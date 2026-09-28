@@ -1,7 +1,9 @@
 // Direct production-library scalar diffusion contract.
 #include "../wrf_sdirk3_tile_unified.h"
+#include "../wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "tile_test_fixture.h"
 #include <torch/torch.h>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -116,6 +118,11 @@ struct WdampContractTag {
 };
 template struct MemberAccessor<WdampContractTag,
                                &TileSDIRK3UnifiedSolver::wdamp_contract_>;
+struct URefTag {
+    using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(URefTag);
+};
+template struct MemberAccessor<URefTag, &TileSDIRK3UnifiedSolver::U_ref_stage_>;
 struct RdnwTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
         const torch::Device&,torch::ScalarType,int64_t) const;
@@ -537,7 +544,8 @@ struct VActualRhsFixture {
 // Observe the public option-2 W tendency after its coupled-RHS conversion.
 // The source-extracted Fortran W oracle reports the mass-coupled H/V raw
 // stresses, so Python multiplies this delta by velocity_mass_w before comparing.
-bool dump_option2_w_actual_rhs(bool packed, bool variable_mu=false, bool variable_phi=false) {
+bool dump_option2_w_actual_rhs(bool packed, bool variable_mu=false, bool variable_phi=false,
+                               bool derivative_probe=false) {
     using namespace wrf::sdirk3;
     using namespace wrf::sdirk3::test;
     constexpr float dx=1000.0f, map=1.25f, mu_base=80000.0f;
@@ -555,6 +563,7 @@ bool dump_option2_w_actual_rhs(bool packed, bool variable_mu=false, bool variabl
         }
     }
     std::vector<float> h_raw_probe, v_raw_probe, rho_probe, alt_probe, dz_probe;
+    bool derivative_probe_done=false;
     const auto run=[&](float khdif,float kvdif) {
         auto& cfg=g_sdirk3_config;
         cfg=SDIRK3Config{};
@@ -595,12 +604,16 @@ bool dump_option2_w_actual_rhs(bool packed, bool variable_mu=false, bool variabl
         tile.solver.*access(MapVyTag{})=torch::full({nv,nx},map,opt);
         for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nu;++i) {
             const int ix=i%nx;
-            tile.u[(j*nz+k)*nu+i]=k==1 ? 1.0f+0.1f*std::cos(float(2*pi*ix/nx)) : 0.0f;
+            tile.u[(j*nz+k)*nu+i]=(!derivative_probe && k==1)
+                ? 1.0f+0.1f*std::cos(float(2*pi*ix/nx)) : 0.0f;
         }
         for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
             const int jj=(packed && j==ny-1)?ny-2:j;
             const int ix=i%unique_nx;
-            tile.w[(j*nw+k)*nx+i]=k==2 ? 0.2f*std::cos(float(2*pi*ix/unique_nx)) : 0.0f;
+            tile.w[(j*nw+k)*nx+i]=derivative_probe
+                ? 0.01f*std::cos(float(2*pi*ix/unique_nx))*
+                  std::sin(float(pi*k/nz))
+                : (k==2 ? 0.2f*std::cos(float(2*pi*ix/unique_nx)) : 0.0f);
             tile.ph[(j*nw+k)*nx+i]=variable_phi
                 ? 9.81f*50.0f*std::sin(float(2*pi*k/nz))*
                   std::cos(float(2*pi*ix/unique_nx))
@@ -673,6 +686,278 @@ bool dump_option2_w_actual_rhs(bool packed, bool variable_mu=false, bool variabl
             dz_probe.assign(dz_w.data_ptr<float>(),dz_w.data_ptr<float>()+dz_w.numel());
         }
         const auto state=tile.state().detach().clone();
+        if (derivative_probe && !derivative_probe_done) {
+            derivative_probe_done=true;
+            TORCH_CHECK(!packed && variable_mu && variable_phi,
+                        "W AD derivative fixture requires physical variable-MU/PH state");
+            const auto& contract=tile.solver.*access(WdampContractTag{});
+            TORCH_CHECK(cfg.effective_wrf_omega_ww_cp() && contract.active &&
+                        contract.x_policy==WWCPBoundaryPolicy::Periodic &&
+                        contract.y_policy==WWCPBoundaryPolicy::SymmetricReplicate &&
+                        grid->smagorinsky_opt==1 && tile.solver.*access(FnmFromWrfTag{}) &&
+                        tile.solver.getNumMoistSpecies()==0 &&
+                        !(tile.solver.*access(KhMomOverrideTag{})).defined() &&
+                        !(tile.solver.*access(KhScalarOverrideTag{})).defined() &&
+                        !(tile.solver.*access(CaptureThetaTag{})),
+                        "W AD derivative fixture is outside native scalar-K option-2 gate");
+            cfg.imex_slow_in_tangent=true;
+
+            constexpr int64_t ph_offset=su+sv+sw;
+            constexpr int64_t mu_offset=su+sv+2*sw+st;
+            auto direction_mu=torch::zeros_like(state);
+            auto direction_ph=torch::zeros_like(state);
+            auto* dmu=direction_mu.data_ptr<float>();
+            auto* dph=direction_ph.data_ptr<float>();
+            for(int j=0;j<ny;++j) for(int i=0;i<nx;++i)
+                dmu[mu_offset+j*nx+i]=4.0f*mu_profile[j*nx+i];
+            for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+                const int ix=i%unique_nx;
+                dph[ph_offset+(j*nw+k)*nx+i]=
+                    9.81f*50.0f*std::sin(float(2*pi*k/nz))*
+                    std::cos(float(2*pi*ix/unique_nx));
+            }
+
+            struct OperatorCase { const char* label; float khdif; float kvdif; };
+            const std::array<OperatorCase,2> operators{{
+                {"W_H_Kv",0.0f,1.0f}, {"W_V_Kh",1.0f,0.0f}}};
+            const std::array<std::pair<const char*,torch::Tensor>,2> directions{{
+                {"PH",direction_ph}, {"MU",direction_mu}}};
+            const std::array<int,3> fd_powers{{-5,-6,-7}};
+            constexpr double u32=0x1.0p-24;
+            const auto crop_w=[&](const torch::Tensor& rhs) {
+                return rhs.slice(0,su+sv,su+sv+sw).view({ny,nw,nx})
+                    .slice(0,1,ny-1).slice(1,1,nz).slice(2,1,nx-1).contiguous();
+            };
+            const auto eval_pair=[&](const torch::Tensor& x,float kh_value,float kv_value) {
+                const float saved_kh=cfg.khdif, saved_kv=cfg.kvdif;
+                cfg.khdif=kh_value; cfg.kvdif=kv_value;
+                tile.solver.*access(URefTag{})=x.clone();
+                const auto rhs_on=(tile.solver.*access(ActualRhsTag{}))(
+                    x,RhsMode::ExplicitOnly);
+                cfg.khdif=0.0f; cfg.kvdif=0.0f;
+                tile.solver.*access(URefTag{})=x.clone();
+                const auto rhs_off=(tile.solver.*access(ActualRhsTag{}))(
+                    x,RhsMode::ExplicitOnly);
+                cfg.khdif=saved_kh; cfg.kvdif=saved_kv;
+                tile.solver.*access(URefTag{})=x.detach().clone();
+                const auto on_w=crop_w(rhs_on.to(torch::kFloat64));
+                const auto off_w=crop_w(rhs_off.to(torch::kFloat64));
+                return std::make_tuple(on_w-off_w,on_w,off_w);
+            };
+
+            for(const auto& op:operators) for(const auto& dir_case:directions) {
+                const auto& direction=dir_case.second;
+                // In this fixture c1h=1,c2h=0 and the W vertical stress is
+                // pointwise rho*Kh*D33 followed by division by mut. From the
+                // WRF alpha relation, alt=(alb*mub-rdnw_signed*DeltaPH')/mut,
+                // hence rho/mut is independent of MU (up to velocity_mass eps).
+                // Treat W_V_Kh/MU as a zero-response invariant, not a relative
+                // VJP signal; a tiny nonzero directional derivative here is
+                // expected roundoff rather than a resolvable K1 test signal.
+                const bool zero_mu_invariant=std::string(op.label)=="W_V_Kh" &&
+                                               std::string(dir_case.first)=="MU";
+                const auto state_leaf=state.clone().requires_grad_(true);
+                const auto eval_g=[&](const torch::Tensor& x) {
+                    return std::get<0>(eval_pair(x,op.khdif,op.kvdif));
+                };
+                bool used_fd=false;
+                std::string fallback_reason;
+                const auto jvp=wrf::sdirk3::compute_jvp_fwad_or_fd(
+                    eval_g,state_leaf,direction,0,0.0f,&used_fd,&fallback_reason);
+                TORCH_CHECK(!used_fd,"option-2 W derivative FWAD fallback: ",fallback_reason);
+                const auto jvp_norm_tensor=jvp.to(torch::kFloat64).norm();
+                const double jvp_norm=jvp_norm_tensor.item<double>();
+                TORCH_CHECK(std::isfinite(jvp_norm) &&
+                            (zero_mu_invariant ? jvp_norm>=0.0 : jvp_norm>0.0),
+                            "option-2 W derivative has no finite AD signal for ",
+                            op.label,"/",dir_case.first);
+
+                // Use the normalized JVP as a fixed cotangent for the matching
+                // VJP dot and projected FD/Taylor checks. It is detached before
+                // the reverse pass, so it cannot contribute a second derivative.
+                const auto cotangent=zero_mu_invariant
+                    ? torch::ones_like(jvp).to(torch::kFloat64) /
+                        std::sqrt(static_cast<double>(jvp.numel()))
+                    : jvp.detach().to(torch::kFloat64)/jvp_norm;
+                double jvp_dot=0.0, vjp_dot=0.0, vjp_rel=0.0;
+                if (!zero_mu_invariant) {
+                    const auto reverse_state=state.clone().requires_grad_(true);
+                    const auto reverse_g=eval_g(reverse_state);
+                    const auto objective=(reverse_g*cotangent).sum();
+                    const auto reverse_grad=torch::autograd::grad(
+                        {objective},{reverse_state})[0];
+                    jvp_dot=(jvp.to(torch::kFloat64)*cotangent).sum().item<double>();
+                    vjp_dot=(reverse_grad.to(torch::kFloat64)*
+                             direction.to(torch::kFloat64)).sum().item<double>();
+                    vjp_rel=std::abs(jvp_dot-vjp_dot)/
+                        std::max({std::abs(jvp_dot),std::abs(vjp_dot),1e-30});
+                }
+
+                const auto base_pair=eval_pair(state,op.khdif,op.kvdif);
+                const auto base_g=std::get<0>(base_pair);
+                const double base_output_l2=(std::get<1>(base_pair).abs()+
+                                              std::get<2>(base_pair).abs()).norm().item<double>();
+                const double base_g_norm=base_g.norm().item<double>();
+                const double base_primal_floor=2.0*u32*base_output_l2;
+                if (zero_mu_invariant) {
+                    TORCH_CHECK(base_g_norm>100.0*base_primal_floor,
+                                "W_V_Kh/MU zero-response control has no resolved nonzero K signal: ",
+                                "base_G=",base_g_norm," primal_floor=",base_primal_floor);
+                }
+                const auto weighted_abs=[&](const torch::Tensor& q) {
+                    return (q.abs()*cotangent.abs()).sum().item<double>();
+                };
+                const double base_output_scale=weighted_abs(std::get<1>(base_pair))+
+                                               weighted_abs(std::get<2>(base_pair));
+                std::array<double,3> projected_fd{};
+                std::array<double,3> projected_error{};
+                std::array<double,3> projected_roundoff{};
+                std::array<double,3> vector_roundoff_by_h{};
+                std::array<double,3> taylor_remainder{};
+                std::array<double,3> taylor_roundoff{};
+                std::array<double,3> invariant_fd_norm{};
+                std::array<double,3> invariant_change_plus{};
+                std::array<double,3> invariant_change_minus{};
+                for(size_t hi=0;hi<fd_powers.size();++hi) {
+                    const float h=std::ldexp(1.0f,fd_powers[hi]);
+                    const auto plus=state+h*direction;
+                    const auto minus=state-h*direction;
+                    const auto active=direction!=0;
+                    const auto plus_changed=torch::where(active,plus!=state,
+                                                         torch::ones_like(active));
+                    const auto minus_changed=torch::where(active,minus!=state,
+                                                          torch::ones_like(active));
+                    TORCH_CHECK(torch::all(plus_changed).item<bool>() &&
+                                torch::all(minus_changed).item<bool>(),
+                                "option-2 W FD perturbation rounded away on direction support ",
+                                op.label,"/",dir_case.first," h=",h);
+                    const auto plus_pair=eval_pair(plus,op.khdif,op.kvdif);
+                    const auto minus_pair=eval_pair(minus,op.khdif,op.kvdif);
+                    const auto g_plus=std::get<0>(plus_pair);
+                    const auto g_minus=std::get<0>(minus_pair);
+                    const auto fd=(g_plus-g_minus)/(2.0*h);
+                    const double fd_norm=(fd.to(torch::kFloat64)-jvp.to(torch::kFloat64))
+                        .norm().item<double>();
+                    const double fd_vector_norm=fd.to(torch::kFloat64).norm().item<double>();
+                    // A priori output-quantization estimate only (not a bound
+                    // on every internal FP32 operation). The factor 2 is fixed
+                    // before observing results; ON/OFF outputs are cast to FP64
+                    // before differencing to avoid an extra FP32 subtraction.
+                    const double four_output_scale=
+                        weighted_abs(std::get<1>(plus_pair))+
+                        weighted_abs(std::get<2>(plus_pair))+
+                        weighted_abs(std::get<1>(minus_pair))+
+                        weighted_abs(std::get<2>(minus_pair));
+                    const double four_output_l2=(
+                        std::get<1>(plus_pair).abs()+std::get<2>(plus_pair).abs()+
+                        std::get<1>(minus_pair).abs()+std::get<2>(minus_pair).abs())
+                            .norm().item<double>();
+                    const double roundoff=2.0*u32*four_output_scale/(2.0*h);
+                    const double vector_roundoff_estimate=2.0*u32*four_output_l2/(2.0*h);
+                    const double proj_fd=(fd.to(torch::kFloat64)*cotangent).sum().item<double>();
+                    const double proj_jvp=(jvp.to(torch::kFloat64)*cotangent).sum().item<double>();
+                    const double proj_error=std::abs(proj_fd-proj_jvp);
+                    const double proj_taylor=std::abs(
+                        (g_plus*cotangent).sum().item<double>()-
+                        (base_g*cotangent).sum().item<double>()-h*proj_jvp);
+                    const double taylor_floor=
+                        2.0*u32*(four_output_scale+base_output_scale);
+                    const double plus_output_l2=(std::get<1>(plus_pair).abs()+
+                                                 std::get<2>(plus_pair).abs()).norm().item<double>();
+                    const double minus_output_l2=(std::get<1>(minus_pair).abs()+
+                                                  std::get<2>(minus_pair).abs()).norm().item<double>();
+                    const double invariant_plus_floor=2.0*u32*(base_output_l2+plus_output_l2);
+                    const double invariant_minus_floor=2.0*u32*(base_output_l2+minus_output_l2);
+                    const double taylor_floor_l2=2.0*u32*(four_output_l2+base_output_l2);
+                    projected_fd[hi]=proj_fd;
+                    projected_error[hi]=proj_error;
+                    projected_roundoff[hi]=roundoff;
+                    vector_roundoff_by_h[hi]=vector_roundoff_estimate;
+                    taylor_remainder[hi]=proj_taylor;
+                    taylor_roundoff[hi]=taylor_floor;
+                    invariant_fd_norm[hi]=fd_vector_norm;
+                    invariant_change_plus[hi]=(g_plus-base_g).norm().item<double>();
+                    invariant_change_minus[hi]=(g_minus-base_g).norm().item<double>();
+                    TORCH_CHECK(std::isfinite(fd_norm) && std::isfinite(roundoff) &&
+                                std::isfinite(vector_roundoff_estimate) &&
+                                std::isfinite(proj_taylor),
+                                "non-finite option-2 W derivative diagnostic");
+                    if (zero_mu_invariant) {
+                        TORCH_CHECK(jvp_norm<=2.0*vector_roundoff_estimate &&
+                                    fd_vector_norm<=2.0*vector_roundoff_estimate &&
+                                    invariant_change_plus[hi]<=invariant_plus_floor &&
+                                    invariant_change_minus[hi]<=invariant_minus_floor &&
+                                    proj_taylor<=taylor_floor_l2,
+                                    "W_V_Kh/MU analytic zero-response exceeded the predeclared ",
+                                    "absolute FP32 output-quantization estimate h=",h,
+                                    " jvp_norm=",jvp_norm," fd_norm=",fd_vector_norm,
+                                    " derivative_floor=",vector_roundoff_estimate,
+                                    " dG+/-=",invariant_change_plus[hi],"/",
+                                    invariant_change_minus[hi]," primal_floor=",
+                                    invariant_plus_floor,"/",invariant_minus_floor,
+                                    " Taylor=",proj_taylor," Taylor_floor=",taylor_floor_l2);
+                    } else {
+                        TORCH_CHECK(std::abs(proj_jvp)>100.0*roundoff,
+                                    "option-2 W derivative signal does not clear predeclared ",
+                                    "FP32 output-quantization estimate ",op.label,"/",dir_case.first,
+                                    " h=",h," signal=",std::abs(proj_jvp),
+                                    " estimate=",roundoff);
+                    }
+                    std::cout<<"WAD_FD "<<op.label<<" direction="<<dir_case.first
+                             <<" h="<<h<<" jvp="<<proj_jvp<<" fd="<<proj_fd
+                             <<" vector_error="<<fd_norm<<" projected_error="<<proj_error
+                             <<" output_quantization_estimate="<<roundoff
+                             <<" vector_output_quantization_estimate="<<vector_roundoff_estimate
+                             <<" taylor_remainder="<<proj_taylor
+                             <<" taylor_output_estimate="<<taylor_floor<<'\n';
+                }
+                if (zero_mu_invariant) {
+                    std::cout<<"WAD_INVARIANT W_V_Kh direction=MU jvp_norm="<<jvp_norm
+                             <<" fd_norm="<<invariant_fd_norm[2]
+                             <<" derivative_floor="<<vector_roundoff_by_h[2]
+                             <<" base_G_norm="<<base_g_norm
+                             <<" base_primal_floor="<<base_primal_floor
+                             <<" dG_plus_minus="<<invariant_change_plus[2]<<"/"
+                             <<invariant_change_minus[2]
+                             <<" absolute_output_estimate=PASS vjp_relative_check=not_applicable\n";
+                    continue;
+                }
+                const double vjp_fd_rel=std::abs(vjp_dot-projected_fd[2])/
+                    std::max({std::abs(vjp_dot),std::abs(projected_fd[2]),1e-30});
+                std::cout<<"WAD_DOT "<<op.label<<" direction="<<dir_case.first
+                         <<" jvp_dot="<<jvp_dot<<" vjp_dot="<<vjp_dot
+                         <<" abs_diff="<<std::abs(jvp_dot-vjp_dot)
+                         <<" vjp_vs_fd="<<vjp_fd_rel<<" jvp_norm="<<jvp_norm
+                         <<" state_fp32="<<(state.scalar_type()==torch::kFloat32)
+                         <<" direction_fp32="<<(direction.scalar_type()==torch::kFloat32)<<'\n';
+                TORCH_CHECK(std::isfinite(vjp_rel) && vjp_rel<=1.0e-3,
+                            "option-2 W VJP transpose mismatch ",op.label,"/",dir_case.first,
+                            " rel=",vjp_rel," jvp_dot=",jvp_dot," vjp_dot=",vjp_dot,
+                            " centered_fd=",projected_fd[2]," vjp_vs_fd=",vjp_fd_rel);
+                const double richardson_error=
+                    std::abs(projected_fd[1]-projected_fd[2])/3.0;
+                TORCH_CHECK(projected_error[2] <= richardson_error+
+                            2.0*projected_roundoff[2],
+                            "option-2 W JVP misses the predeclared Richardson/output estimate ",
+                            op.label,"/",dir_case.first," error=",projected_error[2],
+                            " Richardson=",richardson_error,
+                            " output=",projected_roundoff[2]);
+                TORCH_CHECK(std::abs(projected_fd[1]-projected_fd[2]) <=
+                            0.75*std::abs(projected_fd[0]-projected_fd[1])+
+                            projected_roundoff[1]+projected_roundoff[2],
+                            "option-2 W centered-FD scan did not reach a stable plateau ",
+                            op.label,"/",dir_case.first);
+                TORCH_CHECK(taylor_remainder[2] <=
+                            0.75*taylor_remainder[1]+taylor_roundoff[1]+taylor_roundoff[2],
+                            "option-2 W Taylor remainder did not contract ",
+                            op.label,"/",dir_case.first);
+                std::cout<<"WAD_ADJOINT "<<op.label<<" direction="<<dir_case.first
+                         <<" jvp_norm="<<jvp_norm<<" vjp_dot_rel="<<vjp_rel
+                         <<" fd_plateau=PASS taylor=PASS\n";
+            }
+            cfg.khdif=khdif; cfg.kvdif=kvdif;
+            tile.solver.*access(URefTag{})=state.detach().clone();
+        }
         const auto frozen=state.detach().clone();
         const auto rhs=(tile.solver.*access(ActualRhsTag{}))(
             frozen,RhsMode::Full).detach().clone();
@@ -3832,6 +4117,8 @@ int main(int argc, char** argv) {
         return dump_option2_w_actual_rhs(false,true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-variable-ph-physical")
         return dump_option2_w_actual_rhs(false,false,true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-ad-derivative-physical")
+        return dump_option2_w_actual_rhs(false,true,true,true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-packed")
         return dump_option2_w_actual_rhs(true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-sign")
