@@ -10510,8 +10510,8 @@ public:
                 }
             }
 
-            float prev_candidate_norm_val = -1.0f;  // v20.14r27l: track for short-circuit
-            bool forced_scaled_tried = false;  // v20.14r27m: one forced-scale attempt on same-candidate
+            float prev_candidate_norm_val = -1.0f;
+            bool forced_scaled_tried = false;
             // R13.23 (self-review): the loop condition is a fixtured rule, because it is what
             // makes a rescued candidate land somewhere. Note this loop is NOT gated on
             for (int attempt = 0;
@@ -10553,53 +10553,38 @@ public:
                     ? (S_inv_diag_ * dK_scaled_candidate).norm()
                     : dK_scaled_candidate.norm();
 
-                // v20.14r27n: Same-candidate detection with forced-scale fallback.
-                // When dK fits within all radii, shrinking the radius doesn't change
-                // the candidate. Instead of skipping, try a forced α=0.5 step once.
-                // After forced step, keep the ORIGINAL norm as prev_candidate_norm_val
-                // so subsequent attempts with the same original candidate are caught.
+                // Same-candidate detection with dyadic forced-scale retries. When the
+                // radius no longer changes the clipped candidate, halve the current
+                // clipped step on each remaining trust attempt.
                 {
                     float curr_cand_norm = guarded_item<float>(dK_scaled_norm_tensor);
-                    bool just_forced = false;
-                    if (prev_candidate_norm_val >= 0.0f &&
+                    bool duplicate = prev_candidate_norm_val >= 0.0f &&
                         std::abs(curr_cand_norm - prev_candidate_norm_val) <
-                            1e-6f * (prev_candidate_norm_val + 1e-30f)) {
-                        if (!forced_scaled_tried) {
-                            // v20.14r27t: Force α=0.5 step, but respect effective_limit.
-                            // Without clamping, forced step could exceed trust radius
-                            // in small-radius situations, violating the trust contract.
-                            just_forced = true;
-                            forced_scaled_tried = true;
-                            float eff_lim_f = guarded_item<float>(effective_limit);
-                            float dk_norm_f = guarded_item<float>(dK_norm);
-                            float max_alpha = (dk_norm_f > 1e-14f) ? (eff_lim_f / dk_norm_f) : 1.0f;
-                            float forced_alpha = std::min(0.5f, max_alpha);
-                            dK_scaled_candidate = dK * forced_alpha;
-                            dK_scaled_norm_tensor = trust_scaled_coords
-                                ? (S_inv_diag_ * dK_scaled_candidate).norm()
-                                : dK_scaled_candidate.norm();
-                            curr_cand_norm = guarded_item<float>(dK_scaled_norm_tensor);
-                            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                                std::cerr << "[TRUST REGION] Same candidate on attempt " << attempt
-                                          << ", forcing α=" << forced_alpha
-                                          << " step (||dK_s||=" << curr_cand_norm
-                                          << ", eff_lim=" << eff_lim_f << ")" << std::endl;
-                            }
-                        } else {
-                            // v20.14r40: Already tried forced scale — break entirely.
-                            // Further attempts just shrink radius without changing candidate.
-                            trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
-                                trust_radius_, curr_cand_norm, 0.25, trust_radius_min_));
-                            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                                std::cerr << "[TRUST REGION] Break attempt " << attempt
-                                          << " (same candidate, forced already tried)" << std::endl;
-                            }
-                            break;
+                            1e-6f * (prev_candidate_norm_val + 1e-30f);
+                    if (duplicate) {
+                        // At most two retries fit in the existing three-attempt loop:
+                        // half, then quarter of the current clipped step.
+                        float eff_lim_f = guarded_item<float>(effective_limit);
+                        float dk_norm_f = guarded_item<float>(dK_norm);
+                        const unsigned int retry_level = forced_scaled_tried ? 1u : 0u;
+                        float forced_alpha = wrf::sdirk3::detail::dyadic_clipped_retry_alpha(
+                            eff_lim_f, dk_norm_f, retry_level);
+                        forced_scaled_tried = true;
+                        dK_scaled_candidate = dK * forced_alpha;
+                        dK_scaled_norm_tensor = trust_scaled_coords
+                            ? (S_inv_diag_ * dK_scaled_candidate).norm()
+                            : dK_scaled_candidate.norm();
+                        curr_cand_norm = guarded_item<float>(dK_scaled_norm_tensor);
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                            std::cerr << "[TRUST REGION] Same candidate on attempt " << attempt
+                                      << ", forcing α=" << forced_alpha
+                                      << " step (||dK_s||=" << curr_cand_norm
+                                      << ", eff_lim=" << eff_lim_f << ")" << std::endl;
                         }
-                    }
-                    // v20.14r27n: Don't update prev_candidate_norm_val after forced step.
-                    // Keep original norm so the same original candidate is caught on next attempt.
-                    if (!just_forced) {
+                    } else {
+                        // A radius contraction produced a new clipped candidate. Start
+                        // its duplicate retries from half of that current candidate.
+                        forced_scaled_tried = false;
                         prev_candidate_norm_val = curr_cand_norm;
                     }
                 }
