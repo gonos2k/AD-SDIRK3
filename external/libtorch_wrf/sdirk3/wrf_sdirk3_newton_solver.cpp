@@ -10565,15 +10565,16 @@ public:
                         std::abs(curr_cand_norm - prev_candidate_norm_val) <
                             1e-6f * (prev_candidate_norm_val + 1e-30f)) {
                         if (!forced_scaled_tried) {
-                            // v20.14r27t: Force α=0.5 step, but respect effective_limit.
-                            // Without clamping, forced step could exceed trust radius
-                            // in small-radius situations, violating the trust contract.
+                            // Try half of the current clipped candidate. This remains
+                            // inside effective_limit and differs from retrying the same
+                            // radius-limited candidate when the radius is at its floor.
                             just_forced = true;
                             forced_scaled_tried = true;
                             float eff_lim_f = guarded_item<float>(effective_limit);
                             float dk_norm_f = guarded_item<float>(dK_norm);
-                            float max_alpha = (dk_norm_f > 1e-14f) ? (eff_lim_f / dk_norm_f) : 1.0f;
-                            float forced_alpha = std::min(0.5f, max_alpha);
+                            float forced_alpha =
+                                wrf::sdirk3::detail::half_clipped_retry_alpha(
+                                    eff_lim_f, dk_norm_f);
                             dK_scaled_candidate = dK * forced_alpha;
                             dK_scaled_norm_tensor = trust_scaled_coords
                                 ? (S_inv_diag_ * dK_scaled_candidate).norm()
