@@ -1,13 +1,17 @@
 // Direct production-library scalar diffusion contract.
 #include "../wrf_sdirk3_tile_unified.h"
+#include "../wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "tile_test_fixture.h"
 #include <torch/torch.h>
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <iomanip>
 #include <limits>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -68,6 +72,11 @@ template struct MemberAccessor<MapVyTag, &TileSDIRK3UnifiedSolver::msfvy_>;
 template struct MemberAccessor<MapVxTag, &TileSDIRK3UnifiedSolver::msfvx_>;
 template struct MemberAccessor<MapTxTag, &TileSDIRK3UnifiedSolver::msftx_>;
 template struct MemberAccessor<MapTyTag, &TileSDIRK3UnifiedSolver::msfty_>;
+struct AvgYToVTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(const torch::Tensor&,int);
+    friend type access(AvgYToVTag);
+};
+template struct MemberAccessor<AvgYToVTag,&TileSDIRK3UnifiedSolver::avg_y_to_v_2d>;
 
 struct Option1MomentumTag {
     using type = std::tuple<torch::Tensor,torch::Tensor,torch::Tensor>
@@ -109,6 +118,11 @@ struct WdampContractTag {
 };
 template struct MemberAccessor<WdampContractTag,
                                &TileSDIRK3UnifiedSolver::wdamp_contract_>;
+struct URefTag {
+    using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(URefTag);
+};
+template struct MemberAccessor<URefTag, &TileSDIRK3UnifiedSolver::U_ref_stage_>;
 struct RdnwTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
         const torch::Device&,torch::ScalarType,int64_t) const;
@@ -129,23 +143,146 @@ template struct MemberAccessor<CaptureThetaTag,
                                &TileSDIRK3UnifiedSolver::capture_theta_faces_now_>;
 template struct MemberAccessor<DiffusionTag,
                                &TileSDIRK3UnifiedSolver::setDiffusionCoefficients>;
+struct CfnTag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(CfnTag); };
+struct Cfn1Tag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(Cfn1Tag); };
+template struct MemberAccessor<CfnTag,&TileSDIRK3UnifiedSolver::cfn_>;
+template struct MemberAccessor<Cfn1Tag,&TileSDIRK3UnifiedSolver::cfn1_>;
+struct VerticalInterpolationTag {
+    using type = void (TileSDIRK3UnifiedSolver::*)(const float*,const float*,float,float,float);
+    friend type access(VerticalInterpolationTag);
+};
+template struct MemberAccessor<VerticalInterpolationTag,
+    &TileSDIRK3UnifiedSolver::setVerticalInterpolationCoefficients>;
 
-struct MomentumDiffusionTag {
-    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
-        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
-        float, float, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
-        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
-    friend type access(MomentumDiffusionTag);
+struct UOption2HelperTag { friend auto access(UOption2HelperTag); };
+struct VOption2HelperTag { friend auto access(VOption2HelperTag); };
+template<typename Tag, auto Member> struct AutoMemberAccessor {
+    friend auto access(Tag) { return Member; }
 };
-struct VMomentumDiffusionTag {
-    using type = MomentumDiffusionTag::type;
-    friend type access(VMomentumDiffusionTag);
-};
-template struct MemberAccessor<MomentumDiffusionTag,
+struct UOption2CachedHelperTag { friend auto access(UOption2CachedHelperTag); };
+template struct AutoMemberAccessor<UOption2CachedHelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf>;
-template struct MemberAccessor<VMomentumDiffusionTag,
+template struct AutoMemberAccessor<UOption2HelperTag,
+    &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf>;
+template struct AutoMemberAccessor<VOption2HelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf>;
 
+struct Option2WHelperTag { friend auto access(Option2WHelperTag); };
+template struct AutoMemberAccessor<Option2WHelperTag,
+    &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf>;
+
+struct VerticalUStressTag { friend auto access(VerticalUStressTag); };
+template struct AutoMemberAccessor<VerticalUStressTag,
+    &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress>;
+struct VerticalVStressTag { friend auto access(VerticalVStressTag); };
+template struct AutoMemberAccessor<VerticalVStressTag,
+    &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress>;
+struct VerticalWMixingLegacyTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&);
+    friend type access(VerticalWMixingLegacyTag);
+};
+template struct MemberAccessor<VerticalWMixingLegacyTag,
+    static_cast<VerticalWMixingLegacyTag::type>(
+        &TileSDIRK3UnifiedSolver::compute_vertical_mixing_w)>;
+struct VerticalWMixingStageTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
+    friend type access(VerticalWMixingStageTag);
+};
+template struct MemberAccessor<VerticalWMixingStageTag,
+    static_cast<VerticalWMixingStageTag::type>(
+        &TileSDIRK3UnifiedSolver::compute_vertical_mixing_w)>;
+
+struct Defor13StageGeometryTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&);
+    friend type access(Defor13StageGeometryTag);
+};
+template struct MemberAccessor<Defor13StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor13>;
+struct Defor11StageGeometryTag { friend auto access(Defor11StageGeometryTag); };
+template struct AutoMemberAccessor<Defor11StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor11>;
+struct Defor23StageGeometryTag {
+    using type = Defor13StageGeometryTag::type;
+    friend type access(Defor23StageGeometryTag);
+};
+template struct MemberAccessor<Defor23StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor23>;
+struct Defor33StageGeometryTag { friend auto access(Defor33StageGeometryTag); };
+template struct AutoMemberAccessor<Defor33StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor33>;
+struct Defor12StageGeometryTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        float, float, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
+    friend type access(Defor12StageGeometryTag);
+};
+template struct MemberAccessor<Defor12StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor12>;
+struct Defor22StageGeometryTag {
+    using type = Defor12StageGeometryTag::type;
+    friend type access(Defor22StageGeometryTag);
+};
+template struct MemberAccessor<Defor22StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor22>;
+struct Rdz3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(Rdz3dCacheTag); };
+template struct MemberAccessor<Rdz3dCacheTag, &TileSDIRK3UnifiedSolver::rdz_3d_>;
+struct VerticalScalarStageTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&);
+    friend type access(VerticalScalarStageTag);
+};
+template struct MemberAccessor<VerticalScalarStageTag,
+    static_cast<VerticalScalarStageTag::type>(
+        &TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar)>;
+struct Rdzw3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(Rdzw3dCacheTag); };
+template struct MemberAccessor<Rdzw3dCacheTag, &TileSDIRK3UnifiedSolver::rdzw_3d_>;
+
+void set_asymmetric_vertical_interpolation(TileSDIRK3UnifiedSolver& solver,
+                                           int nz) {
+    const std::vector<float> fnm(nz, 0.75f), fnp(nz, 0.25f);
+    solver.setVerticalInterpolationCoefficients(fnm.data(), fnp.data(),
+                                                0.0f, 0.0f, 0.0f);
+}
+
+template<typename Member>
+torch::Tensor call_option2_momentum_helper(
+    Member member, TileSDIRK3UnifiedSolver& solver,
+    const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,
+    const torch::Tensor& kh, float rdx, float rdy,
+    const torch::Tensor& map_u, const torch::Tensor& map_v,
+    const torch::Tensor& map_m, const torch::Tensor& muu,
+    const torch::Tensor& ph_full, const torch::Tensor& rho,
+    const torch::Tensor& zx, const torch::Tensor& zy,
+    const torch::Tensor& rdzw, const torch::Tensor& rdz,
+    bool report_explicit_geometry=false) {
+    if constexpr (std::is_invocable_v<Member, TileSDIRK3UnifiedSolver&,
+                  const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+                  const torch::Tensor&, float, float, const torch::Tensor&,
+                  const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+                  const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+                  const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+                  const torch::Tensor&>) {
+        if (report_explicit_geometry) std::cout << "GEOMETRY_INPUT stage_explicit=1\n";
+        return (solver.*member)(u,v,w,kh,rdx,rdy,map_u,map_v,map_m,map_m,muu,
+                                ph_full,rho,zx,zy,rdzw,rdz);
+    } else {
+        if (report_explicit_geometry) std::cout << "GEOMETRY_INPUT stage_explicit=0\n";
+        return (solver.*member)(u,v,w,kh,rdx,rdy,map_u,map_v,map_m,map_m,muu,
+                                ph_full,rho);
+    }
+}
 namespace {
 constexpr int nx = 8, ny = 6, nz = 4;
 constexpr int nu=nx+1,nv=ny+1,nw=nz+1;
@@ -197,6 +334,999 @@ struct Option2RhsFixture {
         solver.*access(MapVyTag{})=torch::ones({ny+1,nx},opt);
     }
 };
+
+// Diagnostic bridge for the full-RHS comparison script. The printed input
+// profile is shared with test_option2_momentum_geometry.py's extracted
+// Fortran driver; this emits actual computeUnifiedRHS ON-OFF components.
+int dump_option2_full_rhs_probe(float map_scale=1.25f) {
+    using namespace wrf::sdirk3;
+    constexpr double gravity=9.81;
+    constexpr float dx=1000.0f,kh=2.0f/3.0f,kv=4.0f/3.0f;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+    const std::vector<float> c1h{0.75f,1.125f,0.875f,1.25f};
+    const std::vector<float> c2h{0.0f,2000.0f,4000.0f,6000.0f};
+    const auto evaluate=[&](bool on) {
+        auto& cfg=g_sdirk3_config;
+        cfg=SDIRK3Config{};
+        cfg.diffusion_option=2; cfg.khdif=on?kh:0.0f; cfg.kvdif=on?kv:0.0f;
+        cfg.mass_coordinate_mode=1; cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false; cfg.wrf_damp_opt=0;
+        cfg.imex_split_mode=3; cfg.hevi_split=false; cfg.use_stress_tensor=true;
+        Option2RhsFixture fixture(false,dx,c1h,c2h);
+        auto& solver=fixture.solver;
+        const float base_theta=100000.0f/287.0f;
+        std::vector<float> pbase(st,100000.0f),thinit(st,base_theta-300.0f);
+        std::vector<float> phbase(sw),mubase(sm,80000.0f);
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i)
+            phbase[(j*nw+k)*nx+i]=static_cast<float>(gravity*1000.0*k);
+        solver.setBaseState(pbase.data(),thinit.data(),phbase.data(),mubase.data());
+        auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
+        TORCH_CHECK(grid,"full RHS probe lacks WRF grid info");
+        grid->smagorinsky_opt=1;
+        (solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,
+            false,false,false,false,false,"full RHS component probe");
+        solver.*access(MapTxTag{})=torch::full({ny,nx},map_scale,opt);
+        solver.*access(MapTyTag{})=torch::full({ny,nx},map_scale,opt);
+        solver.*access(MapUxTag{})=torch::full({ny,nx+1},map_scale,opt);
+        solver.*access(MapUyTag{})=torch::full({ny,nx+1},map_scale,opt);
+        solver.*access(MapVxTag{})=torch::full({ny+1,nx},map_scale,opt);
+        solver.*access(MapVyTag{})=torch::full({ny+1,nx},map_scale,opt);
+        auto u=torch::zeros({ny,nz,nx+1},opt);
+        auto v=torch::zeros({ny+1,nz,nx},opt);
+        auto w=torch::zeros({ny,nw,nx},opt);
+        auto ph=torch::empty({ny,nw,nx},opt);
+        auto theta=torch::empty({ny,nz,nx},opt);
+        auto mu=torch::zeros({ny,nx},opt);
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i){
+            const double x=2*pi*i/nx,y=2*pi*j/ny;
+            u[j][k][i]=(k==1)?1.0f+0.1f*std::cos(x):0.0f;
+            v[j][k][i]=(k==1)?0.15f*(1.0f+0.1f*std::cos(x))*std::sin(y):0.0f;
+            theta[j][k][i]=0.4f+0.2f*std::sin(x)+0.15f*std::cos(y)+0.05f*k;
+        }
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k)
+            u[j][k][nx]=u[j][k][0];
+        for(int j=0;j<ny+1;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i)
+            if(j==ny) v[j][k][i]=0.0f;
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i){
+            const double x=2*pi*i/nx,y=2*pi*j/ny;
+            w[j][k][i]=(k==2)?0.2f*std::cos(x):0.0f;
+            const double terrain=100.0*std::cos(x)+40.0*std::cos(y);
+            ph[j][k][i]=static_cast<float>(gravity*terrain);
+        }
+        const auto state=torch::cat({u.reshape({-1}),v.reshape({-1}),w.reshape({-1}),
+            ph.reshape({-1}),theta.reshape({-1}),mu.reshape({-1})});
+        const auto pbase_t=torch::full({ny,nz,nx},100000.0f,opt);
+        const auto thbase_t=torch::full({ny,nz,nx},base_theta,opt);
+        const auto mubase_t=torch::full({ny,nx},80000.0f,opt);
+        const auto alb=compute_inverse_density(thbase_t,pbase_t,287.0f,717.5f,
+                                                1004.5f,100000.0f);
+        const auto rdnw=torch::full({nz},float(nz),opt);
+        const auto c1=torch::tensor(c1h,opt),c2=torch::tensor(c2h,opt);
+        const auto prho=calc_p_rho_wrf(ph,theta,mu,mubase_t,alb,pbase_t,rdnw,
+            c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f);
+        const auto rho=prho.alt.reciprocal();
+        std::cout<<"PROBE_RHO min="<<rho.min().item<double>()
+                 <<" max="<<rho.max().item<double>()<<" base_alb="<<alb.max().item<double>()<<'\n';
+        auto rhs=(solver.*access(ActualRhsTag{}))(state,RhsMode::ExplicitOnly).clone();
+        if(on){
+            const auto u=state.slice(0,0,su).view({ny,nz,nx+1});
+            const auto v=state.slice(0,su,su+sv).view({ny+1,nz,nx});
+            const auto w=state.slice(0,su+sv,su+sv+sw).view({ny,nw,nx});
+            const auto phpert=state.slice(0,su+sv+sw,su+sv+2*sw).view({ny,nw,nx});
+            const auto t=state.slice(0,su+sv+2*sw,su+sv+2*sw+st).view({ny,nz,nx});
+            const auto mupert=state.slice(0,total-sm,total).view({ny,nx});
+            const auto phfull=phpert+grid->ph_base.to(opt);
+            const auto zw=phfull/gravity;
+            const auto rdzw=(zw.slice(1,1,nw)-zw.slice(1,0,nz)).reciprocal();
+            const auto rdzbottom=(2.0/(zw.slice(1,1,2)-zw.slice(1,0,1)));
+            const auto rdzmiddle=2.0/(zw.slice(1,2,nw)-zw.slice(1,0,nz-1));
+            const auto rdz=torch::cat({rdzbottom,rdzmiddle,
+                                       torch::zeros({ny,1,nx},opt)},1);
+            const auto xl=torch::cat({zw.slice(2,nx-1,nx),zw},2);
+            const auto xr=torch::cat({zw,zw.slice(2,0,1)},2);
+            const auto zx=(1.0f/ dx)*(xr-xl);
+            const auto zyin=(1.0f/dx)*(zw.slice(0,1,ny)-zw.slice(0,0,ny-1));
+            const auto zy=torch::cat({torch::zeros({1,nw,nx},opt),zyin,
+                                      torch::zeros({1,nw,nx},opt)},0);
+            const auto alb=compute_inverse_density(grid->th_base.to(opt),grid->p_base.to(opt),
+                                                   287.0f,717.5f,1004.5f,100000.0f);
+            const auto rdnw=torch::full({nz},float(nz),opt);
+            const auto c1=torch::tensor(c1h,opt),c2=torch::tensor(c2h,opt);
+            const auto rhot=calc_p_rho_wrf(phpert,t,mupert,grid->mu_base.to(opt),alb,
+                grid->p_base.to(opt),rdnw,c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f)
+                .alt.reciprocal();
+            const auto mu_full=mupert+grid->mu_base.to(opt);
+            const auto raw_h=call_option2_momentum_helper(access(UOption2HelperTag{}),solver,
+                u,v,w,torch::full({ny,nz,nx},kh,opt),1.0f/dx,1.0f/dx,
+                torch::full({ny,nx+1},map_scale,opt),torch::full({ny+1,nx},map_scale,opt),
+                torch::full({ny,nx},map_scale,opt),mu_full,phfull,rhot,zx,zy,rdzw,rdz);
+            const auto dx_t=torch::full({1},1.0f/dx,opt);
+            const auto d13=(solver.*access(Defor13StageGeometryTag{}))(
+                u,w,dx_t,rdnw,zx,zy,rdzw,rdz);
+        const auto raw_v=(solver.*access(VerticalUStressTag{}))(
+                u,d13,torch::full({ny,nz,nx},kv,opt),rhot,rdnw);
+            const auto d11=(solver.*access(Defor11StageGeometryTag{}))(
+                u,v,w,1.0f/dx,1.0f/dx,rdnw,zx,zy,rdzw,rdz);
+            const auto d12=(solver.*access(Defor12StageGeometryTag{}))(
+                u,v,w,1.0f/dx,1.0f/dx,rdnw,zx,zy,rdzw,rdz);
+            const auto emit=[&](const char* name,const torch::Tensor& q){
+                std::cerr<<"FULLRHS_EMIT "<<name<<" dims="<<q.dim()<<" sizes="<<q.sizes()<<'\n';
+                const auto q_contig=q.contiguous();
+                const auto a=q_contig.accessor<float,3>();
+                for(int j=0;j<q.size(0);++j)for(int k=0;k<q.size(1);++k)for(int i=0;i<q.size(2);++i)
+                    std::cout<<"CPP_"<<name<<' '<<j<<' '<<k<<' '<<i<<' '
+                             <<std::setprecision(17)<<a[j][k][i]<<'\n';
+            };
+            emit("H_RAW",raw_h);emit("V_RAW",raw_v);
+            emit("D11",d11);emit("D12",d12);
+            emit("ZX",zx);emit("RDZW",rdzw);
+            for(int k=0;k<nz;++k)
+                std::cout<<"PROBE_MASS "<<k<<" 80000 "
+                         <<c1h[k]*80000.0f+c2h[k]<<' '
+                         <<(c1h[k]*80000.0f+c2h[k])/map_scale<<'\n';
+            std::cout<<"PROBE_RHO min="<<rhot.min().item<double>()
+                     <<" max="<<rhot.max().item<double>()<<'\n';
+        }
+        return rhs;
+    };
+    const auto on=evaluate(true),off=evaluate(false),delta=on-off;
+    const auto u_delta=delta.slice(0,0,su).view({ny,nz,nx+1}).contiguous();
+    const auto v_delta=delta.slice(0,su,su+sv).view({ny+1,nz,nx}).contiguous();
+    const auto w_delta=delta.slice(0,su+sv,su+sv+sw).view({ny,nw,nx}).contiguous();
+    const auto t_delta=delta.slice(0,su+sv+2*sw,su+sv+2*sw+st).view({ny,nz,nx}).contiguous();
+    const auto mu_delta=delta.slice(0,total-sm,total).view({ny,nx}).contiguous();
+    auto emit=[&](const char* name,const torch::Tensor& q){
+        const auto a=q.accessor<float,3>();
+        for(int j=0;j<q.size(0);++j) for(int k=0;k<q.size(1);++k) for(int i=0;i<q.size(2);++i)
+            std::cout<<"CPP_"<<name<<' '<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(17)<<a[j][k][i]<<'\n';
+    };
+    std::cout<<"PROBE_INPUT nx="<<nx<<" ny="<<ny<<" nz="<<nz
+             <<" khdif="<<kh<<" kvdif="<<kv<<" xkhh="<<3*kh<<" xkhv="<<3*kv
+             <<" map="<<map_scale<<" c1h="<<c1h[0]<<','<<c1h[1]<<','<<c1h[2]<<','<<c1h[3]
+             <<" c2h="<<c2h[0]<<','<<c2h[1]<<','<<c2h[2]<<','<<c2h[3]<<'\n';
+    emit("U",u_delta);emit("V",v_delta);emit("W",w_delta);emit("T",t_delta);
+    std::cout<<"PROBE_MUDELTA max="<<mu_delta.abs().max().item<double>()<<'\n';
+    std::cout<<"PROBE_FINITE "<<torch::isfinite(delta).all().item<bool>()<<'\n';
+    return 0;
+}
+
+// Actual-RHS V probe on the same frozen physical/packed X-periodic state as
+// the source-extracted V composite oracle. The base EOS is chosen so rho=1,
+// while the dry layer mass, map, and alpha stay distinct and non-unit.
+struct VActualRhsFixture {
+    std::vector<float> fnm,fnp,c1f,c2f,c1h,c2h;
+    TileSDIRK3UnifiedSolver solver;
+    VActualRhsFixture(bool packed,float spacing,float map,float mass_value,
+                      float c1_value,float c2_value,float pbase_value,double gravity,
+                      int unique_nx,bool nonuniform=false)
+        : fnm(nw,0.5f),fnp(nw,0.5f),c1f(nw,1.0f),c2f(nw,0.0f),
+          c1h(nz,c1_value),c2h(nz,c2_value),
+          solver(nx,ny,nz,spacing,spacing,{1.0f/spacing},{1.0f/spacing},
+                 std::vector<float>(nz,float(nz)),0) {
+        if (nonuniform) {
+            c1h={0.90f,1.00f,1.10f,1.20f};
+            c2h={14000.0f,13000.0f,11000.0f,9000.0f};
+        }
+        if (nonuniform) {
+            const std::array<float,nw> fnm_profile{{0.70f,0.60f,0.80f,0.65f,0.50f}};
+            for (int k=0;k<nw;++k) {
+                fnm[k]=fnm_profile[k];
+                fnp[k]=1.0f-fnm[k];
+            }
+        }
+        const int ide=packed?nx:nx+1,jde=packed?ny:ny+1;
+        solver.setWRFIndices(1,ide,1,jde,1,nz,
+            1,ide,1,jde,1,nw,-2,nx+4,-2,ny+4,1,nw);
+        solver.setBoundaryConditions(true,false,false,false,true,true,
+                                     false,false,false,false);
+        std::vector<float> pbase(ny*nz*nx,pbase_value),tinit(ny*nz*nx,0.0f);
+        std::vector<float> phbase(ny*nw*nx),mubase(ny*nx,mass_value);
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+            const int ix=i%unique_nx;
+            const double terrain=100.0*std::cos(2.0*pi*ix/unique_nx);
+            phbase[(j*nw+k)*nx+i]=static_cast<float>(gravity*(terrain+1000.0*k));
+        }
+        solver.setBaseState(pbase.data(),tinit.data(),phbase.data(),mubase.data());
+        (solver.*access(CoordinateTag{}))(c1f.data(),c2f.data(),c1h.data(),c2h.data());
+        solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),
+                                                    1.0f,0.0f,0.0f);
+        const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+        solver.*access(MapTxTag{})=torch::full({ny,nx},map,opt);
+        solver.*access(MapTyTag{})=torch::full({ny,nx},map,opt);
+        solver.*access(MapUxTag{})=torch::full({ny,nu},map,opt);
+        solver.*access(MapUyTag{})=torch::full({ny,nu},map,opt);
+        solver.*access(MapVxTag{})=torch::full({nv,nx},map,opt);
+        solver.*access(MapVyTag{})=torch::full({nv,nx},map,opt);
+    }
+};
+
+// Observe the public option-2 W tendency after its coupled-RHS conversion.
+// The source-extracted Fortran W oracle reports the mass-coupled H/V raw
+// stresses, so Python multiplies this delta by velocity_mass_w before comparing.
+bool dump_option2_w_actual_rhs(bool packed, bool variable_mu=false, bool variable_phi=false,
+                               bool derivative_probe=false) {
+    using namespace wrf::sdirk3;
+    using namespace wrf::sdirk3::test;
+    constexpr float dx=1000.0f, map=1.25f, mu_base=80000.0f;
+    constexpr float kh=2.0f/3.0f, kv=4.0f/3.0f;
+    const int unique_nx=packed?nx-1:nx;
+    const int unique_ny=packed?ny-1:ny;
+    const float pbase_value=287.0f*(300.0f+0.01f);
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    std::vector<float> mu_profile(sm,0.0f);
+    if (variable_mu) {
+        for (int j=0;j<ny;++j) for (int i=0;i<nx;++i) {
+            const int jj=j%unique_ny, ii=i%unique_nx;
+            mu_profile[j*nx+i]=700.0f*std::sin(float(2*pi*ii/unique_nx))+
+                               250.0f*std::cos(float(2*pi*jj/unique_ny));
+        }
+    }
+    std::vector<float> h_raw_probe, v_raw_probe, rho_probe, alt_probe, dz_probe;
+    bool derivative_probe_done=false;
+    const auto run=[&](float khdif,float kvdif) {
+        auto& cfg=g_sdirk3_config;
+        cfg=SDIRK3Config{};
+        cfg.diffusion_option=2; cfg.khdif=khdif; cfg.kvdif=kvdif;
+        cfg.mass_coordinate_mode=1; cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false; cfg.wrf_damp_opt=0;
+        cfg.imex_split_mode=3; cfg.hevi_split=false; cfg.use_stress_tensor=true;
+        TileCase tile(dx);
+        if(packed) {
+            tile.solver.setWRFIndices(1,nx,1,ny,1,nz,1,nx,1,ny,1,nw,
+                                      -2,nx+4,-2,ny+4,1,nw);
+            tile.solver.setBoundaryConditions(true,false,false,false,true,true,
+                                               false,false,false,false);
+        }
+        std::vector<float> pbase(st,pbase_value),tinit(st,0.0f),
+                           phbase(sw),mubase(sm,mu_base);
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+            const int ix=i%unique_nx;
+            phbase[(j*nw+k)*nx+i]=static_cast<float>(9.81*(100.0*std::cos(2*pi*ix/unique_nx)+1000.0*k));
+        }
+        tile.solver.setBaseState(pbase.data(),tinit.data(),phbase.data(),mubase.data());
+        auto grid=std::static_pointer_cast<WRFGridInfoExtended>(tile.solver.getGridInfo());
+        TORCH_CHECK(grid,"W actual-RHS fixture has no extended GridInfo");
+        grid->rdn=torch::full({nz},float(nz),opt);
+        grid->rdnw=torch::full({nz},float(nz),opt);
+        grid->g=9.81f;
+        grid->smagorinsky_opt=1;
+        if(grid->qv.defined() && grid->qv.numel()>0) grid->qv=torch::zeros_like(grid->qv);
+        const std::vector<float> c1f(nw,1.0f),c2f(nw,0.0f),c1h(nz,1.0f),c2h(nz,0.0f);
+        const std::vector<float> fnm(nw,0.5f),fnp(nw,0.5f);
+        (tile.solver.*access(CoordinateTag{}))(c1f.data(),c2f.data(),c1h.data(),c2h.data());
+        tile.solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),0.0f,0.0f,0.0f);
+        tile.solver.*access(MapTxTag{})=torch::full({ny,nx},map,opt);
+        tile.solver.*access(MapTyTag{})=torch::full({ny,nx},map,opt);
+        tile.solver.*access(MapUxTag{})=torch::full({ny,nu},map,opt);
+        tile.solver.*access(MapUyTag{})=torch::full({ny,nu},map,opt);
+        tile.solver.*access(MapVxTag{})=torch::full({nv,nx},map,opt);
+        tile.solver.*access(MapVyTag{})=torch::full({nv,nx},map,opt);
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nu;++i) {
+            const int ix=i%nx;
+            tile.u[(j*nz+k)*nu+i]=(!derivative_probe && k==1)
+                ? 1.0f+0.1f*std::cos(float(2*pi*ix/nx)) : 0.0f;
+        }
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+            const int jj=(packed && j==ny-1)?ny-2:j;
+            const int ix=i%unique_nx;
+            tile.w[(j*nw+k)*nx+i]=derivative_probe
+                ? 0.01f*std::cos(float(2*pi*ix/unique_nx))*
+                  std::sin(float(pi*k/nz))
+                : (k==2 ? 0.2f*std::cos(float(2*pi*ix/unique_nx)) : 0.0f);
+            tile.ph[(j*nw+k)*nx+i]=variable_phi
+                ? 9.81f*50.0f*std::sin(float(2*pi*k/nz))*
+                  std::cos(float(2*pi*ix/unique_nx))
+                : 0.0f;
+            if(packed && jj!=j) tile.w[(j*nw+k)*nx+i]=tile.w[(jj*nw+k)*nx+i];
+        }
+        std::fill(tile.theta.begin(),tile.theta.end(),0.01f);
+        tile.mu=mu_profile;
+        (tile.solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,
+            false,false,false,false,false,"option-2 W actual-RHS fixture");
+        TORCH_CHECK(grid->smagorinsky_opt==1 && tile.solver.*access(FnmFromWrfTag{}) &&
+                    tile.solver.getNumMoistSpecies()==0,
+                    "W actual-RHS fixture did not establish native dry km_opt=1 gates");
+        if ((variable_mu || variable_phi) && khdif==kh && kvdif==kv) {
+            const auto base_shape=std::vector<int64_t>{ny,nz,nx};
+            const auto w_shape=std::vector<int64_t>{ny,nw,nx};
+            const auto mass_shape=std::vector<int64_t>{ny,nx};
+            const auto view=[&](const std::vector<float>& values,
+                                const std::vector<int64_t>& shape) {
+                return torch::from_blob(const_cast<float*>(values.data()),shape,opt).clone();
+            };
+            const auto u_tensor=view(tile.u,{ny,nz,nu});
+            const auto v_tensor=view(tile.v,{nv,nz,nx});
+            const auto w_tensor=view(tile.w,w_shape);
+            const auto ph_tensor=view(tile.ph,w_shape);
+            const auto t_tensor=view(tile.theta,base_shape);
+            const auto mu_tensor=view(tile.mu,mass_shape);
+            const auto pbase_tensor=view(pbase,base_shape);
+            const auto mu_base_tensor=view(mubase,mass_shape);
+            const auto ph_base_tensor=view(phbase,w_shape);
+            const auto tbase_tensor=torch::full_like(pbase_tensor,300.0f);
+            const auto alb=compute_inverse_density(tbase_tensor,pbase_tensor,
+                                                   287.0f,717.5f,1004.5f,100000.0f);
+            const auto prho=calc_p_rho_wrf(ph_tensor,t_tensor,mu_tensor,mu_base_tensor,
+                                           alb,pbase_tensor,grid->rdnw,
+                                           torch::from_blob(const_cast<float*>(c1h.data()),{nz},opt),
+                                           torch::from_blob(const_cast<float*>(c2h.data()),{nz},opt),
+                                           287.0f,717.5f,1004.5f,100000.0f,300.0f);
+            const auto rho=prho.alt.reciprocal().contiguous();
+            const auto mu_full=mu_tensor+mu_base_tensor;
+            const auto ph_full=ph_tensor+ph_base_tensor;
+            const auto z_w=ph_full/grid->g;
+            const auto dz_w=z_w.slice(1,1,nw)-z_w.slice(1,0,nz);
+            const auto rdzw=dz_w.reciprocal();
+            const auto x_left=torch::cat({z_w.slice(2,nx-1,nx),z_w},2);
+            const auto x_right=torch::cat({z_w,z_w.slice(2,0,1)},2);
+            const auto zx=(1.0f/dx)*(x_right-x_left);
+            const auto zy_wall=torch::zeros({1,nw,nx},opt);
+            const auto zy=torch::cat({zy_wall,
+                (1.0f/dx)*(z_w.slice(0,1,ny)-z_w.slice(0,0,ny-1)),zy_wall},0);
+            const auto rdz_bottom=(2.0/(z_w.select(1,1)-z_w.select(1,0))).unsqueeze(1);
+            const auto rdz_interior=2.0/(z_w.slice(1,2,nw)-z_w.slice(1,0,nw-2));
+            const auto rdz_top=torch::zeros_like(z_w.slice(1,0,1));
+            const auto rdz=torch::cat({rdz_bottom,rdz_interior,rdz_top},1);
+            const auto map_tensor=torch::full({ny,nx},map,opt);
+            const auto kh_w=torch::full_like(t_tensor,kvdif);
+            const auto kh_mass=torch::full_like(t_tensor,khdif);
+            const auto h_raw=(tile.solver.*access(Option2WHelperTag{}))(
+                u_tensor,v_tensor,w_tensor,kh_w,rho,1.0f/dx,1.0f/dx,
+                map_tensor,map_tensor,mu_full,ph_full,zx,zy,rdzw,rdz).contiguous();
+            const auto defor33=2.0f*(w_tensor.slice(1,1,nw)-
+                                      w_tensor.slice(1,0,nz))*rdzw;
+            const auto v_raw=(tile.solver.*access(VerticalWMixingStageTag{}))(
+                w_tensor,kh_mass,grid->rdnw,rho,defor33,grid->rdn).contiguous();
+            h_raw_probe.assign(h_raw.data_ptr<float>(),h_raw.data_ptr<float>()+h_raw.numel());
+            v_raw_probe.assign(v_raw.data_ptr<float>(),v_raw.data_ptr<float>()+v_raw.numel());
+            rho_probe.assign(rho.data_ptr<float>(),rho.data_ptr<float>()+rho.numel());
+            alt_probe.assign(prho.alt.data_ptr<float>(),prho.alt.data_ptr<float>()+prho.alt.numel());
+            dz_probe.assign(dz_w.data_ptr<float>(),dz_w.data_ptr<float>()+dz_w.numel());
+        }
+        const auto state=tile.state().detach().clone();
+        if (derivative_probe && !derivative_probe_done) {
+            derivative_probe_done=true;
+            TORCH_CHECK(!packed && variable_mu && variable_phi,
+                        "W AD derivative fixture requires physical variable-MU/PH state");
+            const auto& contract=tile.solver.*access(WdampContractTag{});
+            TORCH_CHECK(cfg.effective_wrf_omega_ww_cp() && contract.active &&
+                        contract.x_policy==WWCPBoundaryPolicy::Periodic &&
+                        contract.y_policy==WWCPBoundaryPolicy::SymmetricReplicate &&
+                        grid->smagorinsky_opt==1 && tile.solver.*access(FnmFromWrfTag{}) &&
+                        tile.solver.getNumMoistSpecies()==0 &&
+                        !(tile.solver.*access(KhMomOverrideTag{})).defined() &&
+                        !(tile.solver.*access(KhScalarOverrideTag{})).defined() &&
+                        !(tile.solver.*access(CaptureThetaTag{})),
+                        "W AD derivative fixture is outside native scalar-K option-2 gate");
+            cfg.imex_slow_in_tangent=true;
+
+            constexpr int64_t ph_offset=su+sv+sw;
+            constexpr int64_t mu_offset=su+sv+2*sw+st;
+            auto direction_mu=torch::zeros_like(state);
+            auto direction_ph=torch::zeros_like(state);
+            auto* dmu=direction_mu.data_ptr<float>();
+            auto* dph=direction_ph.data_ptr<float>();
+            for(int j=0;j<ny;++j) for(int i=0;i<nx;++i)
+                dmu[mu_offset+j*nx+i]=4.0f*mu_profile[j*nx+i];
+            for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+                const int ix=i%unique_nx;
+                dph[ph_offset+(j*nw+k)*nx+i]=
+                    9.81f*50.0f*std::sin(float(2*pi*k/nz))*
+                    std::cos(float(2*pi*ix/unique_nx));
+            }
+
+            struct OperatorCase { const char* label; float khdif; float kvdif; };
+            const std::array<OperatorCase,2> operators{{
+                {"W_H_Kv",0.0f,1.0f}, {"W_V_Kh",1.0f,0.0f}}};
+            const std::array<std::pair<const char*,torch::Tensor>,2> directions{{
+                {"PH",direction_ph}, {"MU",direction_mu}}};
+            const std::array<int,3> fd_powers{{-5,-6,-7}};
+            constexpr double u32=0x1.0p-24;
+            const auto crop_w=[&](const torch::Tensor& rhs) {
+                return rhs.slice(0,su+sv,su+sv+sw).view({ny,nw,nx})
+                    .slice(0,1,ny-1).slice(1,1,nz).slice(2,1,nx-1).contiguous();
+            };
+            const auto eval_pair=[&](const torch::Tensor& x,float kh_value,float kv_value) {
+                const float saved_kh=cfg.khdif, saved_kv=cfg.kvdif;
+                cfg.khdif=kh_value; cfg.kvdif=kv_value;
+                tile.solver.*access(URefTag{})=x.clone();
+                const auto rhs_on=(tile.solver.*access(ActualRhsTag{}))(
+                    x,RhsMode::ExplicitOnly);
+                cfg.khdif=0.0f; cfg.kvdif=0.0f;
+                tile.solver.*access(URefTag{})=x.clone();
+                const auto rhs_off=(tile.solver.*access(ActualRhsTag{}))(
+                    x,RhsMode::ExplicitOnly);
+                cfg.khdif=saved_kh; cfg.kvdif=saved_kv;
+                tile.solver.*access(URefTag{})=x.detach().clone();
+                const auto on_w=crop_w(rhs_on.to(torch::kFloat64));
+                const auto off_w=crop_w(rhs_off.to(torch::kFloat64));
+                return std::make_tuple(on_w-off_w,on_w,off_w);
+            };
+
+            for(const auto& op:operators) for(const auto& dir_case:directions) {
+                const auto& direction=dir_case.second;
+                // In this fixture c1h=1,c2h=0 and the W vertical stress is
+                // pointwise rho*Kh*D33 followed by division by mut. From the
+                // WRF alpha relation, alt=(alb*mub-rdnw_signed*DeltaPH')/mut,
+                // hence rho/mut is independent of MU (up to velocity_mass eps).
+                // Treat W_V_Kh/MU as a zero-response invariant, not a relative
+                // VJP signal; a tiny nonzero directional derivative here is
+                // expected roundoff rather than a resolvable K1 test signal.
+                const bool zero_mu_invariant=std::string(op.label)=="W_V_Kh" &&
+                                               std::string(dir_case.first)=="MU";
+                const auto state_leaf=state.clone().requires_grad_(true);
+                const auto eval_g=[&](const torch::Tensor& x) {
+                    return std::get<0>(eval_pair(x,op.khdif,op.kvdif));
+                };
+                bool used_fd=false;
+                std::string fallback_reason;
+                const auto jvp=wrf::sdirk3::compute_jvp_fwad_or_fd(
+                    eval_g,state_leaf,direction,0,0.0f,&used_fd,&fallback_reason);
+                TORCH_CHECK(!used_fd,"option-2 W derivative FWAD fallback: ",fallback_reason);
+                const auto jvp_norm_tensor=jvp.to(torch::kFloat64).norm();
+                const double jvp_norm=jvp_norm_tensor.item<double>();
+                TORCH_CHECK(std::isfinite(jvp_norm) &&
+                            (zero_mu_invariant ? jvp_norm>=0.0 : jvp_norm>0.0),
+                            "option-2 W derivative has no finite AD signal for ",
+                            op.label,"/",dir_case.first);
+
+                // Use the normalized JVP as a fixed cotangent for the matching
+                // VJP dot and projected FD/Taylor checks. It is detached before
+                // the reverse pass, so it cannot contribute a second derivative.
+                const auto cotangent=zero_mu_invariant
+                    ? torch::ones_like(jvp).to(torch::kFloat64) /
+                        std::sqrt(static_cast<double>(jvp.numel()))
+                    : jvp.detach().to(torch::kFloat64)/jvp_norm;
+                double jvp_dot=0.0, vjp_dot=0.0, vjp_rel=0.0;
+                if (!zero_mu_invariant) {
+                    const auto reverse_state=state.clone().requires_grad_(true);
+                    const auto reverse_g=eval_g(reverse_state);
+                    const auto objective=(reverse_g*cotangent).sum();
+                    const auto reverse_grad=torch::autograd::grad(
+                        {objective},{reverse_state})[0];
+                    jvp_dot=(jvp.to(torch::kFloat64)*cotangent).sum().item<double>();
+                    vjp_dot=(reverse_grad.to(torch::kFloat64)*
+                             direction.to(torch::kFloat64)).sum().item<double>();
+                    vjp_rel=std::abs(jvp_dot-vjp_dot)/
+                        std::max({std::abs(jvp_dot),std::abs(vjp_dot),1e-30});
+                }
+
+                const auto base_pair=eval_pair(state,op.khdif,op.kvdif);
+                const auto base_g=std::get<0>(base_pair);
+                const double base_output_l2=(std::get<1>(base_pair).abs()+
+                                              std::get<2>(base_pair).abs()).norm().item<double>();
+                const double base_g_norm=base_g.norm().item<double>();
+                const double base_primal_floor=2.0*u32*base_output_l2;
+                if (zero_mu_invariant) {
+                    TORCH_CHECK(base_g_norm>100.0*base_primal_floor,
+                                "W_V_Kh/MU zero-response control has no resolved nonzero K signal: ",
+                                "base_G=",base_g_norm," primal_floor=",base_primal_floor);
+                }
+                const auto weighted_abs=[&](const torch::Tensor& q) {
+                    return (q.abs()*cotangent.abs()).sum().item<double>();
+                };
+                const double base_output_scale=weighted_abs(std::get<1>(base_pair))+
+                                               weighted_abs(std::get<2>(base_pair));
+                std::array<double,3> projected_fd{};
+                std::array<double,3> projected_error{};
+                std::array<double,3> projected_roundoff{};
+                std::array<double,3> vector_roundoff_by_h{};
+                std::array<double,3> taylor_remainder{};
+                std::array<double,3> taylor_roundoff{};
+                std::array<double,3> invariant_fd_norm{};
+                std::array<double,3> invariant_change_plus{};
+                std::array<double,3> invariant_change_minus{};
+                for(size_t hi=0;hi<fd_powers.size();++hi) {
+                    const float h=std::ldexp(1.0f,fd_powers[hi]);
+                    const auto plus=state+h*direction;
+                    const auto minus=state-h*direction;
+                    const auto active=direction!=0;
+                    const auto plus_changed=torch::where(active,plus!=state,
+                                                         torch::ones_like(active));
+                    const auto minus_changed=torch::where(active,minus!=state,
+                                                          torch::ones_like(active));
+                    TORCH_CHECK(torch::all(plus_changed).item<bool>() &&
+                                torch::all(minus_changed).item<bool>(),
+                                "option-2 W FD perturbation rounded away on direction support ",
+                                op.label,"/",dir_case.first," h=",h);
+                    const auto plus_pair=eval_pair(plus,op.khdif,op.kvdif);
+                    const auto minus_pair=eval_pair(minus,op.khdif,op.kvdif);
+                    const auto g_plus=std::get<0>(plus_pair);
+                    const auto g_minus=std::get<0>(minus_pair);
+                    const auto fd=(g_plus-g_minus)/(2.0*h);
+                    const double fd_norm=(fd.to(torch::kFloat64)-jvp.to(torch::kFloat64))
+                        .norm().item<double>();
+                    const double fd_vector_norm=fd.to(torch::kFloat64).norm().item<double>();
+                    // A priori output-quantization estimate only (not a bound
+                    // on every internal FP32 operation). The factor 2 is fixed
+                    // before observing results; ON/OFF outputs are cast to FP64
+                    // before differencing to avoid an extra FP32 subtraction.
+                    const double four_output_scale=
+                        weighted_abs(std::get<1>(plus_pair))+
+                        weighted_abs(std::get<2>(plus_pair))+
+                        weighted_abs(std::get<1>(minus_pair))+
+                        weighted_abs(std::get<2>(minus_pair));
+                    const double four_output_l2=(
+                        std::get<1>(plus_pair).abs()+std::get<2>(plus_pair).abs()+
+                        std::get<1>(minus_pair).abs()+std::get<2>(minus_pair).abs())
+                            .norm().item<double>();
+                    const double roundoff=2.0*u32*four_output_scale/(2.0*h);
+                    const double vector_roundoff_estimate=2.0*u32*four_output_l2/(2.0*h);
+                    const double proj_fd=(fd.to(torch::kFloat64)*cotangent).sum().item<double>();
+                    const double proj_jvp=(jvp.to(torch::kFloat64)*cotangent).sum().item<double>();
+                    const double proj_error=std::abs(proj_fd-proj_jvp);
+                    const double proj_taylor=std::abs(
+                        (g_plus*cotangent).sum().item<double>()-
+                        (base_g*cotangent).sum().item<double>()-h*proj_jvp);
+                    const double taylor_floor=
+                        2.0*u32*(four_output_scale+base_output_scale);
+                    const double plus_output_l2=(std::get<1>(plus_pair).abs()+
+                                                 std::get<2>(plus_pair).abs()).norm().item<double>();
+                    const double minus_output_l2=(std::get<1>(minus_pair).abs()+
+                                                  std::get<2>(minus_pair).abs()).norm().item<double>();
+                    const double invariant_plus_floor=2.0*u32*(base_output_l2+plus_output_l2);
+                    const double invariant_minus_floor=2.0*u32*(base_output_l2+minus_output_l2);
+                    const double taylor_floor_l2=2.0*u32*(four_output_l2+base_output_l2);
+                    projected_fd[hi]=proj_fd;
+                    projected_error[hi]=proj_error;
+                    projected_roundoff[hi]=roundoff;
+                    vector_roundoff_by_h[hi]=vector_roundoff_estimate;
+                    taylor_remainder[hi]=proj_taylor;
+                    taylor_roundoff[hi]=taylor_floor;
+                    invariant_fd_norm[hi]=fd_vector_norm;
+                    invariant_change_plus[hi]=(g_plus-base_g).norm().item<double>();
+                    invariant_change_minus[hi]=(g_minus-base_g).norm().item<double>();
+                    TORCH_CHECK(std::isfinite(fd_norm) && std::isfinite(roundoff) &&
+                                std::isfinite(vector_roundoff_estimate) &&
+                                std::isfinite(proj_taylor),
+                                "non-finite option-2 W derivative diagnostic");
+                    if (zero_mu_invariant) {
+                        TORCH_CHECK(jvp_norm<=2.0*vector_roundoff_estimate &&
+                                    fd_vector_norm<=2.0*vector_roundoff_estimate &&
+                                    invariant_change_plus[hi]<=invariant_plus_floor &&
+                                    invariant_change_minus[hi]<=invariant_minus_floor &&
+                                    proj_taylor<=taylor_floor_l2,
+                                    "W_V_Kh/MU analytic zero-response exceeded the predeclared ",
+                                    "absolute FP32 output-quantization estimate h=",h,
+                                    " jvp_norm=",jvp_norm," fd_norm=",fd_vector_norm,
+                                    " derivative_floor=",vector_roundoff_estimate,
+                                    " dG+/-=",invariant_change_plus[hi],"/",
+                                    invariant_change_minus[hi]," primal_floor=",
+                                    invariant_plus_floor,"/",invariant_minus_floor,
+                                    " Taylor=",proj_taylor," Taylor_floor=",taylor_floor_l2);
+                    } else {
+                        TORCH_CHECK(std::abs(proj_jvp)>100.0*roundoff,
+                                    "option-2 W derivative signal does not clear predeclared ",
+                                    "FP32 output-quantization estimate ",op.label,"/",dir_case.first,
+                                    " h=",h," signal=",std::abs(proj_jvp),
+                                    " estimate=",roundoff);
+                    }
+                    std::cout<<"WAD_FD "<<op.label<<" direction="<<dir_case.first
+                             <<" h="<<h<<" jvp="<<proj_jvp<<" fd="<<proj_fd
+                             <<" vector_error="<<fd_norm<<" projected_error="<<proj_error
+                             <<" output_quantization_estimate="<<roundoff
+                             <<" vector_output_quantization_estimate="<<vector_roundoff_estimate
+                             <<" taylor_remainder="<<proj_taylor
+                             <<" taylor_output_estimate="<<taylor_floor<<'\n';
+                }
+                if (zero_mu_invariant) {
+                    std::cout<<"WAD_INVARIANT W_V_Kh direction=MU jvp_norm="<<jvp_norm
+                             <<" fd_norm="<<invariant_fd_norm[2]
+                             <<" derivative_floor="<<vector_roundoff_by_h[2]
+                             <<" base_G_norm="<<base_g_norm
+                             <<" base_primal_floor="<<base_primal_floor
+                             <<" dG_plus_minus="<<invariant_change_plus[2]<<"/"
+                             <<invariant_change_minus[2]
+                             <<" absolute_output_estimate=PASS vjp_relative_check=not_applicable\n";
+                    continue;
+                }
+                const double vjp_fd_rel=std::abs(vjp_dot-projected_fd[2])/
+                    std::max({std::abs(vjp_dot),std::abs(projected_fd[2]),1e-30});
+                std::cout<<"WAD_DOT "<<op.label<<" direction="<<dir_case.first
+                         <<" jvp_dot="<<jvp_dot<<" vjp_dot="<<vjp_dot
+                         <<" abs_diff="<<std::abs(jvp_dot-vjp_dot)
+                         <<" vjp_vs_fd="<<vjp_fd_rel<<" jvp_norm="<<jvp_norm
+                         <<" state_fp32="<<(state.scalar_type()==torch::kFloat32)
+                         <<" direction_fp32="<<(direction.scalar_type()==torch::kFloat32)<<'\n';
+                TORCH_CHECK(std::isfinite(vjp_rel) && vjp_rel<=1.0e-3,
+                            "option-2 W VJP transpose mismatch ",op.label,"/",dir_case.first,
+                            " rel=",vjp_rel," jvp_dot=",jvp_dot," vjp_dot=",vjp_dot,
+                            " centered_fd=",projected_fd[2]," vjp_vs_fd=",vjp_fd_rel);
+                const double richardson_error=
+                    std::abs(projected_fd[1]-projected_fd[2])/3.0;
+                TORCH_CHECK(projected_error[2] <= richardson_error+
+                            2.0*projected_roundoff[2],
+                            "option-2 W JVP misses the predeclared Richardson/output estimate ",
+                            op.label,"/",dir_case.first," error=",projected_error[2],
+                            " Richardson=",richardson_error,
+                            " output=",projected_roundoff[2]);
+                TORCH_CHECK(std::abs(projected_fd[1]-projected_fd[2]) <=
+                            0.75*std::abs(projected_fd[0]-projected_fd[1])+
+                            projected_roundoff[1]+projected_roundoff[2],
+                            "option-2 W centered-FD scan did not reach a stable plateau ",
+                            op.label,"/",dir_case.first);
+                TORCH_CHECK(taylor_remainder[2] <=
+                            0.75*taylor_remainder[1]+taylor_roundoff[1]+taylor_roundoff[2],
+                            "option-2 W Taylor remainder did not contract ",
+                            op.label,"/",dir_case.first);
+                std::cout<<"WAD_ADJOINT "<<op.label<<" direction="<<dir_case.first
+                         <<" jvp_norm="<<jvp_norm<<" vjp_dot_rel="<<vjp_rel
+                         <<" fd_plateau=PASS taylor=PASS\n";
+            }
+            cfg.khdif=khdif; cfg.kvdif=kvdif;
+            tile.solver.*access(URefTag{})=state.detach().clone();
+        }
+        const auto frozen=state.detach().clone();
+        const auto rhs=(tile.solver.*access(ActualRhsTag{}))(
+            frozen,RhsMode::Full).detach().clone();
+        TORCH_CHECK(torch::equal(frozen,state),"W actual-RHS fixture changed its state");
+        return rhs;
+    };
+    const auto on=run(kh,kv);
+    const auto off=run(0.0f,0.0f);
+    const auto horizontal_on=run(0.0f,kv);
+    const auto vertical_on=run(kh,0.0f);
+    const auto delta=on-off;
+    const auto horizontal_delta=horizontal_on-off;
+    const auto vertical_delta=vertical_on-off;
+    const auto dw=delta.slice(0,su+sv,su+sv+sw).view({ny,nw,nx}).contiguous();
+    const auto hw=horizontal_delta.slice(0,su+sv,su+sv+sw).view({ny,nw,nx}).contiguous();
+    const auto vw=vertical_delta.slice(0,su+sv,su+sv+sw).view({ny,nw,nx}).contiguous();
+    const auto onw=on.slice(0,su+sv,su+sv+sw).view({ny,nw,nx});
+    const auto offw=off.slice(0,su+sv,su+sv+sw).view({ny,nw,nx});
+    const int owned_y=packed?ny-1:ny;
+    const int owned_x=packed?nx-1:nx;
+    const auto on_owned=onw.slice(0,1,owned_y-1).slice(1,1,nz).slice(2,1,owned_x-1);
+    const auto off_owned=offw.slice(0,1,owned_y-1).slice(1,1,nz).slice(2,1,owned_x-1);
+    const auto a=dw.accessor<float,3>();
+    const auto ha=hw.accessor<float,3>(),va=vw.accessor<float,3>();
+    std::cout<<"WACT_META packed="<<(packed?1:0)<<" variable_mu="<<(variable_mu?1:0)
+             <<" variable_phi="<<(variable_phi?1:0)<<" map="<<map
+             <<" velocity_mass_w="<<std::setprecision(17)<<mu_base+1.0e-10
+             <<" kh="<<kh<<" kv="<<kv
+             <<" on_w_max="<<on_owned.abs().max().item<double>()
+             <<" off_w_max="<<off_owned.abs().max().item<double>()<<'\n';
+    for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i)
+        std::cout<<"WACT_RATE "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(17)<<a[j][k][i]<<'\n';
+    for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+        std::cout<<"WACT_H_RATE "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(17)<<ha[j][k][i]<<'\n';
+        std::cout<<"WACT_V_RATE "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(17)<<va[j][k][i]<<'\n';
+        std::cout<<"WACT_MASS "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(17)<<mu_base+mu_profile[j*nx+i]+1.0e-10<<'\n';
+    }
+    if(variable_mu || variable_phi) {
+        TORCH_CHECK(h_raw_probe.size()==sw && v_raw_probe.size()==sw && rho_probe.size()==st &&
+                    alt_probe.size()==st && dz_probe.size()==st,
+                    "variable-density W fixture did not capture C++ operator inputs/results");
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i)
+            std::cout<<"WACT_RHO "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(17)<<rho_probe[(j*nz+k)*nx+i]<<'\n';
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i) {
+            const int index=(j*nz+k)*nx+i;
+            std::cout<<"WACT_ALT "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(17)<<alt_probe[index]<<'\n';
+            std::cout<<"WACT_DZ "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(17)<<dz_probe[index]<<'\n';
+        }
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+            const int index=(j*nw+k)*nx+i;
+            std::cout<<"WACT_H_RAW "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(17)<<h_raw_probe[index]<<'\n';
+            std::cout<<"WACT_V_RAW "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(17)<<v_raw_probe[index]<<'\n';
+        }
+    }
+    TORCH_CHECK(torch::isfinite(delta).all().item<bool>(),"W actual-RHS delta is non-finite");
+    return true;
+}
+
+bool dump_option2_v_actual_rhs(bool packed,float map=1.25f,bool nonuniform=false) {
+    using namespace wrf::sdirk3;
+    using namespace wrf::sdirk3::test;
+    auto& cfg=g_sdirk3_config;
+    constexpr float dx=1000.0f, gravity=9.81f;
+    const float kh=nonuniform?0.0f:2.0f/3.0f;
+    constexpr float kv=4.0f/3.0f;
+    constexpr float mu_base_value=80000.0f, c1_value=1.0f, c2_value=12000.0f;
+    const int unique_nx=packed?nx-1:nx;
+    const int unique_ny=packed?ny-1:ny;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    std::vector<float> c1h(nz,c1_value),c2h(nz,c2_value);
+    if (nonuniform) {
+        c1h={0.90f,1.00f,1.10f,1.20f};
+        c2h={14000.0f,13000.0f,11000.0f,9000.0f};
+    }
+    const double cpovcv=1004.5/717.5;
+    const float pbase_value=static_cast<float>(100000.0*std::pow(
+        287.0*300.0/100000.0,cpovcv));
+    const auto state=[&]() {
+        auto u=torch::zeros({ny,nz,nu},opt);
+        auto v=torch::zeros({nv,nz,nx},opt);
+        auto w=torch::zeros({ny,nw,nx},opt);
+        auto ph=torch::zeros({ny,nw,nx},opt);
+        auto theta=torch::ones({ny,nz,nx},opt);
+        auto mu=torch::zeros({ny,nx},opt);
+        // Match the Fortran fixture exactly: U uses its physical face period
+        // nx, while packed V/terrain use nx-1 unique mass cells.
+        for(int j=0;j<ny;++j) for(int i=0;i<nu;++i) {
+            const int ix=i%nx;
+            u[j][1][i]=1.0f+0.1f*std::cos(float(2.0*pi*ix/nx));
+        }
+        for(int j=0;j<nv;++j) for(int i=0;i<nx;++i) {
+            const int ix=i%unique_nx;
+            v[j][1][i]=1.0f+0.1f*std::cos(float(2.0*pi*ix/unique_nx));
+        }
+        if (nonuniform) {
+            for(int j=0;j<ny;++j) for(int i=0;i<nx;++i) {
+                const int jy=j%unique_ny;
+                const float sy=std::cos(float(2.0*pi*(jy+0.5)/unique_ny));
+                mu[j][i]=8000.0f*sy;
+                for(int k=0;k<nw;++k) {
+                    const float eta=float(k)/float(nz);
+                    ph[j][k][i]=gravity*20.0f*sy*eta*eta;
+                }
+            }
+        }
+        // The public RHS applies projectStateBoundaries before unpacked
+        // tendencies are formed. Match that symmetric-normal-V input in the
+        // independent helper and source-extracted actual-RHS fixtures.
+        v.select(0,0).zero_();
+        if (packed) {
+            v.select(0,ny-1).zero_();
+            v.select(0,ny).copy_(-v.select(0,ny-2));
+        } else {
+            v.select(0,ny).zero_();
+        }
+        return torch::cat({u.reshape({-1}),v.reshape({-1}),w.reshape({-1}),
+                           ph.reshape({-1}),theta.reshape({-1}),mu.reshape({-1})});
+    }();
+    const auto set_config=[&](float khdif,float kvdif) {
+        cfg=SDIRK3Config{};
+        cfg.diffusion_option=2;
+        cfg.khdif=khdif; cfg.kvdif=kvdif;
+        cfg.mass_coordinate_mode=1;
+        cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false;
+        cfg.wrf_damp_opt=0;
+        cfg.imex_split_mode=3;
+        cfg.hevi_split=false;
+        cfg.use_stress_tensor=true;
+    };
+    const auto configure=[&](VActualRhsFixture& tile,float khdif,float kvdif,
+                             bool stress=true) {
+        set_config(khdif,kvdif);
+        cfg.use_stress_tensor=stress;
+        auto& solver=tile.solver;
+        auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
+        TORCH_CHECK(grid,"V actual-RHS fixture has no extended GridInfo");
+        grid->smagorinsky_opt=1;
+        if(grid->qv.defined() && grid->qv.numel()>0) grid->qv=torch::zeros_like(grid->qv);
+        (solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,
+            false,false,false,false,false,"calc_ww_cp Omega (V actual-RHS fixture)");
+        TORCH_CHECK(cfg.effective_wrf_omega_ww_cp() &&
+                    (solver.*access(WdampContractTag{})).active &&
+                    (solver.*access(WdampContractTag{})).x_policy==WWCPBoundaryPolicy::Periodic &&
+                    (solver.*access(WdampContractTag{})).y_policy==WWCPBoundaryPolicy::SymmetricReplicate &&
+                    grid->smagorinsky_opt==1 && solver.*access(FnmFromWrfTag{}) &&
+                    solver.getNumMoistSpecies()==0 &&
+                    !(solver.*access(KhMomOverrideTag{})).defined() &&
+                    !(solver.*access(KhScalarOverrideTag{})).defined() &&
+                    !(solver.*access(CaptureThetaTag{})),
+                    "V actual-RHS fixture did not establish native dry km_opt=1 gates");
+    };
+    const auto run_rhs=[&](float khdif,float kvdif,bool stress=true) {
+        set_config(khdif,kvdif);
+        cfg.use_stress_tensor=stress;
+        VActualRhsFixture tile(packed,dx,map,mu_base_value,c1_value,c2_value,
+                               pbase_value,gravity,unique_nx,nonuniform);
+        configure(tile,khdif,kvdif,stress);
+        const auto frozen_state=state.detach().clone();
+        const auto rhs=(tile.solver.*access(ActualRhsTag{}))(
+            frozen_state.clone(),RhsMode::ExplicitOnly).detach().clone();
+        TORCH_CHECK(torch::equal(frozen_state,state),
+                    "actual RHS probe changed its frozen input state");
+        return rhs;
+    };
+
+    // Build the raw helper components independently on an identical solver
+    // configuration, then observe the public production RHS via ON/OFF calls.
+    set_config(kh,kv);
+    VActualRhsFixture tile(packed,dx,map,mu_base_value,c1_value,c2_value,
+                           pbase_value,gravity,unique_nx,nonuniform);
+    configure(tile,kh,kv);
+    auto& solver=tile.solver;
+    const auto u=state.slice(0,0,su).view({ny,nz,nu});
+    const auto v=state.slice(0,su,su+sv).view({nv,nz,nx});
+    const auto w=state.slice(0,su+sv,su+sv+sw).view({ny,nw,nx});
+    const auto ph=state.slice(0,su+sv+sw,su+sv+2*sw).view({ny,nw,nx});
+    const auto theta=state.slice(0,su+sv+2*sw,su+sv+2*sw+st).view({ny,nz,nx});
+    const auto mu=state.slice(0,total-sm,total).view({ny,nx});
+    auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
+    auto ph_base=grid->ph_base.to(opt);
+    const auto ph_full=ph+ph_base;
+    const int mass_m=packed?ny-1:ny, mass_n=unique_nx;
+    const auto z_core=(ph_full.slice(0,0,mass_m).slice(2,0,mass_n))/gravity;
+    const auto left=torch::cat({z_core.slice(2,mass_n-1,mass_n),z_core},2);
+    const auto right=torch::cat({z_core,z_core.slice(2,0,1)},2);
+    const auto zx_core=(right-left)*(1.0f/dx);
+    torch::Tensor zx_stage;
+    if(packed) {
+        const auto zx_x=torch::cat({zx_core,zx_core.slice(2,1,2)},2);
+        zx_stage=torch::cat({zx_x,zx_x.slice(0,mass_m-1,mass_m)},0);
+    } else zx_stage=zx_core;
+    const auto zy_in=(z_core.slice(0,1,mass_m)-z_core.slice(0,0,mass_m-1))*(1.0f/dx);
+    const auto zy_core=torch::cat({torch::zeros({1,nw,mass_n},opt),zy_in,
+                                   torch::zeros({1,nw,mass_n},opt)},0);
+    torch::Tensor zy_stage;
+    if(packed) {
+        const auto zy_x=torch::cat({zy_core,zy_core.slice(2,0,1)},2);
+        zy_stage=torch::cat({zy_x,zy_x.slice(0,mass_m-1,mass_m)},0);
+    } else zy_stage=zy_core;
+    const auto rdzw_core=(z_core.slice(1,1,nw)-z_core.slice(1,0,nz)).reciprocal();
+    const auto rdz_bottom=(2.0f/(z_core.slice(1,1,2)-z_core.slice(1,0,1)));
+    const auto rdz_middle=2.0f/(z_core.slice(1,2,nw)-z_core.slice(1,0,nz-1));
+    const auto rdz_top=torch::zeros({mass_m,1,mass_n},opt);
+    const auto rdz_core=torch::cat({rdz_bottom,rdz_middle,rdz_top},1);
+    const auto extend_mass=[&](const torch::Tensor& q) {
+        if(!packed) return q;
+        const auto x=torch::cat({q,q.slice(2,0,1)},2);
+        return torch::cat({x,x.slice(0,mass_m-1,mass_m)},0);
+    };
+    const auto rdzw_stage=extend_mass(rdzw_core);
+    const auto rdz_stage=extend_mass(rdz_core);
+    const auto rdnw=(solver.*access(RdnwTag{}))(torch::kCPU,torch::kFloat32,nz);
+    const auto rdy=torch::full({1},1.0f/dx,opt);
+    const auto c1_tensor=torch::tensor(c1h,opt);
+    const auto c2_tensor=torch::tensor(c2h,opt);
+    const auto pbase=torch::full({ny,nz,nx},pbase_value,opt);
+    const auto thbase=torch::full({ny,nz,nx},300.0f,opt);
+    const auto mu_base=grid->mu_base.to(opt);
+    const auto alb=compute_inverse_density(thbase,pbase,287.0f,717.5f,1004.5f,100000.0f);
+    const auto rho=calc_p_rho_wrf(ph,theta,mu,mu_base,alb,pbase,rdnw,
+        c1_tensor,c2_tensor,287.0f,717.5f,1004.5f,100000.0f,300.0f).alt.reciprocal();
+    const auto mu_full=mu+mu_base;
+    const auto muv=(solver.*access(AvgYToVTag{}))(mu_full,nv);
+    const auto kh_field=torch::full({ny,nz,nx},kh,opt);
+    const auto kv_w_field=torch::full({ny,nw,nx},kv,opt);
+    const auto kv_profile=2.0f-6.0f*(rho-1.0f);
+    const auto layer_mass_v=c1_tensor.view({1,nz,1})*muv.unsqueeze(1)+c2_tensor.view({1,nz,1});
+    const auto alpha_v=layer_mass_v/map;
+    const auto map_u=solver.*access(MapUxTag{}), map_v=solver.*access(MapVxTag{});
+    const auto map_m=solver.*access(MapTxTag{});
+    const auto raw_h=call_option2_momentum_helper(access(VOption2HelperTag{}),solver,
+        u,v,w,kh_field,1.0f/dx,1.0f/dx,map_v,solver.*access(MapVyTag{}),map_m,
+        muv,ph_full,rho,zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto d12_raw=(solver.*access(Defor12StageGeometryTag{}))(
+        u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto d22_raw=(solver.*access(Defor22StageGeometryTag{}))(
+        u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto defor23=(solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdy,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto raw_z=(solver.*access(VerticalVStressTag{}))(
+        v,defor23,kv_w_field,rho,rdnw).contiguous();
+    const auto raw_z_profile=(solver.*access(VerticalVStressTag{}))(
+        v,defor23,kv_profile,rho,rdnw).contiguous();
+    const auto raw_z_product_mutant=(solver.*access(VerticalVStressTag{}))(
+        v,defor23,torch::ones_like(kv_profile),rho*kv_profile,rdnw).contiguous();
+    const auto rhs_off=run_rhs(0.0f,0.0f);
+    const auto rhs_h_only_on_full=run_rhs(kh,0.0f);
+    const auto rhs_h_only_full=rhs_h_only_on_full-rhs_off;
+    const auto rhs_z_only_on_full=run_rhs(0.0f,kv);
+    const auto rhs_z_only_full=rhs_z_only_on_full-rhs_off;
+    const auto rhs_both_on_full=run_rhs(kh,kv);
+    const auto rhs_both_full=rhs_both_on_full-rhs_off;
+    const auto rhs_v_block=[&](const torch::Tensor& q) {
+        return q.slice(0,su,su+sv).view({nv,nz,nx}).contiguous();
+    };
+    const auto rhs_mu_block=[&](const torch::Tensor& q) {
+        return q.slice(0,total-sm,total).view({ny,nx}).contiguous();
+    };
+    const auto rhs_both=rhs_v_block(rhs_both_full);
+    const auto rhs_h_only=rhs_v_block(rhs_h_only_full);
+    const auto rhs_z_only=rhs_v_block(rhs_z_only_full);
+    const auto rhs_off_v=rhs_v_block(rhs_off);
+    const auto rhs_h_only_on=rhs_v_block(rhs_h_only_on_full);
+    const auto rhs_z_only_on=rhs_v_block(rhs_z_only_on_full);
+    const auto rhs_both_on=rhs_v_block(rhs_both_on_full);
+    const double rhs_off_v_signal=rhs_v_block(rhs_off).abs().max().item<double>();
+    const auto mu_both=rhs_mu_block(rhs_both_full);
+    // Repeat ON/OFF in both orders on one solver. Inputs stay frozen clones;
+    // comparison with fresh-solver runs catches order-dependent RHS caches.
+    VActualRhsFixture sequence_tile(packed,dx,map,mu_base_value,c1_value,c2_value,
+                                    pbase_value,gravity,unique_nx,nonuniform);
+    configure(sequence_tile,kh,kv);
+    const auto actual_same_solver=[&]() {
+        return (sequence_tile.solver.*access(ActualRhsTag{}))(
+            state.detach().clone(),RhsMode::ExplicitOnly).detach().clone();
+    };
+    configure(sequence_tile,0.0f,0.0f);
+    const auto seq_off_first=actual_same_solver();
+    configure(sequence_tile,kh,kv);
+    const auto seq_on_after_off=actual_same_solver();
+    configure(sequence_tile,0.0f,0.0f);
+    const auto seq_off_after_on=actual_same_solver();
+    configure(sequence_tile,kh,kv);
+    const auto seq_on_second=actual_same_solver();
+    const double same_solver_order_error=std::max(
+        (rhs_v_block(seq_on_after_off-seq_off_first)-rhs_both).abs().max().item<double>(),
+        (rhs_v_block(seq_on_second-seq_off_after_on)-rhs_both).abs().max().item<double>());
+    const double mv=mu_base_value;
+    const double alpha=(c1_value*mu_base_value+c2_value)/map;
+    const auto ah=raw_h.accessor<float,3>();
+    const auto az=raw_z.accessor<float,3>();
+    const auto az_profile=raw_z_profile.accessor<float,3>();
+    const auto az_product_mutant=raw_z_product_mutant.accessor<float,3>();
+    const auto hrate=rhs_h_only.accessor<float,3>();
+    const auto zrate=rhs_z_only.accessor<float,3>();
+    const auto bothrate=rhs_both.accessor<float,3>();
+    const auto offrate=rhs_off_v.accessor<float,3>();
+    const auto honrate=rhs_h_only_on.accessor<float,3>();
+    const auto zonrate=rhs_z_only_on.accessor<float,3>();
+    const auto bonrate=rhs_both_on.accessor<float,3>();
+    const auto muba=mu_both.accessor<float,2>();
+    const auto va=v.accessor<float,3>();
+    const auto mv_acc=muv.accessor<float,2>();
+    const auto alpha_v_acc=alpha_v.accessor<float,3>();
+    const auto rho_acc=rho.accessor<float,3>();
+    const auto d12_contig=d12_raw.contiguous();
+    const auto d22_contig=d22_raw.contiguous();
+    const auto d12_acc=d12_contig.accessor<float,3>();
+    const auto d22_acc=d22_contig.accessor<float,3>();
+    for(int j=0;j<d12_raw.size(0);++j) for(int k=0;k<d12_raw.size(1);++k)
+        for(int i=0;i<d12_raw.size(2);++i) {
+            std::cout<<"VACT_D12 "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(10)<<d12_acc[j][k][i]<<'\n';
+            std::cout<<"VACT_D22 "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(10)<<d22_acc[j][k][i]<<'\n';
+        }
+    for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i)
+        std::cout<<"VACT_RHO "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(10)<<rho_acc[j][k][i]<<'\n';
+    for(int j=1;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i) {
+        std::cout<<"VACT_RAW_H "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<ah[j][k][i]<<'\n';
+        std::cout<<"VACT_RAW_Z "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<az[j][k][i]<<'\n';
+        if (nonuniform) {
+            std::cout<<"VACT_Z_PROFILE_RAW "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(10)<<az_profile[j][k][i]<<'\n';
+            std::cout<<"VACT_Z_PRODUCT_MUTANT "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(10)<<az_product_mutant[j][k][i]<<'\n';
+        }
+        std::cout<<"VACT_H_RATE "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<hrate[j][k][i]<<'\n';
+        std::cout<<"VACT_Z_RATE "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<zrate[j][k][i]<<'\n';
+        const float mdot_both=0.5f*(muba[j-1][i]+muba[j][i]);
+        const float rate_both=c1_value*mdot_both/(c1_value*mu_base_value+c2_value);
+        const float rv_both=mu_base_value*(bothrate[j][k][i]+va[j][k][i]*rate_both);
+        std::cout<<"VACT_BOTH_RATE "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<bothrate[j][k][i]<<'\n';
+        std::cout<<"VACT_OFF_V "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<offrate[j][k][i]<<'\n';
+        std::cout<<"VACT_ON_H "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<honrate[j][k][i]<<'\n';
+        std::cout<<"VACT_ON_Z "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<zonrate[j][k][i]<<'\n';
+        std::cout<<"VACT_ON_BOTH "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<bonrate[j][k][i]<<'\n';
+        std::cout<<"VACT_MU_BOTH "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<mdot_both<<'\n';
+        std::cout<<"VACT_RATE_BOTH "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<rate_both<<'\n';
+        std::cout<<"VACT_RV_BOTH "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<rv_both<<'\n';
+        std::cout<<"VACT_M_V "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<mv_acc[j][i]<<'\n';
+        std::cout<<"VACT_MSFVX "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<map<<'\n';
+        std::cout<<"VACT_ALPHA_V "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(10)<<alpha_v_acc[j][k][i]<<'\n';
+    }
+    const double rho_min=rho.min().item<double>(),rho_max=rho.max().item<double>();
+    const double rho_error=nonuniform?0.0:(rho-1.0f).abs().max().item<double>();
+    std::cout<<"VACT_META packed="<<packed<<" unique_nx="<<unique_nx
+             <<" owned_v="<<(packed?ny-2:ny-1)*nz*unique_nx
+             <<" endpoint_aliases="<<(packed?(ny-2)*nz:0)<<" rho_error="<<rho_error
+             <<" khdif="<<kh<<" kvdif="<<kv<<" map="<<map
+             <<" M_v="<<mv<<" alpha_v="<<alpha
+             <<" nonuniform="<<nonuniform<<" rho_min="<<rho_min<<" rho_max="<<rho_max
+             <<" rhs_off_v_signal="<<rhs_off_v_signal
+             <<" same_solver_order_error="<<same_solver_order_error<<'\n';
+    return std::isfinite(rho_error) && rho_error<2e-6;
+}
 
 bool run(torch::Dtype dtype) {
     const double eps = dtype == torch::kFloat32
@@ -310,6 +1440,361 @@ bool run_packed_periodic_seam(torch::Dtype dtype) {
     return pass;
 }
 
+// Fortran module_diffusion_em.F cal_deform_and_div forms U shear as
+// du/dz * 0.5*(rdz(i,k,j)+rdz(i-1,k,j)) (around lines 837-845). Packed
+// periodic X has N unique mass columns plus an alias at column N. U faces are
+// [west seam, interior faces, east seam, face-1 alias].
+bool run_packed_u_rdz_seam() {
+    using wrf::sdirk3::test::TileCase;
+    constexpr int unique_n=nx-1;
+    wrf::sdirk3::g_sdirk3_config=wrf::sdirk3::SDIRK3Config{};
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    TileCase tile(1.0f);
+    tile.solver.setBoundaryConditions(true,false,false,false,true,true,
+                                      false,false,false,false);
+    tile.solver.setWRFIndices(1,nx,1,ny,1,nz, 1,nx,1,ny,1,nz+1,
+                              -2,nx+4,-2,ny+4,1,nz+1);
+
+    auto u=torch::zeros({ny,nz,nx+1},opt);
+    u.select(1,1).fill_(1.0f); // isolated vertical shear at W level k=1
+    const auto w=torch::zeros({ny,nw,nx},opt);
+    auto rdz=torch::empty({ny,nw,nx},opt);
+    const float values[nx]={1,2,3,4,5,6,7,1};
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        rdz[j][k][i]=values[i];
+    const auto zx=torch::zeros({ny,nw,nx+1},opt);
+    const auto zy=torch::zeros({ny+1,nw,nx},opt);
+    const auto rdzw=torch::ones({ny,nz,nx},opt);
+    const auto rdnw=torch::ones({nz},opt);
+    const auto actual=(tile.solver.*access(Defor13StageGeometryTag{}))(
+        u,w,torch::tensor({1.0f},opt),rdnw,zx,zy,rdzw,rdz).contiguous();
+    const auto a=actual.accessor<float,3>();
+
+    auto expected_face=[&](int face) {
+        if (face==nx) return 0.5f*(values[0]+values[1]); // packed terminal aliases face 1
+        const int left=face==0 ? unique_n-1 : face-1;
+        const int right=face==unique_n ? 0 : face;
+        return 0.5f*(values[left]+values[right]);
+    };
+    double max_error=0.0;
+    for (int j=0;j<ny;++j) for (int face=0;face<=nx;++face)
+        max_error=std::max(max_error,std::abs(double(a[j][1][face]-expected_face(face))));
+    double west_alias=0.0, terminal_alias=0.0;
+    for (int j=0;j<ny;++j) {
+        west_alias=std::max(west_alias,std::abs(double(a[j][1][unique_n]-a[j][1][0])));
+        terminal_alias=std::max(terminal_alias,std::abs(double(a[j][1][nx]-a[j][1][1])));
+    }
+    const double west_expected=expected_face(0), face1_expected=expected_face(1);
+    const double tolerance=2.0e-6;
+    const bool pass=max_error<=tolerance && west_alias<=tolerance &&
+                    terminal_alias<=tolerance && west_expected==4.0 && face1_expected==1.5;
+    std::cout << (pass?"PASS ":"FAIL ") << "packed periodic U rdz seam"
+              << " west=" << a[1][1][0] << " expected_west=" << west_expected
+              << " face1=" << a[1][1][1] << " expected_face1=" << face1_expected
+              << " east_alias=" << a[1][1][nx] << " expected_east_alias=" << face1_expected
+              << " max_error=" << max_error << " west_alias_error=" << west_alias
+              << " terminal_alias_error=" << terminal_alias
+              << " tolerance=" << tolerance << '\n';
+    return pass;
+}
+
+// Actual em_b_wave PC2 tile extents: U and defor13 have one extra X point,
+// while rho and Kv remain mass-staggered. The helper's returned tendency must
+// retain the U shape and be finite for these production tensor relationships.
+bool run_vertical_u_stress_actual_shape() {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int u_y = mass_y, u_z = mass_z, u_x = mass_x + 1;
+    constexpr int w_z = mass_z + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    const auto u = torch::zeros({u_y, u_z, u_x}, opt);
+    const auto defor13 = torch::zeros({u_y, w_z, u_x}, opt);
+    const auto rho = torch::ones({mass_y, mass_z, mass_x}, opt);
+    const auto kv = torch::ones_like(rho);
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalUStressTag{}))(
+        u, defor13, kv, rho, rdnw);
+    const bool pass = tendency.sizes() == u.sizes() &&
+                      torch::isfinite(tendency).all().item<bool>();
+    std::cout << (pass ? "PASS " : "FAIL ")
+              << "vertical U stress actual staggered shape"
+              << " u=" << u.sizes() << " rho=" << rho.sizes()
+              << " tendency=" << tendency.sizes() << '\n';
+    return pass;
+}
+
+bool run_vertical_v_stress_actual_shape() {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int v_y = mass_y + 1, v_z = mass_z;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    const auto v = torch::zeros({v_y, v_z, mass_x}, opt);
+    const auto defor23 = torch::zeros({v_y, mass_z + 1, mass_x}, opt);
+    const auto rho = torch::ones({mass_y, mass_z, mass_x}, opt);
+    const auto kv = torch::ones_like(rho);
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalVStressTag{}))(
+        v, defor23, kv, rho, rdnw);
+    const bool pass = tendency.sizes() == v.sizes() &&
+                      torch::isfinite(tendency).all().item<bool>();
+    std::cout << (pass ? "PASS " : "FAIL ")
+              << "vertical V stress actual staggered shape"
+              << " v=" << v.sizes() << " rho=" << rho.sizes()
+              << " tendency=" << tendency.sizes() << '\n';
+    return pass;
+}
+
+int dump_vertical_u_stress_raw(bool zero_k) {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int u_x = mass_x + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    auto u = torch::zeros({mass_y, mass_z, u_x}, opt);
+    auto defor13 = torch::zeros({mass_y, mass_z + 1, u_x}, opt);
+    auto rho = torch::empty({mass_y, mass_z, mass_x}, opt);
+    auto kv = torch::empty_like(rho);
+    for (int j = 0; j < mass_y; ++j) {
+        for (int k = 0; k < mass_z; ++k) {
+            for (int i = 0; i < mass_x; ++i) {
+                rho[j][k][i] = 1.0f + float(k) / 32.0f + float(i) / 512.0f;
+                kv[j][k][i] = 2.0f + float(k) / 64.0f + float(i) / 128.0f;
+            }
+        }
+    }
+    if (zero_k) kv.zero_();
+    for (int j = 0; j < mass_y; ++j)
+        for (int k = 1; k < mass_z; ++k)
+            for (int i = 1; i < mass_x; ++i)
+                defor13[j][k][i] = 0.25f + float(k) / 128.0f + float(i) / 256.0f;
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalUStressTag{}))(
+        u, defor13, kv, rho, rdnw).contiguous();
+    const auto a = tendency.accessor<float, 3>();
+    for (int j = 0; j < mass_y; ++j)
+        for (int k = 0; k < mass_z; ++k)
+            for (int i = 0; i < u_x; ++i)
+                std::cout << "U_RAW " << j << ' ' << k << ' ' << i << ' '
+                          << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
+}
+
+int dump_vertical_v_stress_raw(bool zero_k) {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int v_y = mass_y + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    auto v = torch::zeros({v_y, mass_z, mass_x}, opt);
+    auto defor23 = torch::zeros({v_y, mass_z + 1, mass_x}, opt);
+    auto rho = torch::empty({mass_y, mass_z, mass_x}, opt);
+    auto kv = torch::empty_like(rho);
+    for (int j = 0; j < mass_y; ++j) {
+        for (int k = 0; k < mass_z; ++k) {
+            for (int i = 0; i < mass_x; ++i) {
+                rho[j][k][i] = 1.0f + float(k) / 32.0f + float(i) / 512.0f;
+                kv[j][k][i] = 2.0f + float(k) / 64.0f + float(i) / 128.0f;
+            }
+        }
+    }
+    if (zero_k) kv.zero_();
+    for (int j = 1; j < v_y - 1; ++j)
+        for (int k = 1; k < mass_z; ++k)
+            for (int i = 0; i < mass_x; ++i)
+                defor23[j][k][i] = 0.25f + float(k) / 128.0f +
+                                   float(j) / 256.0f + float(i) / 512.0f;
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalVStressTag{}))(
+        v, defor23, kv, rho, rdnw).contiguous();
+    const auto a = tendency.accessor<float, 3>();
+    for (int j = 0; j < v_y; ++j)
+        for (int k = 0; k < mass_z; ++k)
+            for (int i = 0; i < mass_x; ++i)
+                std::cout << "V_RAW " << j << ' ' << k << ' ' << i << ' '
+                          << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
+}
+
+bool run_vertical_shear_rdz_metric_diagnostic() {
+    constexpr int mass_y = 17, mass_x = 17, mass_z = 16;
+    constexpr int u_x = mass_x + 1, v_y = mass_y + 1, w_z = mass_z + 1;
+    constexpr float dz_m = 1024.0f, du_dk = 0.5f, rdnw_value = 10.0f;
+    constexpr float physical_rdz_value = 1.0f / dz_m;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, rdnw_value), 0);
+    auto z_w = torch::empty({mass_y, w_z, mass_x}, opt);
+    for (int j=0; j<mass_y; ++j) for (int k=0; k<w_z; ++k)
+        for (int i=0; i<mass_x; ++i) z_w[j][k][i] = dz_m*k;
+    auto physical_rdz = torch::zeros_like(z_w);
+    for (int j=0; j<mass_y; ++j) for (int k=1; k<w_z-1; ++k)
+        for (int i=0; i<mass_x; ++i)
+            physical_rdz[j][k][i] = 2.0f/(z_w[j][k+1][i]-z_w[j][k-1][i]);
+    solver.*access(Rdz3dCacheTag{}) = physical_rdz;
+    const auto zx = torch::zeros({mass_y,w_z,mass_x},opt);
+    const auto zy = torch::zeros({v_y,w_z,mass_x},opt);
+    solver.setTerrainSlopes(zx,zy);
+    auto w = torch::zeros({mass_y,w_z,mass_x},opt);
+    auto u = torch::empty({mass_y,mass_z,u_x},opt);
+    auto v = torch::empty({v_y,mass_z,mass_x},opt);
+    for (int k=0; k<mass_z; ++k) {
+        u.select(1,k).fill_(du_dk*k);
+        v.select(1,k).fill_(du_dk*k);
+    }
+    const auto rdnw = torch::full({mass_z},rdnw_value,opt);
+    const auto rdx = torch::ones({1},opt);
+    const auto stage_rdz = torch::full({mass_y,mass_z,mass_x},physical_rdz_value,opt);
+    const auto empty = torch::Tensor();
+    auto u_fallback=(solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx,rdnw,zx,zy,empty,empty);
+    auto u_stage=(solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx,rdnw,zx,zy,empty,stage_rdz);
+    auto v_fallback=(solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx,rdnw,zx,zy,empty,empty);
+    auto v_stage=(solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx,rdnw,zx,zy,empty,stage_rdz);
+    const double expected=double(du_dk)*physical_rdz_value;
+    const double legacy=double(du_dk)*(2.0*rdnw_value);
+    auto check=[&](const char* axis,const torch::Tensor& fallback,
+                   const torch::Tensor& stage,const torch::Tensor& state,
+                   int i_sample,int j_sample) {
+        auto exp=torch::zeros_like(stage);
+        exp.slice(1,1,mass_z).fill_(expected);
+        const double err_fallback=(fallback.slice(1,1,mass_z)-
+            exp.slice(1,1,mass_z)).abs().max().item<double>();
+        const double err_stage=(stage-exp).abs().max().item<double>();
+        const double fallback_value=fallback[j_sample][1][i_sample].item<double>();
+        const double stage_value=stage[j_sample][1][i_sample].item<double>();
+        const double legacy_error=std::abs(fallback_value-legacy);
+        const bool pass=err_fallback>1.0 && err_stage<1.0e-7 && legacy_error<1.0e-6;
+        std::cout << (pass?"PASS ":"FAIL ") << "RDZ_" << axis
+                  << " expected=" << std::setprecision(17) << expected
+                  << " fallback=" << fallback_value
+                  << " fallback_max_error=" << err_fallback
+                  << " legacy_2rdnw=" << legacy << " legacy_model_error=" << legacy_error
+                  << " stage=" << stage_value << " stage_max_error=" << err_stage
+                  << " physical_rdz=" << physical_rdz_value
+                  << " rdnw=" << rdnw_value << " dz_m=" << dz_m
+                  << " cache_shape=17x17x17 stage_shape=17x16x17\n";
+        return pass;
+    };
+    const bool u_ok=check("U",u_fallback,u_stage,u,1,1);
+    const bool v_ok=check("V",v_fallback,v_stage,v,1,1);
+    return u_ok&&v_ok;
+}
+
+int dump_vertical_w_mixing_contract(const std::string& coefficient, bool stage) {
+    constexpr int ny=17,nx=17,nz=16;
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    cfg.specified=false;
+    cfg.nested=false;
+    cfg.open_xs=cfg.open_xe=cfg.open_ys=cfg.open_ye=false;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    TileSDIRK3UnifiedSolver solver(nx,ny,nz,1.0f,1.0f,{1.0f},{1.0f},
+                                   std::vector<float>(nz,10.0f),0);
+    auto grid=solver.getGridInfo();
+    TORCH_CHECK(grid,"W stress fixture requires grid info");
+    auto dn=torch::full({nz+1},-0.5f,opt);
+    auto rdn=torch::full({nz+1},2.0f,opt);
+    dn[0]=0.0f;
+    rdn[0]=0.0f;
+    grid->dn=dn;
+    grid->rdn=rdn;
+    grid->rdzw=torch::full({nz},1.0f/1024.0f,opt);
+    const float physical_rdzw=1.0f/1024.0f;
+    solver.*access(Rdzw3dCacheTag{})=torch::full({ny,nz,nx},physical_rdzw,opt);
+    auto w=torch::zeros({ny,nz+1,nx},opt);
+    auto rho=torch::empty({ny,nz,nx},opt);
+    auto xkmh=torch::empty_like(rho);
+    auto xkmv=torch::empty_like(rho);
+    auto defor33=torch::empty_like(rho);
+    for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i) {
+        rho[j][k][i]=1.0f+float(k)/32.0f+float(i)/512.0f;
+        xkmh[j][k][i]=4.0f+float(k)/8.0f+float(i)/128.0f;
+        xkmv[j][k][i]=12.0f+float(k)/16.0f+float(i)/64.0f;
+        defor33[j][k][i]=0.25f+float(k)/16.0f+float(i)/256.0f;
+    }
+    w.select(1,0).zero_();
+    for(int j=0;j<ny;++j) for(int i=0;i<nx;++i) {
+        float w_value=0.0f;
+        w[j][0][i]=w_value;
+        for(int k=0;k<nz;++k) {
+            w_value += defor33[j][k][i].item<float>()/(2.0f*physical_rdzw);
+            w[j][k+1][i]=w_value;
+        }
+    }
+    const auto rdnw=torch::full({nz},10.0f,opt);
+    // The legacy call reconstructs D33 from W and uses a cached physical
+    // metric in the divergence. The stage call uses this same prescribed D33,
+    // horizontal xkmh, and the positive magnitude of Fortran's signed 1/dn.
+    const auto& km=coefficient=="xkmh"?xkmh:(coefficient=="zero"?torch::zeros_like(xkmh):xkmv);
+    const auto tendency=(stage
+        ? (solver.*access(VerticalWMixingStageTag{}))(w,km,rdnw,rho,defor33,rdn)
+        : (solver.*access(VerticalWMixingLegacyTag{}))(w,km,rdnw,rho)).contiguous();
+    TORCH_CHECK(tendency.sizes()==w.sizes(),"W stress output shape mismatch");
+    const auto a=tendency.accessor<float,3>();
+    for(int j=0;j<ny;++j) for(int k=0;k<nz+1;++k) for(int i=0;i<nx;++i)
+        std::cout << "W_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
+}
+
 // Flat normal stresses: Fortran tau=-2*rho*K*Dq and signed dnw=-1.
 // Raw coupled tendency is +2*g*dz*rho*K*Lq, independent of column mass.
 bool run_normal_stress(torch::Dtype dtype) {
@@ -351,11 +1836,12 @@ bool run_normal_stress(torch::Dtype dtype) {
                 0.03*torch::arange(nx+1,opt).view({1,nx+1}));
             const auto mu_v = mass_scale*MUT*(vmap +
                 0.02*torch::arange(ny+1,opt).view({ny+1,1}));
+            const auto empty=torch::Tensor();
             const auto actual = u_mode
-                ? (tile.solver.*access(MomentumDiffusionTag{}))(
-                    u,v,w,viscosity,1,1,umap,umap,mmap,mmap,mu_u,phi,rho)
-                : (tile.solver.*access(VMomentumDiffusionTag{}))(
-                    u,v,w,viscosity,1,1,vmap,vmap,mmap,mmap,mu_v,phi,rho);
+                ? call_option2_momentum_helper(access(UOption2HelperTag{}),tile.solver,
+                    u,v,w,viscosity,1,1,umap,umap,mmap,mu_u,phi,rho,empty,empty,empty,empty)
+                : call_option2_momentum_helper(access(VOption2HelperTag{}),tile.solver,
+                    u,v,w,viscosity,1,1,vmap,vmap,mmap,mu_v,phi,rho,empty,empty,empty,empty);
             auto expected = torch::zeros_like(actual);
             const double rho_value = rho[0][0][0].item<double>();
             if (u_mode) for (int j=1; j<ny-1; ++j) for (int k=0; k<nz; ++k)
@@ -547,6 +2033,42 @@ bool run_option1_scalar_rhs_contract() {
                   << " budget=" << reference_budget << '\n';
         ok=pass && ok;
     }
+
+    // Actual option-1 RHS sign check: zero horizontal K, flat unit maps,
+    // zero velocity and a monotone vertical theta perturbation isolate the
+    // shared vertical scalar helper without claiming full option-1 parity.
+    cfg.khdif=0.0f;
+    cfg.kvdif=10.0f;
+    TileCase vertical(100.0f);
+    const auto t_init=prepare(vertical);
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+        const int idx=(j*nz+k)*nx+i;
+        vertical.theta[idx]=t_init[idx]+2.0f*k;
+    }
+    (vertical.solver.*access(MapTxTag{}))=torch::ones({ny,nx});
+    (vertical.solver.*access(MapTyTag{}))=torch::ones({ny,nx});
+    (vertical.solver.*access(MapUxTag{}))=torch::ones({ny,nx+1});
+    (vertical.solver.*access(MapUyTag{}))=torch::ones({ny,nx+1});
+    (vertical.solver.*access(MapVxTag{}))=torch::ones({ny+1,nx});
+    (vertical.solver.*access(MapVyTag{}))=torch::ones({ny+1,nx});
+    const auto vertical_state=vertical.state();
+    const auto vertical_on=(vertical.solver.*access(ActualRhsTag{}))(
+        vertical_state,RhsMode::ExplicitOnly).detach().clone();
+    cfg.kvdif=0.0f;
+    const auto vertical_off=(vertical.solver.*access(ActualRhsTag{}))(
+        vertical_state,RhsMode::ExplicitOnly).detach().clone();
+    const auto delta=(vertical_on-vertical_off).slice(0,su+sv+2*sw,
+                                                       su+sv+2*sw+st).view({ny,nz,nx});
+    const auto q=torch::empty({ny,nz,nx});
+    for (int k=0;k<nz;++k) q.select(1,k).fill_(2.0f*k);
+    const double signal=delta.abs().max().item<double>();
+    const double work=(q*delta).sum().item<double>();
+    const bool vertical_pass=torch::isfinite(vertical_on).all().item<bool>() &&
+        torch::isfinite(vertical_off).all().item<bool>() && signal>1.0e-8 && work<0.0;
+    std::cout << (vertical_pass?"PASS ":"FAIL ")
+              << "option-1 actual RHS vertical scalar sign signal=" << signal
+              << " fixture_q_dot_tend=" << work << '\n';
+    ok=vertical_pass&&ok;
     return ok;
 }
 
@@ -565,7 +2087,7 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         const auto x=torch::cat({q,q.slice(2,0,1)},2);
         return torch::cat({x,x.slice(0,m-1,m)},0);
     };
-    const auto make_state=[&](bool packed) {
+    const auto make_state=[&](bool packed, bool change_stage_vertical_geometry=false) {
         const int m=packed?ny-1:ny,n=packed?nx-1:nx;
         auto theta=torch::empty({ny,nz,nx},opt);
         auto mu=torch::empty({ny,nx},opt);
@@ -575,15 +2097,20 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         auto mu_values=mu.accessor<float,2>();
         for (int j=0;j<m;++j) for (int k=0;k<nz;++k) for (int i=0;i<n;++i) {
             const double x=2*pi*i/n,y=pi*(j+0.5)/m;
-            theta_values[j][k][i]=4.0*std::sin(x)+2.5*std::cos(y)+
-                1.2*(k+1)*(0.5*std::sin(x)+0.3*std::cos(y));
+            theta_values[j][k][i]=change_stage_vertical_geometry
+                ? 2.0*(k+1)
+                : 4.0*std::sin(x)+2.5*std::cos(y)+
+                  1.2*(k+1)*(0.5*std::sin(x)+0.3*std::cos(y));
         }
         for (int j=0;j<m;++j) for (int i=0;i<n;++i) {
             const double x=2*pi*i/n,y=pi*(j+0.5)/m;
             mu_values[j][i]=128.0*i+64.0*j+16.0*std::sin(x);
             const float height=600.0f*std::sin(x)+400.0f*std::cos(y);
-            for (int k=0;k<nw;++k)
-                ph_values[j][k][i]=static_cast<float>(gravity)*height;
+            for (int k=0;k<nw;++k) {
+                const double eta=double(k)/(nw-1);
+                const double shape=change_stage_vertical_geometry ? eta*eta : 0.0;
+                ph_values[j][k][i]=static_cast<float>(gravity)*(height+300.0*shape*std::sin(x+y));
+            }
         }
         if (packed) {
             theta=pack_mass(theta.slice(0,0,m).slice(2,0,n),m);
@@ -645,20 +2172,31 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     };
     const auto evaluate=[&](bool on,bool packed,int km_opt=1,
                             const torch::Tensor& state_override=torch::Tensor(),
-                            bool make_reference=true) -> Result {
+                            bool make_reference=true,
+                            bool partial_owned=false,
+                            int supplied_coefficient=0,
+                            bool zero_namelist_k=false,
+                            bool vertical_scalar_case=false,
+                            bool stress_scalar_path=true) -> Result {
         cfg=SDIRK3Config{};
         cfg.diffusion_option=2;
-        cfg.khdif=on?1000.0f:0.0f;
-        cfg.kvdif=0.0f;
+        cfg.khdif=vertical_scalar_case?1.0f:
+            (zero_namelist_k?0.0f:(on?1000.0f:0.0f));
+        cfg.kvdif=vertical_scalar_case && on ? 10.0f : 0.0f;
         cfg.mass_coordinate_mode=1;
         cfg.wrf_omega_ww_cp=false;
         cfg.mu_horizontal_div_only=false;
         cfg.wrf_damp_opt=0;
         cfg.imex_split_mode=3;
         cfg.hevi_split=false;
-        cfg.use_stress_tensor=false;
+        cfg.use_stress_tensor=vertical_scalar_case && stress_scalar_path;
         Option2RhsFixture fixture(packed,dx,c1h,c2h);
         auto& solver=fixture.solver;
+        if (partial_owned) {
+            TORCH_CHECK(!packed,"partial ownership fixture must use physical layout");
+            solver.setWRFIndices(2,nx+1,1,ny+1,1,nz,
+                1,nx+1,1,ny+1,1,nw,-2,nx+4,-2,ny+4,1,nw);
+        }
         TORCH_CHECK(solver.*access(FnmFromWrfTag{}),
                     "RHS fixture must use WRF-provided fnm/fnp");
         auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
@@ -674,8 +2212,20 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
             true,1,1,true,true,false,false,false,false,false,true,true,
             false,false,false,false,false,"calc_ww_cp Omega (test fixture)");
 
+        if (supplied_coefficient != 0) {
+            const std::vector<float> kh_mom(ny*nz*nx,1.0f);
+            const std::vector<float> kh_scalar(ny*nz*nx,1.0f);
+            const std::vector<float> kv_mom(ny*nw*nx,1.0f);
+            const std::vector<float> kv_scalar(ny*nw*nx,1.0f);
+            (solver.*access(DiffusionTag{}))(
+                supplied_coefficient==1 ? kh_mom.data() : nullptr,
+                supplied_coefficient==2 ? kv_mom.data() : nullptr,
+                supplied_coefficient==4 ? kh_scalar.data() : nullptr,
+                supplied_coefficient==3 ? kv_scalar.data() : nullptr);
+        }
+
         const int m=packed?ny-1:ny,n=packed?nx-1:nx;
-        const auto state=state_override.defined()?state_override:make_state(packed);
+        const auto state=state_override.defined()?state_override:make_state(packed,vertical_scalar_case);
         auto rhs=(solver.*access(ActualRhsTag{}))(
             state,RhsMode::ExplicitOnly).clone();
 
@@ -723,8 +2273,9 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         const double terrain_signal=std::max(zx.abs().max().item<double>(),
                                              zy.abs().max().item<double>());
         const auto geometry=torch::cat({rdzw.reshape({-1}),zx.reshape({-1}),
-                                         zy.reshape({-1})}).detach().clone();
-        if (!on || !make_reference)
+                                         zy.reshape({-1}),
+                                         (solver.*access(Rdz3dCacheTag{})).slice(1,0,nz+1).reshape({-1})}).detach().clone();
+        if ((!on || !make_reference) && !vertical_scalar_case)
             return {rhs,torch::Tensor(),torch::Tensor(),geometry,terrain_signal};
         auto q=core3(state_t);
         auto mu_core=core2(state_mu);
@@ -736,7 +2287,74 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
                                                 1004.5f,100000.0f);
         const auto prho=calc_p_rho_wrf(phi_core,q,mu_core,mubase,alb,pbase,
             rdnw,c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f);
-        const auto rho=prho.alt.reciprocal();
+        auto rho=prho.alt.reciprocal();
+        if (vertical_scalar_case) {
+            // Source-equivalent extraction of module_diffusion_em.F's
+            // vertical_diffusion_s H3 and tendency loops. `z_w` is the exact
+            // current-RHS full-height profile used by Step 9; `rdz_cache` is
+            // the helper-owned cached metric. `rk_addtend_dry` divides theta
+            // by msfty, which is one in this fixture.
+            const auto rdz_stage_core=torch::cat({
+                (2.0/(z_w.slice(1,1,2)-z_w.slice(1,0,1))),
+                2.0/(z_w.slice(1,2,nw)-z_w.slice(1,0,nw-2)),
+                torch::zeros({m,1,n},opt)},1);
+            const auto rdz_stage=packed
+                ? pack_mass(rdz_stage_core,m) : rdz_stage_core;
+            const auto rdz_cache_full=(solver.*access(Rdz3dCacheTag{})).slice(1,0,nw);
+            const auto rdz_cache=packed
+                ? core3(rdz_cache_full) : rdz_cache_full;
+            if (!stress_scalar_path) {
+                const auto t_full=q+thbase;
+                const auto pi_full=torch::pow(287.0f*t_full/100000.0f,
+                                               1004.5f/717.5f);
+                const auto p_full=100000.0f*pi_full*
+                    ((mu_core+mubase)/mubase).unsqueeze(1);
+                rho=p_full/(287.0f*t_full);
+            }
+            const float xkhv=30.0f; // canonical km_opt=1: xkhv=3*kvdif
+            const auto h3_fortran=[&](const torch::Tensor& rdz) {
+                auto h=torch::zeros({m,nw,n},opt);
+                const auto rho_avg=0.5f*(rho.slice(1,1,nz)+rho.slice(1,0,nz-1));
+                const auto dq=q.slice(1,1,nz)-q.slice(1,0,nz-1);
+                h.slice(1,1,nz).copy_(-xkhv*rho_avg*dq*rdz.slice(1,1,nz));
+                return h;
+            };
+            const auto tendency_fortran=[&](const torch::Tensor& rdz) {
+                const auto h=h3_fortran(rdz);
+                // WRF eta decreases with k, so its source dnw is negative;
+                // this fixture's getter exposes |rdnw| as a positive magnitude.
+                const auto dnw=-rdnw.reciprocal().view({1,nz,1});
+                return gravity*(h.slice(1,1,nz+1)-h.slice(1,0,nz))/dnw;
+            };
+            // Native km_opt=1 has xkhv=3*kvdif, hence 3*10=30 here.
+            auto vert_expected=tendency_fortran(rdz_stage_core);
+            auto vert_legacy=tendency_fortran(rdz_cache);
+            // The source routine returns raw tendency; the solver converts
+            // it from layer-mass basis after rk_addtend_dry.
+            const double raw_signal=vert_expected.abs().max().item<double>();
+            const auto layer=c1.view({1,nz,1})*(mu_core+mubase).unsqueeze(1)+
+                             c2.view({1,nz,1});
+            vert_expected=vert_expected/layer;
+            vert_legacy=vert_legacy/layer;
+            if (on) {
+                std::cout << "INFO vertical scalar stage rdz max=" << rdz_stage.abs().max().item<double>()
+                          << " cached rdz max=" << rdz_cache.abs().max().item<double>()
+                          << " interior delta=" << (rdz_stage_core.slice(1,1,nz)-
+                                                        rdz_cache.slice(1,1,nz)).abs().max().item<double>()
+                          << " xkhv=" << xkhv << " rdnw0=" << rdnw[0].item<double>()
+                          << " max_rho=" << rho.abs().max().item<double>()
+                          << " raw_signal=" << raw_signal
+                          << " normalized_signal=" << vert_expected.abs().max().item<double>() << '\n';
+            }
+            if (packed) {
+                const auto x=torch::cat({vert_expected,vert_expected.slice(2,0,1)},2);
+                vert_expected=torch::cat({x,x.slice(0,m-1,m)},0);
+                const auto lx=torch::cat({vert_legacy,vert_legacy.slice(2,0,1)},2);
+                vert_legacy=torch::cat({lx,lx.slice(0,m-1,m)},0);
+            }
+            return {rhs,vert_expected.detach().clone(),vert_legacy.detach().clone(),
+                    geometry,terrain_signal};
+        }
         const auto dnw=-rdnw.reciprocal();
         const auto dn=torch::cat({torch::zeros({1},opt),-rdn.slice(0,1,nz).reciprocal()},0);
         // These are the same WRF pointer arrays passed to the fixture setter;
@@ -816,16 +2434,107 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
                   << " tol=" << tolerance << '\n';
         ok=pass&&ok;
     }
+
+    // Exact same state for ON/OFF; perturbation PH changes physical layer
+    // widths with eta. Also exercise the simple scalar branch's stage metric.
+    for (bool packed : {false,true}) {
+      for (bool stress_path : {true,false}) {
+        const auto on=evaluate(true,packed,1,torch::Tensor(),true,false,0,false,true,stress_path);
+        const auto off=evaluate(false,packed,1,torch::Tensor(),false,false,0,false,true,stress_path);
+        const auto observed=(on.rhs-off.rhs).slice(0,theta_begin,theta_begin+st).view({ny,nz,nx});
+        auto state=make_state(packed,true);
+        const auto theta=state.slice(0,theta_begin,theta_begin+st).view({ny,nz,nx});
+        const auto expected=on.expected;
+        const auto stale=on.legacy;
+        const int64_t rdz_offset=on.geometry.numel()-ny*nw*nx;
+        const double error=(observed-expected).abs().max().item<double>();
+        const double stale_error=(observed-stale).abs().max().item<double>();
+        const double signal=expected.abs().max().item<double>();
+        // Supporting sign check for this prescribed monotone profile; the
+        // authoritative comparison is the source equation above, not a
+        // general unweighted energy identity on this variable-metric grid.
+        const double fixture_work=(theta*observed).sum().item<double>();
+        // 128 float32 epsilons times the measured signal bounds the source
+        // formula's several FP32 multiplies/additions without an absolute floor.
+        const double tolerance=128.0*std::numeric_limits<float>::epsilon()*signal;
+        const int64_t loc=expected.abs().reshape({-1}).argmax().item<int64_t>();
+        const bool pass=torch::isfinite(observed).all().item<bool>() &&
+            torch::isfinite(expected).all().item<bool>() && signal>0.0 &&
+            error<=tolerance && stale_error>32.0*tolerance && fixture_work<0.0;
+        std::cout << (pass?"PASS ":"FAIL ") << "option-2 actual RHS vertical scalar stage metric "
+                  << (stress_path?"stress":"simple") << ' '
+                  << "signal=" << observed.abs().max().item<double>()
+                  << " location=" << loc << " observed_at=" << observed.reshape({-1})[loc].item<double>()
+                  << " expected_at=" << expected.reshape({-1})[loc].item<double>()
+                  << " stale_at=" << stale.reshape({-1})[loc].item<double>()
+                  << " rdz_cache_k1=" << on.geometry[rdz_offset+nx].item<double>()
+                  << " rdz_cache_k2=" << on.geometry[rdz_offset+2*nx].item<double>()
+                  << " signal=" << signal << " error=" << error
+                  << " stale_error=" << stale_error << " fixture_q_dot_tend=" << fixture_work
+                  << " tol=" << tolerance << '\n';
+        ok=pass&&ok;
+      }
+    }
     bool kmopt2_guard=false;
     try {
         (void)evaluate(true,false,2);
     } catch (const c10::Error& error) {
         kmopt2_guard=std::string(error.what()).find(
-            "option-2 metric scalar diffusion requires dry isotropic km_opt=1")!=std::string::npos;
+            "option-2 metric diffusion requires dry isotropic km_opt=1")!=std::string::npos;
     }
     std::cout << (kmopt2_guard?"PASS ":"FAIL ")
               << "option-2 canonical RHS rejects unsupported km_opt=2" << '\n';
     ok=kmopt2_guard&&ok;
+
+    // km_opt=2 diagnoses K from TKE. Zero namelist khdif/kvdif does not
+    // turn that source operator off, so the native path must still fail closed.
+    bool kmopt2_zero_namelist_guard=false;
+    try {
+        (void)evaluate(false,false,2,torch::Tensor(),false,false,0,true);
+    } catch (const c10::Error& error) {
+        kmopt2_zero_namelist_guard=std::string(error.what()).find(
+            "option-2 metric diffusion requires dry isotropic km_opt=1")!=
+            std::string::npos;
+    }
+    std::cout << (kmopt2_zero_namelist_guard?"PASS ":"FAIL ")
+              << "option-2 native km_opt=2 rejects zero namelist K" << '\n';
+    ok=kmopt2_zero_namelist_guard&&ok;
+
+    const auto rejects_supplied_native_k = [&](int coefficient) {
+        try {
+            (void)evaluate(false,false,1,torch::Tensor(),false,false,
+                           coefficient,true);
+        } catch (const c10::Error& error) {
+            return std::string(error.what()).find(
+                "option-2 metric diffusion requires dry isotropic km_opt=1") !=
+                std::string::npos;
+        }
+        return false;
+    };
+    const bool kh_mom_guard=rejects_supplied_native_k(1);
+    const bool kv_mom_guard=rejects_supplied_native_k(2);
+    const bool kv_scalar_guard=rejects_supplied_native_k(3);
+    const bool kh_scalar_guard=rejects_supplied_native_k(4);
+    std::cout << (kh_mom_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kh_mom" << '\n';
+    std::cout << (kv_mom_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kv_mom" << '\n';
+    std::cout << (kv_scalar_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kv_scalar" << '\n';
+    std::cout << (kh_scalar_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kh_scalar" << '\n';
+    ok=kh_mom_guard&&kv_mom_guard&&kv_scalar_guard&&kh_scalar_guard&&ok;
+
+    bool partial_tile_guard=false;
+    try {
+        (void)evaluate(true,false,1,make_state(false),false,true);
+    } catch (const c10::Error& error) {
+        partial_tile_guard=std::string(error.what()).find(
+            "complete single-rank tile ownership")!=std::string::npos;
+    }
+    std::cout << (partial_tile_guard?"PASS ":"FAIL ")
+              << "option-2 canonical RHS rejects partial tile ownership" << '\n';
+    ok=partial_tile_guard&&ok;
 
     constexpr double h_large=2.0e-2,h_small=1.0e-2;
     constexpr double central_rel_budget=5.0e-2;
@@ -925,6 +2634,45 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     return ok;
 }
 
+// The shared scalar helper's no-stage-metric path is used by option 1. Pin
+// its signed-dnw Fortran amplitude independently of the option-2 stage case.
+bool run_scalar_helper_signed_dnw_contract() {
+    using wrf::sdirk3::test::TileCase;
+    TileCase tile(1000.0f);
+    tile.solver.setVerticalInterpolationCoefficients(
+        tile.half.data(),tile.half.data(),1.0f,0.0f,0.0f);
+    (tile.solver.*access(Rdz3dCacheTag{}))=
+        torch::full({ny,nw,nx},1.0f/5000.0f);
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+    auto theta=torch::empty({ny,nz,nx},opt);
+    for (int k=0;k<nz;++k) theta.select(1,k).fill_(2.0f*k);
+    const auto kv=torch::full({ny,nw,nx},10.0f,opt);
+    const auto rdnw=torch::full({nz},4.0f,opt); // C++ stores |1/dnw|.
+    const auto rho=torch::ones({ny,nz,nx},opt);
+    const auto mu=torch::ones({ny,nx},opt);
+    const auto got=(tile.solver.*access(VerticalScalarStageTag{}))(
+        theta,kv,rdnw,rho,theta,mu,torch::Tensor());
+
+    // Extracted from vertical_diffusion_s: H3=-K*rho_avg*Δtheta*rdz;
+    // Fortran dnw=-1/4 because eta decreases, then tendency=g*ΔH3/dnw.
+    auto h3=torch::zeros({ny,nw,nx},opt);
+    h3.slice(1,1,nz).fill_(-10.0f*2.0f/5000.0f);
+    const auto dnw=torch::full({1,nz,1},-0.25f,opt);
+    const auto expected=9.81f*(h3.slice(1,1,nz+1)-h3.slice(1,0,nz))/dnw;
+    const double signal=expected.abs().max().item<double>();
+    const double error=(got-expected).abs().max().item<double>();
+    const double wrong_sign_error=(got+expected).abs().max().item<double>();
+    const double work=(theta*got).sum().item<double>();
+    const double tolerance=128.0*std::numeric_limits<float>::epsilon()*signal;
+    const bool pass=torch::isfinite(got).all().item<bool>() && signal>0.0 &&
+        error<=tolerance && wrong_sign_error>32.0*tolerance && work<0.0;
+    std::cout << (pass?"PASS ":"FAIL ")
+              << "option-1 shared vertical scalar helper signed-dnw signal=" << signal
+              << " error=" << error << " old-sign-error=" << wrong_sign_error
+              << " fixture_q_dot_tend=" << work << " tol=" << tolerance << '\n';
+    return pass;
+}
+
 // The 1D metric fallback must use one implied layer depth for the outer
 // divergence factor and the terrain gradient, even with stretched eta levels.
 bool run_u_terrain_fallback(torch::Dtype dtype) {
@@ -954,8 +2702,10 @@ bool run_u_terrain_fallback(torch::Dtype dtype) {
     const auto zy=torch::zeros_like(zx);
     const auto eval=[&](bool sloped) {
         tile.setTerrainSlopes(sloped?zx:torch::zeros_like(zx),zy);
-        return (tile.*access(MomentumDiffusionTag{}))(
-            u,v,w,viscosity,1,1,umap,umap,mmap,mmap,mass,torch::Tensor(),rho);
+        const auto empty=torch::Tensor();
+        return call_option2_momentum_helper(access(UOption2HelperTag{}),tile,
+            u,v,w,viscosity,1,1,umap,umap,mmap,mass,torch::Tensor(),rho,
+            empty,empty,empty,empty);
     };
     const auto delta=eval(true)-eval(false);
     double error=0.0,signal=0.0;
@@ -1022,8 +2772,10 @@ bool run_u_terrain_thickness(torch::Dtype dtype) {
         const auto slope_y = torch::zeros_like(slope_x);
         const auto eval = [&](const torch::Tensor& zx) {
             tile.solver.setTerrainSlopes(zx,slope_y);
-            return (tile.solver.*access(MomentumDiffusionTag{}))(
-                u,v,w,viscosity,1,1,umap,umap,mmap,mmap,mass,phi,rho).clone();
+            const auto empty=torch::Tensor();
+            return call_option2_momentum_helper(access(UOption2HelperTag{}),tile.solver,
+                u,v,w,viscosity,1,1,umap,umap,mmap,mass,phi,rho,
+                empty,empty,empty,empty).clone();
         };
         const auto delta = eval(slope_x)-eval(torch::zeros_like(slope_x));
         double error=0.0, signal=0.0;
@@ -1522,15 +3274,416 @@ void dump_flat_periodic_x(torch::Dtype dtype) {
                           << ' ' << std::setprecision(17) << a[j][k][x] << '\n';
 }
 
+// Expose the raw private U helper for the source-grounded option-2 geometry
+// oracle.  Cached terrain is deliberately flat while the supplied stage PH is
+// terrain-following, so this pins whether D11 consumes stage-local zx.
+void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
+                                    bool wrong_stage_metric=false,
+                                    bool top_pulse=false,
+                                    bool wrong_v_vertical_coefficient=false,
+                                    bool zero_k=false,
+                                    bool flat_terrain=false,
+                                    bool old_v_west_seam=false,
+                                    bool packed_layout=false,
+                                    bool y_varying=false,
+                                    bool w_composite=false,
+                                    bool variable_w_coefficients=false) {
+    using wrf::sdirk3::test::TileCase;
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    // Native km_opt=1 background fixture: keep horizontal and vertical
+    // coefficients distinct so a khdif/kvdif cross-wire is observable.
+    const float khdif=zero_k ? 0.0f : 2.0f/3.0f;
+    const float kvdif=zero_k ? 0.0f : 4.0f/3.0f;
+    constexpr float map=1.25f;
+    cfg.khdif=khdif;
+    cfg.kvdif=kvdif;
+    constexpr float dx=1000.0f, gravity=9.81f;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    TileCase tile(dx);
+    if (packed_layout) {
+        tile.solver.setWRFIndices(1,nx,1,ny,1,nz, 1,nx,1,ny,1,nz+1,
+                                  -2,nx+4,-2,ny+4,1,nz+1);
+        tile.solver.setBoundaryConditions(true,false,false,false,true,true,
+                                          false,false,false,false);
+    }
+    if (y_varying) {
+        tile.solver.setBoundaryConditions(true,true,false,false,false,false,
+                                          false,false,false,false);
+    }
+    // Match the extracted Fortran driver's dn=dnw=-1/NZ so setVertical...
+    // derives the same top extrapolation cft1/cft2 used by cal_deform_and_div.
+    auto grid=tile.solver.getGridInfo();
+    TORCH_CHECK(grid,"option-2 geometry fixture has no GridInfo");
+    grid->rdn=torch::full({nz},float(nz),opt);
+    grid->rdnw=torch::full({nz},float(nz),opt);
+    tile.solver.setTerrainSlopes(torch::zeros({ny,nw,nx},opt),
+                                  torch::zeros({ny+1,nw,nx},opt));
+    auto u=torch::zeros({ny,nz,nu},opt);
+    auto v=torch::zeros({ny+1,nz,nx},opt);
+    auto w=torch::zeros({ny,nw,nx},opt);
+    auto ph_full=torch::empty({ny,nw,nx},opt);
+    auto zx_stage=torch::empty({ny,nw,nx+1},opt);
+    auto zy_stage=torch::zeros({ny+1,nw,nx},opt);
+    auto rdzw_stage=torch::full({ny,nz,nx},1.0f/1000.0f,opt);
+    auto rdz_stage=torch::full({ny,nw,nx},1.0f/1000.0f,opt);
+    const int unique_nx=packed_layout ? nx-1 : nx;
+    const float terrain_amplitude=(flat_terrain || y_varying) ? 0.0f : 100.0f;
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i) {
+        const float terrain_y=y_varying ? 40.0f*std::cos(float(2.0*pi*j/ny)) : 0.0f;
+        const float terrain=terrain_amplitude*std::cos(float(2.0*pi*(i%unique_nx)/unique_nx))+
+                            terrain_y;
+        ph_full[j][k][i]=gravity*(terrain+1000.0f*k);
+        const int im1=(i+unique_nx-1)%unique_nx;
+        const float terrain_left=terrain_amplitude*std::cos(float(2.0*pi*im1/unique_nx))+
+                                 terrain_y;
+        zx_stage[j][k][i]=(terrain-terrain_left)/dx;
+    }
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k)
+        zx_stage[j][k][nx]=zx_stage[j][k][0];
+    if (y_varying) {
+        for (int j=0;j<ny;++j) {
+            const int jm=(j+ny-1)%ny;
+            const float hy=40.0f*std::cos(float(2.0*pi*j/ny));
+            const float hym=40.0f*std::cos(float(2.0*pi*jm/ny));
+            for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+                zy_stage[j][k][i]=(hy-hym)/dx;
+        }
+        for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+            zy_stage[ny][k][i]=zy_stage[0][k][i];
+    }
+    rdz_stage.select(1,0).fill_(2.0f/1000.0f);
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i) {
+        const float profile = k==(top_pulse ? nz-1 : 1) ? 1.0f : 0.0f;
+        const float x_mode = y_varying ? 0.0f :
+            (top_pulse ? 1.0f :
+             1.0f+0.1f*std::cos(float(2.0*pi*(i%unique_nx)/unique_nx)));
+        u[j][k][i]=profile*x_mode;
+    }
+    if (w_composite) {
+        for (int j=0;j<ny;++j) for (int i=0;i<nx;++i)
+            w[j][2][i]=0.2f*std::cos(float(2.0*pi*i/nx));
+    }
+    (tile.solver.*access(Rdzw3dCacheTag{}))=rdzw_stage;
+    auto kh=torch::full({ny,nz,nx},khdif,opt);
+    auto kv=torch::full({ny,nz,nx},kvdif,opt);
+    auto rho=torch::ones({ny,nz,nx},opt);
+    if (variable_w_coefficients) {
+        for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+            const float x=std::cos(float(2.0*pi*i/nx));
+            const float y=std::sin(float(2.0*pi*j/ny));
+            rho[j][k][i]=0.85f+0.035f*j+0.055f*k+0.045f*x+0.025f*y;
+            kh[j][k][i]=0.40f+0.07f*k+0.035f*i+0.02f*y;
+            kv[j][k][i]=0.90f+0.08f*k+0.055f*i+0.03f*y;
+        }
+    }
+    const auto map_u=torch::full({ny,nu},map,opt);
+    const auto map_v=torch::full({ny+1,nx},map,opt);
+    const auto map_m=torch::full({ny,nx},map,opt);
+    (tile.solver.*access(MapUxTag{}))=map_u;
+    (tile.solver.*access(MapUyTag{}))=map_u;
+    (tile.solver.*access(MapVxTag{}))=map_v;
+    (tile.solver.*access(MapVyTag{}))=map_v;
+    (tile.solver.*access(MapTxTag{}))=map_m;
+    (tile.solver.*access(MapTyTag{}))=map_m;
+    const auto muu=torch::full({ny,nx},784.8f,opt);
+    std::vector<float> fnm(nw,0.5f),fnp(nw,0.5f);
+    if (variable_w_coefficients) {
+        const std::array<float,nw> fnm_profile{{0.73f,0.61f,0.82f,0.66f,0.50f}};
+        for (int k=0;k<nw;++k) {
+            fnm[k]=fnm_profile[k];
+            fnp[k]=1.0f-fnm[k];
+        }
+    }
+    const auto rdnw=torch::full({nz},float(nz),opt);
+    const auto rdn=torch::full({nz},float(nz),opt);
+    // Set fnm/fnp and derive cfn/cfn1 before either diffusion helper reads D11.
+    tile.solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),
+                                                     0.0f,0.0f,0.0f);
+    const auto raw=wrong_stage_metric
+        ? (tile.solver.*access(UOption2CachedHelperTag{}))(
+              u,v,w,kh,1.0f/dx,1.0f/dx,map_u,map_u,map_m,map_m,muu,ph_full,rho,
+              torch::Tensor(),torch::Tensor(),torch::Tensor(),torch::Tensor())
+        : call_option2_momentum_helper(access(UOption2HelperTag{}),tile.solver,
+              u,v,w,kh,1.0f/dx,1.0f/dx,map_u,map_u,map_m,muu,ph_full,rho,
+              zx_stage,zy_stage,rdzw_stage,rdz_stage,true);
+    const auto raw_out=raw.contiguous();
+    const auto rdx_tensor=torch::full({1},1.0f/dx,opt);
+    const auto defor13=(tile.solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx_tensor,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto defor11=(tile.solver.*access(Defor11StageGeometryTag{}))(
+        u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vertical=(tile.solver.*access(VerticalUStressTag{}))(
+        u,defor13,wrong_vertical_coefficient ? kh : kv,rho,rdnw).contiguous();
+    const auto defor23=(tile.solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx_tensor,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto defor33=(tile.solver.*access(Defor33StageGeometryTag{}))(w,rdnw).contiguous();
+    auto zx_old_x=zx_stage.clone();
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=1;i<nx;++i)
+        zx_old_x[j][k][i]=0.5f*(zx_stage[j][k][i-1].item<float>()+
+                                  zx_stage[j][k][i].item<float>());
+    const auto defor13_old_x=(tile.solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx_tensor,rdnw,zx_old_x,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto horizontal_w=(tile.solver.*access(Option2WHelperTag{}))(
+        u,v,w,kv,rho,1.0f/dx,1.0f/dx,map_m,map_m,muu,ph_full,
+        zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto horizontal_w_old_x=(tile.solver.*access(Option2WHelperTag{}))(
+        u,v,w,kv,rho,1.0f/dx,1.0f/dx,map_m,map_m,muu,ph_full,
+        zx_old_x,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vertical_w=(tile.solver.*access(VerticalWMixingStageTag{}))(
+        w,kh,rdnw,rho,defor33,rdn).contiguous();
+    const auto horizontal_w_wrong_k=(tile.solver.*access(Option2WHelperTag{}))(
+        u,v,w,kh,rho,1.0f/dx,1.0f/dx,map_m,map_m,muu,ph_full,
+        zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vertical_w_wrong_k=(tile.solver.*access(VerticalWMixingStageTag{}))(
+        w,kv,rdnw,rho,defor33,rdn).contiguous();
+    const auto horizontal_w_scalar=(tile.solver.*access(Option2WHelperTag{}))(
+        u,v,w,torch::full_like(kv,kvdif),rho,1.0f/dx,1.0f/dx,map_m,map_m,muu,ph_full,
+        zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vertical_w_scalar=(tile.solver.*access(VerticalWMixingStageTag{}))(
+        w,torch::full_like(kh,khdif),rdnw,rho,defor33,rdn).contiguous();
+    const auto a=raw_out.accessor<float,3>();
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
+        std::cout << "U_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << a[j][k][i] << '\n';
+    const auto d11=defor11.accessor<float,3>();
+    const auto z=vertical.accessor<float,3>();
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+        std::cout << "D11_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d11[j][k][i] << '\n';
+    const auto d13=defor13.accessor<float,3>();
+    const auto d13_old_x=defor13_old_x.accessor<float,3>();
+    const auto d23=defor23.accessor<float,3>();
+    const auto d33=defor33.accessor<float,3>();
+    const auto hw=horizontal_w.accessor<float,3>();
+    const auto hw_old_x=horizontal_w_old_x.accessor<float,3>();
+    const auto vw=vertical_w.accessor<float,3>();
+    const auto hwk=horizontal_w_wrong_k.accessor<float,3>();
+    const auto vwk=vertical_w_wrong_k.accessor<float,3>();
+    const auto hws=horizontal_w_scalar.accessor<float,3>();
+    const auto vws=vertical_w_scalar.accessor<float,3>();
+    const auto zx_out=zx_stage.accessor<float,3>();
+    const auto rdzw_out=rdzw_stage.accessor<float,3>();
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<=nx;++i)
+        std::cout << "M_ZX_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << zx_out[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+        std::cout << "M_RDZW_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << rdzw_out[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nu;++i)
+        std::cout << "D13_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d13[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nu;++i)
+        std::cout << "D13_OLDZX " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d13_old_x[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "D23_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d23[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+        std::cout << "D33_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d33[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WH_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << hw[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WH_OLDZX " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << hw_old_x[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WV_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << vw[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WH_KH_WRONG " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << hwk[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WV_KV_WRONG " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << vwk[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i) {
+        std::cout << "WH_SCALAR_FALLBACK " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << hws[j][k][i] << '\n';
+        std::cout << "WV_SCALAR_FALLBACK " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << vws[j][k][i] << '\n';
+    }
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
+        std::cout << "UV_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << z[j][k][i] << '\n';
+
+    // V shares the same dry stage metric, terrain wave and distinct K values.
+    // It varies in X and is constant in Y, making the prepared Y halo exact.
+    for (int j=0;j<nv;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+        const bool pulse = k==(top_pulse ? nz-1 : 1);
+        const float fy=y_varying ? std::sin(float(2.0*pi*j/ny)) : 1.0f;
+        const float x_mode=y_varying ? 1.0f :
+            1.0f+0.1f*std::cos(float(2.0*pi*(i%unique_nx)/unique_nx));
+        v[j][k][i]=pulse ? fy*x_mode : 0.0f;
+    }
+    const auto defor23_v=(tile.solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx_tensor,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto defor12_v=(tile.solver.*access(Defor12StageGeometryTag{}))(
+        u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto defor22_v=(tile.solver.*access(Defor22StageGeometryTag{}))(
+        u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto vertical_v=(tile.solver.*access(VerticalVStressTag{}))(
+        v,defor23_v,wrong_v_vertical_coefficient ? kh : kv,rho,rdnw).contiguous();
+    auto muv=torch::full({nv,nx},784.8f,opt);
+    const auto horizontal_v=call_option2_momentum_helper(access(VOption2HelperTag{}),
+        tile.solver,u,v,w,kh,1.0f/dx,1.0f/dx,map_v,map_v,map_m,muv,ph_full,rho,
+        zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vh=horizontal_v.accessor<float,3>();
+    const auto vz=vertical_v.accessor<float,3>();
+    const auto d12v=defor12_v.accessor<float,3>();
+    const auto d22v=defor22_v.accessor<float,3>();
+    auto old_seam_d12 = defor12_v.clone();
+    if (old_v_west_seam) old_seam_d12.select(2,0).zero_();
+    const auto old_d12=old_seam_d12.accessor<float,3>();
+    for (int j=0;j<nv;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+        std::cout << "V_H_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << vh[j][k][i] << '\n';
+        std::cout << "V_Z_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << vz[j][k][i] << '\n';
+        std::cout << "V_RHS " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << (vh[j][k][i]+vz[j][k][i])/map << '\n';
+        std::cout << "D12_V_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d12v[j][k][i] << '\n';
+        if (old_v_west_seam) std::cout << "D12_V_OLDSEAM " << j << ' ' << k << ' ' << i << ' '
+                                      << std::setprecision(9) << old_d12[j][k][i] << '\n';
+        if (j<ny) std::cout << "D22_V_CPP " << j << ' ' << k << ' ' << i << ' '
+                           << std::setprecision(9) << d22v[j][k][i] << '\n';
+    }
+    std::cout << "OPTION2_K khdif=" << khdif << " kvdif=" << kvdif
+              << " xkmh=" << khdif << " xkmv=" << kvdif
+              << " xkhh=" << 3*khdif << " xkhv=" << 3*kvdif
+              << " map=" << map
+              << " wrong_vertical_coefficient=" << wrong_vertical_coefficient
+              << " wrong_stage_metric=" << wrong_stage_metric
+              << " top_pulse=" << top_pulse
+              << " cfn=" << tile.solver.*access(CfnTag{})
+              << " cfn1=" << tile.solver.*access(Cfn1Tag{})
+              << " packed_layout=" << packed_layout
+              << " unique_nx=" << unique_nx
+              << " y_varying=" << y_varying
+              << " variable_w_coefficients=" << variable_w_coefficients << '\n';
+}
+
+bool run_option2_v_periodic_west_small_nz() {
+    using wrf::sdirk3::test::TileCase;
+    bool ok=true;
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    for (const int small_nz : {1,2}) {
+        TileCase tile(1000.0f);
+        std::vector<float> fnm(small_nz+1,0.5f),fnp(small_nz+1,0.5f);
+        tile.solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),
+                                                        0.0f,0.0f,0.0f);
+        auto u=torch::zeros({ny,small_nz,nu},opt);
+        auto v=torch::zeros({nv,small_nz,nx},opt);
+        auto w=torch::zeros({ny,small_nz+1,nx},opt);
+        auto zx=torch::zeros({ny,small_nz+1,nx+1},opt);
+        auto zy=torch::zeros({nv,small_nz+1,nx},opt);
+        auto rdzw=torch::full({ny,small_nz,nx},1.0f/1000.0f,opt);
+        auto rdz=torch::full({ny,small_nz+1,nx},1.0f/1000.0f,opt);
+        auto rdnw=torch::full({small_nz},float(small_nz),opt);
+        for (int j=0;j<nv;++j) for (int k=0;k<small_nz;++k)
+            for (int i=0;i<nx;++i)
+                v[j][k][i]=float(k+1)*(1.0f+0.1f*std::cos(float(2.0*pi*i/nx)));
+        const auto d12=(tile.solver.*access(Defor12StageGeometryTag{}))(
+            u,v,w,1.0f/1000.0f,1.0f/1000.0f,rdnw,zx,zy,rdzw,rdz).contiguous();
+        const double west_signal=d12.slice(0,1,ny).select(2,0).abs().max().item<double>();
+        const bool finite=torch::isfinite(d12).all().item<bool>();
+        const bool pass=finite && d12.sizes()==v.sizes() && west_signal>1.0e-8;
+        std::cout << (pass?"PASS ":"FAIL ") << "option-2 V periodic-west D12 small-nz="
+                  << small_nz << " west_signal=" << west_signal
+                  << " finite=" << finite << " shape=" << d12.sizes() << '\n';
+        ok=pass && ok;
+    }
+    return ok;
+}
+
+bool run_external_weight_cfn_epoch_contract(bool expect_refresh) {
+    using wrf::sdirk3::test::TileCase;
+    TileCase tile(1000.0f);
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    std::vector<float> rdnw(nz+1,float(nz)),rdn(nz+1,float(nz));
+    auto grid=tile.solver.getGridInfo();
+    TORCH_CHECK(grid,"external-weight cfn fixture has no GridInfo");
+    grid->rdnw=torch::from_blob(rdnw.data(),{nz+1},opt).clone();
+    grid->rdn=torch::from_blob(rdn.data(),{nz+1},opt).clone();
+
+    wrf::sdirk3::ZeroCopyConfig setup{};
+    setup.nx=nx; setup.ny=ny; setup.nz=nz;
+    setup.nx_u=nu; setup.ny_v=nv; setup.nz_w=nw;
+    setup.ids=setup.its=setup.ims=1; setup.ide=setup.ite=setup.ime=nu;
+    setup.jds=setup.jts=setup.jms=1; setup.jde=setup.jte=setup.jme=nv;
+    setup.kds=setup.kts=setup.kms=1; setup.kde=setup.kme=nw; setup.kte=nz;
+    setup.u_ptr=setup.v_ptr=setup.w_ptr=setup.ph_ptr=setup.t_ptr=setup.p_ptr=
+        tile.setup_state.data();
+    setup.mu_ptr=tile.setup_state.data(); setup.al_ptr=tile.setup_density.data();
+    setup.rdx=setup.rdy=1.0f/tile.spacing;
+    setup.rdnw_ptr=rdnw.data(); setup.rdn_ptr=rdn.data();
+    setup.msftx_ptr=setup.msfty_ptr=setup.msfux_ptr=setup.msfuy_ptr=
+        setup.msfvx_ptr=setup.msfvy_ptr=tile.setup_map.data();
+    setup.c1f_ptr=setup.c1h_ptr=tile.one.data();
+    setup.c2f_ptr=setup.c2h_ptr=tile.zero.data();
+    setup.fnm_ptr=setup.fnp_ptr=tile.half.data();
+    setup.f_ptr=tile.setup_f.data();
+    setup.e_ptr=setup.sina_ptr=tile.setup_zero.data();
+    setup.cosa_ptr=tile.setup_map.data();
+
+    tile.solver.advanceZeroCopy(setup,2,0.1f);
+    (tile.solver.*access(VerticalInterpolationTag{}))(
+        tile.half.data(),tile.half.data(),0.0f,0.0f,0.0f);
+    // Prime the real WRF update path so the subsequent metric mutation tests
+    // an epoch refresh, rather than first-call coefficient initialization.
+    tile.solver.advanceZeroCopy(setup,1,1.0e-3f);
+    const float before_cfn=tile.solver.*access(CfnTag{});
+    const float before_cfn1=tile.solver.*access(Cfn1Tag{});
+    const auto before_fnm=tile.half;
+    const auto before_fnp=tile.half;
+
+    // Regrid only the top w spacing while preserving externally supplied fnm/fnp.
+    // WRF's top extrapolation coefficients depend on this updated rdnw/rdn ratio.
+    rdnw[nz-1]=2.0f;
+    grid->rdnw=torch::from_blob(rdnw.data(),{nz+1},opt).clone();
+    // Prime the GridInfo metric epoch exactly as the WRF setup/regrid owner does
+    // before invoking the next zero-copy solver update.
+    (tile.solver.*access(RdnwTag{}))(torch::kCPU,torch::kFloat32,nz);
+    tile.solver.advanceZeroCopy(setup,1,1.0e-3f);
+    const float after_cfn=tile.solver.*access(CfnTag{});
+    const float after_cfn1=tile.solver.*access(Cfn1Tag{});
+    const auto effective_rdnw=(tile.solver.*access(RdnwTag{}))(
+        torch::kCPU,torch::kFloat32,nz).contiguous();
+    const auto effective_rdn=(tile.solver.*access(RdnTag{}))(
+        torch::kCPU,torch::kFloat32,nz).contiguous();
+    const bool fnm_preserved=before_fnm==tile.half;
+    const bool fnp_preserved=before_fnp==tile.half;
+    const bool external_weights=tile.solver.*access(FnmFromWrfTag{});
+    const bool weights_preserved=fnm_preserved && fnp_preserved && external_weights;
+    const bool refreshed=std::abs(after_cfn-2.0f)<=1e-6f &&
+                         std::abs(after_cfn1+1.0f)<=1e-6f;
+    std::cout << (weights_preserved && (refreshed==expect_refresh) ? "PASS " : "FAIL ")
+              << "external fnm/fnp cfn epoch before=" << before_cfn << ',' << before_cfn1
+              << " after=" << after_cfn << ',' << after_cfn1
+              << " expected_after=2,-1 preserved_weights=" << weights_preserved
+              << " fnm/fnp/external=" << fnm_preserved << '/' << fnp_preserved << '/' << external_weights
+              << " refreshed=" << refreshed
+              << " rdnw_top=" << effective_rdnw[nz-1].item<float>()
+              << " rdn_top=" << effective_rdn[nz-1].item<float>() << '\n';
+    return weights_preserved && (refreshed==expect_refresh);
+}
+
 void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
                                         const std::string& mutation={}) {
     using wrf::sdirk3::test::TileCase;
     constexpr int nw=nz+1;
-    TORCH_CHECK(case_id >= 5 && case_id <= 9,
-                "option-2 scalar parity case must be in [5,9]");
+    TORCH_CHECK(case_id >= 5 && case_id <= 10,
+                "option-2 scalar parity case must be in [5,10]");
     TORCH_CHECK(mutation.empty() ||
                 ((case_id==7 || case_id==8) && mutation=="no-slope") ||
-                (case_id==9 && (mutation=="avg-product" || mutation=="unit-maps")),
+                ((case_id==9 || case_id==10) &&
+                 (mutation=="avg-product" || mutation=="unit-maps")) ||
+                (case_id==10 && mutation=="uniform-depth"),
                 "unsupported option-2 scalar parity counterfactual");
     TileCase tile(1000.0f);
     const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
@@ -1546,7 +3699,20 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         const double layer_mass=c1[k]*mu_full+(1.0-c1[k])*p_span;
         rho_level[k]=case_id==5 ? 1.0 : eta_width*layer_mass/(gravity*layer_depth);
     }
-    for (int k=0;k<nw;++k) w_height[k]=100.0+layer_depth*(k+1);
+    // Stretched physical Z with uniform eta widths, matching the Fortran
+    // source-extraction fixture's rdzw while keeping dnw/fnm/fnp unchanged.
+    constexpr double z_layer[nz]={300.0,500.0,550.0,650.0};
+    for (int k=0;k<nw;++k) {
+        w_height[k]=100.0;
+        if (case_id==10) {
+            // The source helper's mass level 1 is centered between W levels
+            // 1 and 2; skip the unused W level 0 when laying out q's heights.
+            for (int level=0;level<=k;++level)
+                w_height[k]+=z_layer[std::min(level,nz-1)];
+        } else {
+            w_height[k]=100.0+layer_depth*(k+1);
+        }
+    }
 
     auto tensor=[&](const std::vector<double>& values,
                     std::vector<int64_t> shape) {
@@ -1559,7 +3725,7 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
     const auto j=torch::arange(ny,opt);
     const auto phase_y=(j+0.5)*(pi/ny);
     const auto terrain_y=torch::cos(phase_y);
-    const bool terrain=case_id==7 || case_id==8 || case_id==9;
+    const bool terrain=case_id==7 || case_id==8 || case_id==9 || case_id==10;
     const auto h_x=terrain ? 300.0*fourier_x : torch::zeros_like(fourier_x);
     const auto h_cell=h_x.view({1,nx}).expand({ny,nx}).clone()+
         (terrain ? 200.0*terrain_y.view({ny,1}).expand({ny,nx})
@@ -1582,15 +3748,15 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         q=(1.0+0.03*fourier_x).view({1,1,nx}).expand({ny,nz,nx}).clone();
     } else {
         q=1.0+1.0e-4*z_mass;
-        if (case_id==8 || case_id==9) {
+        if (case_id==8 || case_id==9 || case_id==10) {
             const auto mixed_f=(2.0e-4*fourier_x.view({1,nx})+
                 1.0e-4*terrain_y.view({ny,1})).view({ny,1,nx});
-            q=q+z_mass*mixed_f;
+            q=q+z_mass*mixed_f*(case_id==10 ? 10.0 : 1.0);
         }
     }
     auto kh=torch::full({ny,nz,nx},2.0,opt);
     auto rho=tensor(rho_level,{1,nz,1}).expand({ny,nz,nx}).clone();
-    if (case_id==9) {
+    if (case_id==9 || case_id==10) {
         std::vector<double> kh_values,rho_values;
         kh_values.reserve(ny*nz*nx);rho_values.reserve(ny*nz*nx);
         for (int y=0;y<ny;++y) for (int k=0;k<nz;++k) for (int x=0;x<nx;++x) {
@@ -1601,7 +3767,11 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         kh=tensor(kh_values,{ny,nz,nx});
         rho=tensor(rho_values,{ny,nz,nx});
     }
-    const auto rdzw=torch::full({ny,nz,nx},1.0/layer_depth,opt);
+    std::vector<double> rdzw_values;
+    rdzw_values.reserve(ny*nz*nx);
+    for (int y=0;y<ny;++y) for (int k=0;k<nz;++k) for (int x=0;x<nx;++x)
+        rdzw_values.push_back(1.0/(case_id==10 ? z_layer[std::min(k+1,nz-1)] : layer_depth));
+    auto rdzw=tensor(rdzw_values,{ny,nz,nx});
     const auto dnw=torch::full({nz},-eta_width,opt);
     const auto dn=torch::full({nz},-eta_width,opt);
     const auto fnm=torch::full({nz},0.5,opt);
@@ -1610,7 +3780,7 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
     auto msfty=torch::ones({ny,nx},opt);
     auto msfux=torch::ones({ny,nx+1},opt);
     auto msfvy=torch::ones({ny+1,nx},opt);
-    if (case_id==9) {
+    if (case_id==9 || case_id==10) {
         std::vector<double> tx,ty,ux,vy;
         for (int y=0;y<ny;++y) for (int x=0;x<nx;++x) {
             const double px=2.0*pi*x/nx,py=pi*(y+0.5)/ny;
@@ -1636,6 +3806,8 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         kh=kh*rho;
         rho=torch::ones_like(rho);
     }
+    if (mutation=="uniform-depth")
+        rdzw=torch::full_like(rdzw,1.0/(layer_depth/nz));
     const float rdx=case_id==5 ? 0.1f : 0.001f;
     const float rdy=case_id==5 ? 0.13f : 0.001f;
     const auto zx_input=mutation=="no-slope" ? torch::zeros_like(zx) : zx;
@@ -1881,7 +4053,160 @@ void dump_option1_momentum_packed(torch::Dtype dtype,const std::string& componen
 }
 } // namespace
 
+// Flat periodic-X W Fourier mode used by the source-equation oracle. Emit the
+// private helper's raw W tendency so its sign and amplitude can be checked
+// before any later RHS scaling or state update.
+int dump_option2_w_fourier_sign(bool zero_k=false) {
+    constexpr int n_x=8,n_y=6,n_z=4,n_w=n_z+1;
+    constexpr double pi=3.14159265358979323846;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    std::vector<float> inverse_spacing(n_z,1.0f),half(n_w,0.5f);
+    TileSDIRK3UnifiedSolver tile(n_x,n_y,n_z,1.0f,1.0f,{1.0f},{1.0f},
+                                 inverse_spacing,0);
+    tile.setBoundaryConditions(true,false,false,false,true,true,
+                               false,false,false,false);
+    tile.setVerticalInterpolationCoefficients(half.data(),half.data(),
+                                               1.0f,0.0f,0.0f);
+    tile.getGridInfo()->g=1.0f;
+    tile.getGridInfo()->rdn=torch::ones({n_z},opt);
+
+    auto u=torch::zeros({n_y,n_z,n_x+1},opt);
+    auto v=torch::zeros({n_y+1,n_z,n_x},opt);
+    auto w=torch::zeros({n_y,n_w,n_x},opt);
+    auto kh=torch::full({n_y,n_z,n_x},zero_k?0.0f:2.0f,opt);
+    auto rho=torch::ones({n_y,n_z,n_x},opt);
+    for(int j=0;j<n_y;++j) for(int i=0;i<n_x;++i)
+        w[j][2][i]=std::cos(2.0*pi*i/n_x);
+    const auto mx=torch::ones({n_y,n_x},opt);
+    const auto my=torch::ones({n_y,n_x},opt);
+    const auto zx=torch::zeros({n_y,n_w,n_x},opt);
+    const auto zy=torch::zeros_like(zx);
+    const auto rdzw=torch::ones({n_y,n_z,n_x},opt);
+    const auto rdz=torch::ones({n_y,n_w,n_x},opt);
+    const auto tendency=(tile.*access(Option2WHelperTag{}))(
+        u,v,w,kh,rho,1.0f,1.0f,mx,my,torch::Tensor(),torch::Tensor(),
+        zx,zy,rdzw,rdz).to(torch::kFloat64).contiguous();
+    const auto a=tendency.accessor<double,3>();
+    for(int j=0;j<n_y;++j) for(int k=0;k<n_w;++k) for(int i=0;i<n_x;++i)
+        std::cout << "W_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (argc==2 && std::string(argv[1])=="--option2-full-rhs-probe")
+        return dump_option2_full_rhs_probe();
+    if (argc==2 && std::string(argv[1])=="--option2-full-rhs-probe-map1")
+        return dump_option2_full_rhs_probe(1.0f);
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-physical")
+        return dump_option2_v_actual_rhs(false,1.25f) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-packed")
+        return dump_option2_v_actual_rhs(true,1.25f) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-map1")
+        return dump_option2_v_actual_rhs(false,1.0f) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-yvary-physical")
+        return dump_option2_v_actual_rhs(false,1.25f,true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-yvary-packed")
+        return dump_option2_v_actual_rhs(true,1.25f,true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-physical")
+        return dump_option2_w_actual_rhs(false) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-variable-mu-physical")
+        return dump_option2_w_actual_rhs(false,true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-variable-ph-physical")
+        return dump_option2_w_actual_rhs(false,false,true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-ad-derivative-physical")
+        return dump_option2_w_actual_rhs(false,true,true,true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-packed")
+        return dump_option2_w_actual_rhs(true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-w-fourier-sign")
+        return dump_option2_w_fourier_sign();
+    if (argc==2 && std::string(argv[1])=="--option2-w-fourier-zero-k")
+        return dump_option2_w_fourier_sign(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-u-actual-shape")
+        return run_vertical_u_stress_actual_shape() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-v-actual-shape")
+        return run_vertical_v_stress_actual_shape() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-u-stress-raw")
+        return dump_vertical_u_stress_raw(false);
+    if (argc==2 && std::string(argv[1])=="--vertical-u-stress-zero-k")
+        return dump_vertical_u_stress_raw(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-v-stress-raw")
+        return dump_vertical_v_stress_raw(false);
+    if (argc==2 && std::string(argv[1])=="--vertical-v-stress-zero-k")
+        return dump_vertical_v_stress_raw(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-shear-rdz-metric")
+        return run_vertical_shear_rdz_metric_diagnostic() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-old-step10")
+        return dump_vertical_w_mixing_contract("xkmv",false);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-old-xkmh")
+        return dump_vertical_w_mixing_contract("xkmh",false);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-xkmh-zero-k")
+        return dump_vertical_w_mixing_contract("zero",false);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-stage-xkmh")
+        return dump_vertical_w_mixing_contract("xkmh",true);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-stage-zero-k")
+        return dump_vertical_w_mixing_contract("zero",true);
+    if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
+        return run_packed_u_rdz_seam() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
+        dump_option2_momentum_geometry();
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry-wrong-k") {
+        dump_option2_momentum_geometry(true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry-wrong-metric") {
+        dump_option2_momentum_geometry(false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry-top-pulse") {
+        dump_option2_momentum_geometry(false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-w-momentum-stage-geometry") {
+        dump_option2_momentum_geometry(false,false,false,false,false,false,false,false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-w-variable-k-rho") {
+        dump_option2_momentum_geometry(false,false,false,false,false,false,false,false,false,true,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-wrong-k") {
+        dump_option2_momentum_geometry(false,false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-k0") {
+        dump_option2_momentum_geometry(false,false,false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-flat") {
+        dump_option2_momentum_geometry(false,false,false,false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-v-periodic-west-small-nz")
+        return run_option2_v_periodic_west_small_nz() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-old-seam") {
+        dump_option2_momentum_geometry(false,false,false,false,false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-packed") {
+        dump_option2_momentum_geometry(false,false,false,false,false,false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-packed-flat") {
+        dump_option2_momentum_geometry(false,false,false,false,false,true,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-y-terrain") {
+        dump_option2_momentum_geometry(false,false,false,false,false,false,false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-external-fnm-cfn-refresh")
+        return run_external_weight_cfn_epoch_contract(true) ? 0 : 1;
     if ((argc==4 || argc==5) &&
         std::string(argv[1])=="--option2-scalar-fortran-parity") {
         const std::string mutation=argc==5 ? argv[4] : "";
@@ -1927,11 +4252,16 @@ int main(int argc, char** argv) {
     ok = run(torch::kFloat64) && ok;
     ok = run_packed_periodic_seam(torch::kFloat32) && ok;
     ok = run_packed_periodic_seam(torch::kFloat64) && ok;
+    ok = run_packed_u_rdz_seam() && ok;
+    ok = run_vertical_u_stress_actual_shape() && ok;
+    ok = run_vertical_v_stress_actual_shape() && ok;
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
+    ok = run_external_weight_cfn_epoch_contract(true) && ok;
     ok = run_option1_scalar_rhs_contract() && ok;
     ok = run_option2_scalar_rhs_layer_mass_contract() && ok;
+    ok = run_scalar_helper_signed_dnw_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
     ok = run_normal_rhs() && ok;
     ok = run_option1_momentum_rhs_basis_contract() && ok;

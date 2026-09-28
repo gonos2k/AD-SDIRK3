@@ -99,7 +99,8 @@ def compare_option2_scalar(precision: str, fortran_output: str, cpp_binary: Path
     expected_keys = {(j, k, i) for j in range(1, 7)
                      for k in range(1, 5) for i in range(1, 9)}
     case_names = {5: "flat", 6: "flat_hybrid", 7: "terrain_cancel",
-                  8: "terrain_mixed", 9: "variable_k_rho_maps"}
+                  8: "terrain_mixed", 9: "variable_k_rho_maps",
+                  10: "stretched_z_terrain_mixed_maps"}
     for case_id, case_name in case_names.items():
         left = option2_rows(fortran_output, "F_OPT2", case_id)
         if set(left) != expected_keys or not all(map(math.isfinite, left.values())):
@@ -116,8 +117,8 @@ def compare_option2_scalar(precision: str, fortran_output: str, cpp_binary: Path
         # This fixed engineering budget includes the roundoff accumulated in
         # the cancellation case; it does not follow the observed discrepancy.
         budget = 2048.0 * epsilon * max(1.0, signal)
-        if case_id in (5, 6, 8, 9):
-            signal_floor = {5: 0.1, 6: 0.001, 8: 0.01, 9: 0.01}[case_id]
+        if case_id in (5, 6, 8, 9, 10):
+            signal_floor = {5: 0.1, 6: 0.001, 8: 0.01, 9: 0.01, 10: 0.01}[case_id]
             valid = signal > signal_floor and error <= budget
         else:
             valid = signal <= budget and max(abs(value) for value in right.values()) <= budget \
@@ -140,10 +141,13 @@ def compare_option2_scalar(precision: str, fortran_output: str, cpp_binary: Path
                   f"minimum={10.0*budget:.9g}")
             if not math.isfinite(slope_gap) or slope_gap <= 10.0*budget:
                 raise RuntimeError(f"{mode} option-2 {case_name} did not resolve terrain-slope terms")
-        if case_id == 9:
+        if case_id in (9, 10):
             if signal <= max(0.01, 100.0*budget):
                 raise RuntimeError(f"{mode} option-2 {case_name} signal is unresolved")
-            for mutant_name in ("avg-product", "unit-maps"):
+            mutants = ("avg-product", "unit-maps")
+            if case_id == 10:
+                mutants += ("uniform-depth",)
+            for mutant_name in mutants:
                 mutant = subprocess.run(
                     [str(cpp_binary), "--option2-scalar-fortran-parity",
                      mode, str(case_id), mutant_name],
@@ -177,6 +181,7 @@ PROGRAM test_horizontal_diffusion_scalar
   CALL run_case(7, 'option2_terrain_cancel')
   CALL run_case(8, 'option2_terrain_mixed')
   CALL run_case(9, 'option2_variable_k_rho_maps')
+  CALL run_case(10, 'option2_stretched_z_terrain_mixed_maps')
   WRITE(*,'(A)') 'horizontal scalar producer/BC/consumer: PASS'
 CONTAINS
   REAL FUNCTION option2_layer_mass(k) RESULT(q)
@@ -188,6 +193,17 @@ CONTAINS
     INTEGER, INTENT(IN) :: k
     q=ETA_WIDTH*option2_layer_mass(k)/(g*OPTION2_DEPTH)
   END FUNCTION option2_rho
+  REAL FUNCTION option2_height(k) RESULT(q)
+    INTEGER, INTENT(IN) :: k
+    ! Keep eta widths uniform; vary physical W-level Z spacing to exercise
+    ! the source-computed rdzw and its harmonic face average.
+    REAL, PARAMETER :: dz(4)=(/300.,500.,550.,650./)
+    INTEGER :: level
+    q=100.
+    DO level=1,k
+      q=q+dz(MIN(level,4))
+    END DO
+  END FUNCTION option2_height
   INTEGER FUNCTION mirrored_j(j,ny) RESULT(q)
     INTEGER, INTENT(IN) :: j,ny
     q=j
@@ -295,7 +311,7 @@ CONTAINS
         rho(i,k,j)=option2_rho(k)
       END DO; END DO; END DO
     END IF
-    IF (case_id == 9) THEN
+    IF (case_id >= 9) THEN
       DO j=jms,jme; DO i=ims,ime; DO k=1,4
         rho(i,k,j)=variable_rho(i,k,j)
         xkhh(i,k,j)=variable_k(i,k,j)
@@ -355,6 +371,7 @@ CONTAINS
       ! metric producer's output, which could hide a shared geometry error.
       zz=100.+LAYER_DEPTH*(REAL(k)+.5)
       IF (case_id >= 6) zz=100.+OPTION2_DEPTH*(REAL(k)+.5)
+      IF (case_id == 10) zz=.5*(option2_height(k)+option2_height(k+1))
       IF (case_id == 3 .OR. case_id == 4) zz=zz+terrain(i,j)
       IF (case_id >= 7) zz=zz+terrain_option2(ip,jp)
       IF (case_id == 2) THEN
@@ -369,8 +386,8 @@ CONTAINS
       IF (case_id == 4) var(i,k,j)=var(i,k,j)+zz*( &
            .03*SIN(2.*pi*REAL(MODULO(i-1,nx))/REAL(nx))+ &
            .02*COS(2.*pi*REAL(MODULO(j-1,ny))/REAL(ny)))
-      IF (case_id == 8 .OR. case_id == 9) &
-        var(i,k,j)=var(i,k,j)+zz*fourier_option2(ip,jp)
+      IF (case_id == 8 .OR. case_id == 9 .OR. case_id == 10) &
+        var(i,k,j)=var(i,k,j)+zz*fourier_option2(ip,jp)*MERGE(10.,1.,case_id == 10)
     END DO; END DO; END DO
     tend=0.
     CALL horizontal_diffusion_s(tend,cfg,var,msftx,msfty,msfux,msfuy,msfvx,msfvy,xkhh,rdx,rdy, &
@@ -410,7 +427,7 @@ CONTAINS
       IF (case_id == 6) expected=option2_layer_mass(k)*kh* &
            (-4.*rdx**2*SIN(PI0/NX0)**2*.03*SIN(2.*PI0*REAL(i-1)/NX0))
       IF (case_id == 7) expected=0.
-      IF (case_id == 8 .OR. case_id == 9) THEN
+      IF (case_id == 8 .OR. case_id == 9 .OR. case_id == 10) THEN
         max_expected=MAX(max_expected,ABS(tend(i,k,j)))
       ELSE
         err=MAX(err,ABS(tend(i,k,j)-expected))
@@ -439,11 +456,11 @@ CONTAINS
       tol=512.*EPSILON(1.)*MAXVAL(ABS(var(1:nx,1:kte-1,1:ny)))* &
           kh*MAXVAL(rho(1:nx,1:kte-1,1:ny))*amp*derivative_scale**2
     END IF
-    IF (case_id == 9) tol=2048.*EPSILON(1.)*MAX(1.,max_expected)
+    IF (case_id >= 9) tol=2048.*EPSILON(1.)*MAX(1.,max_expected)
     IF (.NOT. ieee_is_finite(tol)) ERROR STOP 'invalid error budget'
     IF ((case_id == 2 .OR. case_id == 4 .OR. case_id == 5) .AND. max_expected <= tol) ERROR STOP 'unresolved positive control'
     IF (case_id == 6 .AND. max_expected <= 100.*tol) ERROR STOP 'unresolved option-2 positive control'
-    IF (case_id == 9 .AND. max_expected <= 100.*tol) ERROR STOP 'unresolved variable option-2 positive control'
+    IF (case_id >= 9 .AND. max_expected <= 100.*tol) ERROR STOP 'unresolved variable option-2 positive control'
     IF (case_id /= 8 .AND. err > tol) THEN
       WRITE(*,'(A,1X,A,2(1X,ES13.5))') 'scalar regression FAIL',TRIM(label),err,tol
       ERROR STOP 1
@@ -460,6 +477,7 @@ CONTAINS
     q=100.+LAYER_DEPTH*REAL(k)
     IF (case_id == 3 .OR. case_id == 4) q=q+terrain(i,j)
     IF (case_id >= 6) q=100.+OPTION2_DEPTH*REAL(k)
+    IF (case_id == 10) q=option2_height(k)
     IF (case_id >= 7) q=q+terrain_option2(i,j)
   END FUNCTION zw
   REAL FUNCTION fourier_rhs(i,j,rdx,rdy,deta,kh) RESULT(q)

@@ -538,6 +538,13 @@ CONTAINS
       IF (.NOT. config_flags%non_hydrostatic) THEN
          CALL wrf_error_fatal("SDIRK3_HYDROSTATIC_UNSUPPORTED: prognostic W/Phi require non_hydrostatic=.TRUE.")
       END IF
+
+      ! The option-2 SFS path supplies NBA stresses from first_rk_step_part2.
+      ! SDIRK3 does not run that path or pass those stresses through its bridge.
+      IF (config_flags%diff_opt == 2 .AND. config_flags%sfs_opt > 0) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_OPTION2_SFS_NBA_UNSUPPORTED: option-2 SFS/NBA stresses are not supported")
+      END IF
       
       IF (sdirk3_initialized) THEN
          CALL wrf_debug(2, "UNIFIED SDIRK3: Already initialized, skipping")
@@ -2091,6 +2098,9 @@ CONTAINS
 
       config_name = "solver_telemetry"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_solver_telemetry))
+
+      config_name = "stage2_rejection_snapshot_diag"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_stage2_rejection_snapshot_diag))
 
       config_name = "progress_invariant_enable"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_progress_invariant_enable))

@@ -134,8 +134,11 @@ jobs:
               echo "${f} claims '${stated}-test' but the pinned inventory has ${pinned}"
               exit 1
             fi
+          # Dated docs/ reports record the inventory at the time of an experiment;
+          # they are historical evidence, not claims about today's test count.
           done < <(grep -rl -E '[0-9]+-test CTest' --include='*.md' . \
-                     | grep -v '^./doc/' | grep -v '/build/' | sort)
+                     | grep -v '^./doc/' | grep -Ev '^./docs/\([0-9]{12}\)_' \
+                     | grep -v '/build/' | sort)
           if [ "${found}" -eq 0 ]; then
             echo "no file states a '<N>-test CTest' count -- this gate's subject vanished"
             exit 1
@@ -473,6 +476,30 @@ jobs:
           set -euo pipefail
           python3 tools/test_option1_momentum_diffusion.py \
             "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
+      - name: option-2 U stress Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 external/libtorch_wrf/sdirk3/tests/test_option2_momentum_geometry.py \
+            --binary "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
+      - name: option-2 W stress Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 external/libtorch_wrf/sdirk3/tests/test_option2_w_stress_sign.py \
+            --binary "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
+      - name: option-2 vertical U V stress Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 external/libtorch_wrf/sdirk3/tests/test_option2_vertical_u_stress.py \
+            --binary "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
+      - name: option-2 vertical W stress Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 external/libtorch_wrf/sdirk3/tests/test_option2_vertical_w_stress.py \
+            --binary "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
 
       - name: install contract (exact manifest, header byte-parity, no stub)
         run: |

@@ -702,6 +702,37 @@ int main() {
               "exact linear-model prediction gives a finite positive third-trial rho");
     }
 
+    // Duplicate candidates follow a dyadic sequence inside the current trust
+    // radius. A fresh radius-limited candidate resets that sequence to half.
+    {
+        using wrf::sdirk3::detail::dyadic_clipped_retry_alpha;
+        constexpr float limit=1.0e-6f, clipped_norm=17.04e-6f;
+        const float initial_scale=std::min(1.0f,limit/clipped_norm);
+        const float retry_scale=dyadic_clipped_retry_alpha(limit,clipped_norm,0);
+        const float second_retry_scale=dyadic_clipped_retry_alpha(limit,clipped_norm,1);
+        const float initial_step=initial_scale*clipped_norm;
+        const float retry_step=retry_scale*clipped_norm;
+        check(retry_scale < initial_scale &&
+              std::abs(retry_step-0.5f*initial_step) < 1.0e-12f &&
+              retry_step <= limit &&
+              std::abs(second_retry_scale*clipped_norm-0.25f*initial_step) < 1.0e-12f,
+              "clipped duplicate retries halve the current admissible step dyadically");
+
+        constexpr float small_step=0.5e-6f;
+        const float unclipped_half=dyadic_clipped_retry_alpha(limit,small_step,0);
+        const float unclipped_quarter=dyadic_clipped_retry_alpha(limit,small_step,1);
+        check(unclipped_half==0.5f && unclipped_quarter==0.25f &&
+              unclipped_half*small_step<=limit && unclipped_quarter*small_step<=limit,
+              "unclipped duplicate retries halve the original step dyadically");
+
+        constexpr float contracted_limit=0.4e-6f;
+        const float reset_scale=dyadic_clipped_retry_alpha(contracted_limit,clipped_norm,0);
+        check(std::abs(reset_scale*clipped_norm-0.5f*contracted_limit) < 1.0e-12f &&
+              reset_scale*clipped_norm<=contracted_limit,
+              "a changed trust radius starts a new dyadic sequence from its current clip");
+
+    }
+
     // Exercise the measured-step cap below the initial radius; equivalent
     // representations in S-scaled coordinates must contract identically.
     {
@@ -752,7 +783,8 @@ int main() {
               "fallback result is invariant under equivalent physical-unit rescaling");
     }
 
-    const int kExpected = 92;    if (g_cases != kExpected) {
+    const int kExpected = 95;
+    if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;
     }

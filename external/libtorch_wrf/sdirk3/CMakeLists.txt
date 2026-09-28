@@ -507,6 +507,31 @@ add_test(NAME Scalar_Advection_Contract COMMAND test_scalar_advection_contract)
 add_executable(test_scalar_diffusion_contract tests/test_scalar_diffusion_contract.cpp)
 target_link_libraries(test_scalar_diffusion_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Scalar_Diffusion_Contract COMMAND test_scalar_diffusion_contract)
+add_test(NAME Option2_Momentum_Geometry_Source_Parity
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_momentum_geometry.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>)
+add_test(NAME Option2_V_Actual_Rhs_Contract
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_v_actual_rhs.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>)
+add_test(NAME Option2_W_Actual_Rhs_Contract
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_w_actual_rhs.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>)
+add_test(NAME Option2_W_Actual_Rhs_AD_Derivative_Contract
+    COMMAND $<TARGET_FILE:test_scalar_diffusion_contract>
+            --option2-momentum-w-actual-rhs-ad-derivative-physical)
+add_test(NAME Option2_U_Full_Rhs_Contract_Map1
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_momentum_geometry.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>
+            --actual-rhs-probe --actual-rhs-map 1)
+add_test(NAME Option2_U_Full_Rhs_Contract_Map125
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_momentum_geometry.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>
+            --actual-rhs-probe)
 
 add_executable(test_potential_temperature_contract tests/test_potential_temperature_contract.cpp)
 target_link_libraries(test_potential_temperature_contract PRIVATE wrf_sdirk3::core)
@@ -664,6 +689,11 @@ add_executable(test_stage_operand_decomposition_contract
     wrf_sdirk3_rhs_run_close.cpp)
 target_link_libraries(test_stage_operand_decomposition_contract "${TORCH_LIBRARIES}")
 add_test(NAME Stage_Operand_Decomposition_Contract COMMAND test_stage_operand_decomposition_contract)
+
+# Round-trip contract for the opt-in Stage-2 rejected-trial evidence archive.
+add_executable(test_stage2_rejection_snapshot test_stage2_rejection_snapshot.cpp)
+target_link_libraries(test_stage2_rejection_snapshot "${TORCH_LIBRARIES}")
+add_test(NAME Stage2_Rejection_Snapshot_Archive COMMAND test_stage2_rejection_snapshot)
 
 # =========================================================================
 # PR 5 commit 3: full-object link closure + archive/manifest contracts

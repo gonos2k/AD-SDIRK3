@@ -1646,7 +1646,52 @@ int main(int argc, char** argv) {
               "case54: wrong source sign still fails per-source replay");
     }
 
-    const int kExpected = 155;  // ratchet: update deliberately with the cases
+    // (55) Exact FP32 recurrence is authoritative even when the FP64 per-cell
+    // relative metric is large: a half-ULP history is rounded away at this base.
+    {
+        constexpr float dt = 1.0f;
+        constexpr double aE = 1.0, aI = 0.0;
+        auto U_n = torch::full({24}, 1000000.0f, torch::kFloat32);
+        auto ks = torch::full({24}, 0.03125f, torch::kFloat32);  // half an FP32 ULP here
+        auto kf = torch::zeros_like(ks);
+        auto U_stage = U_n + (static_cast<double>(dt) * aE) * ks +
+                       (static_cast<double>(dt) * aI) * kf;
+        auto recon = ((static_cast<double>(dt) * aE) * ks).to(torch::kFloat64) +
+                     ((static_cast<double>(dt) * aI) * kf).to(torch::kFloat64);
+        auto actual = U_stage.to(torch::kFloat64) - U_n.to(torch::kFloat64);
+        const double hist_rel = (recon - actual).norm().item<double>() /
+            std::max(recon.norm().item<double>(), actual.norm().item<double>());
+        const double actual_rms = actual.norm().item<double>() / std::sqrt(actual.numel());
+        const double max_rel = ((recon - actual).abs() /
+            (actual.abs() + std::max(actual_rms * 1e-3, 1e-300))).max().item<double>();
+        auto replay = U_n + (static_cast<double>(dt) * aE) * ks +
+                      (static_cast<double>(dt) * aI) * kf;
+        std::printf("CASE55 hist_rel=%.6e hist_max_rel=%.6e fp32_replay_exact=%d\n",
+                    hist_rel, max_rel, torch::equal(replay, U_stage) ? 1 : 0);
+        check(hist_rel > 1e-6 && max_rel > 0.1,
+              "case55: half-ULP recurrence exceeds both FP64 history metrics");
+        check(torch::equal(replay, U_stage),
+              "case55: exact FP32 recurrence reproduces the captured stage");
+
+        StageHistorySource src{1, aE, aI, &ks, &kf};
+        StageDefectSnapshot def;
+        def.stage=1; def.explicit_stage=true; def.converged=false;
+        def.k_norm=0.0;
+        def.f_fast_norm=def.newton_defect_norm=def.defect_to_k_ratio=
+            def.scaled_final_residual=kDefectNA;
+        check(emit_stage_history_diag(0,0,2,dt,U_n,U_stage,{src},{def}).empty(),
+              "case55: exact replay overrides high per-element FP64 relative error");
+
+        src.a_explicit = 3.0;  // wrong source replays 1.5 ULPs and changes the stage
+        auto bad_replay = U_n + (static_cast<double>(dt) * src.a_explicit) * ks +
+                          (static_cast<double>(dt) * src.a_implicit) * kf;
+        check(!torch::equal(bad_replay, U_stage) &&
+              emit_stage_history_diag(0,0,2,dt,U_n,U_stage,{src},{def})
+                  .find("CLOSURE_FAILED") != std::string::npos,
+              "case55: high per-element discrepancy still rejects non-exact replay");
+    }
+
+    const int kExpected = 159;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

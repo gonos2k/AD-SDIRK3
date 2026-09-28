@@ -956,6 +956,9 @@ public:
     }
 
 private:
+    // Refresh WRF top extrapolation coefficients from current rdnw/rdn without
+    // replacing externally supplied fnm/fnp profiles.
+    void refreshTopExtrapolationCoefficients();
     void validateFixedTrajectoryProfile() const;
     uint64_t fixedTrajectoryInputFingerprint() const;
     void checkFixedTrajectoryFingerprint() const;
@@ -2380,14 +2383,22 @@ private:
                                                      const torch::Tensor& msftx, const torch::Tensor& msfty,
                                                      const torch::Tensor& muu,
                                                      const torch::Tensor& ph_full,
-                                                     const torch::Tensor& rho);
+                                                     const torch::Tensor& rho,
+                                                     const torch::Tensor& option2_zx = torch::Tensor(),
+                                                     const torch::Tensor& option2_zy = torch::Tensor(),
+                                                     const torch::Tensor& option2_rdzw = torch::Tensor(),
+                                                     const torch::Tensor& option2_rdz = torch::Tensor());
     torch::Tensor compute_horizontal_diffusion_v_wrf(const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,
                                                      const torch::Tensor& Kh, float rdx, float rdy,
                                                      const torch::Tensor& msfvx, const torch::Tensor& msfvy,
                                                      const torch::Tensor& msftx, const torch::Tensor& msfty,
                                                      const torch::Tensor& muv,
                                                      const torch::Tensor& ph_full,
-                                                     const torch::Tensor& rho);
+                                                     const torch::Tensor& rho,
+                                                     const torch::Tensor& option2_zx = torch::Tensor(),
+                                                     const torch::Tensor& option2_zy = torch::Tensor(),
+                                                     const torch::Tensor& option2_rdzw = torch::Tensor(),
+                                                     const torch::Tensor& option2_rdz = torch::Tensor());
     // PARITY FIX 2025-12-08: Add MUT parameter for proper flux-form diffusion
     // PARITY FIX 2025-12-10: Add ph_full parameter for 3D rdz computation from total geopotential
     // PARITY FIX 2025-12-13: Add u, v for defor13/defor23-based tau31/tau32 computation
@@ -2398,7 +2409,11 @@ private:
                                                      float rdx, float rdy, const torch::Tensor& msftx,
                                                      const torch::Tensor& msfty,
                                                      const torch::Tensor& mu_full = torch::Tensor(),
-                                                     const torch::Tensor& ph_full = torch::Tensor());
+                                                     const torch::Tensor& ph_full = torch::Tensor(),
+                                                     const torch::Tensor& option2_zx = torch::Tensor(),
+                                                     const torch::Tensor& option2_zy = torch::Tensor(),
+                                                     const torch::Tensor& option2_rdzw = torch::Tensor(),
+                                                     const torch::Tensor& option2_rdz = torch::Tensor());
     torch::Tensor compute_biharmonic_diffusion(const torch::Tensor& f, float Kh4, float rdx, float rdy);
     torch::Tensor compute_vertical_mixing(const torch::Tensor& f, const torch::Tensor& Kv, const torch::Tensor& rdnw);
     torch::Tensor compute_vertical_mixing_u(const torch::Tensor& u, const torch::Tensor& w, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw, const torch::Tensor& rho);
@@ -2407,25 +2422,48 @@ private:
     // PERF FIX 2025-12-13: Overload accepting pre-computed defor33 to avoid duplicate computation
     // When horizontal diffusion already computed defor33 for tau33 stress, pass it here to save kernels
     torch::Tensor compute_vertical_mixing_w(const torch::Tensor& w, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
-                                           const torch::Tensor& rho, const torch::Tensor& defor33_precomputed);
+                                           const torch::Tensor& rho, const torch::Tensor& defor33_precomputed,
+                                           const torch::Tensor& option2_rdn = torch::Tensor());
     torch::Tensor compute_vertical_mixing_scalar(const torch::Tensor& scalar, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
-                                                const torch::Tensor& rho, const torch::Tensor& theta_full, const torch::Tensor& mu_full);
+                                                const torch::Tensor& rho, const torch::Tensor& theta_full, const torch::Tensor& mu_full,
+                                                const torch::Tensor& stage_rdz = torch::Tensor());
     // Overload with mix_full_fields and qv_base for QV perturbation mode (WRF vertical_diffusion_s parity)
     torch::Tensor compute_vertical_mixing_scalar(const torch::Tensor& scalar, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
                                                 const torch::Tensor& rho, const torch::Tensor& theta_full, const torch::Tensor& mu_full,
-                                                bool is_qv, bool mix_full_fields, const torch::Tensor& qv_base);
+                                                bool is_qv, bool mix_full_fields, const torch::Tensor& qv_base,
+                                                const torch::Tensor& stage_rdz = torch::Tensor());
     
     // Deformation tensor components (for stress tensor calculation)
     torch::Tensor compute_defor11(const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w, 
-                                  float rdx, float rdy, const torch::Tensor& rdnw);
+                                  float rdx, float rdy, const torch::Tensor& rdnw,
+                                  const torch::Tensor& option2_zx = torch::Tensor(),
+                                  const torch::Tensor& option2_zy = torch::Tensor(),
+                                  const torch::Tensor& option2_rdzw = torch::Tensor(),
+                                  const torch::Tensor& option2_rdz = torch::Tensor());
     torch::Tensor compute_defor12(const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w, 
-                                  float rdx, float rdy, const torch::Tensor& rdnw);
+                                  float rdx, float rdy, const torch::Tensor& rdnw,
+                                  const torch::Tensor& option2_zx = torch::Tensor(),
+                                  const torch::Tensor& option2_zy = torch::Tensor(),
+                                  const torch::Tensor& option2_rdzw = torch::Tensor(),
+                                  const torch::Tensor& option2_rdz = torch::Tensor());
     torch::Tensor compute_defor22(const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w, 
-                                  float rdx, float rdy, const torch::Tensor& rdnw);
+                                  float rdx, float rdy, const torch::Tensor& rdnw,
+                                  const torch::Tensor& option2_zx = torch::Tensor(),
+                                  const torch::Tensor& option2_zy = torch::Tensor(),
+                                  const torch::Tensor& option2_rdzw = torch::Tensor(),
+                                  const torch::Tensor& option2_rdz = torch::Tensor());
     torch::Tensor compute_defor13(const torch::Tensor& u, const torch::Tensor& w, 
-                                  const torch::Tensor& rdx, const torch::Tensor& rdnw);
+                                  const torch::Tensor& rdx, const torch::Tensor& rdnw,
+                                  const torch::Tensor& option2_zx = torch::Tensor(),
+                                  const torch::Tensor& option2_zy = torch::Tensor(),
+                                  const torch::Tensor& option2_rdzw = torch::Tensor(),
+                                  const torch::Tensor& option2_rdz = torch::Tensor());
     torch::Tensor compute_defor23(const torch::Tensor& v, const torch::Tensor& w, 
-                                  const torch::Tensor& rdy, const torch::Tensor& rdnw);
+                                  const torch::Tensor& rdy, const torch::Tensor& rdnw,
+                                  const torch::Tensor& option2_zx = torch::Tensor(),
+                                  const torch::Tensor& option2_zy = torch::Tensor(),
+                                  const torch::Tensor& option2_rdzw = torch::Tensor(),
+                                  const torch::Tensor& option2_rdz = torch::Tensor());
     torch::Tensor compute_defor33(const torch::Tensor& w, const torch::Tensor& rdnw);
 
     // Stress tensor based vertical diffusion (physics-accurate)

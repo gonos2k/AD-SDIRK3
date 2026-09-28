@@ -1507,12 +1507,13 @@ inline std::string emit_stage_history_diag(
                                 std::to_string(d.stage));
         }
     }
-    // The aggregate FP64 increment sum excludes rounding at each FP32 state
-    // addition. When that diagnostic exceeds its relative limit, accept only
-    // an exact replay of the production recurrence; the later per-source gate
-    // also checks every captured intermediate state bit for bit.
+    // The FP64 aggregate and per-element metrics can both differ from production
+    // because the history was accumulated in FP32. When either diagnostic exceeds
+    // its limit, accept only an exact replay of the production recurrence; the
+    // later per-source gate also checks every captured intermediate state bitwise.
     bool fp32_replay_exact = false;
-    if (hist_finite && hist_rel > 1e-6 && U_n.defined() &&
+    const bool history_metric_exceeded = hist_rel > 1e-6 || hist_max_rel > 1e-1;
+    if (hist_finite && history_metric_exceeded && U_n.defined() &&
         U_n.scalar_type() == torch::kFloat32 &&
         U_stage.scalar_type() == torch::kFloat32) {
         auto replay = U_n.detach().clone();
@@ -1522,8 +1523,7 @@ inline std::string emit_stage_history_diag(
                 (static_cast<double>(dt) * s.a_implicit) * (*s.k_fast);
         fp32_replay_exact = torch::equal(replay, U_stage);
     }
-    if (!hist_finite || (hist_rel > 1e-6 && !fp32_replay_exact) ||
-        hist_max_rel > 1e-1) {
+    if (!hist_finite || (history_metric_exceeded && !fp32_replay_exact)) {
         char rb[224];
         std::snprintf(rb, sizeof(rb),
                       "hist_rel=%.6e hist_max_abs=%.6e hist_max_rel=%.6e "

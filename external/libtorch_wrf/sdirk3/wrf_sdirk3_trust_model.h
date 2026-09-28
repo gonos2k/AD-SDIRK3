@@ -170,6 +170,19 @@ inline double contracted_trust_radius(double current_radius,
     return std::max(explicit_min,
                     shrink_factor * std::min(current_radius, actual_trial_norm));
 }
+
+// A repeated radius-limited trial must shrink the clipped candidate itself.
+// step_norm is in trust coordinates; retry_level 0, 1, ... returns half,
+// quarter, ... of the current clipped step as a scalar on the raw step.
+inline float dyadic_clipped_retry_alpha(float effective_limit,
+                                        float step_norm,
+                                        unsigned int retry_level) noexcept {
+    const float max_alpha = step_norm > 1.0e-14f
+        ? effective_limit / step_norm : 1.0f;
+    return std::ldexp(0.5f, -static_cast<int>(retry_level)) *
+           std::min(1.0f, max_alpha);
+}
+
 }  // namespace detail
 
 // Both inputs are in the SCALED space; `mask` is optional (undefined = no masking) and,

@@ -57,6 +57,7 @@
 #include "wrf_sdirk3_krylov_metrics.h"  // relative_residual / shares / E^-1 S
 #include "wrf_sdirk3_stage_krylov_policy.h"  // pure stage budget/tolerance resolution
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
+#include "wrf_sdirk3_stage2_rejection_snapshot.h"  // opt-in first rejected Stage-2 trial evidence
 #include "wrf_sdirk3_u_slow_diagnostics.h"   // next_solver_id: the process-wide one
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_halo_c_api.h"
@@ -716,11 +717,10 @@ static void run_rw_term_bisection(const Context& c) {
 
     // PR 9B.1: whether the implicit W-damping gate is active decides the
     // expected capture inventory (w_damp_padded present or not).
-    const bool expect_wdamp =
-        wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
-        wrf::sdirk3::g_sdirk3_config.implicit_wdamp &&
-        wrf::sdirk3::g_sdirk3_config.w_damp_alpha > 0.0f &&
-        wrf::sdirk3::g_sdirk3_config.wrf_w_crit_cfl > 0.0f;
+    const auto& rw_cfg = wrf::sdirk3::g_sdirk3_config;
+    const bool expect_wdamp = wrf::sdirk3::rw_term_capture_expects_wdamp(
+        rw_cfg.wrf_w_damping == 1, rw_cfg.implicit_wdamp,
+        rw_cfg.w_damp_alpha, rw_cfg.wrf_w_crit_cfl);
 
     auto emit_capture_fail = [&](const char* marker, const std::string& why) {
         emit_stage_diag([&](std::ostream& os) {
@@ -4196,6 +4196,10 @@ public:
     // solve_stage entry so a retry gets a distinct generation.
     torch::Tensor diag_final_K_;
     int diag_final_newton_iter_ = -1;
+    // One snapshot per solver instance/run, shared by the Stage-2 first-reject
+    // evidence path. The flag is set before I/O so a failed filesystem write
+    // cannot add repeated work to later Newton iterations.
+    bool stage2_rejection_snapshot_attempted_ = false;
     int diag_retry_generation_ = -1;
     int diag_solve_generation_ = 0;
 
@@ -4810,6 +4814,10 @@ public:
         diag_final_K_ = torch::Tensor();
         diag_final_newton_iter_ = -1;
         diag_retry_generation_ = -1;
+        wrf::sdirk3::Stage2RejectionSnapshot pending_stage2_rejection;
+        bool pending_stage2_rejection_valid = false;
+        wrf::sdirk3::Stage2RwTermLedger pending_stage2_rw_ledger;
+        std::uint64_t current_base_rhs_input_digest = 0;
         // A fresh generation for THIS solve attempt (a stage retry re-enters here
         // and gets the next generation), so a stale triple from a prior attempt
         // can never be mistaken for this one.
@@ -5806,6 +5814,139 @@ public:
             
             torch::Tensor F;
 
+            // The bounded W-term ledger is armed only for the production base
+            // F(U_eval) call. JVPs, determinism probes, and trial RHS calls use
+            // compute_rhs directly and remain outside this scope.
+            auto compute_base_rhs = [&]() -> torch::Tensor {
+                pending_stage2_rw_ledger = {};
+                current_base_rhs_input_digest = 0;
+                const bool capture_rw_terms = stage == 2 &&
+                    wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag &&
+                    wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 2;
+                if (!capture_rw_terms) return compute_rhs(U_eval);
+
+                wrf::sdirk3::RwTermCaptureIdentity identity;
+                identity.valid = U_eval.defined() && U_eval.scalar_type() == torch::kFloat32;
+                identity.timestep = global_timestep_;
+                identity.solver_id = solver_id_;
+                identity.stage = stage;
+                identity.newton_iter = newton_iter;
+                identity.solve_generation = static_cast<std::uint64_t>(diag_solve_generation_);
+                if (identity.valid) {
+                    try {
+                        identity.input_digest =
+                            wrf::sdirk3::sdirk3_rhs_operand_digest(U_eval);
+                        current_base_rhs_input_digest = identity.input_digest;
+                    } catch (...) {
+                        identity.valid = false;
+                    }
+                }
+                wrf::sdirk3::RwTermCaptureScope scope(true, identity);
+                if (!scope.armed_ok()) {
+                    pending_stage2_rw_ledger.failure = "nested_rw_term_capture_scope";
+                    return compute_rhs(U_eval);
+                }
+
+                auto F_base = compute_rhs(U_eval);
+                // Read the small capture receipt and immediately disarm/move
+                // the existing term inventory before validating or cloning it.
+                const int rhs_mode = scope.rhs_mode();
+                const auto w_conversion = scope.w_conversion_observation();
+                auto final_w = scope.final_w_observation();
+                auto raw_terms = scope.take();
+
+                auto& ledger = pending_stage2_rw_ledger;
+                ledger.identity = identity;
+                ledger.stage = stage;
+                ledger.newton_iter = newton_iter;
+                ledger.solve_generation = identity.solve_generation;
+                ledger.input_digest = identity.input_digest;
+                ledger.rhs_mode = rhs_mode;
+                const auto& rw_cfg = wrf::sdirk3::g_sdirk3_config;
+                ledger.expect_wdamp = wrf::sdirk3::rw_term_capture_expects_wdamp(
+                    rw_cfg.wrf_w_damping == 1, rw_cfg.implicit_wdamp,
+                    rw_cfg.w_damp_alpha, rw_cfg.wrf_w_crit_cfl);
+
+                if (!identity.valid) {
+                    ledger.failure = "invalid_base_rhs_identity";
+                    return F_base;
+                }
+                if (rhs_mode != 1) {  // RhsMode::ImplicitOnly
+                    ledger.failure = "unsupported_base_rhs_mode";
+                    return F_base;
+                }
+                if (!final_w.defined()) {
+                    ledger.failure = "missing_same_call_final_packed_w";
+                    return F_base;
+                }
+                if (!w_conversion.observed) {
+                    ledger.failure = "missing_same_call_w_conversion_bridge";
+                    return F_base;
+                }
+                const std::string inventory_error =
+                    wrf::sdirk3::validate_rw_term_inventory(
+                        raw_terms, ledger.expect_wdamp);
+                if (!inventory_error.empty()) {
+                    ledger.failure = "rw_term_inventory:" + inventory_error;
+                    return F_base;
+                }
+                if (!layout_initialized_) {
+                    ledger.failure = "state_layout_unavailable";
+                    return F_base;
+                }
+                for (const auto& block : cached_layout_.blocks) {
+                    if (block.name == "rw") {
+                        ledger.w_start = block.start;
+                        ledger.w_size = block.size;
+                        break;
+                    }
+                }
+                if (ledger.w_start < 0 || ledger.w_size <= 0 ||
+                    final_w.dim() != 1 || final_w.numel() != ledger.w_size ||
+                    final_w.scalar_type() != torch::kFloat32) {
+                    ledger.failure = "unsupported_final_packed_w_layout";
+                    return F_base;
+                }
+                constexpr std::uint64_t max_rw_ledger_bytes = 32ULL * 1024ULL * 1024ULL;
+                Stage2RwTermLedger size_probe = ledger;
+                size_probe.terms = raw_terms;
+                size_probe.final_w_packed = final_w;
+                size_probe.w_conversion = w_conversion;
+                if (wrf::sdirk3::stage2_rw_term_ledger_nbytes(size_probe) >
+                    max_rw_ledger_bytes) {
+                    ledger.failure = "rw_term_ledger_exceeds_32_mib_cap";
+                    return F_base;
+                }
+                try {
+                    torch::NoGradGuard no_grad;
+                    ledger.terms.reserve(raw_terms.size());
+                    for (const auto& term : raw_terms)
+                        ledger.terms.emplace_back(term.first, term.second.detach().clone());
+                    // final_w was detached and frozen by the scope's observer.
+                    ledger.final_w_packed = final_w.detach();
+                    ledger.w_conversion.observed = w_conversion.observed;
+                    ledger.w_conversion.canonical_horizontal =
+                        w_conversion.canonical_horizontal;
+                    ledger.w_conversion.coupled_slow_export =
+                        w_conversion.coupled_slow_export;
+                    ledger.w_conversion.w_input = w_conversion.w_input.detach().clone();
+                    ledger.w_conversion.velocity_mass_w =
+                        w_conversion.velocity_mass_w.detach().clone();
+                    ledger.w_conversion.mu_tend_at_w =
+                        w_conversion.mu_tend_at_w.detach().clone();
+                    ledger.w_conversion.conversion_rate =
+                        w_conversion.conversion_rate.detach().clone();
+                    ledger.w_conversion.w_tend_after_conversion =
+                        w_conversion.w_tend_after_conversion.detach().clone();
+                    ledger.valid = true;
+                } catch (...) {
+                    ledger.terms.clear();
+                    ledger.final_w_packed = torch::Tensor();
+                    ledger.failure = "rw_term_ledger_clone_failed";
+                }
+                return F_base;
+            };
+
             // C3 DIAGNOSTIC 2026-02-15: One-time RHS determinism check.
             // If F(K) returns different values for the same K due to floating-point
             // non-associativity in parallel reductions, Newton cannot converge below
@@ -5848,7 +5989,7 @@ public:
 
             if (!can_reuse_jacobian) {
                 // Recompute and cache both U and F(U)
-                F = compute_rhs(U_eval);
+                F = compute_base_rhs();
                 // Graph retention is opt-in for adjoint windows only.
                 if (wrf::sdirk3::g_sdirk3_config.use_autograd && options_.retain_graph_for_adjoint) {
                     // Preserve graph - WARNING: Memory usage will increase
@@ -5874,7 +6015,7 @@ public:
                 // Even if U_cached ≈ U_eval by the 0.1 threshold, K has been updated
                 // so U_eval = U_stage + dt*gamma*K is actually different.
                 // Reusing stale F causes residual/JVP mismatch → solver explosion
-                F = compute_rhs(U_eval);
+                F = compute_base_rhs();
                 if (wrf::sdirk3::g_sdirk3_config.use_autograd && options_.retain_graph_for_adjoint) {
                     jacobian_cache_.F_cached = F;
                     jacobian_cache_.U_cached = U_eval;
@@ -10369,8 +10510,8 @@ public:
                 }
             }
 
-            float prev_candidate_norm_val = -1.0f;  // v20.14r27l: track for short-circuit
-            bool forced_scaled_tried = false;  // v20.14r27m: one forced-scale attempt on same-candidate
+            float prev_candidate_norm_val = -1.0f;
+            bool forced_scaled_tried = false;
             // R13.23 (self-review): the loop condition is a fixtured rule, because it is what
             // makes a rescued candidate land somewhere. Note this loop is NOT gated on
             for (int attempt = 0;
@@ -10412,53 +10553,38 @@ public:
                     ? (S_inv_diag_ * dK_scaled_candidate).norm()
                     : dK_scaled_candidate.norm();
 
-                // v20.14r27n: Same-candidate detection with forced-scale fallback.
-                // When dK fits within all radii, shrinking the radius doesn't change
-                // the candidate. Instead of skipping, try a forced α=0.5 step once.
-                // After forced step, keep the ORIGINAL norm as prev_candidate_norm_val
-                // so subsequent attempts with the same original candidate are caught.
+                // Same-candidate detection with dyadic forced-scale retries. When the
+                // radius no longer changes the clipped candidate, halve the current
+                // clipped step on each remaining trust attempt.
                 {
                     float curr_cand_norm = guarded_item<float>(dK_scaled_norm_tensor);
-                    bool just_forced = false;
-                    if (prev_candidate_norm_val >= 0.0f &&
+                    bool duplicate = prev_candidate_norm_val >= 0.0f &&
                         std::abs(curr_cand_norm - prev_candidate_norm_val) <
-                            1e-6f * (prev_candidate_norm_val + 1e-30f)) {
-                        if (!forced_scaled_tried) {
-                            // v20.14r27t: Force α=0.5 step, but respect effective_limit.
-                            // Without clamping, forced step could exceed trust radius
-                            // in small-radius situations, violating the trust contract.
-                            just_forced = true;
-                            forced_scaled_tried = true;
-                            float eff_lim_f = guarded_item<float>(effective_limit);
-                            float dk_norm_f = guarded_item<float>(dK_norm);
-                            float max_alpha = (dk_norm_f > 1e-14f) ? (eff_lim_f / dk_norm_f) : 1.0f;
-                            float forced_alpha = std::min(0.5f, max_alpha);
-                            dK_scaled_candidate = dK * forced_alpha;
-                            dK_scaled_norm_tensor = trust_scaled_coords
-                                ? (S_inv_diag_ * dK_scaled_candidate).norm()
-                                : dK_scaled_candidate.norm();
-                            curr_cand_norm = guarded_item<float>(dK_scaled_norm_tensor);
-                            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                                std::cerr << "[TRUST REGION] Same candidate on attempt " << attempt
-                                          << ", forcing α=" << forced_alpha
-                                          << " step (||dK_s||=" << curr_cand_norm
-                                          << ", eff_lim=" << eff_lim_f << ")" << std::endl;
-                            }
-                        } else {
-                            // v20.14r40: Already tried forced scale — break entirely.
-                            // Further attempts just shrink radius without changing candidate.
-                            trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
-                                trust_radius_, curr_cand_norm, 0.25, trust_radius_min_));
-                            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                                std::cerr << "[TRUST REGION] Break attempt " << attempt
-                                          << " (same candidate, forced already tried)" << std::endl;
-                            }
-                            break;
+                            1e-6f * (prev_candidate_norm_val + 1e-30f);
+                    if (duplicate) {
+                        // At most two retries fit in the existing three-attempt loop:
+                        // half, then quarter of the current clipped step.
+                        float eff_lim_f = guarded_item<float>(effective_limit);
+                        float dk_norm_f = guarded_item<float>(dK_norm);
+                        const unsigned int retry_level = forced_scaled_tried ? 1u : 0u;
+                        float forced_alpha = wrf::sdirk3::detail::dyadic_clipped_retry_alpha(
+                            eff_lim_f, dk_norm_f, retry_level);
+                        forced_scaled_tried = true;
+                        dK_scaled_candidate = dK * forced_alpha;
+                        dK_scaled_norm_tensor = trust_scaled_coords
+                            ? (S_inv_diag_ * dK_scaled_candidate).norm()
+                            : dK_scaled_candidate.norm();
+                        curr_cand_norm = guarded_item<float>(dK_scaled_norm_tensor);
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                            std::cerr << "[TRUST REGION] Same candidate on attempt " << attempt
+                                      << ", forcing α=" << forced_alpha
+                                      << " step (||dK_s||=" << curr_cand_norm
+                                      << ", eff_lim=" << eff_lim_f << ")" << std::endl;
                         }
-                    }
-                    // v20.14r27n: Don't update prev_candidate_norm_val after forced step.
-                    // Keep original norm so the same original candidate is caught on next attempt.
-                    if (!just_forced) {
+                    } else {
+                        // A radius contraction produced a new clipped candidate. Start
+                        // its duplicate retries from half of that current candidate.
+                        forced_scaled_tried = false;
                         prev_candidate_norm_val = curr_cand_norm;
                     }
                 }
@@ -10761,6 +10887,111 @@ public:
                     }
                 }
 
+                // Retain the latest rejected candidate reaching this common Stage-2
+                // trust-decision path. Earlier GMRES-quality continues and the
+                // separate recovery path are intentionally outside this scope.
+                // The opt-in gate is topology-checked by the WRF caller. Cloning
+                // freezes tensor storage for a possible later terminal-stall write;
+                // it adds no RHS/JVP/preconditioner calls and cannot change acceptance.
+                if (!accept_step && stage == 2 &&
+                    wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag) {
+                    wrf::sdirk3::Stage2RejectionSnapshot snapshot;
+                    snapshot.U_n = U_n;
+                    snapshot.U_stage = U_stage;
+                    snapshot.K = K;
+                    snapshot.U_eval = U_eval;
+                    snapshot.F = F;
+                    snapshot.R = R;
+                    snapshot.dK = dK;
+                    snapshot.dK_trial = dK_scaled_candidate;
+                    snapshot.K_trial = K_trial;
+                    snapshot.U_trial = U_trial;
+                    snapshot.F_trial = F_trial;
+                    snapshot.R_trial = R_trial;
+                    snapshot.S_diag = S_diag_;
+                    snapshot.S_inv_diag = S_inv_diag_;
+                    snapshot.halo_mask = halo_mask_initialized_
+                        ? halo_mask_ : torch::Tensor();
+                    snapshot.gmres_r_true = last_gmres_r_true_;
+                    snapshot.timestep = global_timestep_;
+                    snapshot.solver_id = solver_id_;
+                    snapshot.solve_generation =
+                        static_cast<std::uint64_t>(diag_solve_generation_);
+                    snapshot.rhs_input_digest = current_base_rhs_input_digest;
+                    snapshot.stage = stage;
+                    snapshot.newton_iter = newton_iter;
+                    snapshot.trust_attempt = attempt;
+                    snapshot.dt = dt;
+                    snapshot.gamma = gamma;
+                    snapshot.step_fraction = tr_alpha;
+                    snapshot.trust_radius = trust_radius_;
+                    snapshot.effective_limit = guarded_item<double>(effective_limit);
+                    snapshot.residual_old_scaled_l2 = res_old_val;
+                    snapshot.residual_trial_scaled_l2 = res_new_val;
+                    snapshot.actual_reduction = actual_reduction;
+                    snapshot.predicted_reduction = predicted_val;
+                    snapshot.rho = rho_val;
+                    snapshot.rho_accept_threshold = rho_accept_threshold;
+                    snapshot.gmres_relative_error = gmres_rel_error;
+                    snapshot.rejection_reason = !std::isfinite(rho_val)
+                        ? "nonfinite_rho"
+                        : actual_reduction <= 0.0
+                            ? "nonpositive_actual_reduction"
+                                : rho_val < rho_accept_threshold
+                                    ? "rho_below_threshold_or_insufficient_decrease"
+                                    : "other_post_trial_acceptance_gate";
+
+                    // A single Newton base RHS may be followed by multiple
+                    // rejected trust attempts. Keep its already-detached
+                    // ledger pending so every attempt can retain the same
+                    // immutable base-RHS receipt.
+                    snapshot.rw_term_ledger = pending_stage2_rw_ledger;
+                    auto& rw_ledger = snapshot.rw_term_ledger;
+                    if (!rw_ledger.failure.empty() || !rw_ledger.valid ||
+                        rw_ledger.identity.timestep != snapshot.timestep ||
+                        rw_ledger.identity.solver_id != snapshot.solver_id ||
+                        rw_ledger.identity.stage != snapshot.stage ||
+                        rw_ledger.identity.newton_iter != snapshot.newton_iter ||
+                        rw_ledger.identity.solve_generation != snapshot.solve_generation ||
+                        rw_ledger.identity.input_digest != snapshot.rhs_input_digest) {
+                        rw_ledger.valid = false;
+                        if (rw_ledger.failure.empty())
+                            rw_ledger.failure = "base_rhs_ledger_identity_mismatch";
+                    }
+
+                    pending_stage2_rejection =
+                        wrf::sdirk3::clone_stage2_rejection_snapshot(snapshot, false);
+                    pending_stage2_rejection.rw_term_ledger =
+                        snapshot.rw_term_ledger;
+                    pending_stage2_rejection_valid = true;
+
+                    if (!stage2_rejection_snapshot_attempted_) {
+                        stage2_rejection_snapshot_attempted_ = true;
+
+                        const std::string base =
+                            "sdirk3_stage2_first_common_trust_reject_ts" +
+                            std::to_string(global_timestep_) + "_solver" +
+                            std::to_string(solver_id_);
+                        const std::string archive_path = base + ".pt";
+                        const std::string metadata_path = base + ".json";
+                        std::string snapshot_error;
+                        if (wrf::sdirk3::write_stage2_rejection_snapshot(
+                                snapshot, archive_path, metadata_path,
+                                &snapshot_error)) {
+                            std::cerr << "SDIRK3_STAGE2_REJECTION_SNAPSHOT path="
+                                      << archive_path << " metadata=" << metadata_path
+                                      << " iter=" << newton_iter
+                                      << " attempt=" << attempt
+                                      << " step_fraction=" << tr_alpha
+                                      << " rho=" << rho_val
+                                      << " (observed tensors; no RHS replay)\n";
+                        } else {
+                            std::cerr << "SDIRK3_STAGE2_REJECTION_SNAPSHOT_UNAVAILABLE reason="
+                                      << snapshot_error << "\n";
+                        }
+                    }
+                }
+
                 if (accept_step) {
                     it.candidate.outcome = wrf::sdirk3::TrialOutcome::AcceptedTrust;
                     dK_scaled = dK_scaled_candidate;
@@ -11034,6 +11265,54 @@ public:
                                   << "Breaking at iter=" << newton_iter << std::endl;
                         stats_.newton_termination = static_cast<int>(
                             wrf::sdirk3::NewtonTerminationReason::ZeroStepStall);
+                        if (stage == 2 &&
+                            wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag) {
+                            if (pending_stage2_rejection_valid &&
+                                wrf::sdirk3::stage2_terminal_snapshot_candidate_matches(
+                                    pending_stage2_rejection, newton_iter,
+                                    static_cast<std::uint64_t>(diag_solve_generation_))) {
+                                const std::string base =
+                                    "sdirk3_stage2_terminal_zero_step_stall_ts" +
+                                    std::to_string(global_timestep_) + "_solver" +
+                                    std::to_string(solver_id_) + "_iter" +
+                                    std::to_string(newton_iter);
+                                const std::string archive_path = base + ".pt";
+                                const std::string metadata_path = base + ".json";
+                                std::string snapshot_error;
+                                if (wrf::sdirk3::write_stage2_terminal_stall_snapshot(
+                                        pending_stage2_rejection, newton_iter,
+                                        stagnation_count, archive_path, metadata_path,
+                                        &snapshot_error,
+                                        wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 2)) {
+                                    std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL path="
+                                              << archive_path << " metadata=" << metadata_path
+                                              << " terminal_iter=" << newton_iter
+                                              << " candidate_iter="
+                                              << pending_stage2_rejection.newton_iter
+                                              << " stagnation_count=" << stagnation_count
+                                              << (pending_stage2_rejection.rw_term_ledger.valid
+                                                      ? " w_ledger=validated"
+                                                      : "")
+                                              << " (latest common-path rejection; observed tensors; no RHS replay)\n";
+                                } else {
+                                    std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE reason="
+                                              << snapshot_error << "\n";
+                                }
+                            } else if (pending_stage2_rejection_valid) {
+                                std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE "
+                                          << "reason=latest_common_path_candidate_identity_mismatch"
+                                          << " candidate_iter="
+                                          << pending_stage2_rejection.newton_iter
+                                          << " candidate_generation="
+                                          << pending_stage2_rejection.solve_generation
+                                          << " terminal_generation="
+                                          << diag_solve_generation_
+                                          << " terminal_iter=" << newton_iter << "\n";
+                            } else {
+                                std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE "
+                                          << "reason=no_common_path_rejected_trial_was_captured\n";
+                            }
+                        }
                         break;
                     }
                 } else {
