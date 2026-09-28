@@ -537,14 +537,24 @@ struct VActualRhsFixture {
 // Observe the public option-2 W tendency after its coupled-RHS conversion.
 // The source-extracted Fortran W oracle reports the mass-coupled H/V raw
 // stresses, so Python multiplies this delta by velocity_mass_w before comparing.
-bool dump_option2_w_actual_rhs(bool packed) {
+bool dump_option2_w_actual_rhs(bool packed, bool variable_mu=false) {
     using namespace wrf::sdirk3;
     using namespace wrf::sdirk3::test;
     constexpr float dx=1000.0f, map=1.25f, mu_base=80000.0f;
     constexpr float kh=2.0f/3.0f, kv=4.0f/3.0f;
     const int unique_nx=packed?nx-1:nx;
+    const int unique_ny=packed?ny-1:ny;
     const float pbase_value=287.0f*(300.0f+0.01f);
     const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    std::vector<float> mu_profile(sm,0.0f);
+    if (variable_mu) {
+        for (int j=0;j<ny;++j) for (int i=0;i<nx;++i) {
+            const int jj=j%unique_ny, ii=i%unique_nx;
+            mu_profile[j*nx+i]=700.0f*std::sin(float(2*pi*ii/unique_nx))+
+                               250.0f*std::cos(float(2*pi*jj/unique_ny));
+        }
+    }
+    std::vector<float> h_raw_probe, v_raw_probe, rho_probe;
     const auto run=[&](float khdif,float kvdif) {
         auto& cfg=g_sdirk3_config;
         cfg=SDIRK3Config{};
@@ -595,13 +605,67 @@ bool dump_option2_w_actual_rhs(bool packed) {
             if(packed && jj!=j) tile.w[(j*nw+k)*nx+i]=tile.w[(jj*nw+k)*nx+i];
         }
         std::fill(tile.theta.begin(),tile.theta.end(),0.01f);
-        std::fill(tile.mu.begin(),tile.mu.end(),0.0f);
+        tile.mu=mu_profile;
         (tile.solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
             true,1,1,true,true,false,false,false,false,false,true,true,
             false,false,false,false,false,"option-2 W actual-RHS fixture");
         TORCH_CHECK(grid->smagorinsky_opt==1 && tile.solver.*access(FnmFromWrfTag{}) &&
                     tile.solver.getNumMoistSpecies()==0,
                     "W actual-RHS fixture did not establish native dry km_opt=1 gates");
+        if (variable_mu && khdif==kh && kvdif==kv) {
+            const auto base_shape=std::vector<int64_t>{ny,nz,nx};
+            const auto w_shape=std::vector<int64_t>{ny,nw,nx};
+            const auto mass_shape=std::vector<int64_t>{ny,nx};
+            const auto view=[&](const std::vector<float>& values,
+                                const std::vector<int64_t>& shape) {
+                return torch::from_blob(const_cast<float*>(values.data()),shape,opt).clone();
+            };
+            const auto u_tensor=view(tile.u,{ny,nz,nu});
+            const auto v_tensor=view(tile.v,{nv,nz,nx});
+            const auto w_tensor=view(tile.w,w_shape);
+            const auto ph_tensor=view(tile.ph,w_shape);
+            const auto t_tensor=view(tile.theta,base_shape);
+            const auto mu_tensor=view(tile.mu,mass_shape);
+            const auto pbase_tensor=view(pbase,base_shape);
+            const auto mu_base_tensor=view(mubase,mass_shape);
+            const auto ph_base_tensor=view(phbase,w_shape);
+            const auto tbase_tensor=torch::full_like(pbase_tensor,300.0f);
+            const auto alb=compute_inverse_density(tbase_tensor,pbase_tensor,
+                                                   287.0f,717.5f,1004.5f,100000.0f);
+            const auto prho=calc_p_rho_wrf(ph_tensor,t_tensor,mu_tensor,mu_base_tensor,
+                                           alb,pbase_tensor,grid->rdnw,
+                                           torch::from_blob(const_cast<float*>(c1h.data()),{nz},opt),
+                                           torch::from_blob(const_cast<float*>(c2h.data()),{nz},opt),
+                                           287.0f,717.5f,1004.5f,100000.0f,300.0f);
+            const auto rho=prho.alt.reciprocal().contiguous();
+            const auto mu_full=mu_tensor+mu_base_tensor;
+            const auto ph_full=ph_tensor+ph_base_tensor;
+            const auto z_w=ph_full/grid->g;
+            const auto rdzw=(z_w.slice(1,1,nw)-z_w.slice(1,0,nz)).reciprocal();
+            const auto x_left=torch::cat({z_w.slice(2,nx-1,nx),z_w},2);
+            const auto x_right=torch::cat({z_w,z_w.slice(2,0,1)},2);
+            const auto zx=(1.0f/dx)*(x_right-x_left);
+            const auto zy_wall=torch::zeros({1,nw,nx},opt);
+            const auto zy=torch::cat({zy_wall,
+                (1.0f/dx)*(z_w.slice(0,1,ny)-z_w.slice(0,0,ny-1)),zy_wall},0);
+            const auto rdz_bottom=(2.0/(z_w.select(1,1)-z_w.select(1,0))).unsqueeze(1);
+            const auto rdz_interior=2.0/(z_w.slice(1,2,nw)-z_w.slice(1,0,nw-2));
+            const auto rdz_top=torch::zeros_like(z_w.slice(1,0,1));
+            const auto rdz=torch::cat({rdz_bottom,rdz_interior,rdz_top},1);
+            const auto map_tensor=torch::full({ny,nx},map,opt);
+            const auto kh_w=torch::full_like(t_tensor,kvdif);
+            const auto kh_mass=torch::full_like(t_tensor,khdif);
+            const auto h_raw=(tile.solver.*access(Option2WHelperTag{}))(
+                u_tensor,v_tensor,w_tensor,kh_w,rho,1.0f/dx,1.0f/dx,
+                map_tensor,map_tensor,mu_full,ph_full,zx,zy,rdzw,rdz).contiguous();
+            const auto defor33=2.0f*(w_tensor.slice(1,1,nw)-
+                                      w_tensor.slice(1,0,nz))*rdzw;
+            const auto v_raw=(tile.solver.*access(VerticalWMixingStageTag{}))(
+                w_tensor,kh_mass,grid->rdnw,rho,defor33,grid->rdn).contiguous();
+            h_raw_probe.assign(h_raw.data_ptr<float>(),h_raw.data_ptr<float>()+h_raw.numel());
+            v_raw_probe.assign(v_raw.data_ptr<float>(),v_raw.data_ptr<float>()+v_raw.numel());
+            rho_probe.assign(rho.data_ptr<float>(),rho.data_ptr<float>()+rho.numel());
+        }
         const auto state=tile.state().detach().clone();
         const auto frozen=state.detach().clone();
         const auto rhs=(tile.solver.*access(ActualRhsTag{}))(
@@ -627,7 +691,7 @@ bool dump_option2_w_actual_rhs(bool packed) {
     const auto off_owned=offw.slice(0,1,owned_y-1).slice(1,1,nz).slice(2,1,owned_x-1);
     const auto a=dw.accessor<float,3>();
     const auto ha=hw.accessor<float,3>(),va=vw.accessor<float,3>();
-    std::cout<<"WACT_META packed="<<(packed?1:0)<<" map="<<map
+    std::cout<<"WACT_META packed="<<(packed?1:0)<<" variable_mu="<<(variable_mu?1:0)<<" map="<<map
              <<" velocity_mass_w="<<std::setprecision(17)<<mu_base+1.0e-10
              <<" kh="<<kh<<" kv="<<kv
              <<" on_w_max="<<on_owned.abs().max().item<double>()
@@ -640,6 +704,22 @@ bool dump_option2_w_actual_rhs(bool packed) {
                  <<std::setprecision(17)<<ha[j][k][i]<<'\n';
         std::cout<<"WACT_V_RATE "<<j<<' '<<k<<' '<<i<<' '
                  <<std::setprecision(17)<<va[j][k][i]<<'\n';
+        std::cout<<"WACT_MASS "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(17)<<mu_base+mu_profile[j*nx+i]+1.0e-10<<'\n';
+    }
+    if(variable_mu) {
+        TORCH_CHECK(h_raw_probe.size()==sw && v_raw_probe.size()==sw && rho_probe.size()==st,
+                    "variable-mu W fixture did not capture C++ operator inputs/results");
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i)
+            std::cout<<"WACT_RHO "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(17)<<rho_probe[(j*nz+k)*nx+i]<<'\n';
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+            const int index=(j*nw+k)*nx+i;
+            std::cout<<"WACT_H_RAW "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(17)<<h_raw_probe[index]<<'\n';
+            std::cout<<"WACT_V_RAW "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(17)<<v_raw_probe[index]<<'\n';
+        }
     }
     TORCH_CHECK(torch::isfinite(delta).all().item<bool>(),"W actual-RHS delta is non-finite");
     return true;
@@ -3733,6 +3813,8 @@ int main(int argc, char** argv) {
         return dump_option2_v_actual_rhs(true,1.25f,true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-physical")
         return dump_option2_w_actual_rhs(false) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-variable-mu-physical")
+        return dump_option2_w_actual_rhs(false,true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-packed")
         return dump_option2_w_actual_rhs(true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-sign")
