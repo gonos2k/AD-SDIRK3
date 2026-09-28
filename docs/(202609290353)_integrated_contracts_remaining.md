@@ -25,7 +25,7 @@ No full WRF rebuild, strict `test/em_b_wave` rerun with this exact source, new s
 | Branch integration | Local tree, build and affected contracts verified | Exact-head remote CI and reviewable draft PR to `main`. |
 | Native W whole-step derivative | W state direction closed for the specified dry single-tile fixture | Resolve PH/MU above the FP32 floor without post-hoc tolerance changes; then broaden state/geometry. |
 | Stage-history opt-in diagnostic | Exact-replay false positive fixed in standalone contracts | Matching ABI0 `em_b_wave` ON/OFF run for the strict input. |
-| Strict 15-second T1 | Open; bounded three-scale fallback prototype still stalls above `1e-7` and exceeds its original trial budget | Find a mathematically justified affordable direction/model or reject this timestep; require a complete forecast before comparing cost. |
+| Strict 15-second T1 | Open; bounded three-scale fallback prototype still stalls above `1e-7`. It tries 9 scales beyond the old one-candidate allowance: 5 use remaining shared RHS tokens and 4 overrun that shared budget. | Find a mathematically justified affordable direction/model or reject this timestep; require a complete forecast before comparing cost. |
 | L34 full spatial operator | Open beyond bounded W and other existing component contracts | Same-state U/V/W/scalar Fortran parity with variable coefficients, real boundaries/maps and production decomposition. |
 | G1 fully weighted budget/time order | Open | Stage flux/source and layer-mass/area budget; timestep refinement above solve error. |
 | A1 full active adjoint | Open | Whole-call packing/boundary/halo transpose and state-dependent coefficient policy with an actual objective derivative check. |
