@@ -515,6 +515,10 @@ add_test(NAME Option2_V_Actual_Rhs_Contract
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_v_actual_rhs.py
             --binary $<TARGET_FILE:test_scalar_diffusion_contract>)
+add_test(NAME Option2_W_Actual_Rhs_Contract
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_w_actual_rhs.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>)
 add_test(NAME Option2_U_Full_Rhs_Contract_Map1
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_momentum_geometry.py

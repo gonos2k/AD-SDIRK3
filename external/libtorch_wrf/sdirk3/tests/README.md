@@ -50,6 +50,15 @@ cmake --build build/sdirk3 --target test_scalar_diffusion_contract
 ctest --test-dir build/sdirk3 -R Option2_Momentum_Geometry_Source_Parity --output-on-failure
 ```
 
+`Option2_W_Actual_Rhs_Contract` checks physical and packed owned interior W ON−OFF rates from
+`computeUnifiedRHS` against an independently compiled Fortran oracle. It checks
+horizontal/vertical K contributions separately, W boundary levels, source
+normalization, and a packed nx-versus-unique-period negative control:
+
+```bash
+ctest --test-dir build/sdirk3 -R Option2_W_Actual_Rhs_Contract --output-on-failure
+```
+
 The W fixture uses physical mass-grid X length `nx`; its `zx` field has a
 separate periodic endpoint at `nx`, checked against endpoint `0`. W tendency
 comparisons use owned interior cells and do not treat either physical mass

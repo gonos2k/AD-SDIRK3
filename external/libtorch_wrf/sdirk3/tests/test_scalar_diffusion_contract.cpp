@@ -534,6 +534,117 @@ struct VActualRhsFixture {
     }
 };
 
+// Observe the public option-2 W tendency after its coupled-RHS conversion.
+// The source-extracted Fortran W oracle reports the mass-coupled H/V raw
+// stresses, so Python multiplies this delta by velocity_mass_w before comparing.
+bool dump_option2_w_actual_rhs(bool packed) {
+    using namespace wrf::sdirk3;
+    using namespace wrf::sdirk3::test;
+    constexpr float dx=1000.0f, map=1.25f, mu_base=80000.0f;
+    constexpr float kh=2.0f/3.0f, kv=4.0f/3.0f;
+    const int unique_nx=packed?nx-1:nx;
+    const float pbase_value=287.0f*(300.0f+0.01f);
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    const auto run=[&](float khdif,float kvdif) {
+        auto& cfg=g_sdirk3_config;
+        cfg=SDIRK3Config{};
+        cfg.diffusion_option=2; cfg.khdif=khdif; cfg.kvdif=kvdif;
+        cfg.mass_coordinate_mode=1; cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false; cfg.wrf_damp_opt=0;
+        cfg.imex_split_mode=3; cfg.hevi_split=false; cfg.use_stress_tensor=true;
+        TileCase tile(dx);
+        if(packed) {
+            tile.solver.setWRFIndices(1,nx,1,ny,1,nz,1,nx,1,ny,1,nw,
+                                      -2,nx+4,-2,ny+4,1,nw);
+            tile.solver.setBoundaryConditions(true,false,false,false,true,true,
+                                               false,false,false,false);
+        }
+        std::vector<float> pbase(st,pbase_value),tinit(st,0.0f),
+                           phbase(sw),mubase(sm,mu_base);
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+            const int ix=i%unique_nx;
+            phbase[(j*nw+k)*nx+i]=static_cast<float>(9.81*(100.0*std::cos(2*pi*ix/unique_nx)+1000.0*k));
+        }
+        tile.solver.setBaseState(pbase.data(),tinit.data(),phbase.data(),mubase.data());
+        auto grid=std::static_pointer_cast<WRFGridInfoExtended>(tile.solver.getGridInfo());
+        TORCH_CHECK(grid,"W actual-RHS fixture has no extended GridInfo");
+        grid->rdn=torch::full({nz},float(nz),opt);
+        grid->rdnw=torch::full({nz},float(nz),opt);
+        grid->g=9.81f;
+        grid->smagorinsky_opt=1;
+        if(grid->qv.defined() && grid->qv.numel()>0) grid->qv=torch::zeros_like(grid->qv);
+        const std::vector<float> c1f(nw,1.0f),c2f(nw,0.0f),c1h(nz,1.0f),c2h(nz,0.0f);
+        const std::vector<float> fnm(nw,0.5f),fnp(nw,0.5f);
+        (tile.solver.*access(CoordinateTag{}))(c1f.data(),c2f.data(),c1h.data(),c2h.data());
+        tile.solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),0.0f,0.0f,0.0f);
+        tile.solver.*access(MapTxTag{})=torch::full({ny,nx},map,opt);
+        tile.solver.*access(MapTyTag{})=torch::full({ny,nx},map,opt);
+        tile.solver.*access(MapUxTag{})=torch::full({ny,nu},map,opt);
+        tile.solver.*access(MapUyTag{})=torch::full({ny,nu},map,opt);
+        tile.solver.*access(MapVxTag{})=torch::full({nv,nx},map,opt);
+        tile.solver.*access(MapVyTag{})=torch::full({nv,nx},map,opt);
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nu;++i) {
+            const int ix=i%nx;
+            tile.u[(j*nz+k)*nu+i]=k==1 ? 1.0f+0.1f*std::cos(float(2*pi*ix/nx)) : 0.0f;
+        }
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+            const int jj=(packed && j==ny-1)?ny-2:j;
+            const int ix=i%unique_nx;
+            tile.w[(j*nw+k)*nx+i]=k==2 ? 0.2f*std::cos(float(2*pi*ix/unique_nx)) : 0.0f;
+            tile.ph[(j*nw+k)*nx+i]=0.0f;
+            if(packed && jj!=j) tile.w[(j*nw+k)*nx+i]=tile.w[(jj*nw+k)*nx+i];
+        }
+        std::fill(tile.theta.begin(),tile.theta.end(),0.01f);
+        std::fill(tile.mu.begin(),tile.mu.end(),0.0f);
+        (tile.solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,
+            false,false,false,false,false,"option-2 W actual-RHS fixture");
+        TORCH_CHECK(grid->smagorinsky_opt==1 && tile.solver.*access(FnmFromWrfTag{}) &&
+                    tile.solver.getNumMoistSpecies()==0,
+                    "W actual-RHS fixture did not establish native dry km_opt=1 gates");
+        const auto state=tile.state().detach().clone();
+        const auto frozen=state.detach().clone();
+        const auto rhs=(tile.solver.*access(ActualRhsTag{}))(
+            frozen,RhsMode::Full).detach().clone();
+        TORCH_CHECK(torch::equal(frozen,state),"W actual-RHS fixture changed its state");
+        return rhs;
+    };
+    const auto on=run(kh,kv);
+    const auto off=run(0.0f,0.0f);
+    const auto horizontal_on=run(0.0f,kv);
+    const auto vertical_on=run(kh,0.0f);
+    const auto delta=on-off;
+    const auto horizontal_delta=horizontal_on-off;
+    const auto vertical_delta=vertical_on-off;
+    const auto dw=delta.slice(0,su+sv,su+sv+sw).view({ny,nw,nx}).contiguous();
+    const auto hw=horizontal_delta.slice(0,su+sv,su+sv+sw).view({ny,nw,nx}).contiguous();
+    const auto vw=vertical_delta.slice(0,su+sv,su+sv+sw).view({ny,nw,nx}).contiguous();
+    const auto onw=on.slice(0,su+sv,su+sv+sw).view({ny,nw,nx});
+    const auto offw=off.slice(0,su+sv,su+sv+sw).view({ny,nw,nx});
+    const int owned_y=packed?ny-1:ny;
+    const int owned_x=packed?nx-1:nx;
+    const auto on_owned=onw.slice(0,1,owned_y-1).slice(1,1,nz).slice(2,1,owned_x-1);
+    const auto off_owned=offw.slice(0,1,owned_y-1).slice(1,1,nz).slice(2,1,owned_x-1);
+    const auto a=dw.accessor<float,3>();
+    const auto ha=hw.accessor<float,3>(),va=vw.accessor<float,3>();
+    std::cout<<"WACT_META packed="<<(packed?1:0)<<" map="<<map
+             <<" velocity_mass_w="<<std::setprecision(17)<<mu_base+1.0e-10
+             <<" kh="<<kh<<" kv="<<kv
+             <<" on_w_max="<<on_owned.abs().max().item<double>()
+             <<" off_w_max="<<off_owned.abs().max().item<double>()<<'\n';
+    for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i)
+        std::cout<<"WACT_RATE "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(17)<<a[j][k][i]<<'\n';
+    for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i) {
+        std::cout<<"WACT_H_RATE "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(17)<<ha[j][k][i]<<'\n';
+        std::cout<<"WACT_V_RATE "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(17)<<va[j][k][i]<<'\n';
+    }
+    TORCH_CHECK(torch::isfinite(delta).all().item<bool>(),"W actual-RHS delta is non-finite");
+    return true;
+}
+
 bool dump_option2_v_actual_rhs(bool packed,float map=1.25f,bool nonuniform=false) {
     using namespace wrf::sdirk3;
     using namespace wrf::sdirk3::test;
@@ -3589,6 +3700,10 @@ int main(int argc, char** argv) {
         return dump_option2_v_actual_rhs(false,1.25f,true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-yvary-packed")
         return dump_option2_v_actual_rhs(true,1.25f,true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-physical")
+        return dump_option2_w_actual_rhs(false) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-w-actual-rhs-packed")
+        return dump_option2_w_actual_rhs(true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-sign")
         return dump_option2_w_fourier_sign();
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-zero-k")
