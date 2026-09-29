@@ -17,7 +17,7 @@ template<typename Tag, typename Tag::type Member> struct GoverningAccessor {
 template struct GoverningAccessor<GoverningRhsTag,
     &TileSDIRK3UnifiedSolver::computeUnifiedRHS>;
 
-void check_governing_step_budget() {
+void check_governing_step_budget(bool stop_after_theta_faces = false) {
     using wrf::sdirk3::RhsMode;
     auto& cfg = wrf::sdirk3::g_sdirk3_config;
     cfg.debug_level = 0;
@@ -690,6 +690,17 @@ void check_governing_step_budget() {
                   << " budget=" << budget << " signal=" << scale
                   << " min_component=" << min_component << '\n';
     }
+    if (stop_after_theta_faces) {
+        for (int s=0; s<Ark::stages; ++s) {
+            TORCH_CHECK(trace.stage_state[s].scalar_type()==torch::kFloat64 &&
+                        trace.fast[s].scalar_type()==torch::kFloat64 &&
+                        trace.slow[s].scalar_type()==torch::kFloat64,
+                        "internal FP64 stage history lost its working dtype at stage ",s+1);
+        }
+        TORCH_CHECK(hybrid_after.scalar_type()==torch::kFloat32,
+                    "internal FP64 step did not return through the FP32 WRF boundary");
+        return;
+    }
     auto ark_replay=trace.input.clone();
     auto fp32_update_replay=trace.input.clone();
     auto fp32_update_error=torch::zeros_like(trace.input.to(torch::kFloat64));
@@ -1351,6 +1362,12 @@ int main(int argc, char** argv) {
     std::ostringstream log;
     auto* previous = std::cerr.rdbuf(log.rdbuf());
     try {
+        if (argc == 2 && std::string(argv[1]) == "--internal-fp64") {
+            cfg.internal_fp64 = true;
+            check_governing_step_budget(true);
+            std::cerr.rdbuf(previous);
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--symmetric-walls") {
             check_symmetric_walls();
             std::cerr.rdbuf(previous);

@@ -125,11 +125,19 @@ through Registry + Fortran `set_config` + C++ (env, string setter, dump,
 | 4DVAR window endpoint sync mode | `sdirk3_obs_window_sync_mode` | `WRF_SDIRK3_OBS_WINDOW_SYNC_MODE` |
 | Stage-2 GMRES restart | `sdirk3_stage2_gmres_restart` | `WRF_SDIRK3_STAGE2_GMRES_RESTART` |
 | Stage-2 rejected-trial snapshot | `sdirk3_stage2_rejection_snapshot_diag` | `WRF_SDIRK3_STAGE2_REJECTION_SNAPSHOT_DIAG` |
+| Internal FP64 ARK state and RHS | `sdirk3_internal_fp64` | `WRF_SDIRK3_INTERNAL_FP64` |
 | Stage-2 Krylov restarts | `sdirk3_stage2_max_krylov_restarts` | `WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS` |
 | Stage-2 Krylov tolerance | `sdirk3_stage2_krylov_tol` | `WRF_SDIRK3_STAGE2_KRYLOV_TOL` |
 | W-damping activation (WRF parity) | `w_damping` (standard WRF key) | `WRF_SDIRK3_WRF_W_DAMPING` |
 | IEVA / implicit vertical adv (WRF parity) | `zadvect_implicit` (standard WRF key) | `WRF_SDIRK3_WRF_ZADVECT_IMPLICIT` |
 | W-damping critical CFL (WRF parity) | `w_crit_cfl` (standard WRF key; wired as `wrf_w_crit_cfl` — a separate field from the legacy sdirk3 knob) | `WRF_SDIRK3_WRF_W_CRIT_CFL` |
+
+`sdirk3_internal_fp64` defaults off. It promotes the packed FP32 WRF input before
+ARK stage assembly, retains FP64 stage states and Newton unknowns through the
+RHS, and converts the completed step back to FP32 at the Fortran boundary.
+The current implementation accepts ARK mode 3 on one CPU tile covering the
+domain. Validation so far covers the dry, fixed-coefficient `em_b_wave` case;
+it does not establish MPI, moist, variable-coefficient, or operational accuracy.
 
 The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
 (`share/module_model_constants.F:88`), fixed as `kWrfWAlpha` in

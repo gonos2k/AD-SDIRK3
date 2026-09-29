@@ -5987,6 +5987,14 @@ vertical_coefficients:
 
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+    const bool internal_fp64 = wrf::sdirk3::g_sdirk3_config.internal_fp64;
+    if (internal_fp64) {
+        TORCH_CHECK(U_n.is_cpu() && nprocx_ * nprocy_ == 1 &&
+                    its_ <= ids_ && ite_ >= ide_ - 1 &&
+                    jts_ <= jds_ && jte_ >= jde_ - 1 &&
+                    wrf::sdirk3::g_sdirk3_config.imex_split_mode == 3,
+                    "internal_fp64 requires ARK mode 3 on one CPU tile covering the domain");
+    }
     if (fixed_trajectory_open_) {
         checkFixedTrajectoryFingerprint();
         TORCH_CHECK(U_n.device().is_cpu(),
@@ -6015,6 +6023,8 @@ vertical_coefficients:
 
     // Keep the original leaf so the full-step VJP includes the input projection.
     const auto step_input_graph = U_n;
+    if (internal_fp64)
+        U_n = U_n.to(torch::kFloat64);
     U_n = projectStateBoundaries(U_n);
 
     // 9F.D66/D81: the adjoint driver, opt-in via WRF_SDIRK3_ADJOINT_DRIVER.
@@ -12560,11 +12570,14 @@ vertical_coefficients:
         last_ark_budget_trace_.projected_final = U_new.detach().clone();
     }
     // Unpack updated state with staggered dimensions
-    unpackState(U_new, u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+    const auto step_output_graph = internal_fp64
+        ? U_new.to(torch::kFloat32).contiguous() : U_new;
+    unpackState(step_output_graph,
+                u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
     if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
         last_step_input_graph_ = step_input_graph;
-        last_step_output_graph_ = U_new;
-        recordFixedTrajectoryStep(step_input_graph, U_new, F_phys, dt);
+        last_step_output_graph_ = step_output_graph;
+        recordFixedTrajectoryStep(step_input_graph, step_output_graph, F_phys, dt);
     }
 
     // R13.1: THE np-equivalence record, and the only one entitled to that claim.
@@ -14680,7 +14693,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // For now, assuming mu doesn't need halo exchange in this context
     }
 
-    auto options = make_cpu_from_blob_opts();  // FIX Batch24 Issue 5
+    auto options = u.options();
     
     // Get sizes from actual tensors to ensure consistency
     // Per WRF-SDIRK3-design.md: Standard layout is [j,k,i] = {ny, nz, nx}
@@ -14756,7 +14769,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             std::cerr << "  mu_base_ min/max: " << mu_base_diag_min_cpu.item<float>()
                       << " / " << mu_base_diag_max_cpu.item<float>() << std::endl;
         }
-        mu_full = mu + mu_base_;
+        mu_full = mu + mu_base_.to(mu.device(), mu.scalar_type());
     } else {
         // This should never happen if base_state_initialized_ check passed
         throw std::runtime_error("Base state mu not initialized");
@@ -15351,21 +15364,26 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     {
         auto target_dev = u.device();
         auto target_dtype = u.scalar_type();
-        if (p_base_.defined() && p_base_.numel() > 0 && p_base_.device() != target_dev) {
+        if (p_base_.defined() && p_base_.numel() > 0 &&
+            (p_base_.device() != target_dev || p_base_.scalar_type() != target_dtype)) {
             p_base_ = p_base_.to(target_dev, target_dtype, /*non_blocking=*/true);
         }
-        if (th_base_.defined() && th_base_.numel() > 0 && th_base_.device() != target_dev) {
+        if (th_base_.defined() && th_base_.numel() > 0 &&
+            (th_base_.device() != target_dev || th_base_.scalar_type() != target_dtype)) {
             th_base_ = th_base_.to(target_dev, target_dtype, /*non_blocking=*/true);
         }
         if (t_init_pert_.defined() && t_init_pert_.numel() > 0 &&
-            t_init_pert_.device() != target_dev) {
+            (t_init_pert_.device() != target_dev ||
+             t_init_pert_.scalar_type() != target_dtype)) {
             t_init_pert_ = t_init_pert_.to(target_dev, target_dtype, /*non_blocking=*/true);
         }
         // Also align mu_base_ and ph_base_ which are used in similar contexts
-        if (mu_base_.defined() && mu_base_.numel() > 0 && mu_base_.device() != target_dev) {
+        if (mu_base_.defined() && mu_base_.numel() > 0 &&
+            (mu_base_.device() != target_dev || mu_base_.scalar_type() != target_dtype)) {
             mu_base_ = mu_base_.to(target_dev, target_dtype, /*non_blocking=*/true);
         }
-        if (ph_base_.defined() && ph_base_.numel() > 0 && ph_base_.device() != target_dev) {
+        if (ph_base_.defined() && ph_base_.numel() > 0 &&
+            (ph_base_.device() != target_dev || ph_base_.scalar_type() != target_dtype)) {
             ph_base_ = ph_base_.to(target_dev, target_dtype, /*non_blocking=*/true);
         }
     }
@@ -34578,7 +34596,7 @@ boundary_tensors_done:
         fnp_view_cache_ = torch::Tensor();
         fnm_cache_size_ = 0;
     }
-    // 6.14 Move base state tensors to target device for GPU compatibility
+    // 6.14 Align base state tensors with the evaluated state device and dtype.
     // PARITY FIX 2025-12-11: Base state tensors (p_base_, mu_base_, ph_base_, th_base_)
     // were created with from_blob (CPU) earlier. They are used in tensor math with
     // CUDA state tensors throughout dynamics calculations. Move to state device
