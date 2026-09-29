@@ -185,7 +185,7 @@
         "wrfout_d01_0001-01-01_00:02:00": "764131cabce9e21e9d582a8dba0eedeaa13469ba48c9af8d29081178de6f4496",
         "wrfout_d01_0001-01-01_00:04:00": "829f20ab7dd2f25ac3994aaa9efce90631ffdd527c1524e95a53859ad66fc689"
       },
-      "steps": 0,
+      "steps": 16,
       "converged_implicit_stages": 0,
       "max_scaled_exit_residual": null,
       "internal_carry_reuses": 0,
