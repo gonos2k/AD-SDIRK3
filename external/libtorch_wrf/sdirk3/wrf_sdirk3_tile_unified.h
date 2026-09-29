@@ -1548,6 +1548,7 @@ private:
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);
     ArkBudgetTrace last_ark_budget_trace_;
     bool capture_ark_budget_trace_ = false;
+    torch::Tensor next_fp64_state_for_test_;
     bool capture_theta_faces_now_ = false;
     ArkBudgetTrace::ThetaFaces rhs_theta_faces_;
     bool last_step_final_update_aborted_ = false;
