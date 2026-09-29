@@ -940,6 +940,9 @@ struct SDIRK3Config {
     // Experimental internal double precision path; supported only for ARK324 mode.
     // Default OFF so existing forecasts retain the historical F32 trajectory.
     bool internal_fp64 = false;
+    // Retain the internal FP64 prognostic state across forward tile steps.
+    // Default OFF; requires internal_fp64 and is incompatible with retained adjoints.
+    bool internal_fp64_state_carry = false;
     bool obs_aware_4dvar = false;          // Enable observation-aware terminal forcing path
     int obs_source_mode = 0;               // 0=off,1=FDDA,2=WRFDA-compatible payload
     int obs_window_sync_mode = 0;          // 0=off,1=strict endpoint sync,2=relaxed sync
@@ -2841,6 +2844,9 @@ extern "C" {
     void wrf_sdirk3_load_env_once(void);
     void wrf_sdirk3_load_config_from_namelist(const char* filename);
     void wrf_sdirk3_print_config();
+    // WRF-specific preflight for the experimental FP64 carry path. Returns 0
+    // when the effective config is incompatible with the supplied mp_physics.
+    int wrf_sdirk3_validate_fp64_state_carry(int mp_physics);
 
     // FIX Round127/Round128: 64-bit unsigned integer setter for config values that need
     // full uint64_t range (e.g., warn_throttle_count). Avoids truncation when

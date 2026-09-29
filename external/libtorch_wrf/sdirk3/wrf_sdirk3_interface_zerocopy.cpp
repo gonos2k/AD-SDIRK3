@@ -1110,6 +1110,7 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr)
     std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);
     if (it != g_tile_solvers.end() && it->second) {
+        it->second->resetInternalFp64Carry();
         // FIX 2025-01-11 Round78: Lightweight reset - per-solver state only
         auto grid_info = it->second->getGridInfo();
         if (grid_info) {
@@ -1181,6 +1182,7 @@ void sdirk3_tile_solver_reset_full(void* solver_ptr)
     std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);
     if (it != g_tile_solvers.end() && it->second) {
+        it->second->resetInternalFp64Carry();
         // FIX 2025-01-11 Round78: Reset per-solver state (warnings, logging, device cache)
         auto grid_info = it->second->getGridInfo();
         if (grid_info) {

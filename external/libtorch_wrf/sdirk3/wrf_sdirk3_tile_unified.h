@@ -922,6 +922,7 @@ public:
 
     // Step outcome snapshot for ABI-side non-freeze contract.
     int getLastStepOutcomeCode() const { return last_step_outcome_code_; }
+    void resetInternalFp64Carry() { clearInternalFp64Carry(); }
     // Test-only observation; no production model setting or RHS change.
     // The accepted ARK derivatives, not a later RHS re-evaluation, define the step.
     struct ArkBudgetTrace {
@@ -975,7 +976,16 @@ private:
     // intentionally lightweight and do not publish new WRF pointers.
     // msf_epoch_ is a local generation key. Advance it rather than resetting it
     // to avoid an epoch ABA if an old key is inspected during diagnostics.
+    void clearInternalFp64Carry() {
+        fp64_carry_state_ = torch::Tensor();
+        fp64_carry_published_ = torch::Tensor();
+        fp64_carry_fingerprint_ = 0;
+        fp64_carry_timestep_ = 0;
+        fp64_carry_dt_ = 0.0f;
+    }
+
     void invalidateMapFactorCaches() {
+        clearInternalFp64Carry();
         fixed_trajectory_requested_ = false;
         fixed_trajectory_steps_.clear();
         fixed_trajectory_expected_ = 0;
@@ -1549,6 +1559,11 @@ private:
     ArkBudgetTrace last_ark_budget_trace_;
     bool capture_ark_budget_trace_ = false;
     torch::Tensor next_fp64_state_for_test_;
+    torch::Tensor fp64_carry_state_;
+    torch::Tensor fp64_carry_published_;
+    uint64_t fp64_carry_fingerprint_ = 0;
+    uint64_t fp64_carry_timestep_ = 0;
+    float fp64_carry_dt_ = 0.0f;
     bool capture_theta_faces_now_ = false;
     ArkBudgetTrace::ThetaFaces rhs_theta_faces_;
     bool last_step_final_update_aborted_ = false;

@@ -5988,12 +5988,44 @@ vertical_coefficients:
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
     const bool internal_fp64 = wrf::sdirk3::g_sdirk3_config.internal_fp64;
+    const bool carry_fp64 = wrf::sdirk3::g_sdirk3_config.internal_fp64_state_carry;
+    if (!carry_fp64) clearInternalFp64Carry();
     if (internal_fp64) {
         TORCH_CHECK(U_n.is_cpu() && nprocx_ * nprocy_ == 1 &&
                     its_ <= ids_ && ite_ >= ide_ - 1 &&
                     jts_ <= jds_ && jte_ >= jde_ - 1 &&
                     wrf::sdirk3::g_sdirk3_config.imex_split_mode == 3,
                     "internal_fp64 requires ARK mode 3 on one CPU tile covering the domain");
+    }
+    if (carry_fp64) {
+        TORCH_CHECK(internal_fp64 && rk_step == 1 &&
+                    !wrf::sdirk3::g_sdirk3_config.split_explicit &&
+                    !wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint &&
+                    !fixed_trajectory_requested_ && !fixed_trajectory_open_ &&
+                    !next_fp64_state_for_test_.defined() &&
+                    !wrf::sdirk3::g_sdirk3_config.adaptive_timestep &&
+                    !config_flags_open_xs_ && !config_flags_open_xe_ &&
+                    !config_flags_open_ys_ && !config_flags_open_ye_ &&
+                    !config_flags_specified_ && !config_flags_nested_ &&
+                    !config_flags_polar_,
+                    "FP64 state carry requires the dry fixed-grid forward ARK path");
+        const auto timestep = wrf::sdirk3::mpi_safety::currentHostTimestep();
+        TORCH_CHECK(timestep > 0, "FP64 state carry requires a host timestep token");
+        std::cerr << "[FP64 STATE CARRY] timestep=" << timestep
+                  << " input=" << (fp64_carry_state_.defined() ? "internal" : "host")
+                  << std::endl;
+        if (fp64_carry_state_.defined()) {
+            TORCH_CHECK(timestep == fp64_carry_timestep_ + 1 && dt == fp64_carry_dt_ &&
+                        fp64_carry_state_.is_cpu() &&
+                        fp64_carry_state_.scalar_type() == torch::kFloat64 &&
+                        fp64_carry_state_.sizes() == U_n.sizes() &&
+                        fp64_carry_published_.defined() &&
+                        torch::equal(U_n, fp64_carry_published_) &&
+                        fixedTrajectoryInputFingerprint() == fp64_carry_fingerprint_,
+                        "FP64 state carry rejected a changed host state or RHS context");
+            U_n = fp64_carry_state_;
+            clearInternalFp64Carry();
+        }
     }
     if (next_fp64_state_for_test_.defined()) {
         TORCH_CHECK(internal_fp64 && rk_step == 1 && !fixed_trajectory_open_ &&
@@ -6210,6 +6242,13 @@ vertical_coefficients:
     }
     
     F_phys = projectStateBoundaries(F_phys);
+    if (carry_fp64) {
+        TORCH_CHECK(torch::all(F_phys == 0).item<bool>() &&
+                    (!cqu_.defined() || torch::all(cqu_ == 1).item<bool>()) &&
+                    (!cqv_.defined() || torch::all(cqv_ == 1).item<bool>()) &&
+                    (!cqw_.defined() || torch::all(cqw_ == 0).item<bool>()),
+                    "FP64 state carry requires zero forcing and dry moisture corrections");
+    }
 
     // SDIRK3 Stage computations
     // k2/k3 initialized to zero so partial updates are safe if stages are aborted.
@@ -12585,6 +12624,20 @@ vertical_coefficients:
         ? U_new.to(torch::kFloat32).contiguous() : U_new;
     unpackState(step_output_graph,
                 u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+    if (carry_fp64) {
+        if (getLastStepOutcomeCode() ==
+            static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED)) {
+            fp64_carry_state_ = U_new.detach().clone();
+            fp64_carry_published_ = step_output_graph.detach().clone();
+            fp64_carry_fingerprint_ = fixedTrajectoryInputFingerprint();
+            fp64_carry_timestep_ = wrf::sdirk3::mpi_safety::currentHostTimestep();
+            fp64_carry_dt_ = dt;
+            std::cerr << "[FP64 STATE CARRY] published timestep="
+                      << fp64_carry_timestep_ << std::endl;
+        } else {
+            clearInternalFp64Carry();
+        }
+    }
     if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
         last_step_input_graph_ = step_input_graph;
         last_step_output_graph_ = step_output_graph;
@@ -29720,6 +29773,7 @@ float TileSDIRK3UnifiedSolver::getCurrentMemoryUsage() {
 
 void TileSDIRK3UnifiedSolver::setBaseState(const float* p_base, const float* th_base,
                                           const float* ph_base, const float* mu_base) {
+    clearInternalFp64Carry();
     // Set base state arrays from WRF
     // These are used for perturbation calculations
     // WRF arrays are in Fortran order: (i,k,j) for 3D, (i,j) for 2D    
@@ -31239,6 +31293,7 @@ void TileSDIRK3UnifiedSolver::setBoundaryConditions(
     bool open_xs, bool open_xe,
     bool open_ys, bool open_ye,
     bool specified, bool nested) {
+    clearInternalFp64Carry();
 
     // Save raw (global-domain) BC flags from Fortran.
     raw_flags_periodic_x_ = periodic_x;
@@ -31493,17 +31548,20 @@ void TileSDIRK3UnifiedSolver::setWRFIndices(
     int its, int ite, int jts, int jte, int kts, int kte,
     int ids, int ide, int jds, int jde, int kds, int kde,
     int ims, int ime, int jms, int jme, int kms, int kme) {
-
     // Detect bounds changes: if any index used by halo_exchange_init() differs
     // from the stored value, force re-initialization. This handles regridding,
     // restart with different decomposition, or tile rebalancing.
-    if (halo_exchange_initialized_ &&
-        (ids != ids_ || ide != ide_ || jds != jds_ || jde != jde_ ||
-         kds != kds_ || kde != kde_ ||
-         ims != ims_ || ime != ime_ || jms != jms_ || jme != jme_ ||
-         kms != kms_ || kme != kme_ ||
-         its != its_ || ite != ite_ || jts != jts_ || jte != jte_ ||
-         kts != kts_ || kte != kte_)) {
+    const bool bounds_changed =
+        ids != ids_ || ide != ide_ || jds != jds_ || jde != jde_ ||
+        kds != kds_ || kde != kde_ ||
+        ims != ims_ || ime != ime_ || jms != jms_ || jme != jme_ ||
+        kms != kms_ || kme != kme_ ||
+        its != its_ || ite != ite_ || jts != jts_ || jte != jte_ ||
+        kts != kts_ || kte != kte_;
+    TORCH_CHECK(!fp64_carry_state_.defined() || !bounds_changed,
+                "FP64 state carry rejected changed grid bounds");
+    if (bounds_changed) clearInternalFp64Carry();
+    if (halo_exchange_initialized_ && bounds_changed) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
             std::cerr << "[STAGE HALO] Bounds changed in setWRFIndices — "
                       << "forcing halo exchange re-init" << std::endl;
@@ -41910,6 +41968,7 @@ void TileSDIRK3UnifiedSolver::validateCallGeometry(
 }
 
 void TileSDIRK3UnifiedSolver::setStaggeredDimensions(int nx_u, int ny_v, int nz_w) {
+    clearInternalFp64Carry();
     // Round 3i: INIT-time geometry laundering removed. The old fallback replaced
     // invalid caller dims with nx_+1 GUESSES — every later per-call matches_init
     // check then validated against the guess, not against anything the caller
