@@ -148,6 +148,12 @@ struct TileCase {
         solver.next_fp64_state_for_test_ = state.detach();
         step(dt);
     }
+    torch::Tensor rhsAt(const torch::Tensor& state, wrf::sdirk3::RhsMode mode,
+                        float dt) {
+        solver.dt_stage_ = dt;
+        solver.U_ref_stage_ = state.detach().clone();
+        return solver.computeUnifiedRHS(state, mode).detach();
+    }
 };
 
 } // namespace wrf::sdirk3::test

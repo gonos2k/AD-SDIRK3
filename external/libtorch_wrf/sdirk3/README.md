@@ -242,7 +242,8 @@ the pinned file defines the inventory.
   manifest/archive/link parity),
 - `FP64_State_Handoff_Contract` — autonomous ARK324 tile comparison of FP32
   inter-step publication and continuous FP64 state, with first-step identity,
-  global self-convergence and one-step/two-half-step checks. It excludes
+  global self-convergence, one-step/two-half-step checks, and a fixed-state
+  Full/ExplicitOnly/ImplicitOnly RHS dt-invariance check. It excludes
   Fortran-side updates, physical boundary refresh and MPI.
 - `MPI_Halo_Contract_np{1,2,4}` — halo primitive forward/adjoint/packed AD+BC
   transpose matrices,

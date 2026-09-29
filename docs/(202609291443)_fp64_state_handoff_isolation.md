@@ -1,6 +1,7 @@
 # FP64 state handoff isolation on an autonomous ARK324 tile
 
 Local timestamp: 2026-09-29 14:43:40 JST (Asia/Tokyo).
+Follow-up validation: 2026-09-29 15:07:44 JST (Asia/Tokyo).
 
 ## Context and scope
 
@@ -23,17 +24,21 @@ The common final time is 4 s; each arm uses 4, 8, 16, and 32 steps (h = 1, 0.5, 
 
 For continuous FP64, the one-step versus two half-steps defect at h = 1, 0.5, 0.25 s has observed local rates U 4.178/4.066 and T 3.969/3.992. All first-step A/B states were bitwise equal. The contract requires continuous global rates between 2.6 and 3.4 for each field, local U/T rates between 3.5 and 4.5, and a distinguishable T handoff signal; it does not fix an exact FP32-arm rate, which is sensitive to the phase of rounding. The CTest contract passed on this host.
 
+The follow-up fixed-state RHS check uses identical short warm-up steps in fresh tile solvers, then the same nonzero FP64 packed state with `U_ref_stage_` set to that state at dt = 1, 0.5, 2 s in both evaluation orders. Each of `Full`, `ExplicitOnly`, and `ImplicitOnly` has a finite nonzero reference tendency. All 15 vector comparisons have maximum difference **zero**: 12 compare unequal dt and three repeat the dt=1 baseline in reverse order. This rules out a dt-dependent RHS value at that fixed context in this autonomous tile; it does not cover every displaced Newton state or prove every WRF forcing or boundary update is dt-independent.
+
 This is direct evidence that repeated FP32 publication can mask or distort time-order measurements for U and T in this fixture. V and W still exhibit near-third-order differences under FP32 handoff here, so the result is field-specific. It does **not** prove that the earlier full-WRF non-monotone differences have this sole cause.
 
 ## Source and validation
 
-The changed tile implementation SHA-256 is `c8f942d0b019e10d0bc7897b9a1e6ac58d49d71f83a6feedb49f3b8db0b817b6`; the new test source is `c0d44e71ce1b487727f3b997c6678fb611dc52f85226c79f1697f4f469258318`. A new CMake build at `/private/tmp/sdirk3-fp64-trajectory-build-20260929` linked test executable `34dbee92ca6d3b99748feeeb81bb26a2ae8c07826c0c3017734c4236946c6485` against core archive `41826b3a84445e9122d564244b351e7e9108b9b87a25fda65bc53118b6806552`. CTest registered 111 names matching the pinned inventory exactly. Six focused tests passed: the new `FP64_State_Handoff_Contract`, ARK composition, two-step tile adjoint, full-tile default/FP64 and temporal-order tests. The focused CTest log SHA-256 is `8272e91fb2c9ae0f1d9708f3cce8b0225585bb39f91e8ec54c2323590941effb`.
+The changed tile implementation SHA-256 is `c8f942d0b019e10d0bc7897b9a1e6ac58d49d71f83a6feedb49f3b8db0b817b6`; the updated test source is `6985456acd330335c3dcb55b73f4eff1362961eea98ee8e66d5158ad32f08bda`. A new CMake build at `/private/tmp/sdirk3-fp64-trajectory-build-20260929` linked test executable `3d46d45da1dfad1288290e2a0d4a271a4dca6ef516bd04ac296065a3f745cdb2` against core archive `41826b3a84445e9122d564244b351e7e9108b9b87a25fda65bc53118b6806552`. CTest registered 111 names matching the pinned inventory exactly. Six focused tests passed again after the RHS check was added: `FP64_State_Handoff_Contract`, ARK composition, two-step tile adjoint, full-tile default/FP64 and temporal-order tests. The final focused CTest log SHA-256 is `15af5c10d6ac3bc5c246a8f3d39b0f610d3b9133f542091a8de7e33f20f7e716`.
 
 ## Inactive-hook WRF regression
 
 The validation copy `/private/tmp/sdirk3-fp64-trajectory-wrf-20260929` reused the configured, Registry-consistent PR #266 WRF build, then rebuilt the affected C++ archive and relinked `em_b_wave`. No Fortran source or C/Fortran bridge ABI changed; the private C++ class layout did change and its consumers were rebuilt together. The resulting archive SHA-256 is `3343ecdb2e8c6d191a837d6f61f5bea63d5e8d5c5d81fdaa386e3c88f7b7f384`, `wrf.exe` is `4fd525ca664a65082b84d15b70207c0655a2512c1fd7be2af606c301280dde81`, and the compile log is `534ccf3991af222bba1720117b359543a3cfb05c9b741a8c3169bcc817a586db`.
 
 With the previous strict 15 s namelist (`a4434efb24786212cf4e12d512c6b19a8edc59c796c15f7523a1c24c9e8f55d9`) and archived initial field (`e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9`), the new singleton WRF executable completed 240 s: 16 steps, 48/48 implicit stages converged, largest reported scaled residual `5.1523e-9`, and no logged JVP FD fallback. The three `wrfout` files at 0, 120, and 240 s were each byte-identical to the PR #266 validation outputs (`cd61f4bfa76b0f69fe0baf79a2330d2731c8299c62d2bf0273519cf4a852cccc`, `7697324a36b9eb6918e71d7609d1f1d189b3526c2f5685c85c7fd3fee8a57c49`, `1df2e0bebf473b958553c9f1b2f77b60bf404fb19b876db489ce048186f13d73`). The run log `rsl.error.0000` SHA-256 is `ee7e9a3a8a2e8d6c3066051aa54e8be53b74c6e8fbbd6e836d769a5c8fe8372c`. This validates default-hook neutrality on the declared WRF case, not FP64 state carry in WRF.
+
+An existing opt-in WRF probe evaluated `ExplicitOnly` at four actual first-step ARK states while changing only the displayed dt from 15 to 7.5 and 30 s. All eight vector comparisons reported relative difference 0; the one-step run completed, and its log SHA-256 is `9cf45819faa46917feb6163a6e0d73711ec54c63f60268ae7e20499a72f32592`. A separate two-step run found that the owned-cell sum of squares for each of U/V/W/PH/T/MU was equal between step-1 C++ publication and step-2 entry (log `e2c06f1de757bfdabc4f3ea6f9e0bbba014f220461036ee0a91e0cdfa83298a1`). Those aggregate equalities do not prove that every input value, halo, or Fortran diagnostic was unchanged.
 
 ## Next actions
 

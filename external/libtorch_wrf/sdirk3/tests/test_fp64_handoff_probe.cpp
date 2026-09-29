@@ -14,9 +14,7 @@ struct Result {
     torch::Tensor internal;
 };
 
-Result integrate(int steps, bool continuous, float total_time = 4.0f) {
-    TileCase tile(5000.0f);
-    tile.solver.captureArkBudgetTraceForTest(true);
+void initialize(TileCase& tile) {
     for (int j = 0; j < ny; ++j) {
         for (int k = 0; k < nz; ++k) {
             for (int i = 0; i < nu; ++i)
@@ -28,6 +26,12 @@ Result integrate(int steps, bool continuous, float total_time = 4.0f) {
                     std::cos(2.0*std::acos(-1.0)*j/(ny-1));
         }
     }
+}
+
+Result integrate(int steps, bool continuous, float total_time = 4.0f) {
+    TileCase tile(5000.0f);
+    tile.solver.captureArkBudgetTraceForTest(true);
+    initialize(tile);
     torch::Tensor internal, first_internal;
     const float dt = total_time/steps;
     for (int s = 0; s < steps; ++s) {
@@ -56,6 +60,42 @@ Result integrate(int steps, bool continuous, float total_time = 4.0f) {
 double block_rms(const torch::Tensor& difference, int64_t start, int64_t size) {
     return difference.slice(0, start, start+size).square().mean().sqrt().item<double>();
 }
+
+void check_rhs_dt_invariance() {
+    TileCase reference(5000.0f);
+    initialize(reference);
+    reference.step(1.0e-4f);
+    const auto state = reference.state().to(torch::kFloat64);
+    for (const auto mode : {wrf::sdirk3::RhsMode::Full,
+                            wrf::sdirk3::RhsMode::ExplicitOnly,
+                            wrf::sdirk3::RhsMode::ImplicitOnly}) {
+        torch::Tensor baseline;
+        for (const auto schedule : {std::array<float,3>{1.0f,0.5f,2.0f},
+                                    std::array<float,3>{2.0f,0.5f,1.0f}}) {
+            for (const float dt : schedule) {
+                TileCase tile(5000.0f);
+                initialize(tile);
+                tile.step(1.0e-4f);
+                TORCH_CHECK(torch::equal(tile.state().to(torch::kFloat64), state),
+                            "fixed-state RHS fixtures differ before changing dt");
+                const auto rhs = tile.rhsAt(state, mode, dt);
+                TORCH_CHECK(rhs.scalar_type() == torch::kFloat64 &&
+                            torch::isfinite(rhs).all().item<bool>(),
+                            "fixed-state RHS is not finite FP64");
+                if (!baseline.defined()) baseline = rhs.clone();
+                else {
+                    const double difference = (rhs-baseline).abs().max().item<double>();
+                    std::cout << "RHS_DT mode=" << static_cast<int>(mode)
+                              << " dt=" << dt << " max_diff=" << difference << '\n';
+                    TORCH_CHECK(torch::equal(rhs, baseline),
+                                "fixed-state physical RHS changed with timestep");
+                }
+            }
+        }
+        TORCH_CHECK(baseline.abs().max().item<double>() > 1e-6,
+                    "fixed-state RHS is too small to test timestep invariance");
+    }
+}
 }  // namespace
 
 int main() {
@@ -78,6 +118,8 @@ int main() {
         cfg.stage_fail_action = 1;
         cfg.gmres_warmstart = false;
         cfg.inn_warmstart_enable = false;
+
+        check_rhs_dt_invariance();
 
         std::array<int,4> counts{4,8,16,32};
         std::array<Result,4> rounded, continuous;
