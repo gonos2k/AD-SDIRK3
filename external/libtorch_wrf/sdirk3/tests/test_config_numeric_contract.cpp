@@ -20,6 +20,7 @@ void clear_knobs() {
     unsetenv("WRF_SDIRK3_ADAPTIVE_HIGH_THRESHOLD");
     unsetenv("WRF_SDIRK3_ADAPTIVE_LOW_THRESHOLD");
     unsetenv("WRF_SDIRK3_IMEX_SPLIT_MODE");
+    unsetenv("WRF_SDIRK3_INTERNAL_FP64");
     unsetenv("WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND");
 }
 
@@ -131,6 +132,47 @@ int main() {
         g_sdirk3_config.adaptive_low_threshold != 0.30f) {
         ++failures;
         std::cerr << "FAIL valid adaptive thresholds changed semantics\n";
+    }
+
+    // Internal FP64 remains opt-in and is accepted only for effective ARK324 mode.
+    clear_knobs();
+    SDIRK3Config fp64_default;
+    if (fp64_default.internal_fp64 || !fp64_default.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64 default is not neutral/off\n";
+    }
+    SDIRK3Config fp64_namelist;
+    fp64_namelist.load_from_namelist(
+        "sdirk3_internal_fp64 = .true.\n"
+        "sdirk3_imex_split_mode = 3\n");
+    if (!fp64_namelist.internal_fp64 || !fp64_namelist.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64 namelist parse/ARK324 validation\n";
+    }
+    SDIRK3Config fp64_bad_mode;
+    fp64_bad_mode.internal_fp64 = true;
+    if (fp64_bad_mode.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64 accepted outside effective ARK324 mode\n";
+    }
+    setenv("WRF_SDIRK3_INTERNAL_FP64", "true", 1);
+    setenv("WRF_SDIRK3_IMEX_SPLIT_MODE", "3", 1);
+    SDIRK3Config fp64_env;
+    fp64_env.load_from_env();
+    if (!fp64_env.internal_fp64 || !fp64_env.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64 environment parse/ARK324 validation\n";
+    }
+    g_sdirk3_config = SDIRK3Config{};
+    wrf::sdirk3::wrf_sdirk3_set_config_bool("internal_fp64", 1);
+    if (!g_sdirk3_config.internal_fp64) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64 runtime bool setter\n";
+    }
+    wrf::sdirk3::wrf_sdirk3_set_config_bool("internal_fp64", 0);
+    if (g_sdirk3_config.internal_fp64) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64 runtime bool setter could not disable\n";
     }
 
     expect_invalid_direct(g_sdirk3_config.jvp_epsilon, "jvp_epsilon", std::numeric_limits<float>::quiet_NaN());

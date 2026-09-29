@@ -937,6 +937,9 @@ struct SDIRK3Config {
     // One-shot capture of an already-evaluated rejected Stage-2 trust trial.
     // Default OFF; the WRF caller enforces single-rank/whole-patch topology.
     bool stage2_rejection_snapshot_diag = false;
+    // Experimental internal double precision path; supported only for ARK324 mode.
+    // Default OFF so existing forecasts retain the historical F32 trajectory.
+    bool internal_fp64 = false;
     bool obs_aware_4dvar = false;          // Enable observation-aware terminal forcing path
     int obs_source_mode = 0;               // 0=off,1=FDDA,2=WRFDA-compatible payload
     int obs_window_sync_mode = 0;          // 0=off,1=strict endpoint sync,2=relaxed sync
