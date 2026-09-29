@@ -6243,10 +6243,13 @@ vertical_coefficients:
     
     F_phys = projectStateBoundaries(F_phys);
     if (carry_fp64) {
-        TORCH_CHECK(torch::all(F_phys == 0).item<bool>() &&
-                    (!cqu_.defined() || torch::all(cqu_ == 1).item<bool>()) &&
-                    (!cqv_.defined() || torch::all(cqv_ == 1).item<bool>()) &&
-                    (!cqw_.defined() || torch::all(cqw_ == 0).item<bool>()),
+        TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::all(F_phys == 0)) &&
+                    (!cqu_.defined() ||
+                     wrf::sdirk3::guarded_item<bool>(torch::all(cqu_ == 1))) &&
+                    (!cqv_.defined() ||
+                     wrf::sdirk3::guarded_item<bool>(torch::all(cqv_ == 1))) &&
+                    (!cqw_.defined() ||
+                     wrf::sdirk3::guarded_item<bool>(torch::all(cqw_ == 0))),
                     "FP64 state carry requires zero forcing and dry moisture corrections");
     }
 
