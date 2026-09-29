@@ -1,0 +1,50 @@
+--- PR267/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp
++++ exploratory-WRF/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp
+@@ -3941,0 +3942,4 @@
++    // Local counterfactual only: never copy this carry path into production.
++    static thread_local torch::Tensor probe_carry64, probe_published32;
++    static thread_local int probe_steps = 0;
++
+@@ -5996,0 +6001,8 @@
++    }
++    if (internal_fp64 && probe_carry64.defined()) {
++        TORCH_CHECK(probe_published32.defined() &&
++                    probe_published32.sizes() == U_n.sizes() &&
++                    torch::equal(U_n, probe_published32),
++                    "FP64_CARRY_PROBE: host changed the published prognostic state");
++        U_n = probe_carry64.detach().clone();
++        std::cerr << "FP64_CARRY_PROBE reused step=" << probe_steps + 1 << std::endl;
+@@ -10553,0 +10566,21 @@
++                    TORCH_CHECK(!U_full_exch_conv.defined(),
++                                "FP64_FAST_DT_PROBE requires the ordinary single-tile RHS");
++                    dt_stage_ = dt_saved;
++                    U_ref_stage_ = U_stage.detach().clone();
++                    const auto fast_ref =
++                        computeUnifiedRHS(U_conv, wrf::sdirk3::RhsMode::ImplicitOnly)
++                            .detach().to(torch::kFloat64);
++                    const double fast_norm = fast_ref.norm().item<double>();
++                    for (const double f : {0.5, 2.0}) {
++                        dt_stage_ = static_cast<float>(dt_saved * f);
++                        U_ref_stage_ = U_stage.detach().clone();
++                        const auto fast_alt =
++                            computeUnifiedRHS(U_conv, wrf::sdirk3::RhsMode::ImplicitOnly)
++                                .detach().to(torch::kFloat64);
++                        const double diff = (fast_alt-fast_ref).abs().max().item<double>();
++                        std::cerr << "SDIRK3_FAST_RHS_DT_INVARIANCE stage=" << stage_id
++                                  << " dt_ref=" << dt_saved
++                                  << " dt_alt=" << dt_stage_
++                                  << " norm_ref=" << fast_norm
++                                  << " max_diff=" << diff << std::endl;
++                    }
+@@ -12585,0 +12619,11 @@
++    if (internal_fp64 && getLastStepOutcomeCode() ==
++            static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED)) {
++        probe_carry64 = U_new.detach().clone();
++        probe_published32 = step_output_graph.detach().clone();
++        ++probe_steps;
++        const auto snapshot = probe_carry64.contiguous();
++        std::ofstream dump("fp64_carry_final.bin", std::ios::binary | std::ios::trunc);
++        dump.write(reinterpret_cast<const char*>(snapshot.data_ptr<double>()),
++                   snapshot.numel() * sizeof(double));
++        TORCH_CHECK(dump.good(), "FP64_CARRY_PROBE: failed to write internal state");
++    }
