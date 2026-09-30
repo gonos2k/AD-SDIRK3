@@ -5995,6 +5995,17 @@ vertical_coefficients:
                     wrf::sdirk3::g_sdirk3_config.imex_split_mode == 3,
                     "internal_fp64 requires ARK mode 3 on one CPU tile covering the domain");
     }
+    if (next_fp64_state_for_test_.defined()) {
+        TORCH_CHECK(internal_fp64 && rk_step == 1 && !fixed_trajectory_open_ &&
+                    !wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint &&
+                    next_fp64_state_for_test_.is_cpu() &&
+                    next_fp64_state_for_test_.scalar_type() == torch::kFloat64 &&
+                    next_fp64_state_for_test_.sizes() == U_n.sizes() &&
+                    torch::equal(U_n, next_fp64_state_for_test_.to(torch::kFloat32)),
+                    "FP64 handoff probe requires the exact published FP32 state");
+        U_n = next_fp64_state_for_test_;
+        next_fp64_state_for_test_ = torch::Tensor();
+    }
     if (fixed_trajectory_open_) {
         checkFixedTrajectoryFingerprint();
         TORCH_CHECK(U_n.device().is_cpu(),

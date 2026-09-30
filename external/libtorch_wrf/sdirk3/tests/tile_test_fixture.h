@@ -102,6 +102,7 @@ struct TileCase {
     }
 
     std::vector<std::vector<float>*> fields() { return {&u,&v,&w,&ph,&theta,&mu}; }
+    std::vector<std::vector<float>*> tendencies() { return {&ru,&rv,&rw,&rph,&rt,&rm}; }
     void set(const torch::Tensor& packed) {
         const auto data = packed.to(torch::kFloat32).contiguous();
         const auto* pointer = data.data_ptr<float>();
@@ -142,6 +143,16 @@ struct TileCase {
             one.data(),zero.data(),one.data(),zero.data(),half.data(),half.data(),
             1,dt,nx,ny,nz,nu,nv,nw);
         TORCH_CHECK(solver.getLastStepOutcomeCode() == 0, "tile step did not complete");
+    }
+    void stepWithInternalState(float dt, const torch::Tensor& state) {
+        solver.next_fp64_state_for_test_ = state.detach();
+        step(dt);
+    }
+    torch::Tensor rhsAt(const torch::Tensor& state, wrf::sdirk3::RhsMode mode,
+                        float dt) {
+        solver.dt_stage_ = dt;
+        solver.U_ref_stage_ = state.detach().clone();
+        return solver.computeUnifiedRHS(state, mode).detach();
     }
 };
 

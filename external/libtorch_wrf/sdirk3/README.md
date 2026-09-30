@@ -232,7 +232,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 110-test CTest inventory**, pinned by
+The CMake tree registers an **exact 111-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
@@ -240,6 +240,11 @@ the pinned file defines the inventory.
   contract, WRMS gate metric, acoustic-substep AD, the W-damping forward-mode
   tangent contract, the rw term-capture safety contract, the WRF W-damping reference contract, the calc_ww_cp state-to-omega contract, the W-damping operator/preconditioner policy contract, the stage-operand decomposition contract, core
   manifest/archive/link parity),
+- `FP64_State_Handoff_Contract` — autonomous ARK324 tile comparison of FP32
+  inter-step publication and continuous FP64 state, with first-step identity,
+  global self-convergence, one-step/two-half-step checks, and a fixed-state
+  Full/ExplicitOnly/ImplicitOnly RHS dt-invariance check. It excludes
+  Fortran-side updates, physical boundary refresh and MPI.
 - `MPI_Halo_Contract_np{1,2,4}` — halo primitive forward/adjoint/packed AD+BC
   transpose matrices,
 - `MPI_Runtime_Contract_np{1,2,4}` — runtime fail-close contracts (baseline
