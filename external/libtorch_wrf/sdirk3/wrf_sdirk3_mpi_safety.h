@@ -523,6 +523,12 @@ public:
 inline thread_local uint64_t PeriodicBCGuard::current_timestep{0};
 inline thread_local uint64_t PeriodicBCGuard::periodic_applied_mask{0};
 
+// Fortran publishes the host step before entering its tile loop. Unlike the
+// periodic-BC guard above, this identity must be visible to the worker that
+// executes the solver when OpenMP is enabled.
+void publishHostTimestep(uint64_t timestep) noexcept;
+uint64_t currentHostTimestep() noexcept;
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ISSUE #5: THREADING + MPI SAFETY (MPI_THREAD_FUNNELED COMPLIANCE)
 // ═══════════════════════════════════════════════════════════════════════════

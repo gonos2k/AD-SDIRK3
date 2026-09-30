@@ -49,12 +49,16 @@ void sdirk3_notify_halo_fresh(void) noexcept {
 }
 
 void sdirk3_set_timestep(int64_t* timestep) {
+    wrf::sdirk3::mpi_safety::publishHostTimestep(
+        *timestep > 0 ? static_cast<uint64_t>(*timestep) : 0);
     wrf::sdirk3::mpi_safety::PeriodicBCGuard::newTimestep(
         static_cast<uint64_t>(*timestep)
     );
 }
 
 void sdirk3_set_timestep_i4(int* timestep) {
+    wrf::sdirk3::mpi_safety::publishHostTimestep(
+        *timestep > 0 ? static_cast<uint64_t>(*timestep) : 0);
     wrf::sdirk3::mpi_safety::PeriodicBCGuard::newTimestep(
         static_cast<uint64_t>(*timestep)
     );
@@ -92,15 +96,11 @@ void sdirk3_notify_halo_fresh_(void) noexcept {
 }
 
 void sdirk3_set_timestep_(int64_t* timestep) {
-    wrf::sdirk3::mpi_safety::PeriodicBCGuard::newTimestep(
-        static_cast<uint64_t>(*timestep)
-    );
+    sdirk3_set_timestep(timestep);
 }
 
 void sdirk3_set_timestep_i4_(int* timestep) {
-    wrf::sdirk3::mpi_safety::PeriodicBCGuard::newTimestep(
-        static_cast<uint64_t>(*timestep)
-    );
+    sdirk3_set_timestep_i4(timestep);
 }
 
 void sdirk3_mpi_safety_init_(void) {
@@ -126,6 +126,7 @@ std::thread::id g_owner_thread;              // valid while g_depth > 0
 int g_depth = 0;                             // same-thread nesting depth
 MPIExchangeKind g_outer_kind = MPIExchangeKind::FieldPrimitive;
 std::atomic<bool> g_baseline_set{false};
+std::atomic<uint64_t> g_host_timestep{0};
 std::mutex g_baseline_mutex;                 // serializes FIRST publication
 std::thread::id g_baseline_thread;           // the MPI baseline (init) thread
 // PR 9C.3: ATOMIC — the fatal path (abort_c_abi_exception) reads this from a
@@ -146,6 +147,14 @@ const char* kind_name(MPIExchangeKind k) {
 }
 
 }  // namespace
+
+void publishHostTimestep(uint64_t timestep) noexcept {
+    g_host_timestep.store(timestep, std::memory_order_release);
+}
+
+uint64_t currentHostTimestep() noexcept {
+    return g_host_timestep.load(std::memory_order_acquire);
+}
 
 void establish_mpi_baseline_thread(const char* who) noexcept {
     // First publication is race-free (P2): two threads racing the initial

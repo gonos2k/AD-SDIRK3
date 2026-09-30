@@ -149,10 +149,16 @@ struct TileCase {
         step(dt);
     }
     torch::Tensor rhsAt(const torch::Tensor& state, wrf::sdirk3::RhsMode mode,
-                        float dt) {
+                        float dt, const torch::Tensor& reference = {}) {
         solver.dt_stage_ = dt;
-        solver.U_ref_stage_ = state.detach().clone();
+        solver.U_ref_stage_ = (reference.defined() ? reference : state).detach().clone();
         return solver.computeUnifiedRHS(state, mode).detach();
+    }
+    void replaceImportedDiagnosticsForTest(float pressure, float alpha) {
+        TORCH_CHECK(solver.p_pert_.defined() && solver.al_.defined(),
+                    "imported diagnostics must be initialized before this probe");
+        solver.p_pert_ = torch::full_like(solver.p_pert_, pressure);
+        solver.al_ = torch::full_like(solver.al_, alpha);
     }
 };
 

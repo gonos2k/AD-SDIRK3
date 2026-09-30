@@ -281,6 +281,12 @@ MODULE module_implicit_sdirk3
          USE, INTRINSIC :: ISO_C_BINDING
       END SUBROUTINE wrf_sdirk3_load_env_once
 
+      INTEGER(C_INT) FUNCTION wrf_sdirk3_validate_fp64_state_carry(mp_physics) &
+         BIND(C, name="wrf_sdirk3_validate_fp64_state_carry")
+         USE, INTRINSIC :: ISO_C_BINDING
+         INTEGER(C_INT), VALUE :: mp_physics
+      END FUNCTION wrf_sdirk3_validate_fp64_state_carry
+
       ! FIX 2025-01-25: Config freeze mechanism - call after all config is set
       SUBROUTINE wrf_sdirk3_mark_workers_started() &
          BIND(C, name="wrf_sdirk3_mark_workers_started")
@@ -527,6 +533,7 @@ CONTAINS
       INTEGER :: ims, ime, jms, jme, kms, kme
       INTEGER :: nx, ny, nz, tile_id
       INTEGER :: nx_u, ny_v, nz_w  ! Staggered dimensions
+      INTEGER(C_INT) :: carry_config_rc
       REAL(C_FLOAT) :: dx, dy
       CHARACTER(LEN=256) :: message
       CHARACTER(LEN=256) :: config_name
@@ -590,6 +597,15 @@ CONTAINS
 
       ! Load non-WRF environment overrides once, before any tile parallelism.
       CALL wrf_sdirk3_load_env_once()
+
+      ! FP64 state carry is only supported for dry WRF dynamics. Check after
+      ! environment overrides so the fail-close guard sees the effective value.
+      carry_config_rc = wrf_sdirk3_validate_fp64_state_carry( &
+         INT(config_flags%mp_physics, C_INT))
+      IF (carry_config_rc == 0_C_INT) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_INTERNAL_FP64_STATE_CARRY_UNSUPPORTED: requires mp_physics=0")
+      END IF
 
       ! Existing WRF dynamics flags are authoritative after environment loading.
       config_name = "split_explicit_top_lid"//C_NULL_CHAR
@@ -2104,6 +2120,9 @@ CONTAINS
 
       config_name = "internal_fp64"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_internal_fp64))
+
+      config_name = "internal_fp64_state_carry"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_internal_fp64_state_carry))
 
       config_name = "progress_invariant_enable"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_progress_invariant_enable))
