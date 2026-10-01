@@ -5980,9 +5980,10 @@ vertical_coefficients:
     if (fixed_trajectory_requested_) {
         const int expected_steps = fixed_trajectory_expected_;
         auto dt_schedule = std::move(fixed_trajectory_dt_schedule_);
+        auto initial_fp64_state = std::move(fixed_trajectory_initial_fp64_);
         fixed_trajectory_expected_ = 0;
         fixed_trajectory_requested_ = false;
-        beginFixedTrajectory(expected_steps, dt_schedule);
+        beginFixedTrajectory(expected_steps, dt_schedule, initial_fp64_state);
     }
 
     // Pack current state with staggered dimensions
@@ -6000,8 +6001,9 @@ vertical_coefficients:
     if (carry_fp64) {
         TORCH_CHECK(internal_fp64 && rk_step == 1 &&
                     !wrf::sdirk3::g_sdirk3_config.split_explicit &&
-                    !wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint &&
-                    !fixed_trajectory_requested_ && !fixed_trajectory_open_ &&
+                    (!wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint ||
+                     fixed_trajectory_open_) &&
+                    !fixed_trajectory_requested_ &&
                     !next_fp64_state_for_test_.defined() &&
                     !wrf::sdirk3::g_sdirk3_config.adaptive_timestep &&
                     !config_flags_open_xs_ && !config_flags_open_xe_ &&
@@ -6025,6 +6027,17 @@ vertical_coefficients:
                         "FP64 state carry rejected a changed host state or RHS context");
             U_n = fp64_carry_state_;
             clearInternalFp64Carry();
+        } else if (fixed_trajectory_initial_fp64_.defined()) {
+            TORCH_CHECK(fixed_trajectory_open_ && fixed_trajectory_steps_.empty() &&
+                        U_n.scalar_type() == torch::kFloat32 &&
+                        torch::equal(U_n, fixed_trajectory_initial_fp64_.to(torch::kFloat32)),
+                        "FP64 trajectory initial checkpoint does not match the packed FP32 state");
+            U_n = fixed_trajectory_initial_fp64_;
+            fixed_trajectory_initial_fp64_ = torch::Tensor();
+        } else if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
+            TORCH_CHECK(fixed_trajectory_open_ && fixed_trajectory_steps_.empty(),
+                        "FP64 carry adjoint requires an open fixed trajectory");
+            U_n = U_n.to(torch::kFloat64);
         }
     }
     if (next_fp64_state_for_test_.defined()) {
@@ -12643,8 +12656,9 @@ vertical_coefficients:
     }
     if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
         last_step_input_graph_ = step_input_graph;
-        last_step_output_graph_ = step_output_graph;
-        recordFixedTrajectoryStep(step_input_graph, step_output_graph, F_phys, dt);
+        const auto& adjoint_output_graph = carry_fp64 ? U_new : step_output_graph;
+        last_step_output_graph_ = adjoint_output_graph;
+        recordFixedTrajectoryStep(step_input_graph, adjoint_output_graph, F_phys, dt);
     }
 
     // R13.1: THE np-equivalence record, and the only one entitled to that claim.
@@ -42078,6 +42092,15 @@ void fixed_trajectory_hash_tensor(uint64_t& h, const torch::Tensor& x) {
     fixed_trajectory_hash_bytes(h, c.data_ptr(), static_cast<size_t>(c.numel() * c.element_size()));
 }
 
+void validate_fixed_trajectory_initial_state(const torch::Tensor& state, int64_t size) {
+    if (!state.defined()) return;
+    TORCH_CHECK(wrf::sdirk3::g_sdirk3_config.internal_fp64_state_carry &&
+                state.is_cpu() && state.scalar_type() == torch::kFloat64 &&
+                state.dim() == 1 && state.numel() == size &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(state).all()),
+                "fixed trajectory initial FP64 state must be a finite CPU packed state in carry mode");
+}
+
 void fixed_trajectory_hash_vector(uint64_t& h, const std::vector<float>& values) {
     fixed_trajectory_hash_scalar(h, static_cast<uint64_t>(values.size()));
     if (!values.empty()) fixed_trajectory_hash_bytes(h, values.data(), values.size() * sizeof(float));
@@ -42086,26 +42109,73 @@ void fixed_trajectory_hash_vector(uint64_t& h, const std::vector<float>& values)
 
 void TileSDIRK3UnifiedSolver::validateFixedTrajectoryProfile() const {
     const auto& c = wrf::sdirk3::g_sdirk3_config;
-    TORCH_CHECK(non_hydrostatic_ && c.non_hydrostatic && c.do_curvature &&
-                c.buoyancy_use_current_w && c.omega_w_blend == 1.0f &&
-                !c.omega_update_ref_per_newton,
-                "fixed trajectory requires canonical NH=true curvature=true profile "
-                "with current-w buoyancy, omega_w_blend=1, and fixed Newton reference");
-    TORCH_CHECK(c.retain_graph_for_adjoint && c.use_autograd && c.imex_split_mode == 3 &&
-                c.imex_slow_in_tangent && c.mass_coordinate_mode == 1 && !c.hevi_split &&
-                !c.split_explicit && nprocx_ * nprocy_ == 1 && n_moist_ == 0 &&
-                c.khdif == 0.0f && c.kvdif == 0.0f && c.diffusion_option == 0 &&
-                c.wrf_w_damping == 0 && c.wrf_damp_opt == 0 &&
-                c.wrf_zadvect_implicit == 0 && !c.damp_t &&
-                !c.enable_ad_halo_exchange &&
-                !c.enable_test_tendencies && grid_info_ &&
-                grid_info_->fzm.defined() && grid_info_->fzp.defined(),
-                "fixed trajectory canonical NH/curvature profile unsupported: "
-                "test tendencies, diffusion, and WRF damping must be off");
+    const bool carry_mode = c.internal_fp64_state_carry;
+    const bool common_adjoint_profile =
+        c.retain_graph_for_adjoint && c.use_autograd && c.imex_split_mode == 3 &&
+        c.imex_slow_in_tangent && c.mass_coordinate_mode == 1 && !c.hevi_split &&
+        !c.split_explicit && nprocx_ * nprocy_ == 1 && n_moist_ == 0 &&
+        c.wrf_w_damping == 0 && c.wrf_damp_opt == 0 &&
+        c.wrf_zadvect_implicit == 0 && !c.damp_t &&
+        !c.enable_ad_halo_exchange && !c.enable_test_tendencies;
+    const auto option2_grid_ext = grid_info_
+        ? std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(grid_info_)
+        : std::shared_ptr<wrf::sdirk3::WRFGridInfoExtended>();
+    bool option2_canonical_horizontal = false;
+    if (carry_mode && c.effective_wrf_omega_ww_cp()) {
+        const bool tile_covers_patch =
+            its_ <= ids_ && ite_ >= ide_ - 1 &&
+            jts_ <= jds_ && jte_ >= jde_ - 1;
+        const auto option2_boundary = wrf::sdirk3::resolve_wdamp_runtime_contract(
+            true, nprocx_, nprocy_, tile_covers_patch,
+            config_flags_periodic_x_, config_flags_symmetric_xs_,
+            config_flags_symmetric_xe_, config_flags_open_xs_, config_flags_open_xe_,
+            config_flags_periodic_y_, config_flags_symmetric_ys_,
+            config_flags_symmetric_ye_, config_flags_open_ys_, config_flags_open_ye_,
+            config_flags_specified_, config_flags_nested_, config_flags_polar_,
+            "fixed-trajectory option-2 diffusion");
+        option2_canonical_horizontal =
+            option2_boundary.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
+            option2_boundary.y_policy ==
+                wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
+    }
+    const bool option2_complete_single_tile = nprocx_ * nprocy_ == 1 &&
+        its_ <= ids_ && ite_ >= ide_ && jts_ <= jds_ && jte_ >= jde_;
+    const bool default_option2_coefficients =
+        !Kh_mom_.defined() && !Kh_scalar_.defined() &&
+        (!Kv_mom_.defined() || Kv_mom_.numel() == 0) &&
+        (!Kv_scalar_.defined() || Kv_scalar_.numel() == 0);
+    const bool carry_profile =
+        c.internal_fp64 && !c.adaptive_timestep && common_adjoint_profile &&
+        option2_canonical_horizontal && option2_complete_single_tile &&
+        option2_grid_ext && option2_grid_ext->smagorinsky_opt == 1 &&
+        std::isfinite(option2_grid_ext->c_s) && option2_grid_ext->c_s > 0.0f &&
+        fnm_fnp_from_wrf_ && default_option2_coefficients &&
+        !capture_theta_faces_now_ && c.diffusion_option == 2 &&
+        std::isfinite(c.khdif) && c.khdif >= 0.0f &&
+        std::isfinite(c.kvdif) && c.kvdif >= 0.0f;
+    const bool legacy_profile =
+        common_adjoint_profile && !carry_mode && non_hydrostatic_ &&
+        c.non_hydrostatic && c.do_curvature && c.buoyancy_use_current_w &&
+        c.omega_w_blend == 1.0f && !c.omega_update_ref_per_newton &&
+        c.khdif == 0.0f && c.kvdif == 0.0f && c.diffusion_option == 0 &&
+        grid_info_ && grid_info_->fzm.defined() && grid_info_->fzp.defined();
+    TORCH_CHECK(carry_mode ? carry_profile : legacy_profile,
+                carry_mode
+                    ? "fixed trajectory profile unsupported: carry requires dry fixed-K option-2 ARK on one CPU tile"
+                    : "fixed trajectory canonical NH/curvature profile unsupported: requires the legacy no-diffusion path");
 }
 
 uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
     uint64_t h = kFixedTrajectoryFNVOffset;
+    const bool canonicalize_fp64 =
+        wrf::sdirk3::g_sdirk3_config.internal_fp64_state_carry;
+    const auto hash_context_tensor = [&](const torch::Tensor& value) {
+        if (canonicalize_fp64 && value.defined() && value.is_floating_point()) {
+            fixed_trajectory_hash_tensor(h, value.to(torch::kFloat64).contiguous());
+        } else {
+            fixed_trajectory_hash_tensor(h, value);
+        }
+    };
     for (const int value : {nx_, ny_, nz_, nx_u_, ny_v_, nz_w_, its_, ite_, jts_, jte_,
                             ids_, ide_, jds_, jde_, nprocx_, nprocy_, mypx_, mypy_}) {
         fixed_trajectory_hash_scalar(h, value);
@@ -42116,29 +42186,29 @@ uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
     // These are the effective vertical metrics consumed by the native RHS.
     // The helper may select solver vectors, grid tensors, or a fallback; hashing
     // the selected values closes all source branches, including from_blob views.
-    fixed_trajectory_hash_tensor(
-        h, getRdnwTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
-    fixed_trajectory_hash_tensor(
-        h, getRdnTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
+    hash_context_tensor(
+        getRdnwTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
+    hash_context_tensor(
+        getRdnTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
     for (const float value : {cf1_, cf2_, cf3_, cfn_, cfn1_}) fixed_trajectory_hash_scalar(h, value);
     for (const auto& x : {p_base_, th_base_, t_init_pert_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
                           fnm_cpu_, fnp_cpu_, c1f_, c2f_, c1h_, c2h_,
                           msftx_cpu_, msfty_cpu_, msfux_cpu_, msfuy_cpu_, msfvx_cpu_, msfvy_cpu_,
                           f_, e_, sina_, cosa_, zx_, zy_, cqu_, cqv_, cqw_}) {
-        fixed_trajectory_hash_tensor(h, x);
+        hash_context_tensor(x);
     }
     if (grid_info_) {
         // Hash every vertical-metric source at source precision.  The cache
         // helper may normalize to float32, while an FP64 RHS can consume the
         // FP64 grid tensor; source-value hashing catches sub-float32-ULP edits.
-        fixed_trajectory_hash_tensor(h, grid_info_->rdnw);
-        fixed_trajectory_hash_tensor(h, grid_info_->rdn);
-        fixed_trajectory_hash_tensor(h, grid_info_->dnw);
-        fixed_trajectory_hash_tensor(h, grid_info_->dn);
-        fixed_trajectory_hash_tensor(h, grid_info_->ph_base);
-        fixed_trajectory_hash_tensor(h, grid_info_->fzm);
-        fixed_trajectory_hash_tensor(h, grid_info_->fzp);
-        fixed_trajectory_hash_tensor(h, grid_info_->xlat);
+        hash_context_tensor(grid_info_->rdnw);
+        hash_context_tensor(grid_info_->rdn);
+        hash_context_tensor(grid_info_->dnw);
+        hash_context_tensor(grid_info_->dn);
+        hash_context_tensor(grid_info_->ph_base);
+        hash_context_tensor(grid_info_->fzm);
+        hash_context_tensor(grid_info_->fzp);
+        hash_context_tensor(grid_info_->xlat);
         fixed_trajectory_hash_scalar(h, grid_info_->g);
         fixed_trajectory_hash_scalar(h, grid_info_->dx);
         fixed_trajectory_hash_scalar(h, grid_info_->dy);
@@ -42147,6 +42217,12 @@ uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
         fixed_trajectory_hash_scalar(h, grid_info_->kdamp);
         fixed_trajectory_hash_scalar(h, grid_info_->damp_top);
         fixed_trajectory_hash_scalar(h, grid_info_->dtbc);
+        if (canonicalize_fp64) {
+            const auto option2_grid_ext =
+                std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(grid_info_);
+            fixed_trajectory_hash_scalar(h, option2_grid_ext->smagorinsky_opt);
+            fixed_trajectory_hash_scalar(h, option2_grid_ext->c_s);
+        }
     } else {
         fixed_trajectory_hash_bool(h, false);
     }
@@ -42193,6 +42269,19 @@ uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
                               c.kdamp}) {
         fixed_trajectory_hash_scalar(h, value);
     }
+    if (canonicalize_fp64) {
+        fixed_trajectory_hash_bool(h, c.internal_fp64);
+        fixed_trajectory_hash_bool(h, c.internal_fp64_state_carry);
+        for (const float value : {c.newton_rtol, c.ewt_rtol, c.jvp_epsilon})
+            fixed_trajectory_hash_scalar(h, value);
+        for (const bool value : {c.jvp_use_forward_diff, c.jvp_block_epsilon,
+                                c.jvp_auto_bench_quality_gate,
+                                c.jvp_auto_bench_lock_reset_stage1})
+            fixed_trajectory_hash_bool(h, value);
+        for (const int value : {c.jvp_mixed_fd_newton_switch, c.jvp_auto_bench_calls,
+                               c.jvp_auto_bench_warmup, c.jvp_auto_bench_seed})
+            fixed_trajectory_hash_scalar(h, value);
+    }
     return h;
 }
 
@@ -42208,7 +42297,8 @@ void TileSDIRK3UnifiedSolver::beginFixedTrajectory(int expected_steps) {
 }
 
 void TileSDIRK3UnifiedSolver::beginFixedTrajectory(
-    int expected_steps, const std::vector<float>& dt_schedule) {
+    int expected_steps, const std::vector<float>& dt_schedule,
+    const torch::Tensor& initial_fp64_state) {
     TORCH_CHECK(expected_steps > 0 && !fixed_trajectory_open_ &&
                 !fixed_trajectory_requested_, "invalid/open fixed trajectory");
     TORCH_CHECK(dt_schedule.empty() ||
@@ -42219,9 +42309,16 @@ void TileSDIRK3UnifiedSolver::beginFixedTrajectory(
                     "fixed trajectory timestep schedule contains invalid dt");
     }
     validateFixedTrajectoryProfile();
+    validate_fixed_trajectory_initial_state(initial_fp64_state, getStateVectorSize());
     const uint64_t fingerprint = fixedTrajectoryInputFingerprint();
     std::vector<float> schedule_copy(dt_schedule);
     fixed_trajectory_steps_.clear();
+    if (wrf::sdirk3::g_sdirk3_config.internal_fp64_state_carry &&
+        wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
+        clearInternalFp64Carry();
+    }
+    fixed_trajectory_initial_fp64_ = initial_fp64_state.defined()
+        ? initial_fp64_state.detach().clone() : torch::Tensor();
     fixed_trajectory_expected_ = expected_steps;
     fixed_trajectory_dt_schedule_ = std::move(schedule_copy);
     fixed_trajectory_dt_reference_set_ = false;
@@ -42231,7 +42328,8 @@ void TileSDIRK3UnifiedSolver::beginFixedTrajectory(
 }
 
 void TileSDIRK3UnifiedSolver::requestFixedTrajectory(
-    int expected_steps, const std::vector<float>& dt_schedule) {
+    int expected_steps, const std::vector<float>& dt_schedule,
+    const torch::Tensor& initial_fp64_state) {
     TORCH_CHECK(expected_steps > 0 && !fixed_trajectory_open_ &&
                 !fixed_trajectory_requested_,
                 "invalid/open fixed trajectory request");
@@ -42242,11 +42340,14 @@ void TileSDIRK3UnifiedSolver::requestFixedTrajectory(
         TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
                     "fixed trajectory timestep schedule contains invalid dt");
     }
+    validate_fixed_trajectory_initial_state(initial_fp64_state, getStateVectorSize());
     // Validation and fingerprinting are intentionally deferred until the
     // first unifiedStep has published the Fortran-owned views.
     std::vector<float> schedule_copy(dt_schedule);
     fixed_trajectory_expected_ = expected_steps;
     fixed_trajectory_dt_schedule_ = std::move(schedule_copy);
+    fixed_trajectory_initial_fp64_ = initial_fp64_state.defined()
+        ? initial_fp64_state.detach().clone() : torch::Tensor();
     fixed_trajectory_requested_ = true;
 }
 
@@ -42254,6 +42355,7 @@ void TileSDIRK3UnifiedSolver::cancelFixedTrajectoryRequest() {
     TORCH_CHECK(fixed_trajectory_requested_ && !fixed_trajectory_open_,
                 "fixed trajectory request not pending");
     fixed_trajectory_requested_ = false;
+    fixed_trajectory_initial_fp64_ = torch::Tensor();
     fixed_trajectory_expected_ = 0;
     fixed_trajectory_dt_schedule_.clear();
 }
@@ -42289,6 +42391,13 @@ void TileSDIRK3UnifiedSolver::recordFixedTrajectoryStep(const torch::Tensor& inp
                 "fixed trajectory timestep invalid");
     TORCH_CHECK(getLastStepOutcomeCode() == static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED),
                 "fixed trajectory requires accepted step");
+    if (wrf::sdirk3::g_sdirk3_config.internal_fp64_state_carry) {
+        TORCH_CHECK(input.is_cpu() && output.is_cpu() &&
+                    input.scalar_type() == torch::kFloat64 &&
+                    output.scalar_type() == torch::kFloat64 &&
+                    input.requires_grad() && output.requires_grad(),
+                    "FP64 carry trajectory requires local FP64 input/output graphs");
+    }
     TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(fphys).all()) &&
                 wrf::sdirk3::guarded_item<double>(fphys.abs().max()) == 0.0,
                 "fixed trajectory requires zero projected F_phys");
@@ -42326,9 +42435,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::pullbackFixedTrajectory(const torch::Tens
     return lambda;
 }
 
+std::vector<torch::Tensor> TileSDIRK3UnifiedSolver::getFixedTrajectoryFp64Checkpoints() const {
+    std::vector<torch::Tensor> checkpoints;
+    checkpoints.reserve(fixed_trajectory_steps_.size());
+    for (const auto& step : fixed_trajectory_steps_) {
+        if (step.output.defined() && step.output.scalar_type() == torch::kFloat64) {
+            checkpoints.push_back(step.output.detach().clone());
+        }
+    }
+    return checkpoints;
+}
+
 void TileSDIRK3UnifiedSolver::closeFixedTrajectory() {
     TORCH_CHECK(fixed_trajectory_open_, "fixed trajectory not open");
     fixed_trajectory_steps_.clear();
+    fixed_trajectory_initial_fp64_ = torch::Tensor();
+    clearInternalFp64Carry();
     fixed_trajectory_expected_ = 0;
     fixed_trajectory_open_ = false;
     fixed_trajectory_fp_ = 0;

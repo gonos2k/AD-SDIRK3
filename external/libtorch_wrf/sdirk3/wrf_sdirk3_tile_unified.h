@@ -808,16 +808,21 @@ public:
     // must use the identical value.  A non-empty schedule records and checks
     // one dt for each trajectory step.  dt_stage_ is deliberately excluded
     // from the fixed-input fingerprint because internal stage probes mutate it.
+    // Carry-mode bootstrap can supply the exact FP64 initial checkpoint whose
+    // FP32 publication is already present in the caller-owned WRF state.
     void beginFixedTrajectory(int expected_steps,
-                              const std::vector<float>& dt_schedule);
+                              const std::vector<float>& dt_schedule,
+                              const torch::Tensor& initial_fp64_state = {});
     // Request a fixed trajectory before the first zero-copy publication.
     // Activation occurs in unifiedStep immediately before packState, after all
     // caller-owned views and fingerprint inputs are live.
     void requestFixedTrajectory(int expected_steps,
-                                const std::vector<float>& dt_schedule);
+                                const std::vector<float>& dt_schedule,
+                                const torch::Tensor& initial_fp64_state = {});
     bool fixedTrajectoryRequested() const { return fixed_trajectory_requested_; }
     void cancelFixedTrajectoryRequest();
     torch::Tensor pullbackFixedTrajectory(const torch::Tensor& terminal_cotangent);
+    std::vector<torch::Tensor> getFixedTrajectoryFp64Checkpoints() const;
     void closeFixedTrajectory();
     torch::Tensor runAdjointReplay(const torch::Tensor& lambda_terminal,
                                    float dt,
@@ -988,6 +993,7 @@ private:
         clearInternalFp64Carry();
         fixed_trajectory_requested_ = false;
         fixed_trajectory_steps_.clear();
+        fixed_trajectory_initial_fp64_ = torch::Tensor();
         fixed_trajectory_expected_ = 0;
         fixed_trajectory_open_ = false;
         fixed_trajectory_fp_ = 0;
@@ -2241,6 +2247,7 @@ private:
     torch::Tensor last_step_output_graph_;
     struct FixedTrajectoryStep { torch::Tensor input, output, fphys; float dt = 0.0f; };
     std::vector<FixedTrajectoryStep> fixed_trajectory_steps_;
+    torch::Tensor fixed_trajectory_initial_fp64_;
     int fixed_trajectory_expected_ = 0;
     bool fixed_trajectory_open_ = false;
     bool fixed_trajectory_requested_ = false;

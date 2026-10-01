@@ -957,7 +957,9 @@ extern "C" int sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
         if (!unified_solver) return 0;
         const int64_t expected_size = unified_solver->getStateVectorSize();
         if (expected_size <= 0 || expected_size != static_cast<int64_t>(lambda_size)) return 0;
-        auto terminal = torch::from_blob(const_cast<float*>(lambda_terminal), {expected_size}, wrf::sdirk3::make_cpu_from_blob_opts()).clone();
+        auto terminal_fp32 = torch::from_blob(const_cast<float*>(lambda_terminal), {expected_size}, wrf::sdirk3::make_cpu_from_blob_opts()).clone();
+        auto terminal = wrf::sdirk3::g_sdirk3_config.internal_fp64_state_carry
+            ? terminal_fp32.to(torch::kFloat64) : terminal_fp32;
         auto initial = unified_solver->pullbackFixedTrajectory(terminal)
                            .detach().to(torch::kCPU, torch::kFloat32).contiguous();
         if (!initial.defined() || initial.numel() != expected_size ||

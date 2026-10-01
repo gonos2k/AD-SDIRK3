@@ -941,7 +941,7 @@ struct SDIRK3Config {
     // Default OFF so existing forecasts retain the historical F32 trajectory.
     bool internal_fp64 = false;
     // Retain the internal FP64 prognostic state across forward tile steps.
-    // Default OFF; requires internal_fp64 and is incompatible with retained adjoints.
+    // Default OFF; requires internal_fp64. Retained adjoints require an open fixed trajectory.
     bool internal_fp64_state_carry = false;
     bool obs_aware_4dvar = false;          // Enable observation-aware terminal forcing path
     int obs_source_mode = 0;               // 0=off,1=FDDA,2=WRFDA-compatible payload

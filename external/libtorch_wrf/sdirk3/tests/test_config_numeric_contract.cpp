@@ -217,9 +217,9 @@ int main() {
     carry_with_adjoint.internal_fp64_state_carry = true;
     carry_with_adjoint.imex_split_mode = 3;
     carry_with_adjoint.retain_graph_for_adjoint = true;
-    if (carry_with_adjoint.validate()) {
+    if (!carry_with_adjoint.validate()) {
         ++failures;
-        std::cerr << "FAIL internal_fp64_state_carry accepted with retained adjoint graph\n";
+        std::cerr << "FAIL internal_fp64_state_carry rejected with retained adjoint graph\n";
     }
     setenv("WRF_SDIRK3_INTERNAL_FP64", "true", 1);
     setenv("WRF_SDIRK3_INTERNAL_FP64_STATE_CARRY", "true", 1);

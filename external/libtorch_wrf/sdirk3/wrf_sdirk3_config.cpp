@@ -2298,12 +2298,6 @@ bool SDIRK3Config::validate() const {
                   << std::endl;
         valid = false;
     }
-    if (internal_fp64_state_carry && retain_graph_for_adjoint) {
-        std::cerr << "SDIRK3 Config Error: internal_fp64_state_carry is incompatible with "
-                     "retain_graph_for_adjoint"
-                  << std::endl;
-        valid = false;
-    }
     if (stage2_rejection_snapshot_diag) {
         std::cerr << "[CONFIG VALIDATION] stage2_rejection_snapshot_diag=on; "
                      "single-rank/whole-patch topology is checked at WRF stage entry"
