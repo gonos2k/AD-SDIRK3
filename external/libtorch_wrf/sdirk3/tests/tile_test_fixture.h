@@ -6,6 +6,7 @@
 #include "../wrf_hydrostatic_pressure.h"
 #include "../wrf_sdirk3_acoustic_substep.h"
 #include "../wrf_sdirk3_boundary_ad.h"
+#include "../wrf_sdirk3_autograd_utils.h"
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -134,6 +135,64 @@ struct TileCase {
             blocks.push_back(torch::from_blob(field->data(), {static_cast<int64_t>(field->size())},
                                               torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)).clone());
         return torch::cat(blocks);
+    }
+    torch::Tensor projectControlState(const torch::Tensor& state) {
+        return solver.projectStateBoundaries(state);
+    }
+    void checkPhysicalState(const torch::Tensor& packed, const char* where) {
+        TORCH_CHECK(packed.defined() && packed.numel() == total &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(packed).all()),
+                    where, ": packed state is malformed or non-finite");
+        TORCH_CHECK(solver.p_base_.defined() && solver.ph_base_.defined() &&
+                    solver.mu_base_.defined(), where, ": fixture base state is not initialized");
+        const auto state = packed.to(torch::kFloat64);
+        const auto theta = state.slice(0, su + sv + 2 * sw, su + sv + 2 * sw + st)
+            .view({ny, nz, nx});
+        const auto mu = state.slice(0, total - sm, total).view({ny, nx});
+        const auto ph = state.slice(0, su + sv + sw, su + sv + 2 * sw)
+            .view({ny, nw, nx});
+        const auto theta_full = 300.0 + theta;
+        const auto mu_full = mu + solver.mu_base_.to(torch::kFloat64);
+        const auto ph_full = ph + solver.ph_base_.to(torch::kFloat64);
+        const auto dphi = ph_full.slice(1, 1, nz + 1) - ph_full.slice(1, 0, nz);
+        const auto dz_geometric = dphi / solver.grid_info_->g;
+        // These are the exact fixture buffers supplied on each unifiedStep.
+        // The setup-only rk_step=2 call need not populate the solver's cached
+        // c1h/c2h or vertical-metric tensors yet.
+        const auto rdnw = torch::tensor(metric, torch::kFloat64).abs().slice(0, 0, nz);
+        const auto c1h = torch::tensor(one, torch::kFloat64).slice(0, 0, nz);
+        const auto c2h = torch::tensor(zero, torch::kFloat64).slice(0, 0, nz);
+        const auto eta_layer_thickness = rdnw.abs().reciprocal();
+        const auto hybrid_layer_pressure =
+            c1h.view({1, nz, 1}) * mu_full.unsqueeze(1) + c2h.view({1, nz, 1});
+        TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(theta_full).all()) &&
+                    wrf::sdirk3::guarded_item<double>(theta_full.min()) > 0.0 &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(mu_full).all()) &&
+                    wrf::sdirk3::guarded_item<double>(mu_full.min()) > 0.0 &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(dz_geometric).all()) &&
+                    wrf::sdirk3::guarded_item<double>(dz_geometric.min()) > 0.0 &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(eta_layer_thickness).all()) &&
+                    wrf::sdirk3::guarded_item<double>(eta_layer_thickness.min()) > 0.0 &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(hybrid_layer_pressure).all()) &&
+                    wrf::sdirk3::guarded_item<double>(hybrid_layer_pressure.min()) > 0.0,
+                    where, ": non-positive theta, mass, or layer geometry");
+        const auto diagnostics = wrf::sdirk3::acoustic::diag_p_al(
+            ph, solver.ph_base_.to(torch::kFloat64), theta,
+            solver.p_base_.to(torch::kFloat64), mu_full,
+            solver.mu_base_.to(torch::kFloat64), c1h, c2h, rdnw,
+            100000.0f, 287.0f, 1004.5f / 717.5f, 300.0f);
+        const auto p_pert = std::get<0>(diagnostics);
+        const auto alpha_full = std::get<2>(diagnostics);
+        const auto eos = 287.0 * theta_full / (100000.0 * alpha_full);
+        const auto pressure_full = solver.p_base_.to(torch::kFloat64) + p_pert;
+        const auto density = alpha_full.reciprocal();
+        TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(eos).all()) &&
+                    wrf::sdirk3::guarded_item<double>(eos.min()) > 1e-20 &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(pressure_full).all()) &&
+                    wrf::sdirk3::guarded_item<double>(pressure_full.min()) > 0.0 &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(density).all()) &&
+                    wrf::sdirk3::guarded_item<double>(density.min()) > 0.0,
+                    where, ": diagnosed EOS, pressure, or density is non-positive");
     }
     void step(float dt) {
         solver.unifiedStep(u.data(),v.data(),w.data(),ph.data(),theta.data(),mu.data(),
