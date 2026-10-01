@@ -1,0 +1,17 @@
+--- production/wrf_sdirk3_tile_unified_impl.cpp
++++ observer/wrf_sdirk3_tile_unified_impl.cpp
+@@ -12644,6 +12644,14 @@
+         if (getLastStepOutcomeCode() ==
+             static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED)) {
+             fp64_carry_state_ = U_new.detach().clone();
++            // Observer-only: persist accepted internal state bytes; no state or formula changes.
++            const auto observer_snapshot = fp64_carry_state_.contiguous();
++            std::ofstream observer_dump("fp64_carry_final.bin",
++                                        std::ios::binary | std::ios::trunc);
++            observer_dump.write(
++                reinterpret_cast<const char*>(observer_snapshot.data_ptr<double>()),
++                static_cast<std::streamsize>(observer_snapshot.numel() * sizeof(double)));
++            TORCH_CHECK(observer_dump.good(), "FP64 observer dump write failed");
+             fp64_carry_published_ = step_output_graph.detach().clone();
+             fp64_carry_fingerprint_ = fixedTrajectoryInputFingerprint();
+             fp64_carry_timestep_ = wrf::sdirk3::mpi_safety::currentHostTimestep();
