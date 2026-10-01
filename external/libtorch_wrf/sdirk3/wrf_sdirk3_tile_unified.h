@@ -808,16 +808,21 @@ public:
     // must use the identical value.  A non-empty schedule records and checks
     // one dt for each trajectory step.  dt_stage_ is deliberately excluded
     // from the fixed-input fingerprint because internal stage probes mutate it.
+    // Carry-mode bootstrap can supply the exact FP64 initial checkpoint whose
+    // FP32 publication is already present in the caller-owned WRF state.
     void beginFixedTrajectory(int expected_steps,
-                              const std::vector<float>& dt_schedule);
+                              const std::vector<float>& dt_schedule,
+                              const torch::Tensor& initial_fp64_state = {});
     // Request a fixed trajectory before the first zero-copy publication.
     // Activation occurs in unifiedStep immediately before packState, after all
     // caller-owned views and fingerprint inputs are live.
     void requestFixedTrajectory(int expected_steps,
-                                const std::vector<float>& dt_schedule);
+                                const std::vector<float>& dt_schedule,
+                                const torch::Tensor& initial_fp64_state = {});
     bool fixedTrajectoryRequested() const { return fixed_trajectory_requested_; }
     void cancelFixedTrajectoryRequest();
     torch::Tensor pullbackFixedTrajectory(const torch::Tensor& terminal_cotangent);
+    std::vector<torch::Tensor> getFixedTrajectoryFp64Checkpoints() const;
     void closeFixedTrajectory();
     torch::Tensor runAdjointReplay(const torch::Tensor& lambda_terminal,
                                    float dt,
@@ -922,6 +927,7 @@ public:
 
     // Step outcome snapshot for ABI-side non-freeze contract.
     int getLastStepOutcomeCode() const { return last_step_outcome_code_; }
+    void resetInternalFp64Carry() { clearInternalFp64Carry(); }
     // Test-only observation; no production model setting or RHS change.
     // The accepted ARK derivatives, not a later RHS re-evaluation, define the step.
     struct ArkBudgetTrace {
@@ -975,9 +981,19 @@ private:
     // intentionally lightweight and do not publish new WRF pointers.
     // msf_epoch_ is a local generation key. Advance it rather than resetting it
     // to avoid an epoch ABA if an old key is inspected during diagnostics.
+    void clearInternalFp64Carry() {
+        fp64_carry_state_ = torch::Tensor();
+        fp64_carry_published_ = torch::Tensor();
+        fp64_carry_fingerprint_ = 0;
+        fp64_carry_timestep_ = 0;
+        fp64_carry_dt_ = 0.0f;
+    }
+
     void invalidateMapFactorCaches() {
+        clearInternalFp64Carry();
         fixed_trajectory_requested_ = false;
         fixed_trajectory_steps_.clear();
+        fixed_trajectory_initial_fp64_ = torch::Tensor();
         fixed_trajectory_expected_ = 0;
         fixed_trajectory_open_ = false;
         fixed_trajectory_fp_ = 0;
@@ -1549,6 +1565,11 @@ private:
     ArkBudgetTrace last_ark_budget_trace_;
     bool capture_ark_budget_trace_ = false;
     torch::Tensor next_fp64_state_for_test_;
+    torch::Tensor fp64_carry_state_;
+    torch::Tensor fp64_carry_published_;
+    uint64_t fp64_carry_fingerprint_ = 0;
+    uint64_t fp64_carry_timestep_ = 0;
+    float fp64_carry_dt_ = 0.0f;
     bool capture_theta_faces_now_ = false;
     ArkBudgetTrace::ThetaFaces rhs_theta_faces_;
     bool last_step_final_update_aborted_ = false;
@@ -2226,6 +2247,7 @@ private:
     torch::Tensor last_step_output_graph_;
     struct FixedTrajectoryStep { torch::Tensor input, output, fphys; float dt = 0.0f; };
     std::vector<FixedTrajectoryStep> fixed_trajectory_steps_;
+    torch::Tensor fixed_trajectory_initial_fp64_;
     int fixed_trajectory_expected_ = 0;
     bool fixed_trajectory_open_ = false;
     bool fixed_trajectory_requested_ = false;

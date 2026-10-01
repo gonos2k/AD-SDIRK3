@@ -3,11 +3,33 @@
 #include "tile_test_fixture.h"
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <iomanip>
+#include <thread>
 #include <utility>
+
+extern "C" void sdirk3_set_timestep_i4(int* timestep);
+namespace wrf::sdirk3::mpi_safety {
+uint64_t currentHostTimestep() noexcept;
+}
 
 namespace {
 using namespace wrf::sdirk3::test;
+
+void set_host_timestep(int timestep) {
+    sdirk3_set_timestep_i4(&timestep);
+}
+
+void check_host_timestep_publication() {
+    set_host_timestep(17);
+    uint64_t worker_step = 0;
+    std::thread worker([&] {
+        worker_step = wrf::sdirk3::mpi_safety::currentHostTimestep();
+    });
+    worker.join();
+    TORCH_CHECK(worker_step == 17,
+                "host timestep was not published across worker threads");
+}
 
 struct Result {
     torch::Tensor first_internal;
@@ -57,6 +79,92 @@ Result integrate(int steps, bool continuous, float total_time = 4.0f) {
     return {first_internal, internal};
 }
 
+Result integrate_solver_carry(int steps, float total_time = 4.0f) {
+    TileCase tile(5000.0f);
+    tile.solver.captureArkBudgetTraceForTest(true);
+    initialize(tile);
+    torch::Tensor internal, first_internal;
+    const float dt = total_time/steps;
+    for (int s = 0; s < steps; ++s) {
+        // The WRF v2 ABI republishes unchanged tile/domain bounds every call.
+        if (s > 0) tile.solver.setWRFIndices(1, nx+1, 1, ny+1, 1, nz,
+                                              1, nx+1, 1, ny+1, 1, nz+1,
+                                              -2, nx+4, -2, ny+4, 1, nz+1);
+        set_host_timestep(s+1);
+        tile.step(dt);
+        internal = tile.solver.getLastArkBudgetTrace().projected_final.detach().clone();
+        if (s == 0) first_internal = internal.clone();
+        TORCH_CHECK(torch::equal(tile.state(), internal.to(torch::kFloat32)),
+                    "solver-owned carry did not publish its FP32 projection");
+    }
+    return {first_internal, internal};
+}
+
+void check_carry_guards() {
+    constexpr float dt = 1.0f;
+    TileCase changed(5000.0f);
+    initialize(changed);
+    set_host_timestep(1);
+    changed.step(dt);
+    changed.u[nz*nu+1] += 0.25f;
+    set_host_timestep(2);
+    bool rejected = false;
+    try { changed.step(dt); }
+    catch (const std::exception& e) {
+        rejected = std::string(e.what()).find("FP64 state carry rejected") !=
+                   std::string::npos;
+    }
+    TORCH_CHECK(rejected, "solver-owned carry accepted a changed host state");
+
+    TileCase changed_context(5000.0f);
+    initialize(changed_context);
+    set_host_timestep(1);
+    changed_context.step(dt);
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    const float original_k = cfg.khdif;
+    cfg.khdif += 1.0f;
+    set_host_timestep(2);
+    rejected = false;
+    try { changed_context.step(dt); }
+    catch (const std::exception& e) {
+        rejected = std::string(e.what()).find("FP64 state carry rejected") !=
+                   std::string::npos;
+    }
+    cfg.khdif = original_k;
+    TORCH_CHECK(rejected, "solver-owned carry accepted a changed RHS coefficient");
+
+    TileCase skipped(5000.0f);
+    initialize(skipped);
+    set_host_timestep(1);
+    skipped.step(dt);
+    set_host_timestep(3);
+    rejected = false;
+    try { skipped.step(dt); }
+    catch (const std::exception& e) {
+        rejected = std::string(e.what()).find("FP64 state carry rejected") !=
+                   std::string::npos;
+    }
+    TORCH_CHECK(rejected, "solver-owned carry accepted a skipped host timestep");
+
+    TileCase first(5000.0f), second(5000.0f);
+    initialize(first);
+    initialize(second);
+    second.u[nz*nu+1] += 0.1f;
+    set_host_timestep(1);
+    first.step(dt);
+    second.step(dt);
+    set_host_timestep(2);
+    first.step(dt);
+    second.step(dt);
+    TORCH_CHECK(!torch::equal(first.state(), second.state()),
+                "independent solvers lost their distinct trajectories");
+
+    first.solver.resetInternalFp64Carry();
+    first.u[nz*nu+1] += 0.25f;
+    set_host_timestep(3);
+    first.step(dt);
+}
+
 double block_rms(const torch::Tensor& difference, int64_t start, int64_t size) {
     return difference.slice(0, start, start+size).square().mean().sqrt().item<double>();
 }
@@ -96,6 +204,27 @@ void check_rhs_dt_invariance() {
                     "fixed-state RHS is too small to test timestep invariance");
     }
 }
+
+void check_imported_diagnostic_independence() {
+    for (const auto mode : {wrf::sdirk3::RhsMode::Full,
+                            wrf::sdirk3::RhsMode::ExplicitOnly,
+                            wrf::sdirk3::RhsMode::ImplicitOnly}) {
+        for (const bool displaced : {false, true}) {
+            TileCase tile(5000.0f);
+            initialize(tile);
+            tile.step(1.0e-4f);
+            const auto state = tile.state().to(torch::kFloat64);
+            auto stage_reference = state.clone();
+            if (displaced)
+                stage_reference.slice(0, su+sv, su+sv+sw).add_(1.0e-3);
+            const auto baseline = tile.rhsAt(state, mode, 1.0f, stage_reference).clone();
+            tile.replaceImportedDiagnosticsForTest(125000.0f, 0.75f);
+            const auto changed = tile.rhsAt(state, mode, 1.0f, stage_reference);
+            TORCH_CHECK(torch::equal(baseline, changed),
+                        "dry ARK RHS consumed stale imported p/al diagnostics");
+        }
+    }
+}
 }  // namespace
 
 int main() {
@@ -119,7 +248,9 @@ int main() {
         cfg.gmres_warmstart = false;
         cfg.inn_warmstart_enable = false;
 
+        check_host_timestep_publication();
         check_rhs_dt_invariance();
+        check_imported_diagnostic_independence();
 
         std::array<int,4> counts{4,8,16,32};
         std::array<Result,4> rounded, continuous;
@@ -130,6 +261,16 @@ int main() {
                                      continuous[n].first_internal),
                         "A/B first step differs before any handoff");
         }
+        cfg.internal_fp64_state_carry = true;
+        for (size_t n = 0; n < 3; ++n) {
+            const auto owned = integrate_solver_carry(counts[n]);
+            TORCH_CHECK(torch::equal(owned.first_internal,
+                                     continuous[n].first_internal) &&
+                        torch::equal(owned.internal, continuous[n].internal),
+                        "solver-owned carry differs from the isolated FP64 handoff arm");
+        }
+        check_carry_guards();
+        cfg.internal_fp64_state_carry = false;
         constexpr std::array<int64_t,6> starts{0,su,su+sv,su+sv+sw,
                                                 su+sv+2*sw,total-sm};
         constexpr std::array<int64_t,6> sizes{su,sv,sw,sw,st,sm};

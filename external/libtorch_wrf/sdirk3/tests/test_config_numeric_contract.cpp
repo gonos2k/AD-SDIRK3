@@ -21,6 +21,7 @@ void clear_knobs() {
     unsetenv("WRF_SDIRK3_ADAPTIVE_LOW_THRESHOLD");
     unsetenv("WRF_SDIRK3_IMEX_SPLIT_MODE");
     unsetenv("WRF_SDIRK3_INTERNAL_FP64");
+    unsetenv("WRF_SDIRK3_INTERNAL_FP64_STATE_CARRY");
     unsetenv("WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND");
 }
 
@@ -174,6 +175,79 @@ int main() {
         ++failures;
         std::cerr << "FAIL internal_fp64 runtime bool setter could not disable\n";
     }
+
+    SDIRK3Config carry_default;
+    if (carry_default.internal_fp64_state_carry || !carry_default.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry default is not neutral/off\n";
+    }
+    SDIRK3Config carry_namelist;
+    carry_namelist.load_from_namelist(
+        "sdirk3_internal_fp64 = .true.\n"
+        "sdirk3_internal_fp64_state_carry = .true.\n"
+        "sdirk3_imex_split_mode = 3\n");
+    if (!carry_namelist.internal_fp64 || !carry_namelist.internal_fp64_state_carry ||
+        !carry_namelist.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry namelist parse/validation\n";
+    }
+    SDIRK3Config carry_without_fp64;
+    carry_without_fp64.internal_fp64_state_carry = true;
+    carry_without_fp64.imex_split_mode = 3;
+    if (carry_without_fp64.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry accepted without internal_fp64\n";
+    }
+    SDIRK3Config carry_bad_mode;
+    carry_bad_mode.internal_fp64 = true;
+    carry_bad_mode.internal_fp64_state_carry = true;
+    carry_bad_mode.imex_split_mode = 1;
+    if (carry_bad_mode.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry accepted outside effective ARK324 mode\n";
+    }
+    SDIRK3Config carry_split = carry_namelist;
+    carry_split.split_explicit = true;
+    if (carry_split.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry accepted split-explicit mode\n";
+    }
+    SDIRK3Config carry_with_adjoint;
+    carry_with_adjoint.internal_fp64 = true;
+    carry_with_adjoint.internal_fp64_state_carry = true;
+    carry_with_adjoint.imex_split_mode = 3;
+    carry_with_adjoint.retain_graph_for_adjoint = true;
+    if (!carry_with_adjoint.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry rejected with retained adjoint graph\n";
+    }
+    setenv("WRF_SDIRK3_INTERNAL_FP64", "true", 1);
+    setenv("WRF_SDIRK3_INTERNAL_FP64_STATE_CARRY", "true", 1);
+    setenv("WRF_SDIRK3_IMEX_SPLIT_MODE", "3", 1);
+    SDIRK3Config carry_env;
+    carry_env.load_from_env();
+    if (!carry_env.internal_fp64 || !carry_env.internal_fp64_state_carry || !carry_env.validate()) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry environment parse/validation\n";
+    }
+    g_sdirk3_config = SDIRK3Config{};
+    wrf::sdirk3::wrf_sdirk3_set_config_bool("internal_fp64_state_carry", 1);
+    if (!g_sdirk3_config.internal_fp64_state_carry) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry runtime bool setter\n";
+    }
+    wrf::sdirk3::wrf_sdirk3_set_config_bool("internal_fp64_state_carry", 0);
+    if (g_sdirk3_config.internal_fp64_state_carry) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry runtime bool setter could not disable\n";
+    }
+    g_sdirk3_config.internal_fp64_state_carry = true;
+    if (wrf::sdirk3::wrf_sdirk3_validate_fp64_state_carry(0) != 1 ||
+        wrf::sdirk3::wrf_sdirk3_validate_fp64_state_carry(1) != 0) {
+        ++failures;
+        std::cerr << "FAIL internal_fp64_state_carry dry-dynamics compatibility guard\n";
+    }
+    g_sdirk3_config.internal_fp64_state_carry = false;
 
     expect_invalid_direct(g_sdirk3_config.jvp_epsilon, "jvp_epsilon", std::numeric_limits<float>::quiet_NaN());
     expect_invalid_direct(g_sdirk3_config.jvp_epsilon, "jvp_epsilon", std::numeric_limits<float>::infinity());

@@ -1,0 +1,272 @@
+{
+  "created_local": "2026-09-29 20:58:04 JST",
+  "base_commit": "09be40135e526b14060bc20b322726b4a916035d",
+  "source_sha256": {
+    "Registry/Registry.EM_SDIRK3_OPTIMIZATIONS": "f60c1f72b83e58bd58ef10e653345a0d93765063894f102378ece2313e84bbbd",
+    "dyn_em/module_implicit_sdirk3.F": "6964e33832d2152652aba699f520fb8bf3c84cbd23df1b002873788d747839cf",
+    "external/libtorch_wrf/sdirk3/README.md": "1be37b4eb7912af77a7a02173e31689a42d9e3d08318c660a343226e30ce20bf",
+    "external/libtorch_wrf/sdirk3/tests/test_config_numeric_contract.cpp": "ee68e45d124889f131300b9dc4a67db9f36431f49f8a5e6bc25d59d2e1fdb3ca",
+    "external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp": "26b5856c37495463b72393a82e497fb0f1ad24250b3c4380b4f6507cf7e8d1ce",
+    "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h": "7d3e2c15ac802636f8963e90a8bef89cd5d807c31ae692fd378d7d86427bb2eb",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp": "2da3a6f32592aef51a6756ba1fc4ff8d040852ce9b633e94a2b6d66b399f5104",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "a1cad0d7495a1ed7cd30676c583f87acb4a120cf51ad28022bf117740258f636",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp": "91f6c15ee54ae0390a6eedbce9bf7b467b5b4e4c67498c5dcfd7f1bf9841cec8",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_mpi_safety.h": "be903f041b56d337b1c6d3d334664b4486339f32efaccae5c2de4237939e9126",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_mpi_safety_impl.cpp": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "e1ca8fc399f3ae6b552f02ad5a61ce52eafbe74ec2bef418de58fb840c8b6111",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "eb5df07b014343ed4cc80fb11b903c6347b7ac26e4621fc2c73226d4894848c8"
+  },
+  "wrf_executable_sha256": "ddc95dcbd7f22ce4fd0a4074715dc369cd5609b979e6b997f19891a562685b58",
+  "wrf_archive_sha256": "97d3504197833d48072ccee0a057c1689dc0252e66d11285a838e2ff2cc12dc5",
+  "configure_sha256": "e14c0ff55cee9df6b879b4c70948c6f281c9263f0d97ceca7053d3e1851d10ab",
+  "initial_input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "physics": {
+    "case": "em_b_wave",
+    "mp_physics": 0,
+    "diff_opt": 2,
+    "km_opt": 1,
+    "khdif": 1000.0,
+    "kvdif": 10.0,
+    "mpi_ranks": 1,
+    "omp_threads": 1
+  },
+  "runs": {
+    "rk3_240_reference": {
+      "namelist_sha256": "173e0a89404203326c58c4d4c84d678658702cfb9208af388acc9bc1a202c8ba",
+      "log_sha256": "7c5a194a1de98690c08ed32164b12c946846ebc79afb4b64bc5ef4f70c45f453",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:00:00": "876890d91a71fcad7061ebd7a29e0e232320a6dba35fe6778f650e4168bf5854",
+        "wrfout_d01_0001-01-01_00:02:00": "764131cabce9e21e9d582a8dba0eedeaa13469ba48c9af8d29081178de6f4496",
+        "wrfout_d01_0001-01-01_00:04:00": "829f20ab7dd2f25ac3994aaa9efce90631ffdd527c1524e95a53859ad66fc689"
+      },
+      "steps": 16,
+      "converged_implicit_stages": 0,
+      "max_scaled_exit_residual": null,
+      "internal_carry_reuses": 0,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 0.26174,
+      "success": true
+    },
+    "itemguard_final_off7p5_15": {
+      "namelist_sha256": "5b4110f0faa0e62e63cd957a37265333b4ac442bf50d6e23ee17a38364c5068b",
+      "log_sha256": "12fedf6692e12fe0b640dc4edd41adf988a67996c5849d106ef8276de79dac42",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:00:00": "6ed4d5871e6f87528dbb5131c12fd45fe4cfd6966c6a2bcadf16bcd72504427f"
+      },
+      "steps": 2,
+      "converged_implicit_stages": 6,
+      "max_scaled_exit_residual": 7.188e-10,
+      "internal_carry_reuses": 0,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 0.85039,
+      "success": true,
+      "process_exit_code": 0
+    },
+    "itemguard_final_on7p5_15": {
+      "namelist_sha256": "f4b3ba74896a410bde1bb93ac454ae102667221dd37ae528e4e272d178fc1496",
+      "log_sha256": "2ecb457a7d02f6d17e427fab180c1665236ad4da611f909e180ef9327f862975",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:00:00": "b4464030f2a27960f8d8dda34c8fbfb1bcd3d7962358f1496e024b7369e755d3"
+      },
+      "steps": 2,
+      "converged_implicit_stages": 6,
+      "max_scaled_exit_residual": 7.188e-10,
+      "internal_carry_reuses": 1,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 0.86414,
+      "success": true,
+      "process_exit_code": 0
+    },
+    "itemguard_final_off15_240": {
+      "namelist_sha256": "6b1c33e610fe46da50083e7e144d963d3525c4f8e99f637595d869c353befc99",
+      "log_sha256": "82775ef18ddb91ce23a7de1f05bfb722a0723c110a8a7dc429c9562f90ce5277",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:02:00": "7697324a36b9eb6918e71d7609d1f1d189b3526c2f5685c85c7fd3fee8a57c49",
+        "wrfout_d01_0001-01-01_00:04:00": "1df2e0bebf473b958553c9f1b2f77b60bf404fb19b876db489ce048186f13d73",
+        "wrfout_d01_0001-01-01_00:00:00": "cd61f4bfa76b0f69fe0baf79a2330d2731c8299c62d2bf0273519cf4a852cccc"
+      },
+      "steps": 16,
+      "converged_implicit_stages": 48,
+      "max_scaled_exit_residual": 5.1523e-09,
+      "internal_carry_reuses": 0,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 6.37824,
+      "success": true,
+      "process_exit_code": 0
+    },
+    "itemguard_final_on15_240": {
+      "namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+      "log_sha256": "a03edb0bf0fba6e045f2b43bb15db985924499e31359c929d996d0a78a11ce3d",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:02:00": "9b049074f71fe7315193448aab984bf34a726a5fcde701a49756e71a12fad898",
+        "wrfout_d01_0001-01-01_00:04:00": "726862ec98bf865dc5d4734d990709c7fa0b9f9ff9e13b5ed5f5320a19cab935",
+        "wrfout_d01_0001-01-01_00:00:00": "3c4866589bceb960fb859993a0e2bd45cc50efabb310591b0ca39cb573364d66"
+      },
+      "steps": 16,
+      "converged_implicit_stages": 48,
+      "max_scaled_exit_residual": 5.1523e-09,
+      "internal_carry_reuses": 15,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 6.357450000000002,
+      "success": true,
+      "process_exit_code": 0
+    },
+    "itemguard_final_namelist_tight0p46875_15": {
+      "namelist_sha256": "20181fe233867271d5711585f770400543a36b7af02c1f8fec777fa1456828e4",
+      "log_sha256": "1334816fbc247fa5ee4bb3929c327a271b3e7104f569b6d081f43a5125be89eb",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:00:00": "8df6f5207f993a3fb44c86783571722089e1e215613e73d2c620f5e9275d5204"
+      },
+      "steps": 32,
+      "converged_implicit_stages": 96,
+      "max_scaled_exit_residual": 1.2864e-14,
+      "internal_carry_reuses": 31,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 13.837640000000004,
+      "success": true,
+      "process_exit_code": 0
+    },
+    "itemguard_final_namelist_tight0p234375_15": {
+      "namelist_sha256": "391c2c380bd7d8480e197c569216f3d6da52d4ac0eaf62bee391fdbbe75c38fe",
+      "log_sha256": "5e1bd0869a211c3f7ba27bcf286d25ca20859155375fef36b09afcd6d73f341a",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:00:00": "bbdee7dbe9ba7f65ac236409b4cd9f4fb50bf4edbba7113b0e6bdf729d50b82d"
+      },
+      "steps": 64,
+      "converged_implicit_stages": 192,
+      "max_scaled_exit_residual": 1.1373e-15,
+      "internal_carry_reuses": 63,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 27.35225,
+      "success": true,
+      "process_exit_code": 0
+    },
+    "itemguard_final_namelist_tight0p1171875_15": {
+      "namelist_sha256": "64958ac4cb4b459b5fd72cd01de2addd76870ed7aaa3921c44f92f74115970f1",
+      "log_sha256": "e79f386319e2372e26ccec84afd324d8b14ec65c046358c24ff3deae5df70c36",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:00:00": "65cce155b2fb7d86e40e9aaaa1cff7489716fa48057c33e8cf7fb04a034b32fe"
+      },
+      "steps": 128,
+      "converged_implicit_stages": 384,
+      "max_scaled_exit_residual": 5.4691e-16,
+      "internal_carry_reuses": 127,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 51.527460000000005,
+      "success": true,
+      "process_exit_code": 0
+    },
+    "itemguard_final_namelist_tight0p05859375_15": {
+      "namelist_sha256": "03d5a6a07832a8a1b6ac303f2b240012a048af28606bfbcf3062b46fe3f6d62c",
+      "log_sha256": "c5c64073c2a8b86aed2a45319c675b4558131f51acf9bea09c09d94ab20a98d7",
+      "output_sha256": {
+        "wrfout_d01_0001-01-01_00:00:00": "9c2bfbed30b3601a49f1ff326404a9841ab2d7bb7664e93beab650c2e6915674"
+      },
+      "steps": 256,
+      "converged_implicit_stages": 768,
+      "max_scaled_exit_residual": 2.7257e-16,
+      "internal_carry_reuses": 255,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 96.26636,
+      "success": true,
+      "process_exit_code": 0
+    },
+    "itemguard_final_reject_moist": {
+      "namelist_sha256": "4851e92dee1affeb9a73260236e256ee98d9ebadff49346b5edb4e51803ca870",
+      "log_sha256": "9db54f234301b88b9d84ba703495b828365c5ce80d5414c9db3ee61613ad3aa3",
+      "output_sha256": {},
+      "steps": 0,
+      "converged_implicit_stages": 0,
+      "max_scaled_exit_residual": null,
+      "internal_carry_reuses": 0,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 0,
+      "success": false,
+      "process_exit_code": 1,
+      "rejection_marker": "SDIRK3_INTERNAL_FP64_STATE_CARRY_UNSUPPORTED"
+    },
+    "itemguard_final_reject_split": {
+      "namelist_sha256": "439afe2c5fefb20a1a3a9067afd5d5b76409fedadad557c4986282b57ae0b79b",
+      "log_sha256": "94c576c486b20d55962d4a03fb06a294ca43c29c7a140011a7d9f8a5aad2db07",
+      "output_sha256": {},
+      "steps": 0,
+      "converged_implicit_stages": 0,
+      "max_scaled_exit_residual": null,
+      "internal_carry_reuses": 0,
+      "jvp_fd_calls": 0,
+      "main_timing_sum_seconds": 0,
+      "success": false,
+      "process_exit_code": 1,
+      "rejection_marker": "FP64 state carry requires the dry fixed-grid forward ARK path"
+    }
+  },
+  "rms_vs_rk3": {
+    "U": {
+      "carry": 0.00842258820014804,
+      "off": 0.008422582329324713
+    },
+    "V": {
+      "carry": 0.0009542414579581198,
+      "off": 0.0009542277030729309
+    },
+    "W": {
+      "carry": 0.0006257081371768217,
+      "off": 0.0006257192882557716
+    },
+    "PH": {
+      "carry": 1.3329872867193437,
+      "off": 1.3330011660148913
+    },
+    "T": {
+      "carry": 0.04142574689800989,
+      "off": 0.04142537836280856
+    },
+    "MU": {
+      "carry": 0.4490241513372867,
+      "off": 0.4490223705224219
+    }
+  },
+  "rms_carry_vs_off": {
+    "U": 4.726026570301347e-07,
+    "V": 4.243787200269206e-07,
+    "W": 1.6010815488951995e-06,
+    "PH": 0.00035865315091137217,
+    "T": 9.584308262940302e-06,
+    "MU": 3.553006827305827e-05
+  },
+  "output_parity_reference_dirs": {
+    "itemguard_final_off7p5_15": "local7p5",
+    "itemguard_final_on7p5_15": "carrylocal7p5_15",
+    "itemguard_final_off15_240": "strict15_fp64_handoff_probe",
+    "itemguard_final_on15_240": "carrydump15_240",
+    "itemguard_final_namelist_tight0p46875_15": "carrytight0p46875_15",
+    "itemguard_final_namelist_tight0p234375_15": "carrytight0p234375_15",
+    "itemguard_final_namelist_tight0p1171875_15": "carrytight0p1171875_15",
+    "itemguard_final_namelist_tight0p05859375_15": "carrytight0p05859375_15"
+  },
+  "source_commit": "14d449d012da7bf55af21c8e089b9a028bffb939",
+  "core_validation": {
+    "registered_tests": 111,
+    "initial_ctest_passed": 110,
+    "initial_ctest_failed": 1,
+    "initial_failure": "Core_Archive_MakeParity missing source-tree Make archive, not a numerical failure",
+    "parity_rerun_passed": true,
+    "make_archive_exact_members": 24,
+    "full_ctest_log_sha256": "d955ad2d3c608fcb02d856ba05bb644dec4e19095650872de6ddff0c0d79ceda",
+    "make_archive_build_log_sha256": "5b17f83d3b6b7244564d4292cc4766598b673ebd8e4c9e2e8ac01d376da344b4",
+    "clean_wrf_build_log_sha256": "15a171856682d3a6ba34e24a8f0518fd573f5e6edd8d984fd3e46cdc3ac7219b",
+    "final_wrf_link_log_sha256": "93efaf68843ec38c3c2b19981f57c1c45e5d8a5f852ceb4d28b808e9aa129e68",
+    "cmake_install_success": true,
+    "installed_public_header_byte_equal": true,
+    "installed_archive_members_content_equal": true,
+    "install_log_sha256": "33e4a58fbef30c092038750ce38819a4043532e432e027e51116a0a11d99124c",
+    "final_ratchet_passed": true,
+    "final_ratchet_log_sha256": "7fd42aff49e20ee30e3578473da934b976019e02cf42eb25b061abc413200982",
+    "final_handoff_ctest_passed": true,
+    "final_make_archive_parity_passed": true,
+    "final_lint_ratchet_passed": true,
+    "final_lint_ratchet_log_sha256": "7fd42aff49e20ee30e3578473da934b976019e02cf42eb25b061abc413200982",
+    "initial_remote_fast_contract_failure": "four direct .item() checks outside NoGradGuard at 282d331; replaced with guarded_item in 14d449d"
+  },
+  "raw_archive_sha256": "7f6ba43540e03459adbf6e36e3298e3a14a0408db9ca07367e634c81b1a22a87"
+}

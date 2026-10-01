@@ -1,0 +1,192 @@
+{
+  "source_commit": "a3507049050bac7fd9ccadb60f71b28f97f8556a",
+  "source_tree": "/private/tmp/sdirk3-fp64-trajectory-20260929",
+  "validation_copy": "/private/tmp/sdirk3-fp64-trajectory-wrf-20260929",
+  "production_archive_sha256": "d52ad871bdc685f7a957b9b4a6f8208083d53960bb379243978e94348fc6ceed",
+  "production_wrf_exe_sha256": "4935332feb718aa0401361bdc543b98f2d9aaa9872b74934bd84c79e725d48fa",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "strict_namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+  "strict_run": {
+    "success": true,
+    "timing": {
+      "steps": 16,
+      "sum_s": 7.167619999999999,
+      "mean_s": 0.44797624999999996,
+      "median_s": 0.434985,
+      "min_s": 0.42199,
+      "max_s": 0.52446
+    }
+  },
+  "repeat_same_exe_frame_byte_identity": {
+    "00:00:00": true,
+    "00:02:00": true,
+    "00:04:00": true
+  },
+  "prior_on_frame_byte_identity": {
+    "00:00:00": {
+      "sha256": "3c4866589bceb960fb859993a0e2bd45cc50efabb310591b0ca39cb573364d66",
+      "prior_on_sha256": "3c4866589bceb960fb859993a0e2bd45cc50efabb310591b0ca39cb573364d66",
+      "byte_identical_prior_on": true,
+      "rk3_sha256": "876890d91a71fcad7061ebd7a29e0e232320a6dba35fe6778f650e4168bf5854"
+    },
+    "00:02:00": {
+      "sha256": "9b049074f71fe7315193448aab984bf34a726a5fcde701a49756e71a12fad898",
+      "prior_on_sha256": "9b049074f71fe7315193448aab984bf34a726a5fcde701a49756e71a12fad898",
+      "byte_identical_prior_on": true,
+      "rk3_sha256": "764131cabce9e21e9d582a8dba0eedeaa13469ba48c9af8d29081178de6f4496"
+    },
+    "00:04:00": {
+      "sha256": "b2dde536e0627ad71b973f6e6bb449b2537bf634f2e656863b34919c0ce85b0f",
+      "prior_on_sha256": "726862ec98bf865dc5d4734d990709c7fa0b9f9ff9e13b5ed5f5320a19cab935",
+      "byte_identical_prior_on": false,
+      "rk3_sha256": "829f20ab7dd2f25ac3994aaa9efce90631ffdd527c1524e95a53859ad66fc689"
+    }
+  },
+  "prior_on_final_selected_field_differences": {
+    "U": {
+      "finite": true,
+      "carry_vs_rk3_rms": 0.00842258820014804,
+      "carry_vs_rk3_max": 0.041556596755981445,
+      "carry_vs_prior_on_rms": 0.0,
+      "carry_vs_prior_on_max": 0.0,
+      "carry_vs_prior_on_exact": true
+    },
+    "V": {
+      "finite": true,
+      "carry_vs_rk3_rms": 0.0009542414579581198,
+      "carry_vs_rk3_max": 0.0038835620507597923,
+      "carry_vs_prior_on_rms": 0.0,
+      "carry_vs_prior_on_max": 0.0,
+      "carry_vs_prior_on_exact": true
+    },
+    "W": {
+      "finite": true,
+      "carry_vs_rk3_rms": 0.0006257081371744708,
+      "carry_vs_rk3_max": 0.0023986949818208814,
+      "carry_vs_prior_on_rms": 2.4956335049716345e-12,
+      "carry_vs_prior_on_max": 1.1641532182693481e-10,
+      "carry_vs_prior_on_exact": false
+    },
+    "PH": {
+      "finite": true,
+      "carry_vs_rk3_rms": 1.3329872867193437,
+      "carry_vs_rk3_max": 4.22900390625,
+      "carry_vs_prior_on_rms": 0.0,
+      "carry_vs_prior_on_max": 0.0,
+      "carry_vs_prior_on_exact": true
+    },
+    "T": {
+      "finite": true,
+      "carry_vs_rk3_rms": 0.04142574689800989,
+      "carry_vs_rk3_max": 0.12176513671875,
+      "carry_vs_prior_on_rms": 0.0,
+      "carry_vs_prior_on_max": 0.0,
+      "carry_vs_prior_on_exact": true
+    },
+    "MU": {
+      "finite": true,
+      "carry_vs_rk3_rms": 0.4490241513372867,
+      "carry_vs_rk3_max": 1.5088815689086914,
+      "carry_vs_prior_on_rms": 0.0,
+      "carry_vs_prior_on_max": 0.0,
+      "carry_vs_prior_on_exact": true
+    }
+  },
+  "archived_rk3_exe": "/private/tmp/sdirk3-fp64-trajectory-wrf-20260929/.validation/rk3_240_reference/wrf.exe",
+  "archived_rk3_input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "archived_rk3_namelist_sha256": "173e0a89404203326c58c4d4c84d678658702cfb9208af388acc9bc1a202c8ba",
+  "archived_rk3_timing": {
+    "steps": 16,
+    "sum_s": 0.26174000000000003,
+    "mean_s": 0.016358750000000002,
+    "median_s": 0.00284,
+    "min_s": 0.00259,
+    "max_s": 0.07927
+  },
+  "observer": {
+    "scope": "dump-only local validation executable; production source/archive/executable remain unchanged",
+    "patch_sha256": "92d8284bd6b2f5ebef8e69003a2d810b639ba5da264d7d2c0346a841d8afdefd",
+    "observer_archive_sha256": "1b2f09aa6dc853259dc0215799d457fce464566c542b6fc17698e502e9a6c3d8",
+    "observer_exe_sha256": "5e8f32dce6f04f0bbbdbe186ff6e8b4d1ef9ab79c91ac4721efcd76a7dce713f",
+    "case_dump_bitwise_equal_to_archived_carrytight": {
+      "0p46875": true,
+      "0p234375": true,
+      "0p1171875": true,
+      "0p05859375": true
+    },
+    "case_dumps_sha256": {
+      "0p46875": "6c1dbcbeccf12057593a70f70d31ba48c13a1b5952fc15d405def6bb98d39dad",
+      "0p234375": "2b9e01c1fc6e502b242a30e4f006627524f2b115a091c7763bf329255fb0207e",
+      "0p1171875": "44f118b18b4ffa87c057b1135bd42e58e43ac767fde7a5dfa7ec0661d7d7d605",
+      "0p05859375": "d55c16b59e6f3d55cd27346c4fbde01cf863d30a83dfb224cce32622baf7d97a"
+    },
+    "observed_orders": {
+      "U": {
+        "adjacent_rms": [
+          1.1037445446206255e-10,
+          1.4472617101912808e-11,
+          1.8536384310442936e-12
+        ],
+        "observed_order": [
+          2.9310085722439445,
+          2.9648940640642225
+        ]
+      },
+      "V": {
+        "adjacent_rms": [
+          1.6430416558850996e-10,
+          2.158997969311539e-11,
+          2.765224826948478e-12
+        ],
+        "observed_order": [
+          2.9279352657491238,
+          2.964893197564458
+        ]
+      },
+      "W": {
+        "adjacent_rms": [
+          3.798499293923734e-07,
+          4.851918658286619e-08,
+          6.096777668190681e-09
+        ],
+        "observed_order": [
+          2.9688022838709007,
+          2.9924365229278513
+        ]
+      },
+      "PH": {
+        "adjacent_rms": [
+          7.903951902562844e-06,
+          9.980939155343193e-07,
+          1.2492556894825017e-07
+        ],
+        "observed_order": [
+          2.985326690515732,
+          2.9981067836249746
+        ]
+      },
+      "T": {
+        "adjacent_rms": [
+          6.769539098126371e-13,
+          1.2907368778506152e-13,
+          1.2151671140785695e-13
+        ],
+        "observed_order": [
+          2.3908626805633184,
+          0.08704019915814402
+        ]
+      },
+      "MU": {
+        "adjacent_rms": [
+          1.3227074627927744e-11,
+          1.6376163752869226e-12,
+          2.0515544458995945e-13
+        ],
+        "observed_order": [
+          3.0138246837434446,
+          2.9968080864028668
+        ]
+      }
+    }
+  }
+}

@@ -126,6 +126,7 @@ through Registry + Fortran `set_config` + C++ (env, string setter, dump,
 | Stage-2 GMRES restart | `sdirk3_stage2_gmres_restart` | `WRF_SDIRK3_STAGE2_GMRES_RESTART` |
 | Stage-2 rejected-trial snapshot | `sdirk3_stage2_rejection_snapshot_diag` | `WRF_SDIRK3_STAGE2_REJECTION_SNAPSHOT_DIAG` |
 | Internal FP64 ARK state and RHS | `sdirk3_internal_fp64` | `WRF_SDIRK3_INTERNAL_FP64` |
+| Carry FP64 prognostic state across forward steps | `sdirk3_internal_fp64_state_carry` | `WRF_SDIRK3_INTERNAL_FP64_STATE_CARRY` |
 | Stage-2 Krylov restarts | `sdirk3_stage2_max_krylov_restarts` | `WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS` |
 | Stage-2 Krylov tolerance | `sdirk3_stage2_krylov_tol` | `WRF_SDIRK3_STAGE2_KRYLOV_TOL` |
 | W-damping activation (WRF parity) | `w_damping` (standard WRF key) | `WRF_SDIRK3_WRF_W_DAMPING` |
@@ -138,6 +139,29 @@ RHS, and converts the completed step back to FP32 at the Fortran boundary.
 The current implementation accepts ARK mode 3 on one CPU tile covering the
 domain. Validation so far covers the dry, fixed-coefficient `em_b_wave` case;
 it does not establish MPI, moist, variable-coefficient, or operational accuracy.
+
+The separate `sdirk3_internal_fp64_state_carry` switch also defaults off. It
+requires `sdirk3_internal_fp64 = .true.` and effective ARK mode 3; split-explicit
+mode is excluded. Retained adjoints are permitted only while a fixed trajectory
+is open; they record independent local step graphs and compose their pullbacks
+over accepted FP64 checkpoints. A caller may provide the initial FP64 packed
+checkpoint to `beginFixedTrajectory` or the deferred `requestFixedTrajectory`;
+otherwise the first packed FP32 state is
+promoted before the first local input leaf is created.
+WRF initialization rejects it
+when `mp_physics` is nonzero. The forward path is limited to one CPU tile and
+rank, fixed timestep and auxiliary inputs, dry moisture corrections, zero external
+tendencies, and supported fixed boundaries. It reuses a completed FP64 state
+only when the next FP32 publication, host timestep, and RHS-context fingerprint
+match; changed inputs fail closed. The fixed-trajectory profile retains its
+legacy no-diffusion case and also admits dry fixed-K option-2 carry. These local
+graphs cover short trajectories; they do not provide bounded-memory checkpoint
+replay for long runs.
+The C/Fortran pullback ABI keeps FP32 buffers: its terminal cotangent is promoted
+once before the FP64 reverse chain and the initial gradient is narrowed once on
+return. `FP64_Carry_Adjoint` checks native NH/curvature trajectories of two and
+four steps, internal checkpoint equality, W/PH/MU objective derivatives, and the
+diffusion ON-minus-OFF derivative with a separate signal-relative budget.
 
 The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
 (`share/module_model_constants.F:88`), fixed as `kWrfWAlpha` in
@@ -232,7 +256,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 111-test CTest inventory**, pinned by
+The CMake tree registers an **exact 112-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 

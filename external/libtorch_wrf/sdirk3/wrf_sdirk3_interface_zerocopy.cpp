@@ -957,7 +957,9 @@ extern "C" int sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
         if (!unified_solver) return 0;
         const int64_t expected_size = unified_solver->getStateVectorSize();
         if (expected_size <= 0 || expected_size != static_cast<int64_t>(lambda_size)) return 0;
-        auto terminal = torch::from_blob(const_cast<float*>(lambda_terminal), {expected_size}, wrf::sdirk3::make_cpu_from_blob_opts()).clone();
+        auto terminal_fp32 = torch::from_blob(const_cast<float*>(lambda_terminal), {expected_size}, wrf::sdirk3::make_cpu_from_blob_opts()).clone();
+        auto terminal = wrf::sdirk3::g_sdirk3_config.internal_fp64_state_carry
+            ? terminal_fp32.to(torch::kFloat64) : terminal_fp32;
         auto initial = unified_solver->pullbackFixedTrajectory(terminal)
                            .detach().to(torch::kCPU, torch::kFloat32).contiguous();
         if (!initial.defined() || initial.numel() != expected_size ||
@@ -1110,6 +1112,7 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr)
     std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);
     if (it != g_tile_solvers.end() && it->second) {
+        it->second->resetInternalFp64Carry();
         // FIX 2025-01-11 Round78: Lightweight reset - per-solver state only
         auto grid_info = it->second->getGridInfo();
         if (grid_info) {
@@ -1181,6 +1184,7 @@ void sdirk3_tile_solver_reset_full(void* solver_ptr)
     std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);
     if (it != g_tile_solvers.end() && it->second) {
+        it->second->resetInternalFp64Carry();
         // FIX 2025-01-11 Round78: Reset per-solver state (warnings, logging, device cache)
         auto grid_info = it->second->getGridInfo();
         if (grid_info) {
