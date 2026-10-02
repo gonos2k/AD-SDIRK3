@@ -163,6 +163,13 @@ return. `FP64_Carry_Adjoint` checks native NH/curvature trajectories of two and
 four steps, internal checkpoint equality, W/PH/MU objective derivatives, and the
 diffusion ON-minus-OFF derivative with a separate signal-relative budget.
 
+`FP64_Initial_Inverse` runs the same executable with `--inverse`: a six-control
+W/PH/MU twin experiment with 105 independent terminal W observations. It uses
+the carried FP64 forward and adjoint in an actual Armijo optimization, checks
+observational rank against two-width FD uncertainty, and compares the result
+with an independent regularized linear MAP reference. This short native example
+does not qualify a full WRF observation window or real-atmosphere assimilation.
+
 The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
 (`share/module_model_constants.F:88`), fixed as `kWrfWAlpha` in
 `wrf_sdirk3_w_damping.h` — WRF exposes no namelist for it, so neither do we.
@@ -256,7 +263,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 112-test CTest inventory**, pinned by
+The CMake tree registers an **exact 113-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 

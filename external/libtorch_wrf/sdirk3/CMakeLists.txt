@@ -595,6 +595,7 @@ add_test(NAME Fixed_Trajectory_Derivative COMMAND test_fixed_trajectory_derivati
 add_executable(test_fp64_carry_adjoint tests/test_fp64_carry_adjoint.cpp)
 target_link_libraries(test_fp64_carry_adjoint PRIVATE wrf_sdirk3::core)
 add_test(NAME FP64_Carry_Adjoint COMMAND test_fp64_carry_adjoint)
+add_test(NAME FP64_Initial_Inverse COMMAND test_fp64_carry_adjoint --inverse)
 
 add_executable(test_fixed_trajectory_lifecycle tests/test_fixed_trajectory_lifecycle.cpp)
 target_link_libraries(test_fixed_trajectory_lifecycle PRIVATE wrf_sdirk3::core)
