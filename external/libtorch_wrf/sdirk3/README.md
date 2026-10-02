@@ -170,6 +170,17 @@ observational rank against two-width FD uncertainty, and compares the result
 with an independent regularized linear MAP reference. This short native example
 does not qualify a full WRF observation window or real-atmosphere assimilation.
 
+`FP64_Two_Time_Inverse` (`--two-times`) uses the same six controls and observations
+at accepted steps 2 and 4. Each independent W sample has fixed physical error
+standard deviation `sqrt(105)*0.001 m/s`, preserving the previous terminal cost;
+additional observations are summed without a new count/time mean. The vector
+`pullbackFixedTrajectory` overload takes cotangents for outputs Z1...ZN and adds
+each immediately before its local pullback. Undefined entries mean zero; the
+terminal-only overload remains compatible. The example checks temporal-placement
+falsifiers, fixed-R information gain and weak MU posterior variance, then actually
+minimizes the two-time cost. Only explicit physical rejection or reported ordinary
+non-convergence can backtrack; fatal/contract/adjoint errors propagate.
+
 The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
 (`share/module_model_constants.F:88`), fixed as `kWrfWAlpha` in
 `wrf_sdirk3_w_damping.h` — WRF exposes no namelist for it, so neither do we.
@@ -263,7 +274,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 113-test CTest inventory**, pinned by
+The CMake tree registers an **exact 114-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 

@@ -11,8 +11,23 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 
 namespace wrf::sdirk3::test {
+// Only these explicit numerical trial failures may trigger optimizer backtracking.
+struct PhysicalTrialRejection : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+struct NonConvergedTrialRejection : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+inline void requireAcceptedTrialStep(int outcome) {
+    if (outcome == static_cast<int>(StepOutcomeCode::HARD_STAGE_ABORT) ||
+        outcome == static_cast<int>(StepOutcomeCode::SOFT_NO_PROGRESS))
+        throw NonConvergedTrialRejection("forward trial did not advance");
+    TORCH_CHECK(outcome == static_cast<int>(StepOutcomeCode::OK_ADVANCED),
+                "forward trial returned a fatal/unsupported outcome: ", outcome);
+}
 constexpr int nx = 8, ny = 6, nz = 4, nu = nx + 1, nv = ny + 1, nw = nz + 1;
 constexpr int su = ny*nz*nu, sv = nv*nz*nx, sw = ny*nw*nx, st = ny*nz*nx, sm = ny*nx;
 constexpr int total = su + sv + 2*sw + st + sm;
@@ -140,9 +155,10 @@ struct TileCase {
         return solver.projectStateBoundaries(state);
     }
     void checkPhysicalState(const torch::Tensor& packed, const char* where) {
-        TORCH_CHECK(packed.defined() && packed.numel() == total &&
-                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(packed).all()),
-                    where, ": packed state is malformed or non-finite");
+        TORCH_CHECK(packed.defined() && packed.dim() == 1 && packed.numel() == total,
+                    where, ": packed state is malformed");
+        if (!wrf::sdirk3::guarded_item<bool>(torch::isfinite(packed).all()))
+            throw PhysicalTrialRejection(std::string(where)+": non-finite physical state");
         TORCH_CHECK(solver.p_base_.defined() && solver.ph_base_.defined() &&
                     solver.mu_base_.defined(), where, ": fixture base state is not initialized");
         const auto state = packed.to(torch::kFloat64);
@@ -165,7 +181,7 @@ struct TileCase {
         const auto eta_layer_thickness = rdnw.abs().reciprocal();
         const auto hybrid_layer_pressure =
             c1h.view({1, nz, 1}) * mu_full.unsqueeze(1) + c2h.view({1, nz, 1});
-        TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(theta_full).all()) &&
+        if (!(wrf::sdirk3::guarded_item<bool>(torch::isfinite(theta_full).all()) &&
                     wrf::sdirk3::guarded_item<double>(theta_full.min()) > 0.0 &&
                     wrf::sdirk3::guarded_item<bool>(torch::isfinite(mu_full).all()) &&
                     wrf::sdirk3::guarded_item<double>(mu_full.min()) > 0.0 &&
@@ -174,8 +190,8 @@ struct TileCase {
                     wrf::sdirk3::guarded_item<bool>(torch::isfinite(eta_layer_thickness).all()) &&
                     wrf::sdirk3::guarded_item<double>(eta_layer_thickness.min()) > 0.0 &&
                     wrf::sdirk3::guarded_item<bool>(torch::isfinite(hybrid_layer_pressure).all()) &&
-                    wrf::sdirk3::guarded_item<double>(hybrid_layer_pressure.min()) > 0.0,
-                    where, ": non-positive theta, mass, or layer geometry");
+                    wrf::sdirk3::guarded_item<double>(hybrid_layer_pressure.min()) > 0.0))
+            throw PhysicalTrialRejection(std::string(where)+": non-positive theta, mass, or layer geometry");
         const auto diagnostics = wrf::sdirk3::acoustic::diag_p_al(
             ph, solver.ph_base_.to(torch::kFloat64), theta,
             solver.p_base_.to(torch::kFloat64), mu_full,
@@ -186,13 +202,13 @@ struct TileCase {
         const auto eos = 287.0 * theta_full / (100000.0 * alpha_full);
         const auto pressure_full = solver.p_base_.to(torch::kFloat64) + p_pert;
         const auto density = alpha_full.reciprocal();
-        TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(eos).all()) &&
+        if (!(wrf::sdirk3::guarded_item<bool>(torch::isfinite(eos).all()) &&
                     wrf::sdirk3::guarded_item<double>(eos.min()) > 1e-20 &&
                     wrf::sdirk3::guarded_item<bool>(torch::isfinite(pressure_full).all()) &&
                     wrf::sdirk3::guarded_item<double>(pressure_full.min()) > 0.0 &&
                     wrf::sdirk3::guarded_item<bool>(torch::isfinite(density).all()) &&
-                    wrf::sdirk3::guarded_item<double>(density.min()) > 0.0,
-                    where, ": diagnosed EOS, pressure, or density is non-positive");
+                    wrf::sdirk3::guarded_item<double>(density.min()) > 0.0))
+            throw PhysicalTrialRejection(std::string(where)+": diagnosed EOS, pressure, or density is non-positive");
     }
     void step(float dt) {
         solver.unifiedStep(u.data(),v.data(),w.data(),ph.data(),theta.data(),mu.data(),
@@ -201,7 +217,7 @@ struct TileCase {
             u_map.data(),u_map.data(),v_map.data(),v_map.data(),
             one.data(),zero.data(),one.data(),zero.data(),half.data(),half.data(),
             1,dt,nx,ny,nz,nu,nv,nw);
-        TORCH_CHECK(solver.getLastStepOutcomeCode() == 0, "tile step did not complete");
+        requireAcceptedTrialStep(solver.getLastStepOutcomeCode());
     }
     void stepWithInternalState(float dt, const torch::Tensor& state) {
         solver.next_fp64_state_for_test_ = state.detach();
