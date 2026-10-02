@@ -1,0 +1,218 @@
+{
+  "timestamp_jst": "2026-10-03T06:18:33.219620",
+  "numerical_source_commit": "2ad29c63eb6e26f589031a7280f6a392a6cc7723",
+  "base_commit": "793845bcd2c30c5076230f580caa7ff2fc0eb53f",
+  "sources": {
+    "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp": {
+      "git_blob": "0e5d5a787e7831be02baeb73c572396ac50acde1",
+      "sha256": "91ebcbbad06ad77c8973a87c8f60434eb1fcd35380ae0881ba0dca7fc2e08c65"
+    },
+    "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h": {
+      "git_blob": "9703b50ffe63cd7c048c4cfc025ed5ff227fa082",
+      "sha256": "4109f7c2a58b6268ac567ba2037e884c0584266d329f6e2065991d37620e76eb"
+    },
+    "external/libtorch_wrf/sdirk3/CMakeLists.txt": {
+      "git_blob": "963a72ee39d52af1842c09a2308b011e42e6a6c9",
+      "sha256": "4e002c0c9bc03614ebb08765faaeecab50904dec90c8489ada6f1a5ec5ed8014"
+    }
+  },
+  "executable_sha256": "73dae0ebc170e24d132d4c11251e5c572d12f4e6bf2c3b26fdf4fff6fba078fa",
+  "compiler": "Apple clang 21.0.0 (clang-2100.3.34.2), Release -O3, arm64",
+  "libtorch": "2.10.0 Homebrew",
+  "scope": "Dry fixed option-2 K, single CPU native tile, six W/PH/MU controls, four .25s steps, physical observations at accepted steps2/4; no new WRF/RK3 forecast; core registered MPI contracts only",
+  "fixed_R_std_m_s": 0.010246950765959599,
+  "local_ctest": {
+    "registered": 115,
+    "passed": 115,
+    "failed": 0,
+    "raw_log": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261003/fp64_nonlinear_inverse/ctest.log"
+  },
+  "estimates_not_rigorous_bounds": true,
+  "measurements": {
+    "NONLINEAR_SUMMARY": {
+      "J_initial": 79367174.34511234,
+      "J_final": 343016.9791484986,
+      "data_initial": 79367174.34511234,
+      "data_final": 17629.662310648473,
+      "gradient_initial": 176394.7216015151,
+      "gradient_final": 0.0031948168485312245,
+      "gradient_tight": 0.0031948168485312245,
+      "gradient_tight_difference": 0.0,
+      "cost_tight_difference": 0.0,
+      "state_tight_max_block_relative_difference": 0.0,
+      "physical_rmse_initial": 8.908825643434287,
+      "physical_rmse_final": 0.1327767385901931,
+      "linear_gap": 530.5052052551256,
+      "linearization_error_estimate": 0.06339177323497625,
+      "accepted": 11.0,
+      "rejected": 1.0,
+      "physical_rejections": 0.0,
+      "nonconverged_rejections": 0.0,
+      "armijo_rejections": 1.0,
+      "truth_amplitude": 8233.990975178567,
+      "bfgs_updates": 11.0,
+      "bfgs_skips": 0.0,
+      "min_accepted_alpha": 0.5,
+      "accepted_alphas": "1,0.5,1,1,1,1,1,1,1,1,1,"
+    },
+    "NONLINEAR_TIGHT_NEWTON": {
+      "tol": 1e-11,
+      "gradient": 0.0031948168485312245,
+      "gradient_difference": 0.0,
+      "cost_difference": 0.0,
+      "cost_budget": 0.0034301697914849863,
+      "max_block_state_relative_difference": 0.0,
+      "state_budget": 1e-08,
+      "estimated_solve_control_delta": 0.0
+    },
+    "NONLINEAR_STRONG_POINT": {
+      "fraction": 0.5,
+      "direction_fd": -96624.70472678542,
+      "direction_adjoint": -96624.73628222356,
+      "budget": 48.31346351161927,
+      "taylor_ratio": 3.8485117588308135
+    },
+    "NONLINEAR_SEPARATION": {
+      "gap": 530.5052052551256,
+      "fd_linearization_error_estimate": 0.06339177323497625,
+      "solve_control_estimate": 0.0,
+      "coefficient_floor": 1.834237171343032e-10,
+      "threshold": 6.3391773234976245
+    },
+    "NONLINEAR_TRUTH": {
+      "amplitude": 8233.990975178567,
+      "W_max": 10.0,
+      "W_cap": 10.0,
+      "mass_fraction": 0.1152944319178884,
+      "mass_cap": 0.2,
+      "layer_fraction": 0.32289357423920173,
+      "layer_cap": 0.5
+    },
+    "trajectory_deltas": [
+      {
+        "step": 1.0,
+        "max_w": 12.938909445695137,
+        "mass_fraction": 0.11523063805771509,
+        "layer_fraction": 0.3215170976486283
+      },
+      {
+        "step": 2.0,
+        "max_w": 19.688463194757926,
+        "mass_fraction": 0.11504049268690153,
+        "layer_fraction": 0.319007646331994
+      },
+      {
+        "step": 3.0,
+        "max_w": 26.30583027302906,
+        "mass_fraction": 0.11472479178909364,
+        "layer_fraction": 0.3153799302195015
+      },
+      {
+        "step": 4.0,
+        "max_w": 32.74181939449891,
+        "mass_fraction": 0.11428456714040956,
+        "layer_fraction": 0.3106561130412261
+      }
+    ],
+    "control_comparisons": [
+      {
+        "index": 0.0,
+        "fd": -94580.82762956619,
+        "adjoint_background": -94580.82763005872,
+        "gradient_final": 0.0014335391444433299,
+        "budget": 47.292218415643504,
+        "estimate": 491.6516132495316,
+        "reference": 497.3037598620879
+      },
+      {
+        "index": 1.0,
+        "fd": 66982.9292729497,
+        "adjoint_background": 66982.92927165629,
+        "gradient_final": -0.0015443554268586013,
+        "budget": 33.493269237088995,
+        "estimate": -332.19770699359447,
+        "reference": -352.18191760551497
+      },
+      {
+        "index": 2.0,
+        "fd": -109302.90725305676,
+        "adjoint_background": -109302.90725234812,
+        "gradient_final": 0.00013995404435718228,
+        "budget": 54.65325822714252,
+        "estimate": 416.43009102555055,
+        "reference": 469.77300248619156
+      },
+      {
+        "index": 3.0,
+        "fd": 75722.55362719297,
+        "adjoint_background": 75722.55363053412,
+        "gradient_final": -0.0023816148112132396,
+        "budget": 37.86308141588121,
+        "estimate": -289.26362129050926,
+        "reference": -325.44983669489307
+      },
+      {
+        "index": 4.0,
+        "fd": -1238.275433331728,
+        "adjoint_background": -1238.2754332638335,
+        "gradient_final": -8.64737984045405e-05,
+        "budget": 0.6209423172799046,
+        "estimate": 178.64117293560378,
+        "reference": 668.6056408099197
+      },
+      {
+        "index": 5.0,
+        "fd": 536.7044664919376,
+        "adjoint_background": 536.7044664203258,
+        "gradient_final": -0.00026006262939404223,
+        "budget": 0.27015683386000894,
+        "estimate": -98.47779623638758,
+        "reference": -290.27031225283605
+      }
+    ]
+  },
+  "failed_fixed_metric_prototype": {
+    "base_commit": "793845bcd2c30c5076230f580caa7ff2fc0eb53f",
+    "variant": "fixed background metric, max30, unchanged convergence gate",
+    "status": "failed_optimizer_convergence",
+    "amplitude": 8233.990975178567,
+    "J_initial": 79367174.34511234,
+    "J_final": 343016.9875751418,
+    "gradient_initial": 176394.7216015151,
+    "gradient_final": 3.26157,
+    "gradient_tolerance": 0.176395,
+    "executable_sha256": "dafd59e396b7fca1bd543ab253f5bbdc481821e7d11cc1107175bbd9eaed2716"
+  },
+  "graph_manifest": {
+    "base": "793845bcd2c30c5076230f580caa7ff2fc0eb53f",
+    "corpus": "/private/tmp/sdirk3-fp64-carry-adjoint-graph",
+    "byte_matched_sources": [
+      {
+        "path": "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp",
+        "sha256": "91ebcbbad06ad77c8973a87c8f60434eb1fcd35380ae0881ba0dca7fc2e08c65",
+        "git_blob": "0e5d5a787e7831be02baeb73c572396ac50acde1"
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+        "sha256": "4109f7c2a58b6268ac567ba2037e884c0584266d329f6e2065991d37620e76eb",
+        "git_blob": "9703b50ffe63cd7c048c4cfc025ed5ff227fa082"
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "sha256": "c5b817595b9b92a4e9b778b98978fb4452a96cb62aa8709a575b1f747db6fcbf",
+        "git_blob": "301a735ad16490c94fbe2290ab72d21a8583c801"
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "sha256": "264a171874816d8788fcc110f7e6924200a5bdf2e122b66556387b48579c5354",
+        "git_blob": "1f65748feda9919713caae2c0abf687eac14bad8"
+      }
+    ],
+    "navigation_limit": "Graph relationships are navigation only; missing member-call links were verified in authoritative source."
+  },
+  "team_review": {
+    "green": "Final source/graph byte matches; no numerical blockers",
+    "red": "BFGS/R/caps/units/convergence/estimate scope audited; no blockers"
+  },
+  "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261003/fp64_nonlinear_inverse"
+}
