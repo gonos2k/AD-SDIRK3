@@ -64,6 +64,7 @@ FP64_State_Handoff_Contract
 FP64_Carry_Adjoint
 FP64_Initial_Inverse
 FP64_Two_Time_Inverse
+FP64_Nonlinear_Inverse
 Full_Tile_Temporal_Order
 Full_Tile_Horizontal_PGF
 Full_Tile_Symmetric_Walls

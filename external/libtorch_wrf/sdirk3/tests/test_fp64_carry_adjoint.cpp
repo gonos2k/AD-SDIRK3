@@ -1,5 +1,6 @@
 // Internal FP64 trajectory, independent primal checkpoints, and active-effect VJP.
 #include "tile_test_fixture.h"
+#include <algorithm>
 #include <iomanip>
 #include <limits>
 #include <string>
@@ -81,6 +82,27 @@ torch::Tensor physical_w_index_tensor() {
 torch::Tensor physical_w_values(const torch::Tensor& z) {
     return z.index_select(0,physical_w_index_tensor());
 }
+double max_block_state_relative_difference(const torch::Tensor& reference,
+                                          const torch::Tensor& candidate) {
+    TORCH_CHECK(reference.dim()==1 && candidate.dim()==1 &&
+                reference.numel()==total && candidate.numel()==total,
+                "packed endpoint comparison requires matching state vectors");
+    const int sizes[]={su,sv,sw,sw,st,sm};
+    // Reference-unit floors: 1 for velocity/theta blocks, 100 for geopotential
+    // and column-mass blocks, each scaled by sqrt(block size).
+    const double unit_floors[]={1.0,1.0,1.0,100.0,1.0,100.0};
+    double maximum=0.0;
+    int offset=0;
+    for(int block=0;block<6;++block) {
+        const auto ref=reference.slice(0,offset,offset+sizes[block]);
+        const auto delta=candidate.slice(0,offset,offset+sizes[block])-ref;
+        const double denominator=std::max(ref.norm().item<double>(),
+            unit_floors[block]*std::sqrt(static_cast<double>(sizes[block])));
+        maximum=std::max(maximum,delta.norm().item<double>()/denominator);
+        offset+=sizes[block];
+    }
+    return maximum;
+}
 Objective objective(const torch::Tensor& z,const torch::Tensor& observations,double observation_scale) {
     if(!observations.defined()) return objective(z);  // Preserve the original derivative case exactly.
     TORCH_CHECK(std::isfinite(observation_scale) && observation_scale>0.0 && observations.dim()==1 &&
@@ -108,8 +130,10 @@ struct Result {
 Result run(const torch::Tensor& z0,int steps,bool active,bool pullback,
            const torch::Tensor& observations=torch::Tensor(),double observation_scale=0.1,
            const std::vector<torch::Tensor>& timed_observations={},double timed_physical_std=0.0,
-           bool probe_time_pullbacks=false) {
+           bool probe_time_pullbacks=false,float newton_tol=1e-10f) {
     configure(active);
+    TORCH_CHECK(std::isfinite(newton_tol) && newton_tol>0.0f,"invalid test-only Newton tolerance");
+    wrf::sdirk3::g_sdirk3_config.newton_tol=newton_tol;
     TileCase tile(5000.0f); prepare_native(tile); tile.set(z0);
     validate_physical_state(tile,z0,"initial state");
     tile.solver.requestFixedTrajectory(steps,std::vector<float>(steps,dt),z0);
@@ -388,14 +412,17 @@ double physical_observation_cost(const torch::Tensor& predicted,const torch::Ten
     return 0.5*((predicted-observed)/physical_std).square().sum().item<double>();
 }
 struct MapEval { double value=0.0, data=0.0; torch::Tensor gradient; Result simulation; };
+struct TrialRejectionTally { int physical=0, nonconverged=0; std::string last; };
 template <class Evaluate>
-bool try_admissible_trial(Evaluate&& evaluate) {
+bool try_admissible_trial(Evaluate&& evaluate,TrialRejectionTally* tally=nullptr) {
     try {
         evaluate();
         return true;
     } catch(const PhysicalTrialRejection&) {
+        if(tally) { ++tally->physical; tally->last="physical"; }
         return false;
     } catch(const NonConvergedTrialRejection&) {
+        if(tally) { ++tally->nonconverged; tally->last="nonconverged"; }
         return false;
     }
 }
@@ -620,7 +647,7 @@ void run_inverse_experiment(const torch::Tensor& raw_initial) {
 }
 
 struct TwoTimeEval { double value=0.0,data=0.0; torch::Tensor gradient; Result simulation; };
-void run_two_time_experiment(const torch::Tensor& raw_initial) {
+void run_two_time_experiment(const torch::Tensor& raw_initial,bool nonlinear=false) {
     constexpr int steps=4;
     constexpr double point_scale=1.0e-3;
     const double physical_std=std::sqrt((ny-1)*(nx-1)*(nw-2))*point_scale;
@@ -628,20 +655,57 @@ void run_two_time_experiment(const torch::Tensor& raw_initial) {
     configure(true);
     TileCase geometry(5000.0f); prepare_native(geometry);
     const auto basis=inverse_basis(geometry,raw_initial);
-    const auto truth=torch::tensor({0.06,-0.04,0.05,-0.035,0.04,-0.025},
+    auto truth=torch::tensor({0.06,-0.04,0.05,-0.035,0.04,-0.025},
         torch::TensorOptions().dtype(torch::kFloat64));
+    double truth_amplitude=1.0;
+    wrf::sdirk3::test::PerturbationSize truth_size{};
+    if(nonlinear) {
+        const auto nominal_increment=basis.columns.mv(truth);
+        truth_size=geometry.perturbationSize(basis.state,nominal_increment);
+        TORCH_CHECK(truth_size.max_w>0.0 && truth_size.mass_fraction>0.0 &&
+                    truth_size.layer_fraction>0.0,
+                    "nonlinear truth controls do not produce positive physical perturbation metrics");
+        truth_amplitude=std::min({10.0/truth_size.max_w,
+                                  0.20/truth_size.mass_fraction,
+                                  0.50/truth_size.layer_fraction});
+        TORCH_CHECK(std::isfinite(truth_amplitude) && truth_amplitude>0.0,
+                    "nonlinear truth physical-cap amplitude is invalid");
+        truth*=truth_amplitude;
+        const auto actual=geometry.perturbationSize(basis.state,basis.columns.mv(truth));
+        TORCH_CHECK(actual.max_w<=10.0*(1.0+1e-12) &&
+                    actual.mass_fraction<=0.20*(1.0+1e-12) &&
+                    actual.layer_fraction<=0.50*(1.0+1e-12),
+                    "nonlinear truth exceeds its W/mass/layer physical caps");
+        validate_physical_state(geometry,basis.state+basis.columns.mv(truth),
+                                "physical-cap nonlinear truth initial state");
+        std::cout<<"NONLINEAR_TRUTH amplitude="<<truth_amplitude
+                 <<" W_max="<<actual.max_w<<" W_cap=10"
+                 <<" mass_fraction="<<actual.mass_fraction<<" mass_cap=0.20"
+                 <<" layer_fraction="<<actual.layer_fraction<<" layer_cap=0.50"
+                 <<" coefficients="<<truth<<"\n";
+    }
     const auto truth_run=run(basis.state+basis.columns.mv(truth),steps,true,false);
     std::vector<torch::Tensor> observations(steps);
     observations[1]=physical_w_values(truth_run.states[1]);
     observations[3]=physical_w_values(truth_run.states[3]);
     const auto background=run(basis.state,steps,true,false);
+    if(nonlinear) {
+        for(int step=0;step<steps;++step) {
+            const auto delta=truth_run.states[step]-background.states[step];
+            const auto size=geometry.perturbationSize(background.states[step],delta);
+            std::cout<<"NONLINEAR_TRAJECTORY_DELTA step="<<(step+1)
+                     <<" max_w="<<size.max_w<<" mass_fraction="<<size.mass_fraction
+                     <<" layer_fraction="<<size.layer_fraction<<"\n";
+        }
+    }
     const auto background2=physical_w_values(background.states[1]);
     const auto background4=physical_w_values(background.states[3]);
     const auto zero=torch::zeros({6},torch::TensorOptions().dtype(torch::kFloat64));
     auto coefficients=zero.clone();
-    auto evaluate=[&](const torch::Tensor& c,bool with_vjp) {
+    auto evaluate=[&](const torch::Tensor& c,bool with_vjp,float newton_tol=1e-10f) {
         auto sim=run(basis.state+basis.columns.mv(c),steps,true,with_vjp,
-                     torch::Tensor(),0.1,observations,physical_std,with_vjp && torch::equal(c,zero));
+                     torch::Tensor(),0.1,observations,physical_std,
+                     with_vjp && torch::equal(c,zero),newton_tol);
         const double prior=0.5*c.square().sum().item<double>();
         torch::Tensor gradient;
         if(with_vjp) gradient=c+basis.columns.t().mv(sim.gradient);
@@ -721,7 +785,15 @@ void run_two_time_experiment(const torch::Tensor& raw_initial) {
                     "two-time information did not reduce weak MU marginal variance ",k);
     const auto d=torch::cat({observations[1]-background2,observations[3]-background4})/physical_std;
     const auto metric=torch::eye(6,A24.options())+A24.t().matmul(A24);
+    auto inverse_metric=torch::linalg_inv(metric);
+    const double metric_min_eigenvalue=torch::linalg_eigvalsh(metric).min().item<double>();
+    TORCH_CHECK(std::isfinite(metric_min_eigenvalue) && metric_min_eigenvalue>0.0,
+                "background preconditioner metric is not positive definite");
     const auto linear_map=torch::linalg_solve(metric,A24.t().mv(d));
+    const double linearization_error_estimate=50.0*fd_uncertainty*
+        (d.norm().item<double>()+2.0*A24.norm().item<double>()*linear_map.norm().item<double>()+
+         fd_uncertainty*linear_map.norm().item<double>())+
+        1024.0*std::numeric_limits<double>::epsilon()*std::max(1.0,linear_map.norm().item<double>());
 
     // The same baseline tape proves that the API sums output cotangents at their
     // correct accepted times and preserves the legacy terminal-only operation.
@@ -749,28 +821,111 @@ void run_two_time_experiment(const torch::Tensor& raw_initial) {
     TORCH_CHECK((shifted-fd).norm().item<double>()>falsification_budget,
                 "shifting step-2 cotangent to the wrong output was not detected by independent FD");
 
+    if(nonlinear) {
+        const auto check_coefficients=0.5*truth;
+        const auto check_eval=evaluate(check_coefficients,true);
+        const auto check_direction=truth/truth.norm();
+        constexpr double check_width=0.01;
+        auto directional_value=[&](double alpha) {
+            return evaluate(check_coefficients+alpha*check_direction,false).value;
+        };
+        const double fplus=directional_value(check_width);
+        const double fminus=directional_value(-check_width);
+        const double fplus_half=directional_value(check_width/2.0);
+        const double fminus_half=directional_value(-check_width/2.0);
+        const double fd_direction=(fplus_half-fminus_half)/check_width;
+        const double adjoint_direction=check_eval.gradient.dot(check_direction).item<double>();
+        const double directional_floor=512.0*std::numeric_limits<double>::epsilon()*
+            (std::abs(fplus_half)+std::abs(fminus_half)+2.0*std::abs(check_eval.value))/check_width;
+        const double directional_budget=directional_floor+5e-4*
+            std::max(std::abs(fd_direction),std::abs(adjoint_direction));
+        const double rem_h=std::abs(fplus-check_eval.value-check_width*adjoint_direction);
+        const double rem_half=std::abs(fplus_half-check_eval.value-
+                                       (check_width/2.0)*adjoint_direction);
+        const double taylor_floor=512.0*std::numeric_limits<double>::epsilon()*
+            (std::abs(fplus)+std::abs(fplus_half)+2.0*std::abs(check_eval.value));
+        TORCH_CHECK(std::max(std::abs(fd_direction),std::abs(adjoint_direction))>
+                        50.0*directional_floor &&
+                    std::abs(fd_direction-adjoint_direction)<=directional_budget,
+                    "strong finite-point directional FD/adjoint mismatch: fd=",fd_direction,
+                    " ad=",adjoint_direction," tol=",directional_budget);
+        TORCH_CHECK(rem_half>50.0*taylor_floor && rem_h/rem_half>3.5 && rem_h/rem_half<4.5,
+                    "strong finite-point Taylor remainder is not quadratic: ratio=",rem_h/rem_half,
+                    " floor=",taylor_floor);
+        std::cout<<"NONLINEAR_STRONG_POINT fraction=0.5 direction_fd="<<fd_direction
+                 <<" direction_adjoint="<<adjoint_direction<<" budget="<<directional_budget
+                 <<" taylor_ratio="<<rem_h/rem_half<<"\n";
+    }
+
     constexpr double armijo=1e-4;
-    int accepted=0,rejected=0;
-    for(int iteration=0;iteration<15;++iteration) {
+    int accepted=0,rejected=0,physical_rejections=0,nonconverged_rejections=0,armijo_rejections=0;
+    int bfgs_updates=0,bfgs_skips=0;
+    double minimum_accepted_alpha=1.0;
+    std::vector<double> accepted_alphas;
+    for(int iteration=0;iteration<(nonlinear?30:15);++iteration) {
         const double gnorm=current.gradient.norm().item<double>();
         if(gnorm<=1e-7*std::max(1.0,start_gradient)) break;
-        const auto direction=-torch::linalg_solve(metric,current.gradient);
+        const auto direction=nonlinear ? -inverse_metric.mv(current.gradient)
+                                       : -torch::linalg_solve(metric,current.gradient);
         const double slope=current.gradient.dot(direction).item<double>();
         TORCH_CHECK(std::isfinite(slope)&&slope<0.0,"two-time metric direction is not descent");
         bool found=false; double alpha=1.0;
         for(int line=0;line<12;++line,alpha*=0.5) {
             const auto trial_c=coefficients+alpha*direction;
             TwoTimeEval trial;
-            if(try_admissible_trial([&]{trial=evaluate(trial_c,true);})) {
+            TrialRejectionTally trial_rejection;
+            if(try_admissible_trial([&]{trial=evaluate(trial_c,true);},&trial_rejection)) {
                 if(trial.value<=current.value+armijo*alpha*slope) {
                     std::cout<<"TWO_TIME_STEP iter="<<accepted<<" alpha="<<alpha
                              <<" J="<<current.value<<" -> "<<trial.value
                              <<" data="<<trial.data<<" |g|="<<gnorm<<"\n";
-                    coefficients=trial_c; current=std::move(trial); ++accepted; found=true;
+                    const auto old_coefficients=coefficients;
+                    const auto old_gradient=current.gradient;
+                    coefficients=trial_c; current=std::move(trial); ++accepted;
+                    accepted_alphas.push_back(alpha); found=true;
+                    minimum_accepted_alpha=std::min(minimum_accepted_alpha,alpha);
+                    if(nonlinear) {
+                        const auto s=coefficients-old_coefficients;
+                        const auto y=current.gradient-old_gradient;
+                        const double curvature=s.dot(y).item<double>();
+                        const double curvature_floor=128.0*std::numeric_limits<double>::epsilon()*
+                            s.norm().item<double>()*y.norm().item<double>();
+                        if(std::isfinite(curvature) && curvature>curvature_floor) {
+                            const double rho=1.0/curvature;
+                            const auto eye=torch::eye(6,inverse_metric.options());
+                            const auto left=eye-rho*torch::outer(s,y);
+                            const auto right=eye-rho*torch::outer(y,s);
+                            auto updated=left.matmul(inverse_metric).matmul(right)+rho*torch::outer(s,s);
+                            updated=0.5*(updated+updated.t());
+                            const auto eig=torch::linalg_eigvalsh(updated);
+                            TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(updated).all()) &&
+                                        std::isfinite(eig.min().item<double>()) &&
+                                        eig.min().item<double>()>0.0,
+                                        "nonlinear inverse-BFGS update lost finite SPD invariants");
+                            inverse_metric=updated;
+                            ++bfgs_updates;
+                            std::cout<<"NONLINEAR_BFGS iter="<<accepted-1<<" action=update"
+                                     <<" curvature="<<curvature<<" curvature_floor="<<curvature_floor
+                                     <<" min_eigenvalue="<<eig.min().item<double>()<<"\n";
+                        } else {
+                            ++bfgs_skips;
+                            std::cout<<"NONLINEAR_BFGS iter="<<accepted-1<<" action=skip"
+                                     <<" reason=unresolved_curvature curvature="<<curvature
+                                     <<" curvature_floor="<<curvature_floor<<"\n";
+                        }
+                    }
                     break;
                 }
+                ++rejected; ++armijo_rejections;
+                std::cout<<"TWO_TIME_BACKTRACK alpha="<<alpha<<" reason=armijo J="
+                         <<current.value<<" trial_J="<<trial.value<<"\n";
+            } else {
                 ++rejected;
-            } else ++rejected;
+                physical_rejections+=trial_rejection.physical;
+                nonconverged_rejections+=trial_rejection.nonconverged;
+                std::cout<<"TWO_TIME_BACKTRACK alpha="<<alpha<<" reason="<<trial_rejection.last
+                         <<" J="<<current.value<<" trial_J=unavailable\n";
+            }
         }
         TORCH_CHECK(found,"two-time Armijo search found no admissible step");
     }
@@ -783,9 +938,57 @@ void run_two_time_experiment(const torch::Tensor& raw_initial) {
                 "two-time inverse failed objective/misfit/gradient convergence: J ",
                 start_value," -> ",current.value," data ",start_data," -> ",current.data,
                 " |g|=",final_gradient," tol=",grad_tolerance);
-    TORCH_CHECK(linear_gap<=linear_tolerance,
-                "two-time nonlinear MAP differs too far from linear reference: gap=",linear_gap,
-                " tol=",linear_tolerance);
+    if(nonlinear) {
+        TORCH_CHECK(bfgs_updates>0,"strong nonlinear solve did not exercise an inverse-BFGS update");
+        TORCH_CHECK(armijo_rejections>0 && minimum_accepted_alpha<1.0,
+                    "strong nonlinear solve did not demonstrate an Armijo alpha backtrack");
+    } else {
+        TORCH_CHECK(linear_gap<=linear_tolerance,
+                    "two-time nonlinear MAP differs too far from linear reference: gap=",linear_gap,
+                    " tol=",linear_tolerance);
+    }
+    double tight_gradient=final_gradient,tight_gradient_difference=0.0,tight_cost_difference=0.0;
+    double tight_max_block_state_relative_difference=0.0,estimated_solve_control_delta=0.0;
+    if(nonlinear) {
+        const auto tight=evaluate(coefficients,true,1e-11f);
+        tight_gradient=tight.gradient.norm().item<double>();
+        tight_gradient_difference=(tight.gradient-current.gradient).norm().item<double>();
+        tight_cost_difference=std::abs(tight.value-current.value);
+        tight_max_block_state_relative_difference=max_block_state_relative_difference(
+            current.simulation.states.back(),tight.simulation.states.back());
+        estimated_solve_control_delta=inverse_metric.mv(tight.gradient-current.gradient).norm().item<double>();
+        const double state_budget=1e-8;
+        const double cost_budget=1e-8*std::max(1.0,std::abs(current.value));
+        TORCH_CHECK(tight_gradient<grad_tolerance &&
+                    tight_gradient_difference<=0.01*grad_tolerance &&
+                    tight_cost_difference<=cost_budget &&
+                    tight_max_block_state_relative_difference<=state_budget,
+                    "tighter-Newton terminal check changed converged MAP beyond budget: |g|=",
+                    tight_gradient," dg=",tight_gradient_difference," dJ=",tight_cost_difference,
+                    " max_block_dstate_rel=",tight_max_block_state_relative_difference);
+        const double coefficient_floor=1024.0*std::numeric_limits<double>::epsilon()*
+            std::max(1.0,coefficients.norm().item<double>());
+        const double separation_error_estimate=std::max({linearization_error_estimate,
+            estimated_solve_control_delta,coefficient_floor});
+        TORCH_CHECK(linear_gap>100.0*separation_error_estimate,
+                    "strong nonlinear MAP is not separated from linearization/solve noise: gap=",
+                    linear_gap," 100x_error_estimate=",100.0*separation_error_estimate,
+                    " fd_linearization_error_estimate=",linearization_error_estimate,
+                    " solve_control_estimate=",estimated_solve_control_delta,
+                    " coefficient_floor=",coefficient_floor);
+        std::cout<<"NONLINEAR_TIGHT_NEWTON tol=1e-11 gradient="<<tight_gradient
+                 <<" gradient_difference="<<tight_gradient_difference
+                 <<" cost_difference="<<tight_cost_difference
+                 <<" cost_budget="<<cost_budget
+                 <<" max_block_state_relative_difference="<<tight_max_block_state_relative_difference
+                 <<" state_budget="<<state_budget
+                 <<" estimated_solve_control_delta="<<estimated_solve_control_delta<<"\n";
+        std::cout<<"NONLINEAR_SEPARATION gap="<<linear_gap
+                 <<" fd_linearization_error_estimate="<<linearization_error_estimate
+                 <<" solve_control_estimate="<<estimated_solve_control_delta
+                 <<" coefficient_floor="<<coefficient_floor
+                 <<" threshold="<<100.0*separation_error_estimate<<"\n";
+    }
     const auto replay=evaluate(coefficients,true);
     TORCH_CHECK(replay.value==current.value && torch::equal(replay.gradient,current.gradient),
                 "two-time objective/gradient replay is not deterministic");
@@ -808,12 +1011,35 @@ void run_two_time_experiment(const torch::Tensor& raw_initial) {
     std::cout<<"TWO_TIME_FINAL_ONLY smax="<<singular4.max().item<double>()
              <<" smin="<<singular4.min().item<double>()
              <<" cond="<<(singular4.max()/singular4.min()).item<double>()<<"\n";
-    std::cout<<"TWO_TIME_RESULT accepted="<<accepted<<" rejected="<<rejected
+    std::cout<<(nonlinear?"NONLINEAR_RESULT":"TWO_TIME_RESULT")
+             <<" accepted="<<accepted<<" rejected="<<rejected
              <<" truth="<<truth<<" nonlinear_map="<<coefficients<<" linear_map="<<linear_map
              <<" |g|="<<start_gradient<<" -> "<<final_gradient
              <<" physical_rmse="<<initial_rmse<<" -> "<<final_rmse
              <<" J="<<start_value<<" -> "<<current.value
-             <<" linear_gap="<<linear_gap<<"/"<<linear_tolerance<<"\n";
+             <<" linear_gap="<<linear_gap<<"/"
+             <<(nonlinear?100.0*std::max({linearization_error_estimate,estimated_solve_control_delta,
+                    1024.0*std::numeric_limits<double>::epsilon()*
+                    std::max(1.0,coefficients.norm().item<double>())}):linear_tolerance)<<"\n";
+    std::cout<<(nonlinear?"NONLINEAR_SUMMARY":"TWO_TIME_SUMMARY")
+             <<" J_initial="<<start_value<<" J_final="<<current.value
+             <<" data_initial="<<start_data<<" data_final="<<current.data
+             <<" gradient_initial="<<start_gradient<<" gradient_final="<<final_gradient
+             <<" gradient_tight="<<tight_gradient
+             <<" gradient_tight_difference="<<tight_gradient_difference
+             <<" cost_tight_difference="<<tight_cost_difference
+             <<" state_tight_max_block_relative_difference="<<tight_max_block_state_relative_difference
+             <<" physical_rmse_initial="<<initial_rmse<<" physical_rmse_final="<<final_rmse
+             <<" linear_gap="<<linear_gap<<" linearization_error_estimate="<<linearization_error_estimate
+             <<" accepted="<<accepted<<" rejected="<<rejected
+             <<" physical_rejections="<<physical_rejections
+             <<" nonconverged_rejections="<<nonconverged_rejections
+             <<" armijo_rejections="<<armijo_rejections<<" truth_amplitude="<<truth_amplitude
+             <<" bfgs_updates="<<bfgs_updates<<" bfgs_skips="<<bfgs_skips
+             <<" min_accepted_alpha="<<minimum_accepted_alpha
+             <<" accepted_alphas=";
+    for(double alpha:accepted_alphas) std::cout<<alpha<<",";
+    std::cout<<"\n";
     for(int k=0;k<6;++k)
         std::cout<<"TWO_TIME_CONTROL index="<<k<<" fd="<<fd_gradient[k]
                  <<" adjoint_background="<<baseline_grad[k].item<double>()
@@ -835,7 +1061,8 @@ void run_two_time_experiment(const torch::Tensor& raw_initial) {
     for(int k=0;k<6;++k)
         std::cout<<"TWO_TIME_SINGULAR index="<<k<<" terminal="<<singular4[k].item<double>()
                  <<" both="<<singular[k].item<double>()<<"\n";
-    std::cout<<"FP64 carry two-time inverse experiment passed\n";
+    std::cout<<(nonlinear?"FP64 carry nonlinear two-time inverse experiment passed\n"
+                         :"FP64 carry two-time inverse experiment passed\n");
 }
 }
 int main(int argc,char** argv) {
@@ -850,6 +1077,11 @@ int main(int argc,char** argv) {
         if(argc>1 && std::string(argv[1])=="--two-times") {
             TORCH_CHECK(argc==2,"--two-times does not accept additional arguments");
             run_two_time_experiment(z0);
+            return 0;
+        }
+        if(argc>1 && std::string(argv[1])=="--nonlinear") {
+            TORCH_CHECK(argc==2,"--nonlinear does not accept additional arguments");
+            run_two_time_experiment(z0,true);
             return 0;
         }
         TORCH_CHECK(argc==1,"unknown FP64 carry adjoint test argument: ",argv[1]);
