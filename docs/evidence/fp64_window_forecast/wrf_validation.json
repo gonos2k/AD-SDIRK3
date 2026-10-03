@@ -1,0 +1,107 @@
+{
+  "numeric_commit": "a3f0ee3af7704ca8580e7b7b2f0c55d4801ac608",
+  "validation_type": "affected C++ component clean rebuild; preserved Fortran/WRF objects; matching clang22 -O2 ABI1; incremental relink",
+  "library_sha256": "c04a39d8b34992fa36512c5bc22dec3740ba4a3e66f4a62b8def1e9d29140dc1",
+  "exe_sha256": "bf2c4a96964a65cccf6eeda6227976215e09dce7b21f0a450843fb5565dd1259",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+  "frames": {
+    "wrfout_d01_0001-01-01_00:00:00": {
+      "sha256": "3c4866589bceb960fb859993a0e2bd45cc50efabb310591b0ca39cb573364d66",
+      "float_variables": 174,
+      "all_finite": true,
+      "min_dry_column_Pa": 89091.65625,
+      "min_dz_m": 942.6573486328125,
+      "byte_equal_prior": true
+    },
+    "wrfout_d01_0001-01-01_00:02:00": {
+      "sha256": "9b049074f71fe7315193448aab984bf34a726a5fcde701a49756e71a12fad898",
+      "float_variables": 174,
+      "all_finite": true,
+      "min_dry_column_Pa": 89090.046875,
+      "min_dz_m": 942.783935546875,
+      "byte_equal_prior": true
+    },
+    "wrfout_d01_0001-01-01_00:04:00": {
+      "sha256": "726862ec98bf865dc5d4734d990709c7fa0b9f9ff9e13b5ed5f5320a19cab935",
+      "float_variables": 174,
+      "all_finite": true,
+      "min_dry_column_Pa": 89088.6328125,
+      "min_dz_m": 942.9161376953125,
+      "byte_equal_prior": false
+    }
+  },
+  "fields": {
+    "U": {
+      "rms_vs_prior": 0.0,
+      "exact_vs_prior": true,
+      "rms_vs_rk3": 0.00842258820014804,
+      "max_vs_rk3": 0.041556596755981445
+    },
+    "V": {
+      "rms_vs_prior": 0.0,
+      "exact_vs_prior": true,
+      "rms_vs_rk3": 0.0009542414579581198,
+      "max_vs_rk3": 0.0038835620507597923
+    },
+    "W": {
+      "rms_vs_prior": 2.4956335049716345e-12,
+      "exact_vs_prior": false,
+      "rms_vs_rk3": 0.0006257081371768217,
+      "max_vs_rk3": 0.0023986949818208814
+    },
+    "PH": {
+      "rms_vs_prior": 0.0,
+      "exact_vs_prior": true,
+      "rms_vs_rk3": 1.3329872867193437,
+      "max_vs_rk3": 4.22900390625
+    },
+    "T": {
+      "rms_vs_prior": 0.0,
+      "exact_vs_prior": true,
+      "rms_vs_rk3": 0.04142574689800989,
+      "max_vs_rk3": 0.12176513671875
+    },
+    "MU": {
+      "rms_vs_prior": 0.0,
+      "exact_vs_prior": true,
+      "rms_vs_rk3": 0.4490241513372867,
+      "max_vs_rk3": 1.5088815689086914
+    }
+  },
+  "success": true,
+  "converged_implicit_stages": 48,
+  "max_scaled_residual": 5.1523e-09,
+  "step_log_sum_s": 6.499749999999999,
+  "rk3_step_log_sum_s": 0.26174,
+  "timing_scope": "single-run step-log sum; not wall-time or equal-accuracy comparison",
+  "fp32_off": {
+    "expected_failure": true,
+    "exit": 1,
+    "first_failure_marker_equal_prior": true,
+    "newton_residual": 1.274e-06
+  },
+  "toolchain": {
+    "new_cpp": "Homebrew clang22.1.4 C++17 -O2 ABI1",
+    "standalone": "AppleClang21 Release -O3",
+    "inherited_wrf_objects": "preserved pr268/pr269 objects; documented GNU Fortran15.2.0/OpenMPI5.0.9 build; not rebuilt here",
+    "runtime_mpi": "OpenMPI5.0.9 one rank, one thread",
+    "torch": "Homebrew2.10.0",
+    "netcdf_link_recipe": "netCDF4.9.3_2 / netCDF-Fortran4.6.2; exact dynamic paths in link list",
+    "dynamic_libraries": [
+      "\t/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch.dylib (compatibility version 0.0.0, current version 0.0.0)",
+      "\t/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch_cpu.dylib (compatibility version 0.0.0, current version 0.0.0)",
+      "\t/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libc10.dylib (compatibility version 0.0.0, current version 0.0.0)",
+      "\t/opt/homebrew/opt/gcc/lib/gcc/current/libgfortran.5.dylib (compatibility version 6.0.0, current version 6.0.0)",
+      "\t/opt/homebrew/opt/gcc/lib/gcc/current/libquadmath.0.dylib (compatibility version 1.0.0, current version 1.0.0)",
+      "\t/opt/homebrew/opt/open-mpi/lib/libmpi_usempif08.40.dylib (compatibility version 81.0.0, current version 81.3.0)",
+      "\t/opt/homebrew/opt/open-mpi/lib/libmpi_usempi_ignore_tkr.40.dylib (compatibility version 81.0.0, current version 81.1.0)",
+      "\t/opt/homebrew/opt/open-mpi/lib/libmpi_mpifh.40.dylib (compatibility version 81.0.0, current version 81.1.0)",
+      "\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.7.0)",
+      "\t/opt/homebrew/opt/netcdf/lib/libnetcdf.22.dylib (compatibility version 22.0.0, current version 22.0.0)",
+      "\t/opt/homebrew/opt/netcdf-fortran/lib/libnetcdff.7.dylib (compatibility version 7.0.0, current version 7.1.0)",
+      "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)"
+    ]
+  }
+}

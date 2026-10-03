@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "recorded_local_time": "2026-10-03 20:14 JST (+0900)",
+  "repository": "gonos2k/AD-SDIRK3",
+  "workflow": "SDIRK3 CI",
+  "run_id": 37114137980,
+  "run_url": "https://github.com/gonos2k/AD-SDIRK3/actions/runs/37114137980",
+  "event": "workflow_dispatch",
+  "conclusion": "success",
+  "head_commit": "ddc59e1f4a4620b3b0f33e350003cfb86242d36b",
+  "numeric_source_commit": "a3f0ee3af7704ca8580e7b7b2f0c55d4801ac608",
+  "head_delta": {
+    "commit": "ddc59e1f4a4620b3b0f33e350003cfb86242d36b",
+    "scope": "CI timeout only: core-linux timeout-minutes raised from 45 to 90",
+    "numeric_source_changed": false
+  },
+  "jobs": {
+    "core-linux": "success",
+    "build-contract-negatives": "success",
+    "fast-contracts": "success",
+    "required": "success"
+  },
+  "make_cmake_abi_install": {
+    "production_make_archive_and_exact_set": "success",
+    "cmake_configure_and_build_core_tests": "success",
+    "fortran_cpp_rhs_lifecycle_abi": "success",
+    "fortran_cpp_scalar_diffusion_momentum_stress_parity_steps": 7,
+    "installed_manifest_and_header_byte_parity": "success",
+    "installed_c_abi_compile_link_smoke": "success"
+  },
+  "ctest": {
+    "registered": 119,
+    "passed": 118,
+    "skipped": 1,
+    "failed": 0,
+    "skip": "MSF_Map_Transfer_MPS",
+    "total_seconds": 4345.07,
+    "new_window_tests": [
+      {"number": 74, "name": "FP64_Window_Forecast", "status": "Passed", "seconds": 596.12},
+      {"number": 75, "name": "FP64_Fixed_Data_Refinement", "status": "Passed", "seconds": 2807.43},
+      {"number": 76, "name": "FP64_Stable_Column_Inverse", "status": "Passed", "seconds": 164.28}
+    ]
+  },
+  "numerical_evidence": {
+    "source": "CI core-linux LastTest.log from artifact core-linux-diagnostics (artifact 11272740705)",
+    "windows_8_steps_dt_0_25": {
+      "analysis_seconds": 2.0,
+      "withheld_seconds": 3.0,
+      "objective_initial": 1.9479837378909473,
+      "objective_final": 0.005280905779198574,
+      "gradient_initial_norm": 49.74219887170253,
+      "gradient_final_norm": 3.903478411847058e-08,
+      "withheld_W_error_background_norm": 0.023679779062772466,
+      "withheld_W_error_analysis_norm": 0.0002763380811645439,
+      "prefix_and_replay_exact": true
+    },
+    "windows_16_steps_dt_0_25": {
+      "analysis_seconds": 4.0,
+      "withheld_seconds": 6.0,
+      "objective_initial": 5.563279773693368,
+      "objective_final": 0.005464943187168041,
+      "gradient_initial_norm": 167.68129957307715,
+      "gradient_final_norm": 1.1752964335749402e-07,
+      "withheld_W_error_background_norm": 0.038232109600995684,
+      "withheld_W_error_analysis_norm": 0.00016521397190901585,
+      "prefix_and_replay_exact": true
+    },
+    "fixed_data_refinement": {
+      "coarse_steps_dt_seconds": [16, 0.25],
+      "fine_steps_dt_seconds": [32, 0.125],
+      "observation_times_seconds": [2.0, 4.0],
+      "withheld_time_seconds": 6.0,
+      "sigma_physical": 0.010246950765959599,
+      "data_equal": true,
+      "control_delta_norm": 1.5200349576395446e-07,
+      "objective_delta": 1.1918416801225129e-08,
+      "baseline_gradient_delta_norm": 0.0003951493020082709,
+      "max_tighter_solve_gradient_delta_norm": 0.0,
+      "time_signal_resolved": true,
+      "coarse_fine_withheld_delta": {
+        "W_m_s": 1.0073050971056542e-08,
+        "PH_m2_s2": 5.5104806172673157e-07,
+        "MU_Pa": 3.345333364757018e-07,
+        "theta_K": 4.997664557318008e-14
+      },
+      "tight_newton_tolerance": 1e-11,
+      "tight_comparison_cost_gradient_and_state_deltas": 0.0
+    },
+    "stable_column": {
+      "theta_range_K": [310.0, 316.0],
+      "N_squared_range_s2": [1.6320343114015356e-05, 2.8610542718211838e-05],
+      "equilibrium_steps": 16,
+      "equilibrium_duration_seconds": 4.0,
+      "max_block_relative_drift": 1.3592649765102451e-14,
+      "precision_gate": 3.077210490389147e-10,
+      "initial_eulerian_buoyancy_relative_error": 1.9636369132822113e-16,
+      "full_wave_period_measured": false
+    }
+  },
+  "raw_log_path": "/private/tmp/fp64-window-ci-37114137980.log",
+  "diagnostics_artifact": {
+    "name": "core-linux-diagnostics",
+    "id": 11272740705,
+    "url": "https://github.com/gonos2k/AD-SDIRK3/actions/runs/37114137980/artifacts/11272740705",
+    "downloaded_to": "/private/tmp/fp64-window-ci-artifacts"
+  },
+  "ctest_inventory_and_install_manifest": "exact comparisons passed"
+}

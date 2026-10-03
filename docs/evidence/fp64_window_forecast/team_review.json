@@ -1,0 +1,19 @@
+{
+  "numeric_commit": "a3f0ee3af7704ca8580e7b7b2f0c55d4801ac608",
+  "green": [
+    "fixed observation data/times/R and tighter solves consistent",
+    "owned-cell weights/factored budgets consistent",
+    "stable Eulerian initial restoring diagnostic scoped correctly"
+  ],
+  "red": [
+    "no blocker in same-weight floor and root graph preservation",
+    "resolved retained post-damping fails closed"
+  ],
+  "limitations": [
+    "gamma5 estimates stage construction, not RHS/J evaluation error",
+    "all-theta budget is an engineering guard, not exact RK conservation",
+    "no focused runtime falsifier forces resolved retained damping rejection",
+    "per-window refinement RMSE uses each regenerated truth; shared-data comparison is direct endpoint delta"
+  ],
+  "final_evidence_review": "Red reviewed final local119, WRF48/48, source receipts and main integration tree identity; stale pilot validation_status repaired. Green inspected completed exact-sourceCI all4jobs, raw119/118pass1MPSskip, ABI/parity/install and native measurements."
+}

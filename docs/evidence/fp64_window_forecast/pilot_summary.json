@@ -1,0 +1,558 @@
+{
+  "schema_version": 1,
+  "recorded_local_time": "2026-10-03 18:49:10 JST (+0900)",
+  "numeric_source_commit": "a3f0ee3af7704ca8580e7b7b2f0c55d4801ac608",
+  "evidence_checkout_head": "ddc59e1f4a4620b3b0f33e350003cfb86242d36b",
+  "head_change_scope": {
+    "commit": "ddc59e1",
+    "file": ".github/workflows/sdirk3-ci.yml",
+    "change": "core-linux timeout-minutes 45 to 90",
+    "numeric_source_changed": false,
+    "basis": "fixed-data refinement pilot elapsed 1748.51 seconds"
+  },
+  "source_receipt": {
+    "archived_path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261003/fp64_window_forecast/source_receipt.json",
+    "evidence_copy": "source_receipt.json",
+    "sha256": "27b287214ea5831b875e3dc1e3bf64d1b30bbd11039be69a0df3f5fd40904490",
+    "pilot_test_binary_sha256": "b7093ad5276dfe67ee5a6e1e6f94f0e05dfcc7e50e96a154d45a101ff92ff8a2",
+    "pilot_wrms_test_binary_sha256": "5d1c34f066216a9dd3b68880c8b13c8ad96409b4c6d71617a4679d7785423521",
+    "pilot_static_library_sha256": "45254e272f00550633b6035b71c4c38fdd514dccf432ac9766308478905c1ca3"
+  },
+  "budget_method_and_scope": {
+    "dry_layer_weight": "dx*dy/(map^2*g) * abs(deta) * (c1h*(MUB+MU)+c2h)",
+    "theta_integral": "sum(dry_layer_weight * (300 K + packed theta perturbation))",
+    "ownership": {
+      "fixture_shape_mass_cells": [
+        8,
+        6
+      ],
+      "fixture_fortran_ids_ide_jds_jde": [
+        1,
+        9,
+        1,
+        7
+      ],
+      "is_packed_periodic_domain": false,
+      "counted_mass_cells": 48,
+      "reason": "owned-cell masking follows the solver metadata; the inverse W observation sites cover a 7x5 subset and do not define mass ownership"
+    },
+    "all_theta_allowance_caveat": "The theta allowance is a deliberately broad engineering gate, not an exact RK invariant theorem or a rigorous arbitrary-profile time-error bound. It uses 512*DBL_EPSILON times the summed absolute endpoint anomaly products, plus 300 times the mass allowance. It does not subtract or predict the RK bilinear defect for nonuniform theta. Interpret only for these scoped pilots; do not claim general Q_theta conservation."
+  },
+  "completed_pilots": {
+    "neutral_owned_budget_windows": {
+      "log": "/private/tmp/fp64-windows-owned-budget-pilot.log",
+      "result": "passed",
+      "configuration": {
+        "controls": 6,
+        "dt_seconds": 0.25,
+        "dry_fixed_coefficients": true,
+        "theta_initial_profile": "310 K neutral",
+        "withheld_observation_forecasts": true,
+        "window_specs": [
+          {
+            "analysis_steps": 8,
+            "forecast_steps": 4
+          },
+          {
+            "analysis_steps": 16,
+            "forecast_steps": 8
+          }
+        ]
+      },
+      "windows": [
+        {
+          "analysis_steps": 8,
+          "forecast_steps": 4,
+          "observation_times_seconds": [
+            1,
+            2
+          ],
+          "withheld_time_seconds": 3,
+          "dry_budget": {
+            "truth": {
+              "mass_kg": 10275219780448.572,
+              "theta_integral_kg_K": 3185318131939057.5,
+              "max_mass_drift_kg": 1.6224505088757724e-05,
+              "mass_allowance_kg": 0.6675065524040092,
+              "max_theta_drift_kg_K": 0.007205070200143382,
+              "theta_allowance_kg_K": 480.60970421731383,
+              "constant_theta": true
+            },
+            "background": {
+              "mass_kg": 10275228918281.586,
+              "theta_integral_kg_K": 3185320964667292,
+              "max_mass_drift_kg": 0,
+              "mass_allowance_kg": 0.667519018620077,
+              "max_theta_drift_kg_K": 0,
+              "theta_allowance_kg_K": 480.61369340645547,
+              "constant_theta": true
+            },
+            "analysis": {
+              "mass_kg": 10275222053474,
+              "theta_integral_kg_K": 3185318836576940.5,
+              "max_mass_drift_kg": 1.1588854249566793e-05,
+              "mass_allowance_kg": 0.6675096533608873,
+              "max_theta_drift_kg_K": 0.006254233070649207,
+              "theta_allowance_kg_K": 480.6106965235148,
+              "constant_theta": true
+            }
+          },
+          "field_rmse": {
+            "half": {
+              "seconds": 1,
+              "background_W_m_s": 0.0008056660608714376,
+              "analysis_W_m_s": 3.185730355143409e-05,
+              "background_PH_m2_s2": 0.44735818342867867,
+              "analysis_PH_m2_s2": 0.0006035042406812313,
+              "background_MU_Pa": 0.7695350826530548,
+              "analysis_MU_Pa": 0.19209141357319484,
+              "background_theta_K": 3.3429821253831136e-15,
+              "analysis_theta_K": 2.0986837273595995e-15
+            },
+            "analysis_end": {
+              "seconds": 2,
+              "background_W_m_s": 0.0013302236282508662,
+              "analysis_W_m_s": 6.284525603405107e-05,
+              "background_PH_m2_s2": 0.43460746959981666,
+              "analysis_PH_m2_s2": 0.0009267488779910806,
+              "background_MU_Pa": 0.7527503511175083,
+              "analysis_MU_Pa": 0.18789255147842024,
+              "background_theta_K": 9.21061433975188e-15,
+              "analysis_theta_K": 3.8926473281200635e-15
+            },
+            "withheld": {
+              "seconds": 3,
+              "background_W_m_s": 0.0018664894617896428,
+              "analysis_W_m_s": 9.262056154889867e-05,
+              "background_PH_m2_s2": 0.4137368635168887,
+              "analysis_PH_m2_s2": 0.0017214033634976222,
+              "background_MU_Pa": 0.7252024123395778,
+              "analysis_MU_Pa": 0.1809975890131412,
+              "background_theta_K": 1.870893255873888e-14,
+              "analysis_theta_K": 6.225174051300269e-15
+            }
+          },
+          "heldout_W": {
+            "resolved": true,
+            "background_error_norm": 0.023679779062772466,
+            "analysis_error_norm": 0.00027633808116454345,
+            "roundoff_floor": 1.1368683772161603e-13,
+            "prefix_and_replay": "exact"
+          },
+          "inverse": {
+            "objective_initial": 1.9479837378909473,
+            "objective_final": 0.0052809057791985735,
+            "gradient_initial_norm": 49.74219887170252,
+            "gradient_final_norm": 3.903478516706493e-08,
+            "initial_physical_W_rmse_m_s": 0.0013957018800198513,
+            "final_physical_W_rmse_m_s": 1.4988510779723906e-05,
+            "accepted_steps": 2,
+            "rejected_steps": 0
+          }
+        },
+        {
+          "analysis_steps": 16,
+          "forecast_steps": 8,
+          "observation_times_seconds": [
+            2,
+            4
+          ],
+          "withheld_time_seconds": 6,
+          "dry_budget": {
+            "truth": {
+              "mass_kg": 10275219780448.572,
+              "theta_integral_kg_K": 3185318131939057.5,
+              "max_mass_drift_kg": 4.403747880132869e-05,
+              "mass_allowance_kg": 1.3350131048080185,
+              "max_theta_drift_kg_K": 0.01821057152119465,
+              "theta_allowance_kg_K": 961.2194084346276,
+              "constant_theta": true
+            },
+            "background": {
+              "mass_kg": 10275228918281.586,
+              "theta_integral_kg_K": 3185320964667292,
+              "max_mass_drift_kg": 0,
+              "mass_allowance_kg": 1.3350380372401536,
+              "max_theta_drift_kg_K": 0,
+              "theta_allowance_kg_K": 961.2273868129107,
+              "constant_theta": true
+            },
+            "analysis": {
+              "mass_kg": 10275220541749.299,
+              "theta_integral_kg_K": 3185318367942282.5,
+              "max_mass_drift_kg": 4.403777347761206e-05,
+              "mass_allowance_kg": 1.3350151820049498,
+              "max_theta_drift_kg_K": 0.026703514377004467,
+              "theta_allowance_kg_K": 961.2200731376457,
+              "constant_theta": true
+            }
+          },
+          "field_rmse": {
+            "half": {
+              "seconds": 2,
+              "background_W_m_s": 0.0013302236282508662,
+              "analysis_W_m_s": 2.154478537678339e-05,
+              "background_PH_m2_s2": 0.43460746959981666,
+              "analysis_PH_m2_s2": 0.0003062484819603492,
+              "background_MU_Pa": 0.7527503511175083,
+              "analysis_MU_Pa": 0.06375072345376444,
+              "background_theta_K": 9.21061433975188e-15,
+              "analysis_theta_K": 3.644057981319777e-15
+            },
+            "analysis_end": {
+              "seconds": 4,
+              "background_W_m_s": 0.002357177434430294,
+              "analysis_W_m_s": 4.102511488946172e-05,
+              "background_PH_m2_s2": 0.3857529467225472,
+              "analysis_PH_m2_s2": 0.000991684456700535,
+              "background_MU_Pa": 0.6875364907954187,
+              "analysis_MU_Pa": 0.05818817603217038,
+              "background_theta_K": 3.157825078448975e-14,
+              "analysis_theta_K": 6.296051182078799e-15
+            },
+            "withheld": {
+              "seconds": 6,
+              "background_W_m_s": 0.0031157412624436115,
+              "analysis_W_m_s": 5.735654497032626e-05,
+              "background_PH_m2_s2": 0.3147275017814182,
+              "analysis_PH_m2_s2": 0.002117133184840606,
+              "background_MU_Pa": 0.5858536947954182,
+              "analysis_MU_Pa": 0.04948717331147962,
+              "background_theta_K": 6.569619082779223e-14,
+              "analysis_theta_K": 9.248008964512922e-15
+            }
+          },
+          "heldout_W": {
+            "resolved": true,
+            "background_error_norm": 0.03823210960099569,
+            "analysis_error_norm": 0.00016521397190901542,
+            "roundoff_floor": 1.1368683772161603e-13,
+            "prefix_and_replay": "exact"
+          },
+          "inverse": {
+            "objective_initial": 5.563279773693368,
+            "objective_final": 0.00546494318716804,
+            "gradient_initial_norm": 167.68129957307715,
+            "gradient_final_norm": 1.1752964777304299e-07,
+            "initial_physical_W_rmse_m_s": 0.002358660588913413,
+            "final_physical_W_rmse_m_s": 1.0097856956562191e-05,
+            "accepted_steps": 2,
+            "rejected_steps": 0
+          }
+        }
+      ],
+      "scope_note": "Truth and forecasts are generated by the same numerical model; the withheld-time result is a synthetic self-twin inverse test, not independent forecast verification."
+    },
+    "stable_theta_pilot": {
+      "log": "/private/tmp/fp64-stable-pilot.log",
+      "result": "passed",
+      "profile": {
+        "theta_min_K": 310,
+        "theta_max_K": 316,
+        "N2_min_s2": 1.6320343114015356e-05,
+        "N2_max_s2": 2.8610542718211838e-05,
+        "Kv": 0,
+        "Kh": 1000
+      },
+      "equilibrium": {
+        "steps": 16,
+        "duration_seconds": 4,
+        "max_block_relative_drift": 1.3592649765102463e-14,
+        "precision_gate": 3.077210490389147e-10
+      },
+      "initial_eulerian_buoyancy_response": {
+        "claim_scope": "initial thermodynamic tendency only; full wave period not measured",
+        "positive_small": {
+          "W_amplitude_m_s": 0.01,
+          "N2W_norm_m_s3": 1.9253257592194632e-06,
+          "theta_eta_rate_max_K_s": 0,
+          "eulerian_theta_rate_max_K_s": 6.1955319434007395e-06,
+          "height_rate_error_m_s": 1.734723475976807e-18,
+          "relative_buoyancy_error": 1.9636369132822108e-16
+        },
+        "negative_small": {
+          "W_amplitude_m_s": -0.01,
+          "N2W_norm_m_s3": 1.9253257592194632e-06,
+          "theta_eta_rate_max_K_s": 0,
+          "eulerian_theta_rate_max_K_s": 6.1955319434007395e-06,
+          "height_rate_error_m_s": 1.734723475976807e-18,
+          "relative_buoyancy_error": 1.9636369132822108e-16
+        },
+        "positive_large": {
+          "W_amplitude_m_s": 0.02,
+          "N2W_norm_m_s3": 3.8506515184389265e-06,
+          "theta_eta_rate_max_K_s": 0,
+          "eulerian_theta_rate_max_K_s": 1.2391063886801479e-05,
+          "height_rate_error_m_s": 3.469446951953614e-18,
+          "relative_buoyancy_error": 1.9636369132822108e-16
+        }
+      },
+      "dry_budget": {
+        "truth": {
+          "mass_kg": 10275219780448.572,
+          "theta_integral_kg_K": 3216143791280403,
+          "max_mass_drift_kg": 2.781330476864241e-05,
+          "mass_allowance_kg": 0.6675065524040092,
+          "max_theta_drift_kg_K": 1.1550991619442357,
+          "theta_allowance_kg_K": 564.7170257661487,
+          "constant_theta": false
+        },
+        "background": {
+          "mass_kg": 10275228918281.586,
+          "theta_integral_kg_K": 3216146651422136,
+          "max_mass_drift_kg": 0,
+          "mass_allowance_kg": 0.667519018620077,
+          "max_theta_drift_kg_K": 0,
+          "theta_allowance_kg_K": 564.721089752585,
+          "constant_theta": false
+        },
+        "analysis": {
+          "mass_kg": 10275222052524.586,
+          "theta_integral_kg_K": 3216144502440195,
+          "max_mass_drift_kg": 1.3906681488151662e-05,
+          "mass_allowance_kg": 0.6675096520656537,
+          "max_theta_drift_kg_K": 1.1364029588366975,
+          "theta_allowance_kg_K": 564.7180362558447,
+          "constant_theta": false
+        }
+      },
+      "inverse_window": {
+        "analysis_steps": 8,
+        "forecast_steps": 4,
+        "dt_seconds": 0.25,
+        "withheld_time_seconds": 3,
+        "field_rmse_withheld": {
+          "background_W_m_s": 0.0018619287145672533,
+          "analysis_W_m_s": 9.25634631964314e-05,
+          "background_PH_m2_s2": 0.4136010757940999,
+          "analysis_PH_m2_s2": 0.001708720988336704,
+          "background_MU_Pa": 0.7247657840995816,
+          "analysis_MU_Pa": 0.18079748562102563,
+          "background_theta_K": 1.5967455450052754e-06,
+          "analysis_theta_K": 4.114868881712922e-08
+        },
+        "heldout_W": {
+          "resolved": true,
+          "background_error_norm": 0.023668107709200487,
+          "analysis_error_norm": 0.0002764427028212011,
+          "roundoff_floor": 1.1368683772161603e-13,
+          "prefix_and_replay": "exact"
+        },
+        "inverse_summary": {
+          "objective_initial": 1.9468046481991412,
+          "objective_final": 0.005281047502848584,
+          "gradient_initial_norm": 49.70387563582622,
+          "gradient_final_norm": 3.927804010936021e-08,
+          "initial_physical_W_rmse_m_s": 0.00139527941581575,
+          "final_physical_W_rmse_m_s": 1.4986150517280887e-05,
+          "accepted_steps": 2,
+          "rejected_steps": 0
+        }
+      },
+      "support_limits": [
+        "TileCase uses flat terrain in this pilot",
+        "Kv=0, so active vertical scalar mixing was not exercised",
+        "This does not validate nonzero-terrain theta scalar diffusion"
+      ]
+    },
+    "fixed_data_time_refinement": {
+      "log": "/private/tmp/fp64-fixed-data-pilot.log",
+      "exit_status": 0,
+      "elapsed_seconds": 1748.51,
+      "fixed_observations": {
+        "times_seconds": [
+          2,
+          4
+        ],
+        "forecast_time_seconds": 6,
+        "sigma": 0.010246950765959599,
+        "coarse_and_fine_observations_equal": true
+      },
+      "coarse_dt_0p25": {
+        "analysis_steps": 16,
+        "forecast_steps": 8,
+        "dry_budget": {
+          "truth": {
+            "mass_kg": 10275219780448.572,
+            "theta_integral_kg_K": 3185318131939057.5,
+            "max_mass_drift_kg": 4.403747880132869e-05,
+            "mass_allowance_kg": 1.3350131048080185,
+            "max_theta_drift_kg_K": 0.01821057152119465,
+            "theta_allowance_kg_K": 961.2194084346276,
+            "constant_theta": true
+          },
+          "background": {
+            "mass_kg": 10275228918281.586,
+            "theta_integral_kg_K": 3185320964667292,
+            "max_mass_drift_kg": 0,
+            "mass_allowance_kg": 1.3350380372401536,
+            "max_theta_drift_kg_K": 0,
+            "theta_allowance_kg_K": 961.2273868129107,
+            "constant_theta": true
+          },
+          "analysis": {
+            "mass_kg": 10275220541746.23,
+            "theta_integral_kg_K": 3185318367941331,
+            "max_mass_drift_kg": 2.781337570922915e-05,
+            "mass_allowance_kg": 1.3350151819965725,
+            "max_theta_drift_kg_K": 0.013518913743610028,
+            "theta_allowance_kg_K": 961.2200731349649,
+            "constant_theta": true
+          }
+        },
+        "withheld_W": {
+          "resolved": true,
+          "background_error_norm": 0.03823210960099569,
+          "analysis_error_norm": 0.00016520432207462005,
+          "roundoff_floor": 1.1368683772161603e-13
+        },
+        "inverse_summary": {
+          "objective_initial": 5.563304077044181,
+          "objective_final": 0.005464955351996509,
+          "gradient_initial_norm": 167.68169381864476,
+          "gradient_final_norm": 1.1764518993396078e-07,
+          "initial_physical_W_rmse_m_s": 0.002358665740846757,
+          "final_physical_W_rmse_m_s": 1.0097869195302388e-05,
+          "accepted_steps": 2,
+          "rejected_steps": 0
+        }
+      },
+      "fine_dt_0p125": {
+        "analysis_steps": 32,
+        "forecast_steps": 16,
+        "dry_budget": {
+          "truth": {
+            "mass_kg": 10275219780448.572,
+            "theta_integral_kg_K": 3185318131939057.5,
+            "max_mass_drift_kg": 8.112192790576955e-05,
+            "mass_allowance_kg": 2.6700262096160396,
+            "max_theta_drift_kg_K": 0.02265358399381512,
+            "theta_allowance_kg_K": 1922.438816869255,
+            "constant_theta": true
+          },
+          "background": {
+            "mass_kg": 10275228918281.586,
+            "theta_integral_kg_K": 3185320964667292,
+            "max_mass_drift_kg": 0,
+            "mass_allowance_kg": 2.6700760744803067,
+            "max_theta_drift_kg_K": 0,
+            "theta_allowance_kg_K": 1922.454773625822,
+            "constant_theta": true
+          },
+          "analysis": {
+            "mass_kg": 10275220541747.66,
+            "theta_integral_kg_K": 3185318367941775.5,
+            "max_mass_drift_kg": 3.708439544425346e-05,
+            "mass_allowance_kg": 2.6700303640009717,
+            "max_theta_drift_kg_K": 0.052245898586988915,
+            "theta_allowance_kg_K": 1922.4401462724338,
+            "constant_theta": true
+          }
+        },
+        "withheld_W": {
+          "resolved": true,
+          "background_error_norm": 0.03823223400502768,
+          "analysis_error_norm": 0.0001652138471891039,
+          "roundoff_floor": 1.1368683772161603e-13
+        },
+        "inverse_summary": {
+          "objective_initial": 5.563304077044181,
+          "objective_final": 0.00546494343357971,
+          "gradient_initial_norm": 167.6820880308339,
+          "gradient_final_norm": 1.1746845560343105e-07,
+          "initial_physical_W_rmse_m_s": 0.002358665740846757,
+          "final_physical_W_rmse_m_s": 1.0097846751874246e-05,
+          "accepted_steps": 2,
+          "rejected_steps": 0
+        }
+      },
+      "logged_fixed_data_refinement": {
+        "coarse_steps": 16,
+        "coarse_dt_seconds": 0.25,
+        "fine_steps": 32,
+        "fine_dt_seconds": 0.125,
+        "observation_times_seconds": [
+          2,
+          4
+        ],
+        "forecast_time_seconds": 6,
+        "data_equal": true,
+        "control_delta_norm": 1.5200349575364493e-07,
+        "objective_delta": 1.1918416798623044e-08,
+        "baseline_gradient_delta_norm": 0.00039514930202469244,
+        "max_solve_gradient_delta_norm": 0,
+        "time_signal_resolved": true,
+        "withheld_W_delta": 1.0073050971052318e-08,
+        "withheld_PH_delta": 5.510480617267316e-07,
+        "withheld_MU_delta": 3.345333364757018e-07,
+        "withheld_theta_delta": 4.997664557318008e-14
+      },
+      "coarse_fine_truth_caveat": "Fine and coarse forecasts use the same SDIRK model. Fixed data are held constant for this time-refinement comparison; this is not independent model validation."
+    }
+  },
+  "archived_production_wrf_rk3_reference": {
+    "metadata_file": "docs/evidence/fp64_carry_adjoint/wrf_validation.json",
+    "source_commit": "a3507049050bac7fd9ccadb60f71b28f97f8556a",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "strict_namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+    "archived_rk3_namelist_sha256": "173e0a89404203326c58c4d4c84d678658702cfb9208af388acc9bc1a202c8ba",
+    "strict_carry_run_16_steps": {
+      "sum_seconds": 7.167619999999999,
+      "mean_seconds": 0.44797624999999996,
+      "median_seconds": 0.434985,
+      "min_seconds": 0.42199,
+      "max_seconds": 0.52446
+    },
+    "archived_rk3_run_16_steps": {
+      "sum_seconds": 0.26174000000000003,
+      "mean_seconds": 0.01635875,
+      "median_seconds": 0.00284,
+      "min_seconds": 0.00259,
+      "max_seconds": 0.07927
+    },
+    "repeat_same_executable_frame_byte_identity": {
+      "00:00:00": true,
+      "00:02:00": true,
+      "00:04:00": true
+    },
+    "scope_note": "Historical em_b_wave reference metadata for reuse. It is separate from these 0.25-second synthetic inverse windows and does not validate the current numeric commit."
+  },
+  "validation_status": {
+    "final_ctest_complete": true,
+    "registered": 119,
+    "passed": 119,
+    "skipped": 0,
+    "failed": 0,
+    "last_recorded_progress": "119/119",
+    "pending_test": null,
+    "final_source_receipt": "source_receipt.json",
+    "local_suite_receipt": "local_suite.json",
+    "remote_ci_complete": true,
+    "remote_ci_run": 37114137980,
+    "pilot_binary_scope": "Detailed macOS metric logs are earlier completed pilots; final committed-source suite outcomes and binary hashes are separate in local_suite.json/source_receipt.json. No reconstructed pilot executable hash is claimed.",
+    "remote_all_required_jobs": "success"
+  },
+  "current_wrf_em_b_wave_validation": {
+    "metadata_file": "docs/evidence/fp64_window_forecast/wrf_validation.json",
+    "numeric_commit": "a3f0ee3af7704ca8580e7b7b2f0c55d4801ac608",
+    "validation_type": "affected C++ component clean rebuild; preserved Fortran/WRF objects; matching clang22 -O2 ABI1; incremental relink",
+    "library_sha256": "c04a39d8b34992fa36512c5bc22dec3740ba4a3e66f4a62b8def1e9d29140dc1",
+    "exe_sha256": "bf2c4a96964a65cccf6eeda6227976215e09dce7b21f0a450843fb5565dd1259",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+    "success": true,
+    "converged_implicit_stages": 48,
+    "max_scaled_residual": 5.1523e-09,
+    "finite_positive_frames": 3,
+    "step_log_sum_seconds": 6.499749999999999,
+    "archived_rk3_step_log_sum_seconds": 0.26174,
+    "timing_scope": "single-run step-log sum; not wall-time or equal-accuracy comparison",
+    "fp32_off_expected_failure": {
+      "expected_failure": true,
+      "exit": 1,
+      "first_failure_marker_equal_prior": true,
+      "newton_residual": 1.274e-06
+    },
+    "scope_note": "This is a successful WRF-parity carry validation. FP32-off is a falsifying expected-failure arm, not a successful run. The archived RK3 comparison is on the same input but timing is not a wall-time or equal-accuracy claim."
+  }
+}
