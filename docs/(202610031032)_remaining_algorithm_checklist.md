@@ -25,8 +25,7 @@ PR #271/#272 are review-ready candidates, not merged main features.
 - [x] Execute actual two-time inverse optimization, FD/Taylor, replay and independent linear-MAP checks using the existing implementation.
 - [x] Correct the root README's overly broad claim that no native observation-window adjoint is supplied.
 - [x] Validate affected regressions, refresh the source-matched graph and obtain independent Green/Red review.
-PR delivery and final exact-source remote CI are recorded below after completion;
-the local scientific checklist is closed without asserting an unfinished CI result.
+- [x] Deliver PR #273 and verify exact-source remote CI, with numerical scope and open integration state explicit.
 
 ## Subsequent checkpoints, not silently completed
 
@@ -113,3 +112,17 @@ full-PH integration attempt, and a setup-only RHS call before native context
 preparation. Neither is presented as a discovered production numerical defect.
 No acceptance threshold was expanded to pass either failure. The native delta
 formula and an actual measured window resolved them.
+
+## Final remote receipt
+
+Finalized: 2026-10-03 11:38:20 JST.
+[CI 37089213725](https://github.com/gonos2k/AD-SDIRK3/actions/runs/37089213725)
+ran at exact numerical/evidence HEAD `7dc5d10675f757d6eef0bd8726b2d1b1aeb9af5d`.
+All four required jobs succeeded. Raw Linux CTest confirms 116 registered,
+115 passed, one MPS-only skip, zero failures; FP64_Balanced_Inverse passed in
+47.37 s. This final receipt amendment changes documentation only after that
+run, with no changes to production/test/build/CI source. PR #273 is stacked
+on #272; the workflow was dispatched manually because its base is outside the
+main/ad-main automatic PR trigger. No PR in this open stack is merged here.
+The active bounded checklist above is complete; the separately named broader
+physical/window extensions are not reclassified as validated.

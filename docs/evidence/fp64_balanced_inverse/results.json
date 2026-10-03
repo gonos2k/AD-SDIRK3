@@ -489,5 +489,15 @@
   },
   "scope": "Native nonzero horizontally uniform hydrostatic background, not equilibrium control truth or realistic WRF/terrain/geostrophic assimilation",
   "new_WRF_RK3_forecast_run": false,
-  "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261003/fp64_balanced_inverse"
+  "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261003/fp64_balanced_inverse",
+  "remote_ci": {
+    "run_id": 37089213725,
+    "validated_head": "7dc5d10675f757d6eef0bd8726b2d1b1aeb9af5d",
+    "jobs_succeeded": 4,
+    "registered": 116,
+    "passed": 115,
+    "skipped": 1,
+    "failed": 0,
+    "balanced_seconds": 47.37
+  }
 }
