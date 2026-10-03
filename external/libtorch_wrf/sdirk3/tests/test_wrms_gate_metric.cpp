@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -58,6 +59,135 @@ int main() {
     require_close(growth_small, 0.5f, 2.0e-4f, "small-scale WRMS growth");
     require_close(growth_large, 0.5f, 2.0e-4f, "large-scale WRMS growth");
     require_close(growth_large / growth_small, 1.0f, 2.0e-4f, "WRMS scale invariance ratio");
+
+    // A stage-equation roundoff floor only resolves the construction
+    // G=Y-B-aF. It does not bound nonlinear RHS evaluation error.
+    const auto B=torch::tensor({1.0,-2.0,3.0},torch::kFloat64);
+    const auto Y=torch::tensor({1.1,-1.9,3.2},torch::kFloat64);
+    const auto K=torch::tensor({0.2,-0.4,0.1},torch::kFloat64);
+    const auto F=torch::tensor({0.1,-0.3,0.05},torch::kFloat64);
+    constexpr double stage_a=0.25;
+    const double eps64=std::numeric_limits<double>::epsilon();
+    const double gamma5=5.0*eps64/(1.0-5.0*eps64);
+    const auto expected_floor=gamma5*(B.abs()+Y.abs()+(stage_a*K).abs()+
+                                      (stage_a*F).abs())/stage_a;
+    const auto construction_floor=wrf::sdirk3::stage_equation_residual_roundoff(
+        B,Y,K,F,stage_a);
+    require_true(torch::allclose(construction_floor,expected_floor,1e-14,1e-30),
+                 "stage-equation roundoff floor formula");
+
+    const wrf::sdirk3::PackedBlockSizes floor_blocks{4,0,0,0,0,0};
+    const wrf::sdirk3::WRMSNormConfig floor_cfg{
+        /*rtol=*/1.0e-3f, /*atol_u=*/0.0f, /*atol_v=*/0.0f, /*atol_w=*/0.0f,
+        /*atol_ph=*/0.0f, /*atol_t=*/0.0f, /*atol_mu=*/0.0f, /*floor=*/0.0f};
+    const auto y_floor=torch::ones({4},torch::kFloat64);
+    const auto B_floor=torch::ones({4},torch::kFloat64);
+    const auto Y_floor=torch::ones({4},torch::kFloat64);
+    const auto K_floor=0.25*torch::ones({4},torch::kFloat64);
+    const auto F_floor=0.125*torch::ones({4},torch::kFloat64);
+    const auto residual_floor=wrf::sdirk3::stage_equation_residual_roundoff(
+        B_floor,Y_floor,K_floor,F_floor,0.5);
+    const auto residual_zero=torch::zeros_like(residual_floor);
+    const auto near_zero_residual=0.5*residual_floor;
+    const double near_zero_growth=scalar(wrf::sdirk3::wrms_growth_packed(
+        near_zero_residual,residual_zero,y_floor,floor_blocks,floor_cfg,residual_floor));
+    require_close(static_cast<float>(near_zero_growth),0.5f,2.0e-6f,
+                  "near-zero baseline uses the equation-roundoff denominator");
+
+    const auto resolved_initial=150.0*residual_floor;
+    const auto resolved_now=30000.0*residual_floor;
+    const double resolved_floor_norm=scalar(wrf::sdirk3::wrms_norm_packed(
+        residual_floor,y_floor,floor_blocks,floor_cfg));
+    const double resolved_initial_norm=scalar(wrf::sdirk3::wrms_norm_packed(
+        resolved_initial,y_floor,floor_blocks,floor_cfg));
+    const double resolved_growth=scalar(wrf::sdirk3::wrms_growth_packed(
+        resolved_now,resolved_initial,y_floor,floor_blocks,floor_cfg,residual_floor));
+    require_true(resolved_initial_norm>100.0*resolved_floor_norm,
+                 "resolved initial residual exceeds 100x its construction floor");
+    // The production growth cap remains 100: a resolved 200x increase must fail.
+    require_true(resolved_growth>100.0,"resolved WRMS growth still exceeds the unchanged rejection cap");
+
+    // Common equation scaling and replication must not change the floored ratio.
+    constexpr double common_scale=1.0e-6;
+    const auto scaled_floor=wrf::sdirk3::stage_equation_residual_roundoff(
+        common_scale*B_floor,common_scale*Y_floor,common_scale*K_floor,
+        common_scale*F_floor,0.5);
+    require_true(torch::allclose(scaled_floor,common_scale*residual_floor,1e-14,1e-35),
+                 "equation-roundoff floor scales linearly");
+    const double scaled_growth=scalar(wrf::sdirk3::wrms_growth_packed(
+        common_scale*resolved_now,common_scale*resolved_initial,common_scale*y_floor,
+        floor_blocks,floor_cfg,scaled_floor));
+    require_close(static_cast<float>(scaled_growth),static_cast<float>(resolved_growth),
+                  2.0e-6f,"common field scale invariance with residual floor");
+    const auto replicated_growth=scalar(wrf::sdirk3::wrms_growth_packed(
+        torch::cat({resolved_now,resolved_now}),torch::cat({resolved_initial,resolved_initial}),
+        torch::cat({y_floor,y_floor}),
+        wrf::sdirk3::PackedBlockSizes{8,0,0,0,0,0},floor_cfg,
+        torch::cat({residual_floor,residual_floor})));
+    require_close(static_cast<float>(replicated_growth),static_cast<float>(resolved_growth),
+                  2.0e-6f,"component-count invariance with residual floor");
+
+    const auto field_scales=torch::tensor({100.0,100.0,0.01,0.01},torch::kFloat64);
+    const auto multi_B=torch::tensor({1.0,1.0,2.0,2.0},torch::kFloat64);
+    const auto multi_Y=torch::tensor({1.0,1.0,3.0,3.0},torch::kFloat64);
+    const auto multi_K=torch::full({4},0.25,torch::kFloat64);
+    const auto multi_F=torch::full({4},0.125,torch::kFloat64);
+    const auto multi_floor=wrf::sdirk3::stage_equation_residual_roundoff(
+        multi_B,multi_Y,multi_K,multi_F,0.5);
+    const auto multi_initial=150.0*multi_floor;
+    const auto multi_now=3000.0*multi_floor;
+    const double multi_growth=scalar(wrf::sdirk3::wrms_growth_packed(
+        multi_now,multi_initial,multi_Y,
+        wrf::sdirk3::PackedBlockSizes{2,0,0,2,0,0},floor_cfg,multi_floor));
+    const auto scaled_multi_floor=wrf::sdirk3::stage_equation_residual_roundoff(
+        multi_B*field_scales,multi_Y*field_scales,multi_K*field_scales,
+        multi_F*field_scales,0.5);
+    const double field_scaled_growth=scalar(wrf::sdirk3::wrms_growth_packed(
+        multi_now*field_scales,multi_initial*field_scales,multi_Y*field_scales,
+        wrf::sdirk3::PackedBlockSizes{2,0,0,2,0,0},floor_cfg,scaled_multi_floor));
+    require_close(static_cast<float>(field_scaled_growth),static_cast<float>(multi_growth),
+                  2.0e-6f,"per-field scale invariance with residual floor");
+
+    const auto expect_invalid_floor_case=[&](const torch::Tensor& bad_floor,
+                                             const torch::Tensor& bad_now,
+                                             const std::string& label) {
+        bool rejected=false;
+        try { (void)wrf::sdirk3::wrms_growth_packed(
+            bad_now,resolved_initial,y_floor,floor_blocks,floor_cfg,bad_floor); }
+        catch(const std::invalid_argument&) { rejected=true; }
+        require_true(rejected,label);
+    };
+    expect_invalid_floor_case(torch::zeros({3},torch::kFloat64),resolved_now,
+                              "mismatched residual-floor shape is rejected");
+    expect_invalid_floor_case(residual_floor.to(torch::kFloat32),resolved_now,
+                              "non-FP64 residual floor is rejected");
+    expect_invalid_floor_case(torch::full({4},NAN,torch::kFloat64),resolved_now,
+                              "nonfinite residual floor is rejected");
+    expect_invalid_floor_case(-residual_floor,resolved_now,
+                              "negative residual floor is rejected");
+    expect_invalid_floor_case(residual_floor,torch::full({4},INFINITY,torch::kFloat64),
+                              "nonfinite WRMS residual is rejected");
+    bool invalid_y_rejected=false;
+    try { (void)wrf::sdirk3::wrms_growth_packed(
+        resolved_now,resolved_initial,torch::full({4},NAN,torch::kFloat64),
+        floor_blocks,floor_cfg,residual_floor); }
+    catch(const std::invalid_argument&) { invalid_y_rejected=true; }
+    require_true(invalid_y_rejected,"nonfinite WRMS reference is rejected");
+    bool invalid_helper_rejected=false;
+    try { (void)wrf::sdirk3::stage_equation_residual_roundoff(
+        B_floor,Y_floor,K_floor,F_floor,0.0); }
+    catch(const std::invalid_argument&) { invalid_helper_rejected=true; }
+    require_true(invalid_helper_rejected,"nonpositive stage diagonal is rejected");
+    invalid_helper_rejected=false;
+    try { (void)wrf::sdirk3::stage_equation_residual_roundoff(
+        B_floor.to(torch::kFloat32),Y_floor,K_floor,F_floor,0.5); }
+    catch(const std::invalid_argument&) { invalid_helper_rejected=true; }
+    require_true(invalid_helper_rejected,"non-FP64 stage equation input is rejected");
+    invalid_helper_rejected=false;
+    try { (void)wrf::sdirk3::stage_equation_residual_roundoff(
+        B_floor,Y_floor,K_floor,torch::full({4},INFINITY,torch::kFloat64),0.5); }
+    catch(const std::invalid_argument&) { invalid_helper_rejected=true; }
+    require_true(invalid_helper_rejected,"nonfinite stage RHS input is rejected");
 
     const wrf::sdirk3::PackedBlockSizes multi_blocks{
         /*u=*/4, /*v=*/4, /*w=*/4, /*ph=*/4, /*t=*/4, /*mu=*/4

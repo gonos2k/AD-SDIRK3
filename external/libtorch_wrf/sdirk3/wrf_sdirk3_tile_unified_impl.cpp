@@ -13795,10 +13795,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_wrms_norm_ = 0.0f;
     last_stage_wrms_growth_ = 0.0f;
 
+    bool stage_residual_roundoff_limited = false;
     auto update_stage_wrms_metric = [&](const torch::Tensor& residual,
                                         const torch::Tensor& y_ref,
+                                        const torch::Tensor& evaluated_rhs,
                                         const char* label) {
         try {
+            stage_residual_roundoff_limited = false;
             if (!residual.defined() || !y_ref.defined() || !stats.initial_residual_vector.defined()) {
                 throw std::runtime_error("missing residual/y_ref/R0 tensor");
             }
@@ -13811,10 +13814,38 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
             }
             const auto cfg = wrms_gate_config_for_stage();
             torch::NoGradGuard no_grad;
+            torch::Tensor roundoff_floor;
+            if (wrf::sdirk3::g_sdirk3_config.internal_fp64 &&
+                y.scalar_type() == torch::kFloat64) {
+                // G(Y)=Y-B-aF(Y)=a(K-F(Y)) in exact arithmetic. Relative
+                // growth is unresolved below the equivalent stage-equation
+                // construction precision, measured in the same tendency
+                // coordinates/WRMS weights as R. This is not a bound on J_F.
+                roundoff_floor = wrf::sdirk3::stage_equation_residual_roundoff(
+                    U_stage.detach().to(torch::kCPU).contiguous().view({-1}), y,
+                    k.detach().to(torch::kCPU).contiguous().view({-1}),
+                    evaluated_rhs.detach().to(torch::kCPU).contiguous().view({-1}),
+                    dt*a_ii);
+            }
             last_stage_wrms_norm_ = wrf::sdirk3::wrms_norm_packed(r_now, y, blocks, cfg)
                 .detach().to(torch::kCPU).item<double>();
-            last_stage_wrms_growth_ = wrf::sdirk3::wrms_growth_packed(r_now, r0, y, blocks, cfg)
+            last_stage_wrms_growth_ = wrf::sdirk3::wrms_growth_packed(r_now, r0, y, blocks, cfg,roundoff_floor)
                 .detach().to(torch::kCPU).item<double>();
+            if (roundoff_floor.defined()) {
+                stage_residual_roundoff_limited = last_stage_wrms_norm_ <=
+                    wrf::sdirk3::guarded_item<double>(
+                        wrf::sdirk3::wrms_norm_packed(roundoff_floor,y,blocks,cfg));
+            }
+            if (roundoff_floor.defined() &&
+                probe_env_enabled("WRF_SDIRK3_STAGE_RESID_BLOCKS")) {
+                std::cerr << "[WRMS GATE] Stage " << stage << " " << label
+                          << " initial=" << wrf::sdirk3::guarded_item<double>(
+                              wrf::sdirk3::wrms_norm_packed(r0,y,blocks,cfg))
+                          << " now=" << last_stage_wrms_norm_
+                          << " construction_floor=" << wrf::sdirk3::guarded_item<double>(
+                              wrf::sdirk3::wrms_norm_packed(roundoff_floor,y,blocks,cfg))
+                          << " resolved_growth=" << last_stage_wrms_growth_ << std::endl;
+            }
         } catch (const std::exception& e) {
             constexpr float SENTINEL = 1e8f;
             last_stage_wrms_norm_ = SENTINEL;
@@ -14051,7 +14082,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 // v20.14r27y: Also update R_full_norm for mode>=2 so post-damp
                 // uses the fast residual (not a stale value from a previous stage).
                 last_stage_R_full_norm_ = fast_resid;
-                update_stage_wrms_metric(R_fast_vec, U_new, "fast residual");
+                update_stage_wrms_metric(R_fast_vec, U_new, F_fast_final, "fast residual");
 
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     std::cerr << "[RESIDUAL_REEVAL] Stage " << stage
@@ -14091,7 +14122,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 last_stage_rel_R_full_ = rel_R_full;
                 last_stage_rel_R_full_raw_ = rel_R_full_raw;  // v20.14r41: raw for post-damp
                 last_stage_R_full_norm_ = R_full_norm;
-                update_stage_wrms_metric(R_full_cpu, U_new, "full residual");
+                update_stage_wrms_metric(R_full_cpu, U_new, F_full_check, "full residual");
 
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     std::cerr << "[RESIDUAL_REEVAL] Stage " << stage << ": "
@@ -14153,7 +14184,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         // K_floor stabilizes the stage gate but would suppress damping here.
         // When K is small, raw ratio is large → correctly triggers damping.
         const float REL_R_FULL_DAMP_THRESHOLD = wrf::sdirk3::g_sdirk3_config.stage_damp_rel_threshold;
-        if (last_stage_rel_R_full_raw_ > REL_R_FULL_DAMP_THRESHOLD) {
+        // A converged FP64 root whose defect is below construction precision
+        // has no resolved damping signal. Scaling that root under NoGradGuard
+        // would discard its implicit pullback while finite perturbations keep
+        // theirs, producing a different derivative at equilibrium.
+        if (last_stage_rel_R_full_raw_ > REL_R_FULL_DAMP_THRESHOLD &&
+            !(last_stage_converged_ && stage_residual_roundoff_limited)) {
+            TORCH_CHECK(!wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint,
+                        "converged-stage pullback does not support resolved post-solve damping");
             torch::NoGradGuard no_grad;
             float pre_damp_rel = last_stage_rel_R_full_raw_;
             float extra_damp = REL_R_FULL_DAMP_THRESHOLD / pre_damp_rel;
@@ -14203,7 +14241,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                     // Keep pre_damp_rel for stage gate diagnostic; only update R_full_norm
                     // (actual post-damp residual used for absolute indicator).
                     last_stage_R_full_norm_ = R_post_abs_global;
-                    update_stage_wrms_metric(R_post_vec, U_new_post, "post-damp residual");
+                    update_stage_wrms_metric(R_post_vec, U_new_post, F_post, "post-damp residual");
                     std::cerr << "[NEWTON DAMP] Stage " << stage
                               << ": accepted (||R|| " << R_pre_abs_global
                               << " → " << R_post_abs_global << ", damp=" << extra_damp

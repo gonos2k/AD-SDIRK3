@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 #include <stdexcept>
 
@@ -48,6 +49,46 @@ inline torch::Tensor rms_norm_fp64(const torch::Tensor& v) {
     const auto x = v.to(torch::kFloat64);
     const auto n = static_cast<double>(x.numel());
     return torch::sqrt((x * x).sum() / n);
+}
+
+// Componentwise first-order construction floor for the stage equation
+// G = Y - B - a*F. This is a precision estimate for forming that identity in
+// FP64, not an error bound on evaluating the full nonlinear RHS F(Y).
+inline torch::Tensor stage_equation_residual_roundoff(const torch::Tensor& B,
+                                                       const torch::Tensor& Y,
+                                                       const torch::Tensor& K,
+                                                       const torch::Tensor& F,
+                                                       double a) {
+    if (!std::isfinite(a) || a <= 0.0) {
+        throw std::invalid_argument("stage_equation_residual_roundoff: a must be finite and positive");
+    }
+    if (!B.defined() || !Y.defined() || !K.defined() || !F.defined() ||
+        B.dim() != 1 || Y.dim() != 1 || K.dim() != 1 || F.dim() != 1 ||
+        B.numel() == 0 || B.sizes() != Y.sizes() || B.sizes() != K.sizes() ||
+        B.sizes() != F.sizes() || B.scalar_type() != torch::kFloat64 ||
+        Y.scalar_type() != torch::kFloat64 || K.scalar_type() != torch::kFloat64 ||
+        F.scalar_type() != torch::kFloat64 || B.device() != Y.device() ||
+        B.device() != K.device() || B.device() != F.device()) {
+        throw std::invalid_argument(
+            "stage_equation_residual_roundoff: expected matching nonempty FP64 packed vectors");
+    }
+    torch::NoGradGuard no_grad;
+    for (const auto* value : {&B, &Y, &K, &F}) {
+        if (!torch::isfinite(*value).all().item<bool>()) {
+            throw std::invalid_argument(
+                "stage_equation_residual_roundoff: inputs must be finite");
+        }
+    }
+    const double eps = std::numeric_limits<double>::epsilon();
+    constexpr double operation_count = 5.0;
+    const double gamma5 = operation_count * eps / (1.0 - operation_count * eps);
+    const auto floor = gamma5 *
+        (B.abs() + Y.abs() + (a * K).abs() + (a * F).abs()) / a;
+    if (!torch::isfinite(floor).all().item<bool>()) {
+        throw std::invalid_argument(
+            "stage_equation_residual_roundoff: calculated floor is non-finite");
+    }
+    return floor;
 }
 
 // Relative residual contract: RMS(R) / max(RMS(K), K_floor), with K_floor
@@ -184,11 +225,49 @@ inline torch::Tensor wrms_growth_packed(const torch::Tensor& r_now,
                                         const torch::Tensor& r0,
                                         const torch::Tensor& y_ref,
                                         const PackedBlockSizes& blocks,
-                                        const WRMSNormConfig& cfg) {
+                                        const WRMSNormConfig& cfg,
+                                        const torch::Tensor& residual_floor = torch::Tensor()) {
     const auto now = wrms_norm_packed(r_now, y_ref, blocks, cfg);
     const auto initial = wrms_norm_packed(r0, y_ref, blocks, cfg);
     const auto eps = torch::full({}, static_cast<double>(std::max(cfg.floor, 1.0e-20f)), now.options());
-    return now / torch::maximum(initial, eps);
+    if (!residual_floor.defined()) {
+        // Preserve the legacy FP32/FP64 calculation exactly when no floor is supplied.
+        return now / torch::maximum(initial, eps);
+    }
+
+    if (r_now.scalar_type() != torch::kFloat64 || r0.scalar_type() != torch::kFloat64 ||
+        y_ref.scalar_type() != torch::kFloat64 || residual_floor.scalar_type() != torch::kFloat64 ||
+        r_now.dim() != 1 || r0.sizes() != r_now.sizes() || y_ref.sizes() != r_now.sizes() ||
+        residual_floor.sizes() != r_now.sizes() || r_now.device() != r0.device() ||
+        r_now.device() != y_ref.device() || r_now.device() != residual_floor.device()) {
+        throw std::invalid_argument(
+            "wrms_growth_packed: residual floor requires matching FP64 packed vectors");
+    }
+    torch::NoGradGuard no_grad;
+    for (const auto* value : {&r_now, &r0, &y_ref, &residual_floor}) {
+        if (!torch::isfinite(*value).all().item<bool>()) {
+            throw std::invalid_argument("wrms_growth_packed: floor and inputs must be finite");
+        }
+    }
+    if ((residual_floor < 0.0).any().item<bool>()) {
+        throw std::invalid_argument("wrms_growth_packed: residual floor must be nonnegative");
+    }
+    const std::pair<float, const char*> config_values[] = {
+        {cfg.rtol,"rtol"},{cfg.atol_u,"atol_u"},{cfg.atol_v,"atol_v"},
+        {cfg.atol_w,"atol_w"},{cfg.atol_ph,"atol_ph"},{cfg.atol_t,"atol_t"},
+        {cfg.atol_mu,"atol_mu"},{cfg.floor,"floor"}
+    };
+    for (const auto& value : config_values) {
+        if (!std::isfinite(value.first) || value.first < 0.0f) {
+            throw std::invalid_argument(std::string("wrms_growth_packed: invalid ")+value.second);
+        }
+    }
+    const auto floor_wrms=wrms_norm_packed(residual_floor,y_ref,blocks,cfg);
+    if (!torch::isfinite(now).item<bool>() || !torch::isfinite(initial).item<bool>() ||
+        !torch::isfinite(floor_wrms).item<bool>()) {
+        throw std::invalid_argument("wrms_growth_packed: weighted norm is non-finite");
+    }
+    return now / torch::maximum(torch::maximum(initial,eps),floor_wrms);
 }
 
 }  // namespace sdirk3
