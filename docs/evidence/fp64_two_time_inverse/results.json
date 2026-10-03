@@ -1,0 +1,152 @@
+{
+  "base": "0b3798e2696df8fe3fafc025789e086735833524",
+  "observation_steps": [
+    2,
+    4
+  ],
+  "dt_seconds": 0.25,
+  "controls": [
+    {
+      "index": 0.0,
+      "fd": -11.351270626592752,
+      "adjoint_background": -11.35127062658648,
+      "gradient_final": -7.706929330830725e-10,
+      "budget": 0.005675635334421342,
+      "estimate": 0.05968428867837638,
+      "reference": 0.05968429098129441
+    },
+    {
+      "index": 1.0,
+      "fd": 7.5677904466143255,
+      "adjoint_background": 7.5677904465703785,
+      "gradient_final": 3.515060388592506e-09,
+      "budget": 0.00378389524443213,
+      "estimate": -0.03978988429221743,
+      "reference": -0.03978994091651009
+    },
+    {
+      "index": 2.0,
+      "fd": -11.583476777235962,
+      "adjoint_background": -11.583476784705201,
+      "gradient_final": -6.76846202002368e-09,
+      "budget": 0.00579173841350176,
+      "estimate": 0.0497856420298553,
+      "reference": 0.0497856720608755
+    },
+    {
+      "index": 3.0,
+      "fd": 8.108639209518175,
+      "adjoint_background": 8.108639224285492,
+      "gradient_final": 4.503838767211388e-09,
+      "budget": 0.004054319633291934,
+      "estimate": -0.03484912350639039,
+      "reference": -0.034849135572023036
+    },
+    {
+      "index": 4.0,
+      "fd": -0.0341129114735883,
+      "adjoint_background": -0.03411291139839874,
+      "gradient_final": -5.960026916440597e-11,
+      "budget": 1.7056476754700965e-05,
+      "estimate": 0.01839559261552748,
+      "reference": 0.01840168813681888
+    },
+    {
+      "index": 5.0,
+      "fd": 0.02118008910581559,
+      "adjoint_background": 0.021180089096579872,
+      "gradient_final": 4.104896630940935e-11,
+      "budget": 1.0590065570815698e-05,
+      "estimate": -0.011507709865514724,
+      "reference": -0.01151006278096657
+    }
+  ],
+  "singular_values": [
+    {
+      "index": 0.0,
+      "terminal": 13.606979672252965,
+      "both": 15.227742675017822
+    },
+    {
+      "index": 1.0,
+      "terminal": 13.599701403755981,
+      "both": 15.22083133342414
+    },
+    {
+      "index": 2.0,
+      "terminal": 9.706368577623987,
+      "both": 13.754797176328111
+    },
+    {
+      "index": 3.0,
+      "terminal": 9.706278126237574,
+      "both": 13.754701932119257
+    },
+    {
+      "index": 4.0,
+      "terminal": 0.8260248264026799,
+      "both": 0.9240382176876409
+    },
+    {
+      "index": 5.0,
+      "terminal": 0.8247619810314699,
+      "both": 0.9228384331459483
+    }
+  ],
+  "accepted_steps": [
+    "TWO_TIME_STEP iter=0 alpha=1 J=0.92433102274053536 -> 0.0049525852842408017 data=0.0002977687588497902 |g|=19.648190091189843",
+    "TWO_TIME_STEP iter=1 alpha=1 J=0.0049525852842408017 -> 0.0049525852443006438 data=0.00029791225302780542 |g|=1.787203239448333e-05"
+  ],
+  "identifiability": {
+    "rows": 210.0,
+    "rank": 6.0,
+    "smax": 15.227742675017822,
+    "smin": 0.9228384331459483,
+    "cond": 16.500984493143157,
+    "fd_uncertainty": 1.64642457353079e-08,
+    "sigma_physical": 0.010246950765959599
+  },
+  "terminal_only": {
+    "smax": 13.606979672252965,
+    "smin": 0.8247619810314699,
+    "cond": 16.498068515762213
+  },
+  "summary": {
+    "J_initial": 0.9243310227405354,
+    "J_final": 0.004952585244300644,
+    "data_initial": 0.9243310227405354,
+    "data_final": 0.0002979122530278054,
+    "gradient_initial": 19.648190091189843,
+    "gradient_final": 8.891090827329066e-09,
+    "physical_rmse_initial": 0.000961421355463116,
+    "physical_rmse_final": 1.726013479170442e-05,
+    "linear_gap": 6.534206148650949e-06,
+    "accepted": 2.0,
+    "rejected": 0.0
+  },
+  "mutation": {
+    "omitted_error": 7.41899633391224,
+    "shifted_error": 1.42391076181649,
+    "budget": 0.009824095087201903
+  },
+  "mu_variance": {
+    "terminal_mu4": 0.595119503731131,
+    "both_mu4": 0.54003271920467,
+    "terminal_mu5": 0.5944545695815324,
+    "both_mu5": 0.5394507002968724
+  },
+  "executable_sha256": "b8a88237badfc8b320b0a7c54c8556b468ec1240f2ce93482ff0b7ee0f8570d9",
+  "source_commit": "7557c84a6c385b8813a009eb58fcf40901150c69",
+  "local_tests": {
+    "registered": 114,
+    "passed": 114,
+    "failed": 0,
+    "seconds": 240.99
+  },
+  "new_wrf_rk3_run": false,
+  "graph": {
+    "nodes": 402,
+    "edges": 23308,
+    "source_verified": true
+  }
+}

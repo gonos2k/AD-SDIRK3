@@ -42416,19 +42416,64 @@ void TileSDIRK3UnifiedSolver::recordFixedTrajectoryStep(const torch::Tensor& inp
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::pullbackFixedTrajectory(const torch::Tensor& terminal) {
+    std::vector<torch::Tensor> step_output_cotangents;
+    if (fixed_trajectory_expected_ > 0) {
+        step_output_cotangents.resize(static_cast<size_t>(fixed_trajectory_expected_));
+    }
+    if (!step_output_cotangents.empty()) step_output_cotangents.back() = terminal;
+    return pullbackFixedTrajectoryImpl(step_output_cotangents, /*terminal_adapter=*/true);
+}
+
+torch::Tensor TileSDIRK3UnifiedSolver::pullbackFixedTrajectory(
+    const std::vector<torch::Tensor>& step_output_cotangents) {
+    return pullbackFixedTrajectoryImpl(step_output_cotangents, /*terminal_adapter=*/false);
+}
+
+torch::Tensor TileSDIRK3UnifiedSolver::pullbackFixedTrajectoryImpl(
+    const std::vector<torch::Tensor>& step_output_cotangents,
+    bool terminal_adapter) {
     TORCH_CHECK(fixed_trajectory_open_ && fixed_trajectory_steps_.size() ==
                 static_cast<size_t>(fixed_trajectory_expected_), "fixed trajectory incomplete");
     checkFixedTrajectoryFingerprint();
-    TORCH_CHECK(terminal.defined() &&
-                wrf::sdirk3::guarded_item<bool>(torch::isfinite(terminal).all()), "invalid terminal");
-    auto lambda = terminal;
-    for (auto it = fixed_trajectory_steps_.rbegin(); it != fixed_trajectory_steps_.rend(); ++it) {
-        TORCH_CHECK(std::isfinite(it->dt) && it->dt > 0.0f,
+    TORCH_CHECK(step_output_cotangents.size() ==
+                static_cast<size_t>(fixed_trajectory_expected_),
+                "fixed trajectory cotangent count mismatch");
+    if (terminal_adapter) {
+        TORCH_CHECK(!step_output_cotangents.empty() &&
+                    step_output_cotangents.back().defined() &&
+                    wrf::sdirk3::guarded_item<bool>(
+                        torch::isfinite(step_output_cotangents.back()).all()),
+                    "invalid terminal");
+    }
+
+    // Validate every supplied output cotangent before any reverse autograd call.
+    for (size_t reverse = fixed_trajectory_steps_.size(); reverse > 0; --reverse) {
+        const size_t i = reverse - 1;
+        const auto& step = fixed_trajectory_steps_[i];
+        const auto& g = step_output_cotangents[i];
+        TORCH_CHECK(std::isfinite(step.dt) && step.dt > 0.0f,
                     "fixed trajectory recorded invalid timestep");
-        TORCH_CHECK(lambda.sizes() == it->output.sizes() && lambda.options().type_equal(it->output.options()),
-                    "fixed trajectory cotangent shape/type mismatch");
-        lambda = torch::autograd::grad({it->output}, {it->input}, {lambda}, true, false)[0];
-        TORCH_CHECK(lambda.defined() && lambda.numel() == terminal.numel() &&
+        if (!g.defined()) continue;
+        TORCH_CHECK(g.sizes() == step.output.sizes() &&
+                    g.options().type_equal(step.output.options()),
+                    terminal_adapter && i + 1 == step_output_cotangents.size()
+                        ? "fixed trajectory cotangent shape/type mismatch"
+                        : "fixed trajectory step cotangent shape/type mismatch");
+        TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(g).all()),
+                    terminal_adapter && i + 1 == step_output_cotangents.size()
+                        ? "invalid terminal"
+                        : "fixed trajectory step cotangent is non-finite");
+    }
+
+    auto lambda = torch::zeros_like(fixed_trajectory_steps_.back().output);
+    for (size_t reverse = fixed_trajectory_steps_.size(); reverse > 0; --reverse) {
+        const size_t i = reverse - 1;
+        const auto& step = fixed_trajectory_steps_[i];
+        const auto& g = step_output_cotangents[i];
+        if (g.defined()) lambda = lambda + g;
+        lambda = torch::autograd::grad({step.output}, {step.input}, {lambda}, true, false)[0];
+        TORCH_CHECK(lambda.defined() &&
+                    lambda.numel() == fixed_trajectory_steps_.front().input.numel() &&
                     wrf::sdirk3::guarded_item<bool>(torch::isfinite(lambda).all()),
                     "fixed trajectory reverse produced invalid gradient");
     }

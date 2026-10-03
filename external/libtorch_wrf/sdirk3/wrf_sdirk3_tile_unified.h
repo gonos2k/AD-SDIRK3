@@ -822,6 +822,9 @@ public:
     bool fixedTrajectoryRequested() const { return fixed_trajectory_requested_; }
     void cancelFixedTrajectoryRequest();
     torch::Tensor pullbackFixedTrajectory(const torch::Tensor& terminal_cotangent);
+    // Per-accepted-step output cotangents, indexed Z1 ... ZN. Undefined entries are zero.
+    torch::Tensor pullbackFixedTrajectory(
+        const std::vector<torch::Tensor>& step_output_cotangents);
     std::vector<torch::Tensor> getFixedTrajectoryFp64Checkpoints() const;
     void closeFixedTrajectory();
     torch::Tensor runAdjointReplay(const torch::Tensor& lambda_terminal,
@@ -2259,6 +2262,9 @@ private:
                                    const torch::Tensor& output,
                                    const torch::Tensor& fphys,
                                    float dt);
+    torch::Tensor pullbackFixedTrajectoryImpl(
+        const std::vector<torch::Tensor>& step_output_cotangents,
+        bool terminal_adapter);
     // Raw U-staggered map-factor verification (external review rounds 3/3b/3c):
     // the periodic-x preprocessing repairs raw zero msfux/msfuy entries to a fallback
     // value, so the split guard cannot trust the (repaired) member tensors. These flags
