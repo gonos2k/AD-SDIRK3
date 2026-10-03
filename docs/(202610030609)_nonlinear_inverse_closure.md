@@ -18,8 +18,7 @@ stronger nonlinearity in the established six-control, dry fixed-K CPU tile.
 - [x] Compare the converged point with a tighter Newton solve and demonstrate nonlinear-versus-background-linear separation above numerical estimates.
 - [x] Check exact replay of cost, gradient and all internal FP64 checkpoints.
 - [x] Final rebuilt native CTest inventory, source/executable manifest and Green/Red review.
-Remote exact-HEAD required CI and PR delivery are tracked by the final PR checks;
-this scientific checklist does not assert their outcome before completion.
+- [x] Deliver PR #272 ready for review and verify all four CI jobs on numerical/evidence HEAD `6fa9101`.
 
 Production spatial equations, the carried trajectory adjoint, solver options,
 Fortran ABI and external observations are unchanged. This is an executable native
@@ -107,6 +106,19 @@ alignment of filename/header timestamps, which is resolved; both teams
 confirmed initial-only caps and non-rigorous estimate scope. Related weak terminal/two-time, carry,
 ABI and core regressions use the existing CMake entry points. The registered
 inventory is now 115 with matching CI name and documentation contracts.
+
+Final remote receipt: [CI run 37066138671](https://github.com/gonos2k/AD-SDIRK3/actions/runs/37066138671)
+ran on exact HEAD `6fa9101b3dcfdb7d4217e06c1c4a60fbf41bf83d`. All four jobs
+(fast-contracts, core-linux, build-contract-negatives, required) succeeded.
+Raw Linux CTest log confirms 115 registered: 114 passed, one MPS skip,
+zero failures. The nonlinear inverse passed in 242.28 s. PR #272 is ready,
+stacked on #271; the linked workflow was manually dispatched because its
+feature-branch base is outside the automatic main/ad-main trigger.
+
+This final receipt is a documentation-only amendment after that verified run.
+The numerical source and tested executable remain those recorded above;
+no production/test/CMake/CI source changes followed validation. Raw CI logs and
+the final delivery manifest are archived with the local receipts.
 
 Graphify was reused for navigation before editing and refreshed on the affected
 four-file corpus after the source changes. Owning source copies are byte-checked;
