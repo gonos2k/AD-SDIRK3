@@ -195,6 +195,17 @@ These estimates are engineering comparisons, not rigorous error bounds. This
 large, unbalanced dry twin tests optimizer coupling; it does not validate realistic
 balanced meteorological initial conditions or a full WRF assimilation window.
 
+`FP64_Balanced_Inverse` (`--balanced`) first checks a nonzero horizontally
+uniform dry hydrostatic background: theta=310 K, dry column mass=84000 Pa,
+zero winds and an EOS-consistent geopotential perturbation. For this uniform
+sigma fixture, prescribed pressure perturbations are `eta_mid*4000 Pa`; native
+EOS inversion supplies the layer geopotential increments. The example requires
+native pressure/density consistency, small Full RHS, Full=Explicit+Implicit and
+four-step stationarity before reusing the six-control, fixed-R two-time inverse.
+The truth contains dynamical W/PH/MU perturbations; it is not an equilibrium.
+This rest-state gate does not cover terrain, general hybrid coefficients,
+geostrophic balance or realistic WRF initial-condition assimilation.
+
 The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
 (`share/module_model_constants.F:88`), fixed as `kWrfWAlpha` in
 `wrf_sdirk3_w_damping.h` — WRF exposes no namelist for it, so neither do we.
@@ -288,7 +299,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 115-test CTest inventory**, pinned by
+The CMake tree registers an **exact 116-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
