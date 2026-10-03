@@ -598,6 +598,7 @@ add_test(NAME FP64_Carry_Adjoint COMMAND test_fp64_carry_adjoint)
 add_test(NAME FP64_Initial_Inverse COMMAND test_fp64_carry_adjoint --inverse)
 add_test(NAME FP64_Two_Time_Inverse COMMAND test_fp64_carry_adjoint --two-times)
 add_test(NAME FP64_Nonlinear_Inverse COMMAND test_fp64_carry_adjoint --nonlinear)
+add_test(NAME FP64_Balanced_Inverse COMMAND test_fp64_carry_adjoint --balanced)
 
 add_executable(test_fixed_trajectory_lifecycle tests/test_fixed_trajectory_lifecycle.cpp)
 target_link_libraries(test_fixed_trajectory_lifecycle PRIVATE wrf_sdirk3::core)

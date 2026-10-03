@@ -7,6 +7,7 @@
 #include "../wrf_sdirk3_acoustic_substep.h"
 #include "../wrf_sdirk3_boundary_ad.h"
 #include "../wrf_sdirk3_autograd_utils.h"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -156,6 +157,90 @@ struct TileCase {
     }
     torch::Tensor projectControlState(const torch::Tensor& state) {
         return solver.projectStateBoundaries(state);
+    }
+    torch::Tensor nonzeroHydrostaticBackground(double* native_pressure_floor = nullptr) {
+        constexpr double theta_perturbation=10.0;
+        constexpr double mass_perturbation=4000.0;
+        constexpr double p_top=20000.0;
+        const auto pbase=solver.p_base_.to(torch::kFloat64);
+        const auto thbase=solver.th_base_.to(torch::kFloat64);
+        const auto mubase=solver.mu_base_.to(torch::kFloat64);
+        TORCH_CHECK(pbase.defined() && thbase.defined() && mubase.defined(),
+                    "nonzero hydrostatic background requires fixture base arrays");
+        TORCH_CHECK(torch::equal(thbase,torch::full_like(thbase,300.0)) &&
+                    std::all_of(metric.begin(),metric.end(),[](float x){return x==-nz;}) &&
+                    std::all_of(one.begin(),one.end(),[](float x){return x==1.0f;}) &&
+                    std::all_of(zero.begin(),zero.end(),[](float x){return x==0.0f;}),
+                    "balanced fixture requires theta_base=300, uniform signed rdn/rdnw and sigma coefficients");
+        const auto alpha_base=wrf::sdirk3::compute_inverse_density(
+            thbase,pbase,287.0f,717.5f,1004.5f,100000.0f).to(torch::kFloat64);
+        std::vector<double> eta_mid(nz);
+        for(int k=0;k<nz;++k) eta_mid[k]=1.0-(k+0.5)/nz;
+        const auto eta=torch::tensor(eta_mid,torch::kFloat64).view({1,nz,1});
+        const auto expected_base_pressure=p_top+eta*mubase.unsqueeze(1);
+        const double base_pressure_error=(pbase-expected_base_pressure).abs().max().item<double>();
+        const double base_mass_error=(mubase-80000.0).abs().max().item<double>();
+        const double base_pressure_check=8.0*std::numeric_limits<float>::epsilon()*
+            std::max(1.0,pbase.abs().max().item<double>());
+        TORCH_CHECK(base_pressure_error<=base_pressure_check && base_mass_error<=1e-3,
+                    "fixture base is not ptop=20kPa/MUB=80kPa sigma column: dpbase=",
+                    base_pressure_error," dpbase_floor=",base_pressure_check," dmub=",base_mass_error);
+        const auto p_perturbation=eta*mass_perturbation;
+        const auto theta_full=thbase+theta_perturbation;
+        const auto alpha_target=wrf::sdirk3::compute_inverse_density(
+            theta_full,pbase+p_perturbation,287.0f,717.5f,1004.5f,100000.0f).to(torch::kFloat64);
+        const auto c1h=torch::tensor(one,torch::kFloat64).slice(0,0,nz).view({1,nz,1});
+        const auto c2h=torch::tensor(zero,torch::kFloat64).slice(0,0,nz).view({1,nz,1});
+        const auto base_layer_mass=c1h*mubase.unsqueeze(1)+c2h;
+        const auto full_layer_mass=c1h*(mubase+mass_perturbation).unsqueeze(1)+c2h;
+        const auto rdnw_abs=torch::tensor(metric,torch::kFloat64).slice(0,0,nz).abs().view({nz});
+        // Invert the authoritative perturbation alpha relation. The imported
+        // PH base is rounded FP32; replacing analytic alpha_base with its
+        // geometric difference would define a different native EOS state.
+        const auto dphi=(alpha_target*full_layer_mass-alpha_base*base_layer_mass)/
+            rdnw_abs.view({1,nz,1});
+
+        auto packed=torch::zeros({total},torch::kFloat64);
+        const int64_t ph0=su+sv+sw, theta0=su+sv+2*sw, mu0=total-sm;
+        packed.slice(0,theta0,theta0+st).fill_(theta_perturbation);
+        packed.slice(0,mu0,total).fill_(mass_perturbation);
+        auto ph=packed.slice(0,ph0,ph0+sw).view({ny,nw,nx});
+        for(int k=0;k<nz;++k)
+            ph.select(1,k+1).copy_(ph.select(1,k)+dphi.select(1,k));
+
+        const auto native=wrf::sdirk3::calc_p_rho_wrf(
+            ph,packed.slice(0,theta0,theta0+st).view({ny,nz,nx}),
+            packed.slice(0,mu0,total).view({ny,nx}),mubase,alpha_base,pbase,
+            rdnw_abs,c1h.view({nz}),c2h.view({nz}),
+            287.0f,717.5f,1004.5f,100000.0f,300.0f);
+        const double pressure_error=(native.p_pert-p_perturbation).abs().max().item<double>();
+        const double pressure_floor=4096.0*std::numeric_limits<double>::epsilon()*
+            std::max(1.0,pbase.abs().max().item<double>());
+        const double alpha_error=(native.alt-alpha_target).abs().max().item<double>()/
+            alpha_target.abs().max().item<double>();
+        const double alpha_floor=512.0*std::numeric_limits<double>::epsilon();
+        TORCH_CHECK(pressure_error<=pressure_floor && alpha_error<=alpha_floor,
+                    "native calc_p_rho_wrf does not reproduce target p/alpha: dp=",pressure_error,
+                    " dp_floor=",pressure_floor," dalpha_rel=",alpha_error,
+                    " dalpha_floor=",alpha_floor);
+        const auto ph_full=ph+solver.ph_base_.to(torch::kFloat64);
+        const auto geometric_alpha=rdnw_abs.view({1,nz,1})*
+            (ph_full.slice(1,1,nw)-ph_full.slice(1,0,nz))/full_layer_mass;
+        const double geometric_error=((geometric_alpha-alpha_target)/alpha_target)
+            .abs().max().item<double>();
+        const double geometric_floor=16.0*std::numeric_limits<float>::epsilon();
+        TORCH_CHECK(geometric_error<=geometric_floor,
+                    "full-PH hydrostatic geometry exceeds imported FP32 base precision: ",geometric_error);
+        std::cout<<"BALANCED_NATIVE_EOS ptop="<<p_top<<" theta_full=310 total_mu=84000"
+                 <<" base_pressure_error="<<base_pressure_error
+                 <<" expected_ppert_max="<<p_perturbation.abs().max().item<double>()
+                 <<" pressure_error="<<pressure_error<<" pressure_floor="<<pressure_floor
+                 <<" alpha_relative_error="<<alpha_error<<" alpha_floor="<<alpha_floor
+                 <<" geometric_alpha_relative_error="<<geometric_error
+                 <<" geometric_alpha_floor="<<geometric_floor<<"\n";
+        if(native_pressure_floor) *native_pressure_floor=pressure_floor;
+        checkPhysicalState(packed,"nonzero hydrostatic background");
+        return packed;
     }
     PerturbationSize perturbationSize(const torch::Tensor& background,
                                       const torch::Tensor& increment) {

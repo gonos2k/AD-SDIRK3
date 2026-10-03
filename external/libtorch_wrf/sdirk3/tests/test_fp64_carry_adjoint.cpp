@@ -1,6 +1,7 @@
 // Internal FP64 trajectory, independent primal checkpoints, and active-effect VJP.
 #include "tile_test_fixture.h"
 #include <algorithm>
+#include <array>
 #include <iomanip>
 #include <limits>
 #include <string>
@@ -647,6 +648,125 @@ void run_inverse_experiment(const torch::Tensor& raw_initial) {
 }
 
 struct TwoTimeEval { double value=0.0,data=0.0; torch::Tensor gradient; Result simulation; };
+void run_two_time_experiment(const torch::Tensor& raw_initial,bool nonlinear);
+std::array<double,6> block_step_drift(const torch::Tensor& tendency,double dt,const char* label) {
+    const int sizes[]={su,sv,sw,sw,st,sm};
+    const double unit_floors[]={1.0,1.0,1.0,100.0,1.0,100.0};
+    const char* names[]={"U","V","W","PH","THETA","MU"};
+    TORCH_CHECK(tendency.dim()==1 && tendency.numel()==total &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(tendency).all()),
+                label," RHS is malformed or non-finite");
+    std::array<double,6> scaled{};
+    int offset=0;
+    for(int block=0;block<6;++block) {
+        const double maximum=tendency.slice(0,offset,offset+sizes[block])
+            .abs().max().item<double>();
+        scaled[block]=dt*maximum/unit_floors[block];
+        std::cout<<"BALANCED_DIAGNOSTIC kind="<<label<<" block="<<names[block]
+                 <<" max_abs="<<maximum<<" unit_floor="<<unit_floors[block]
+                 <<" dt_scaled="<<scaled[block]<<"\n";
+        offset+=sizes[block];
+    }
+    return scaled;
+}
+void run_balanced_inverse_experiment() {
+    constexpr double dt_seconds=0.25;
+    configure(true);
+    TileCase tile(5000.0f); prepare_native(tile);
+    double pressure_floor=0.0;
+    const auto background=tile.nonzeroHydrostaticBackground(&pressure_floor);
+    TORCH_CHECK(torch::allclose(tile.projectControlState(background),background,1e-13,1e-13),
+                "nonzero hydrostatic background violates the solver boundary projector");
+    // The setup-only call has not prepared native ARK face coefficients.
+    // Use the actual equilibrium window to prepare the live context; its
+    // checkpoints are themselves gated below, with no unmeasured warmup step.
+    tile.set(background);
+    tile.solver.requestFixedTrajectory(4,std::vector<float>(4,dt),background);
+    for(int n=0;n<4;++n) {
+        int host=n+1; sdirk3_set_timestep_i4(&host); tile.step(dt);
+    }
+    const auto checkpoints=tile.solver.getFixedTrajectoryFp64Checkpoints();
+    TORCH_CHECK(checkpoints.size()==4,"hydrostatic window did not complete four steps");
+    for(const auto& checkpoint : checkpoints)
+        validate_physical_state(tile,checkpoint,"hydrostatic accepted checkpoint");
+    const auto full=tile.rhsAt(background,wrf::sdirk3::RhsMode::Full,dt_seconds,background)
+        .to(torch::kFloat64);
+    const auto explicit_rhs=tile.rhsAt(background,wrf::sdirk3::RhsMode::ExplicitOnly,
+                                        dt_seconds,background).to(torch::kFloat64);
+    const auto implicit_rhs=tile.rhsAt(background,wrf::sdirk3::RhsMode::ImplicitOnly,
+                                        dt_seconds,background).to(torch::kFloat64);
+    const auto full_scaled=block_step_drift(full,dt_seconds,"Full");
+    const auto explicit_scaled=block_step_drift(explicit_rhs,dt_seconds,"ExplicitOnly");
+    const auto implicit_scaled=block_step_drift(implicit_rhs,dt_seconds,"ImplicitOnly");
+    const auto split_error=block_step_drift(full-explicit_rhs-implicit_rhs,dt_seconds,
+                                            "Full-minus-Explicit-minus-Implicit");
+    const double rdnw_abs=std::abs(tile.metric[0]);
+    const double mass_full=84000.0;
+    const double gravity=tile.solver.getGridInfo()->g;
+    // Pressure-error pairs feed W acceleration; compare its dt-integrated
+    // velocity with the 1 m/s reference unit used by block_step_drift.
+    const double w_pressure_rhs_budget=dt_seconds*gravity*(2.0*rdnw_abs)*pressure_floor/mass_full;
+    const double fp64_scaled_floor=256.0*std::numeric_limits<double>::epsilon();
+    const double rhs_budgets[]={fp64_scaled_floor,fp64_scaled_floor,w_pressure_rhs_budget,
+                                fp64_scaled_floor,fp64_scaled_floor,fp64_scaled_floor};
+    const int sizes[]={su,sv,sw,sw,st,sm};
+    const double unit_floors[]={1.0,1.0,1.0,100.0,1.0,100.0};
+    const char* names[]={"U","V","W","PH","THETA","MU"};
+    for(int block=0;block<6;++block) {
+        const double closure_budget=256.0*std::numeric_limits<double>::epsilon()*
+            std::max(1.0,full_scaled[block]+explicit_scaled[block]+implicit_scaled[block]);
+        std::cout<<"BALANCED_RHS_GATE block="<<names[block]
+                 <<" full_scaled="<<full_scaled[block]<<" full_budget="<<rhs_budgets[block]
+                 <<" split_error="<<split_error[block]<<" split_budget="<<closure_budget
+                 <<" unit_floor="<<unit_floors[block]<<"\n";
+        TORCH_CHECK(full_scaled[block]<=rhs_budgets[block],
+                    "nonzero hydrostatic Full RHS exceeds EOS/FP64 budget, block ",names[block],
+                    " scaled=",full_scaled[block]," budget=",rhs_budgets[block]);
+        TORCH_CHECK(split_error[block]<=closure_budget,
+                    "Full != ExplicitOnly + ImplicitOnly at the hydrostatic background, block ",
+                    names[block]," scaled error=",split_error[block]," budget=",closure_budget);
+    }
+
+    for(size_t step=0;step<checkpoints.size();++step) {
+        int offset=0;
+        for(int block=0;block<6;++block) {
+            const double maximum=(checkpoints[step]-background)
+                .slice(0,offset,offset+sizes[block]).abs().max().item<double>();
+            const double scaled=maximum/unit_floors[block];
+            const double reference_magnitude=background.slice(0,offset,offset+sizes[block])
+                .abs().max().item<double>()/unit_floors[block];
+            // This is an equilibrium precision gate, not a conversion of the
+            // K-form Newton residual tolerance into a state-error bound.
+            const double state_roundoff=512.0*std::numeric_limits<double>::epsilon()*
+                std::max(1.0,reference_magnitude);
+            const double stationarity_budget=4.0*(rhs_budgets[block]+state_roundoff);
+            std::cout<<"BALANCED_STATIONARITY step="<<(step+1)<<" block="<<names[block]
+                     <<" max_drift="<<maximum<<" unit_floor="<<unit_floors[block]
+                     <<" scaled_drift="<<scaled<<" predicted_budget="<<stationarity_budget
+                     <<" state_roundoff="<<state_roundoff<<"\n";
+            TORCH_CHECK(std::isfinite(scaled) && scaled<=stationarity_budget,
+                        "four-step hydrostatic background drift exceeds RHS+Newton budget, step ",
+                        step+1," block=",names[block]," scaled=",scaled,
+                        " budget=",stationarity_budget);
+            offset+=sizes[block];
+        }
+    }
+    auto unbalanced=background.clone();
+    unbalanced.slice(0,su+sv+sw,su+sv+2*sw).view({ny,nw,nx}).select(1,1).add_(1.0);
+    validate_physical_state(tile,unbalanced,"hydrostatic falsifier");
+    const auto bad_rhs=tile.rhsAt(unbalanced,wrf::sdirk3::RhsMode::Full,dt_seconds,background);
+    const auto bad_scaled=block_step_drift(bad_rhs,dt_seconds,"PH-layer-falsifier");
+    TORCH_CHECK(bad_scaled[2]>100.0*rhs_budgets[2],
+                "broken PH hydrostatic balance was not distinguished from the equilibrium budget");
+    std::cout<<"BALANCED_FALSIFIER delta_phi=1 scaled_w="<<bad_scaled[2]
+             <<" equilibrium_budget="<<rhs_budgets[2]<<"\n";
+    tile.solver.closeFixedTrajectory();
+    std::cout<<"BALANCED_INVERSE truth_is_equilibrium=false controls_perturb_background=true"
+             <<" pressure_roundoff_floor="<<pressure_floor
+             <<" w_rhs_budget="<<w_pressure_rhs_budget
+             <<" newton_tol="<<wrf::sdirk3::g_sdirk3_config.newton_tol<<"\n";
+    run_two_time_experiment(background,false);
+}
 void run_two_time_experiment(const torch::Tensor& raw_initial,bool nonlinear=false) {
     constexpr int steps=4;
     constexpr double point_scale=1.0e-3;
@@ -1025,6 +1145,7 @@ void run_two_time_experiment(const torch::Tensor& raw_initial,bool nonlinear=fal
              <<" J_initial="<<start_value<<" J_final="<<current.value
              <<" data_initial="<<start_data<<" data_final="<<current.data
              <<" gradient_initial="<<start_gradient<<" gradient_final="<<final_gradient
+             <<" tighter_newton_evaluated="<<(nonlinear?1:0)
              <<" gradient_tight="<<tight_gradient
              <<" gradient_tight_difference="<<tight_gradient_difference
              <<" cost_tight_difference="<<tight_cost_difference
@@ -1068,6 +1189,12 @@ void run_two_time_experiment(const torch::Tensor& raw_initial,bool nonlinear=fal
 int main(int argc,char** argv) {
     try {
         torch::set_num_threads(1); std::cout<<std::setprecision(17);
+        if(argc>1 && std::string(argv[1])=="--balanced") {
+            TORCH_CHECK(argc==2,"--balanced does not accept additional arguments");
+            run_balanced_inverse_experiment();
+            std::cout<<"FP64 carry balanced-background two-time pilot passed\n";
+            return 0;
+        }
         const auto z0=initial();
         if(argc>1 && std::string(argv[1])=="--inverse") {
             run_inverse_experiment(z0);
