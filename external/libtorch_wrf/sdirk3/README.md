@@ -299,7 +299,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 116-test CTest inventory**, pinned by
+The CMake tree registers an **exact 119-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
@@ -312,6 +312,23 @@ the pinned file defines the inventory.
   global self-convergence, one-step/two-half-step checks, and a fixed-state
   Full/ExplicitOnly/ImplicitOnly RHS dt-invariance check. It excludes
   Fortran-side updates, physical boundary refresh and MPI.
+- `FP64_Window_Forecast` — the existing six-control, fixed-R inverse at
+  8/16 accepted steps, with unused 3/6 s predictions, full-owned-cell W/PH/MU/
+  theta diagnostics, and dry-mass/weighted-theta endpoint budgets.
+- `FP64_Fixed_Data_Refinement` — one observation dataset at 2/4 s and fixed R
+  compared at h=.25/.125 s, including the inverse solution, 6 s forecast and
+  tighter-solve controls. Two time increments do not establish a convergence order.
+- `FP64_Stable_Column_Inverse` — native EOS-consistent theta=310/312/314/316 K
+  sigma column (Kh=1000, Kv=0), positive discrete N², sixteen-step equilibrium,
+  initial coordinate-correct buoyancy response and the same inverse/forecast.
+  These are short dry single-tile algorithm twins, not operational forecast skill.
+
+Internal FP64 stage quality compares WRMS growth against the larger of the
+initial defect and stage-equation construction precision. The Newton tolerance
+and growth cap are unchanged. A converged roundoff-limited root is retained
+without legacy post-solve damping; resolved post-solve damping remains unsupported
+by the retained converged-stage adjoint and fails explicitly.
+
 - `MPI_Halo_Contract_np{1,2,4}` — halo primitive forward/adjoint/packed AD+BC
   transpose matrices,
 - `MPI_Runtime_Contract_np{1,2,4}` — runtime fail-close contracts (baseline
