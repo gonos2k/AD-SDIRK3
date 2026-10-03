@@ -31,6 +31,9 @@ inline void requireAcceptedTrialStep(int outcome) {
 constexpr int nx = 8, ny = 6, nz = 4, nu = nx + 1, nv = ny + 1, nw = nz + 1;
 constexpr int su = ny*nz*nu, sv = nv*nz*nx, sw = ny*nw*nx, st = ny*nz*nx, sm = ny*nx;
 constexpr int total = su + sv + 2*sw + st + sm;
+struct PerturbationSize {
+    double max_w, mass_fraction, layer_fraction;
+};
 
 struct TileCase {
     std::vector<float> u = std::vector<float>(su), v = std::vector<float>(sv);
@@ -153,6 +156,24 @@ struct TileCase {
     }
     torch::Tensor projectControlState(const torch::Tensor& state) {
         return solver.projectStateBoundaries(state);
+    }
+    PerturbationSize perturbationSize(const torch::Tensor& background,
+                                      const torch::Tensor& increment) {
+        checkPhysicalState(background, "amplitude reference");
+        TORCH_CHECK(increment.dim() == 1 && increment.numel() == total &&
+                    torch::isfinite(increment).all().item<bool>(),
+                    "amplitude increment has an invalid shape/value");
+        const auto w = increment.slice(0, su+sv, su+sv+sw);
+        const auto mass = background.slice(0, total-sm, total).view({ny,nx}) +
+                          solver.mu_base_.to(torch::kFloat64);
+        const auto dmass = increment.slice(0, total-sm, total).view({ny,nx});
+        const auto phi = background.slice(0, su+sv+sw, su+sv+2*sw).view({ny,nw,nx}) +
+                         solver.ph_base_.to(torch::kFloat64);
+        const auto dphi = increment.slice(0, su+sv+sw, su+sv+2*sw).view({ny,nw,nx});
+        const auto layers = phi.slice(1,1,nw) - phi.slice(1,0,nw-1);
+        const auto dlayers = dphi.slice(1,1,nw) - dphi.slice(1,0,nw-1);
+        return {w.abs().max().item<double>(), (dmass/mass).abs().max().item<double>(),
+                (dlayers/layers).abs().max().item<double>()};
     }
     void checkPhysicalState(const torch::Tensor& packed, const char* where) {
         TORCH_CHECK(packed.defined() && packed.dim() == 1 && packed.numel() == total,
