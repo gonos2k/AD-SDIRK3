@@ -1,6 +1,7 @@
 #include "tile_test_fixture.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -36,12 +37,35 @@ void configure_packed(TileCase& tile) {
     TORCH_CHECK(tile.packedPeriodicLayout(),"packed pressure-gradient fixture was not recognized");
 }
 
-void run_layout(bool packed) {
+void run_layout(bool packed, bool nonperiodic_guard=false) {
     configure();
+    TORCH_CHECK(!packed || !nonperiodic_guard,
+                "nonperiodic guarded pressure-gradient fixture cannot be packed");
+    if(nonperiodic_guard) wrf::sdirk3::g_sdirk3_config.mass_pgf_bc_guard=true;
+    if(nonperiodic_guard) wrf::sdirk3::g_sdirk3_config.precond_type=0;
     constexpr float dt=1.0e-4f;
     TileCase tile(5000.0f,0.0f);
     if(packed) configure_packed(tile);
     else TORCH_CHECK(!tile.packedPeriodicLayout(),"physical pressure-gradient fixture became packed");
+    if(nonperiodic_guard) {
+        // A serial physical tile owns open west/east boundaries. Keep the
+        // symmetric-y walls from the periodic fixtures while switching x to
+        // WRF's nonperiodic one-sided PGF guard path. This fixture isolates
+        // horizontal PGF; open-boundary calc_ww_cp Omega is outside its scope.
+        tile.solver.setBoundaryConditions(false,false,false,false,true,true,
+                                          true,true,false,false);
+        auto& cfg=wrf::sdirk3::g_sdirk3_config;
+        // MassCoordinateMode is authoritative: the shared fixture defaults to
+        // WRFParity, which requires periodic x. Select Legacy only here; with
+        // W=0 its mu*w Phi advection contributes nothing to this PGF probe.
+        cfg.mass_coordinate_mode=0;
+        cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false;
+        TORCH_CHECK(!cfg.effective_wrf_omega_ww_cp(),
+                    "guarded PGF fixture must keep calc_ww_cp Omega disabled");
+        TORCH_CHECK(!tile.packedPeriodicLayout(),
+                    "guarded pressure-gradient fixture unexpectedly became packed");
+    }
 
     // The setup-only fixture skips the caller's initial ARK evaluation. Prime
     // that ordinary runtime path, then install the prescribed diagnostic state.
@@ -87,9 +111,11 @@ void run_layout(bool packed) {
     double max_signal=0.0,max_error=0.0,west_signal=0.0,last_owned_signal=0.0;
     double west_error=0.0,last_owned_error=0.0;
     int samples=0;
-    for(int j=0;j<owned_y;++j) for(int k=0;k<nz;++k) for(int i=0;i<mass_nx;++i) {
+    const int first_owned_i=nonperiodic_guard?1:0;
+    for(int j=0;j<owned_y;++j) for(int k=0;k<nz;++k)
+      for(int i=first_owned_i;i<mass_nx;++i) {
         const int right=i;
-        const int left=i==0?mass_nx-1:i-1;
+        const int left=(!nonperiodic_guard && i==0)?mass_nx-1:i-1;
         const double alpha_right=alb[j][k][right];
         const double alpha_left=alb[j][k][left];
         const double pressure_right=p0*std::pow(
@@ -107,7 +133,7 @@ void run_layout(bool packed) {
         const double error=std::abs(actual-expected);
         max_signal=std::max(max_signal,std::abs(expected));
         max_error=std::max(max_error,error);
-        if(i==0) {
+        if(i==first_owned_i) {
             west_signal=std::max(west_signal,std::abs(expected));
             west_error=std::max(west_error,error);
         }
@@ -117,26 +143,68 @@ void run_layout(bool packed) {
         }
         ++samples;
     }
+
+    // Open-boundary U slots are not owned prognostic faces, but the guard
+    // still fills them with the source's one-sided adjacent-cell gradients.
+    // Check both slots explicitly without applying the periodic wrap oracle.
+    double guarded_boundary_signal=0.0,guarded_boundary_error=0.0;
+    if(nonperiodic_guard) {
+        for(int j=0;j<owned_y;++j) for(int k=0;k<nz;++k) {
+            const auto expected_face=[&](int right,int left) {
+                const double alpha_right=alb[j][k][right];
+                const double alpha_left=alb[j][k][left];
+                const double pressure_right=p0*std::pow(
+                    rd*(t0+static_cast<double>(theta_values[j][k][right]))/(p0*alpha_right),cp/cv);
+                const double pressure_left=p0*std::pow(
+                    rd*(t0+static_cast<double>(theta_values[j][k][left]))/(p0*alpha_left),cp/cv);
+                return -0.5/static_cast<double>(tile.spacing)*
+                    (alpha_right+alpha_left)*(pressure_right-pressure_left);
+            };
+            for(const auto [slot,right,left] : {
+                    std::array<int,3>{0,1,0},
+                    std::array<int,3>{nu-1,mass_nx-1,mass_nx-2}}) {
+                const double expected=expected_face(right,left);
+                const double actual=rhs_u[j][k][slot].item<double>();
+                guarded_boundary_signal=std::max(guarded_boundary_signal,std::abs(expected));
+                guarded_boundary_error=std::max(guarded_boundary_error,std::abs(actual-expected));
+            }
+        }
+    }
     const double budget=256.0*std::numeric_limits<float>::epsilon()*max_signal;
-    TORCH_CHECK(samples==owned_y*nz*mass_nx && max_signal>1.0e-5 &&
-                west_signal>0.1*max_signal && last_owned_signal>0.1*max_signal,
-                "pressure-gradient signal did not resolve both periodic seam faces");
-    TORCH_CHECK(west_signal>budget && last_owned_signal>budget,
-                "zeroed-west-seam/last-owned-face mutation would not be detected");
+    const int expected_samples=owned_y*nz*(mass_nx-first_owned_i);
+    TORCH_CHECK(samples==expected_samples && max_signal>1.0e-5 &&
+                (nonperiodic_guard ||
+                 (west_signal>0.1*max_signal && last_owned_signal>0.1*max_signal)),
+                "pressure-gradient signal did not resolve the expected owned faces");
+    TORCH_CHECK(nonperiodic_guard || (west_signal>budget && last_owned_signal>budget),
+                "zeroed periodic seam/final-face mutation would not be detected");
     TORCH_CHECK(west_error<=budget && last_owned_error<=budget,
-                "actual RHS fails the explicit west-seam/last-owned-face oracle: packed=",packed,
-                " west_error=",west_error," last_error=",last_owned_error," budget=",budget);
+                "actual RHS fails the owned-face oracle: packed=",packed,
+                " guarded_nonperiodic=",nonperiodic_guard,
+                " first_error=",west_error," last_error=",last_owned_error," budget=",budget);
+    TORCH_CHECK(!nonperiodic_guard ||
+                (guarded_boundary_signal>budget && guarded_boundary_error<=budget),
+                "actual RHS fails the nonperiodic one-sided boundary oracle: signal=",
+                guarded_boundary_signal," error=",guarded_boundary_error," budget=",budget);
     TORCH_CHECK(max_error<=budget,
                 "actual horizontal pressure-gradient RHS disagrees with independent EOS/Fortran equation: packed=",
-                packed," max_error=",max_error," budget=",budget," signal=",max_signal);
-    std::cout<<"ACTUAL_HPG layout="<<(packed?"packed":"physical")
-             <<" mass_x="<<mass_nx<<" owned_u_faces="<<mass_nx
-             <<" samples="<<samples<<" pressure_amplitude_Pa="<<pressure_amplitude
-             <<" west_seam_signal="<<west_signal
-             <<" last_owned_face_signal="<<last_owned_signal
-             <<" zero_west_mutant_error="<<west_signal
+                packed," guarded_nonperiodic=",nonperiodic_guard,
+                " max_error=",max_error," budget=",budget," signal=",max_signal);
+    std::cout<<"ACTUAL_HPG layout="<<(nonperiodic_guard?"guarded_nonperiodic":(packed?"packed":"physical"))
+             <<" omega="<<(nonperiodic_guard?"off":"fixture_default")
+             <<" mass_x="<<mass_nx<<" owned_u_faces="<<(mass_nx-first_owned_i)
+             <<" samples="<<samples<<" pressure_amplitude_Pa="<<pressure_amplitude;
+    if(nonperiodic_guard) {
+        std::cout<<" guarded_boundary_signal="<<guarded_boundary_signal
+                 <<" zero_guard_boundary_mutant_error="<<guarded_boundary_signal
+                 <<" guarded_boundary_error="<<guarded_boundary_error;
+    } else {
+        std::cout<<" west_seam_signal="<<west_signal
+                 <<" zero_west_mutant_error="<<west_signal;
+    }
+    std::cout<<" last_owned_face_signal="<<last_owned_signal
              <<" zero_last_face_mutant_error="<<last_owned_signal
-             <<" west_error="<<west_error<<" last_error="<<last_owned_error
+             <<" first_owned_error="<<west_error<<" last_error="<<last_owned_error
              <<" max_signal_m_s2="<<max_signal<<" max_error_m_s2="<<max_error
              <<" budget_m_s2="<<budget<<" PASS\n";
 }
@@ -146,5 +214,6 @@ int main() {
     torch::set_num_threads(1);
     run_layout(false);
     run_layout(true);
+    run_layout(false,true);
     return 0;
 }

@@ -1656,12 +1656,11 @@ torch::Tensor wave_observation(const torch::Tensor& background,const WaveState& 
     return physical_w_values(background+wave_field(q));
 }
 struct WaveModes { WaveState q0{},q1{}; WaveComplex eigenvalue{}; };
-WaveModes dominant_gravity_mode(const torch::Tensor& matrix,const WaveReference& column) {
+WaveModes dominant_sub_nmax_mode(const torch::Tensor& matrix,const WaveReference& column) {
     auto eig=torch::linalg_eig(matrix);
     const auto values=std::get<0>(eig).contiguous();
     const auto vectors=std::get<1>(eig).contiguous();
     const auto* lambda=values.data_ptr<c10::complex<double>>();
-    const auto* v=vectors.data_ptr<c10::complex<double>>();
     double nmax=0.0;
     for(int k=0;k<nz;++k)
         nmax=std::max(nmax,std::sqrt(column.gravity/column.theta[k]*column.theta_z[k]));
@@ -1677,8 +1676,22 @@ WaveModes dominant_gravity_mode(const torch::Tensor& matrix,const WaveReference&
     }
     std::cout<<" selected_rad_s="<<(selected>=0?lambda[selected].imag():-1.0)<<"\n";
     TORCH_CHECK(selected>=0,"independent reference has no positive oscillatory branch below stable-column N_max");
+    const auto selected_vector=vectors.select(1,selected).contiguous();
+    const auto eigenvalue=values.select(0,selected);
+    const double matrix_norm=matrix.norm().item<double>();
+    const double vector_norm=selected_vector.norm().item<double>();
+    const double eigenpair_relative_residual=(matrix.mv(selected_vector)-selected_vector*eigenvalue)
+        .norm().item<double>()/
+        std::max((matrix_norm+std::abs(WaveComplex(lambda[selected].real(),lambda[selected].imag())))*vector_norm,
+                 std::numeric_limits<double>::min());
     WaveState plus{};
-    for(int r=0;r<wave_size;++r) plus[r]={v[r*wave_size+selected].real(),v[r*wave_size+selected].imag()};
+    const auto* selected_values=selected_vector.data_ptr<c10::complex<double>>();
+    for(int r=0;r<wave_size;++r)
+        plus[r]={selected_values[r].real(),selected_values[r].imag()};
+    TORCH_CHECK(std::isfinite(eigenpair_relative_residual) &&
+                eigenpair_relative_residual<=std::sqrt(std::numeric_limits<double>::epsilon()),
+                "selected source-derived mode failed the scale-free eigenpair residual gate: ",
+                eigenpair_relative_residual);
     int phase_pivot=WaveReference::W(0);
     for(int r=1;r<4;++r)
         if(std::abs(plus[WaveReference::W(r)])>std::abs(plus[phase_pivot])) phase_pivot=WaveReference::W(r);
@@ -1701,10 +1714,37 @@ WaveModes dominant_gravity_mode(const torch::Tensor& matrix,const WaveReference&
     }
     TORCH_CHECK(std::isfinite(peak) && peak>0.0 && q1_norm>0.0 &&
                 q0_norm*q1_norm-q01*q01>1e-12*q0_norm*q1_norm,
-                "gravity standing mode temporal quadratures are not independent");
+                "selected mode temporal quadratures are not independent");
     const double scale=0.01/peak;
     for(auto& x:modes.q0) x*=scale;
     for(auto& x:modes.q1) x*=scale;
+    const auto q0_energy=column.physicalEnergy(modes.q0);
+    const auto q1_energy=column.physicalEnergy(modes.q1);
+    double pair_w_kinetic=0.0,pair_available_potential=0.0;
+    for(const auto* energy:{&q0_energy,&q1_energy}) {
+        const double bulk=energy->bulk();
+        const double acoustic_fraction=energy->acoustic/bulk;
+        TORCH_CHECK(std::isfinite(energy->kinetic_u) && energy->kinetic_u>=0.0 &&
+                    std::isfinite(energy->kinetic_w) && energy->kinetic_w>=0.0 &&
+                    std::isfinite(energy->available_potential) && energy->available_potential>=0.0 &&
+                    std::isfinite(energy->acoustic) && energy->acoustic>=0.0 &&
+                    std::isfinite(energy->top_surface_candidate) && energy->top_surface_candidate>=0.0 &&
+                    std::isfinite(bulk) && bulk>0.0 &&
+                    std::isfinite(acoustic_fraction) && acoustic_fraction>=0.0 && acoustic_fraction<=1.0,
+                    "selected sub-N_max mode has invalid physical energy participation");
+        pair_w_kinetic=std::max(pair_w_kinetic,energy->kinetic_w);
+        pair_available_potential=std::max(pair_available_potential,energy->available_potential);
+    }
+    TORCH_CHECK(pair_w_kinetic>0.0 && pair_available_potential>0.0,
+                "selected sub-N_max mode pair lacks finite positive W kinetic/available-potential participation");
+    std::cout<<"WAVE_MODE_PHYSICAL mode=coupled_sub_Nmax_mode"
+             <<" eigenpair_relative_residual="<<eigenpair_relative_residual
+             <<" q0_W_kinetic="<<q0_energy.kinetic_w
+             <<" q0_available_potential="<<q0_energy.available_potential
+             <<" q0_acoustic_fraction="<<(q0_energy.acoustic/q0_energy.bulk())
+             <<" q1_W_kinetic="<<q1_energy.kinetic_w
+             <<" q1_available_potential="<<q1_energy.available_potential
+             <<" q1_acoustic_fraction="<<(q1_energy.acoustic/q1_energy.bulk())<<"\n";
     return modes;
 }
 WaveState wave_combine(const WaveState& q0,const WaveState& q1,double a,double b) {
@@ -1751,7 +1791,7 @@ struct WaveFixture {
         background=tile.nonzeroHydrostaticBackground(nullptr,2.0);
         reference=WaveReference::fromStableFixture(tile,background);
         matrix=reference.matrixTensor();
-        const auto pair=dominant_gravity_mode(matrix,reference);
+        const auto pair=dominant_sub_nmax_mode(matrix,reference);
         mode=pair.q0;quadrature=pair.q1;eigenvalue=pair.eigenvalue;
     }
 };
@@ -1776,13 +1816,13 @@ double energy_component_relative_error(double native,double reference) {
 void run_wave_forward_experiment() {
     WaveFixture fixture;
     TORCH_CHECK(fixture.eigenvalue.imag()>0.0 && std::abs(fixture.eigenvalue.real())<1e-8,
-                "selected source-derived gravity mode is not oscillatory");
+                "selected source-derived sub-N_max mode is not oscillatory");
     const double period=2.0*std::acos(-1.0)/fixture.eigenvalue.imag();
     constexpr float step_dt=10.0f;
     const int steps=static_cast<int>(std::ceil(period/step_dt));
     const double duration=steps*step_dt;
     TORCH_CHECK(steps>=100 && duration>=period && duration-period<step_dt,
-                "gravity period was not resolved by the ten-second forecast");
+                "sub-N_max oscillation period was not resolved by the ten-second forecast");
     const WaveState initial_mode=fixture.mode;
     const auto truth=wave_reference_advance(fixture.matrix,initial_mode,duration);
     const auto quarter=wave_reference_advance(fixture.matrix,initial_mode,0.25*period);
@@ -1838,10 +1878,19 @@ void run_wave_forward_experiment() {
     const double half_reference_error=std::sqrt(half_difference/std::max(half_norm,1e-300));
     const double amplitude_scaling_error=std::sqrt(homogeneous_difference/
         std::max(reference_norm,1e-300));
-    const double kinetic_exchange=std::abs(quarter_energy.kinetic_w-start_energy.kinetic_w)/
-        std::max(start_energy.kinetic_w,1e-300);
-    const double potential_exchange=std::abs(quarter_energy.available_potential-start_energy.available_potential)/
-        std::max(start_energy.available_potential,1e-300);
+    const auto native_start_energy=fixture.reference.physicalEnergy(wave_coefficients(wave_field(initial_mode)));
+    const double exchange_scale=std::max(start_energy.kinetic_u+start_energy.kinetic_w,
+                                         start_energy.available_potential);
+    TORCH_CHECK(std::isfinite(exchange_scale) && exchange_scale>0.0,
+                "standing-wave kinetic/potential exchange scale is invalid");
+    const double reference_kinetic_delta=sampled_reference[0].kinetic_u+sampled_reference[0].kinetic_w-
+        start_energy.kinetic_u-start_energy.kinetic_w;
+    const double reference_potential_delta=sampled_reference[0].available_potential-
+        start_energy.available_potential;
+    const double native_kinetic_delta=sampled_native[0].kinetic_u+sampled_native[0].kinetic_w-
+        native_start_energy.kinetic_u-native_start_energy.kinetic_w;
+    const double native_potential_delta=sampled_native[0].available_potential-
+        native_start_energy.available_potential;
     TORCH_CHECK(std::isfinite(relative_error) && relative_error<0.08,
                 "one-period native wave state differs from independent linear forecast: ",relative_error);
     TORCH_CHECK(std::isfinite(phase_error) && std::abs(phase_error)<0.12,
@@ -1849,8 +1898,21 @@ void run_wave_forward_experiment() {
     TORCH_CHECK(std::isfinite(half_reference_error) && half_reference_error<0.08 &&
                 amplitude_scaling_error<0.01,
                 "half-amplitude wave forecast did not preserve independent linear scaling");
-    TORCH_CHECK(kinetic_exchange>0.1 || potential_exchange>0.1,
-                "standing gravity wave did not exchange kinetic and available-potential energy");
+    const double material_exchange=0.1*exchange_scale;
+    TORCH_CHECK(std::isfinite(reference_kinetic_delta) && std::isfinite(reference_potential_delta) &&
+                reference_kinetic_delta*reference_potential_delta<0.0 &&
+                std::abs(reference_kinetic_delta)>material_exchange &&
+                std::abs(reference_potential_delta)>material_exchange &&
+                std::isfinite(native_kinetic_delta) && std::isfinite(native_potential_delta) &&
+                native_kinetic_delta*native_potential_delta<0.0 &&
+                std::abs(native_kinetic_delta)>material_exchange &&
+                std::abs(native_potential_delta)>material_exchange,
+                "standing wave did not show material opposite-signed kinetic/available-potential exchange in reference and native states");
+    const double amplitude_decay_relative_error=std::abs(measured_amplitude-expected_amplitude)/
+        std::max(std::abs(expected_amplitude),std::numeric_limits<double>::min());
+    TORCH_CHECK(std::isfinite(amplitude_decay_relative_error) && amplitude_decay_relative_error<0.01,
+                "one-period modal amplitude decay differs from the source-derived eigenvalue: ",
+                amplitude_decay_relative_error);
     TORCH_CHECK(std::isfinite(max_energy_component_error) && max_energy_component_error<0.01,
                 "native standing-wave energy components differ from source-derived reference: ",
                 max_energy_component_error);
@@ -1862,7 +1924,7 @@ void run_wave_forward_experiment() {
     }
     pressure_rhs_norm=std::sqrt(pressure_rhs_norm);
     buoyancy_rhs_norm=std::sqrt(buoyancy_rhs_norm);
-    std::cout<<"WAVE_FORWARD_REFERENCE mode=gravity omega_rad_s="<<fixture.eigenvalue.imag()
+    std::cout<<"WAVE_FORWARD_REFERENCE mode=coupled_sub_Nmax_mode omega_rad_s="<<fixture.eigenvalue.imag()
              <<" decay_rate_s="<<fixture.eigenvalue.real()<<" period_s="<<period
              <<" duration_s="<<duration<<" dt_s="<<step_dt<<" steps="<<steps
              <<" initial_peak_W_m_s="<<wave_peak_w(initial_mode)
@@ -1871,6 +1933,7 @@ void run_wave_forward_experiment() {
              <<" temporal_amplitude="<<measured_amplitude
              <<" expected_amplitude="<<expected_amplitude
              <<" amplitude_decay_error="<<std::abs(measured_amplitude-expected_amplitude)
+             <<" amplitude_decay_relative_error="<<amplitude_decay_relative_error
              <<" half_amplitude_reference_error="<<half_reference_error
              <<" A_vs_Ahalf_scaling_error="<<amplitude_scaling_error
              <<" energy_bulk_start="<<start_energy.bulk()
@@ -1899,6 +1962,11 @@ void run_wave_forward_experiment() {
              <<" energy_acoustic_end="<<reference_energy.acoustic
              <<" energy_available_potential_end="<<reference_energy.available_potential
              <<" energy_available_potential_quarter="<<quarter_energy.available_potential
+             <<" exchange_scale="<<exchange_scale
+             <<" reference_quarter_delta_kinetic="<<reference_kinetic_delta
+             <<" reference_quarter_delta_available_potential="<<reference_potential_delta
+             <<" native_quarter_delta_kinetic="<<native_kinetic_delta
+             <<" native_quarter_delta_available_potential="<<native_potential_delta
              <<" energy_half_bulk="<<half_energy.bulk()
              <<" top_surface_candidate_end="<<reference_energy.top_surface_candidate
              <<" energy_conservation_asserted=0 boundary_work_unclosed=1\n";
@@ -2167,7 +2235,7 @@ int main(int argc,char** argv) {
         if(argc==2 && std::string(argv[1])=="--wave") {
             run_wave_operator_probe();
             run_wave_forward_experiment();
-            std::cout<<"FP64 carry one-period gravity wave reference passed\n";
+            std::cout<<"FP64 carry one-period coupled sub-Nmax reference passed\n";
             return 0;
         }
         if(argc==2 && std::string(argv[1])=="--wave-inverse") {

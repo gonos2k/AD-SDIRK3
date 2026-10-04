@@ -87,8 +87,14 @@ install:
 cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3 -G Ninja \
       -DCMAKE_PREFIX_PATH=/path/to/torch
 cmake --build build/sdirk3 --parallel
-ctest --test-dir build/sdirk3 --output-on-failure
+FC=/absolute/path/to/gfortran ctest --test-dir build/sdirk3 --output-on-failure
 ```
+
+The C++ core is built with the C++ compiler selected by CMake. The full CTest
+suite also runs source-extracted Fortran oracles, which compile WRF routine
+bodies at test time and require GNU Fortran (`gfortran`). Set `FC` to the
+absolute path of a GNU Fortran executable when running CTest; these oracles use
+GNU compiler flags including `-cpp` and `-fdefault-real-8`.
 
 ## Runtime Configuration: Namelist First (WRF)
 

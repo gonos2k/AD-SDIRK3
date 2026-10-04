@@ -1,7 +1,6 @@
 {
   "archive_log_sha256": {
     "core120": "c2adb0744e59231c3f48d16597f1e55b865eacd584a46f9f1c8339654f42cc30",
-    "current_ctest_inventory_json_bytes": "28f23e600074b75f6ab80783721322d90028800eb2ff6ff09231c0610518cd53",
     "default_wave_damping_control": "cf3c758509cf4b39db938dbb70fd537c5885c56725b24926ccd3d046fb72d83d",
     "fortran_rows": "0d9929ac5f738872c1fd64dbacd28250f457e4c32fff67c78444d07a08e5a5fe",
     "frozen_inverse_receipt": "9e0c68ba04b02ef390431ad9159c5e038eb34bad2257086065b04d99867f7a15",
@@ -14,7 +13,8 @@
     "wave_forward": "1438669318953628a4fb6f13545228ec6445adbb6b61ca4e364e60b2a2129150",
     "wave_inverse_frozen_head": "52d47efd8c2376573c49b1293fe3380a420582b25dc77d21efa5955888a2e748",
     "wave_inverse_pre_freeze": "785f8729b52f06f2cb6108a27e7167289e051e1bb23fe6434beb7966c3868972",
-    "wrf_receipt_copy": "d655ecfc3a8cf5e7777a7c02fe1ec792a5bbfdfbb4f060a7bc94c791d248c581"
+    "wrf_receipt_copy": "d655ecfc3a8cf5e7777a7c02fe1ec792a5bbfdfbb4f060a7bc94c791d248c581",
+    "archived_ctest_inventory_json_bytes": "b4229fa9105ebd138301061f83a98beb478909ae462b42cf1be265e9502a11d5"
   },
   "build": {
     "standalone_sdirk3_cmake": {
@@ -239,7 +239,8 @@
         "test": "FP64_Stable_Wave_Inverse"
       }
     ],
-    "single_all_123_invocation": false
+    "single_all_123_invocation": false,
+    "current_inventory_sha256_serialization": "Raw ctest --show-only=json-v1 stdout bytes; archived pretty-printed JSON has the separate archived byte digest. Parsed JSONs are equal."
   },
   "generated_local": "2026-10-04T19:00:52+09:00",
   "preserved_failure_and_tolerance_controls": {
