@@ -7,6 +7,7 @@
 #include "../wrf_sdirk3_acoustic_substep.h"
 #include "../wrf_sdirk3_boundary_ad.h"
 #include "../wrf_sdirk3_autograd_utils.h"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -31,6 +32,15 @@ inline void requireAcceptedTrialStep(int outcome) {
 constexpr int nx = 8, ny = 6, nz = 4, nu = nx + 1, nv = ny + 1, nw = nz + 1;
 constexpr int su = ny*nz*nu, sv = nv*nz*nx, sw = ny*nw*nx, st = ny*nz*nx, sm = ny*nx;
 constexpr int total = su + sv + 2*sw + st + sm;
+struct PerturbationSize {
+    double max_w, mass_fraction, layer_fraction;
+};
+struct DryBudgetReport {
+    double initial_mass=0.0,initial_theta_integral=0.0;
+    double max_mass_drift=0.0,mass_allowance=0.0;
+    double max_theta_drift=0.0,theta_allowance=0.0;
+    bool constant_theta=false;
+};
 
 struct TileCase {
     std::vector<float> u = std::vector<float>(su), v = std::vector<float>(sv);
@@ -135,6 +145,7 @@ struct TileCase {
     torch::Tensor coriolisF() const { return solver.f_; }
     torch::Tensor coriolisE() const { return solver.e_; }
     void checkFixedInputs() const { solver.checkFixedTrajectoryFingerprint(); }
+    bool packedPeriodicLayout() const { return solver.isPackedPeriodicDomain(); }
     void useDoubleGridMetrics() {
         solver.rdnw_.clear();
         solver.rdn_.clear();
@@ -153,6 +164,198 @@ struct TileCase {
     }
     torch::Tensor projectControlState(const torch::Tensor& state) {
         return solver.projectStateBoundaries(state);
+    }
+    torch::Tensor nonzeroHydrostaticBackground(double* native_pressure_floor = nullptr,
+                                              double theta_step = 0.0) {
+        constexpr double theta_perturbation=10.0;
+        constexpr double mass_perturbation=4000.0;
+        constexpr double p_top=20000.0;
+        TORCH_CHECK(std::isfinite(theta_step) && theta_step>=0.0,
+                    "hydrostatic theta-level increment must be finite and nonnegative");
+        const auto pbase=solver.p_base_.to(torch::kFloat64);
+        const auto thbase=solver.th_base_.to(torch::kFloat64);
+        const auto mubase=solver.mu_base_.to(torch::kFloat64);
+        TORCH_CHECK(pbase.defined() && thbase.defined() && mubase.defined(),
+                    "nonzero hydrostatic background requires fixture base arrays");
+        TORCH_CHECK(torch::equal(thbase,torch::full_like(thbase,300.0)) &&
+                    std::all_of(metric.begin(),metric.end(),[](float x){return x==-nz;}) &&
+                    std::all_of(one.begin(),one.end(),[](float x){return x==1.0f;}) &&
+                    std::all_of(zero.begin(),zero.end(),[](float x){return x==0.0f;}),
+                    "balanced fixture requires theta_base=300, uniform signed rdn/rdnw and sigma coefficients");
+        const auto alpha_base=wrf::sdirk3::compute_inverse_density(
+            thbase,pbase,287.0f,717.5f,1004.5f,100000.0f).to(torch::kFloat64);
+        std::vector<double> eta_mid(nz);
+        for(int k=0;k<nz;++k) eta_mid[k]=1.0-(k+0.5)/nz;
+        const auto eta=torch::tensor(eta_mid,torch::kFloat64).view({1,nz,1});
+        const auto expected_base_pressure=p_top+eta*mubase.unsqueeze(1);
+        const double base_pressure_error=(pbase-expected_base_pressure).abs().max().item<double>();
+        const double base_mass_error=(mubase-80000.0).abs().max().item<double>();
+        const double base_pressure_check=8.0*std::numeric_limits<float>::epsilon()*
+            std::max(1.0,pbase.abs().max().item<double>());
+        TORCH_CHECK(base_pressure_error<=base_pressure_check && base_mass_error<=1e-3,
+                    "fixture base is not ptop=20kPa/MUB=80kPa sigma column: dpbase=",
+                    base_pressure_error," dpbase_floor=",base_pressure_check," dmub=",base_mass_error);
+        const auto p_perturbation=eta*mass_perturbation;
+        const auto theta_increment=theta_perturbation+
+            theta_step*torch::arange(nz,torch::kFloat64).view({1,nz,1});
+        const auto theta_full=thbase+theta_increment;
+        const auto alpha_target=wrf::sdirk3::compute_inverse_density(
+            theta_full,pbase+p_perturbation,287.0f,717.5f,1004.5f,100000.0f).to(torch::kFloat64);
+        const auto c1h=torch::tensor(one,torch::kFloat64).slice(0,0,nz).view({1,nz,1});
+        const auto c2h=torch::tensor(zero,torch::kFloat64).slice(0,0,nz).view({1,nz,1});
+        const auto base_layer_mass=c1h*mubase.unsqueeze(1)+c2h;
+        const auto full_layer_mass=c1h*(mubase+mass_perturbation).unsqueeze(1)+c2h;
+        const auto rdnw_abs=torch::tensor(metric,torch::kFloat64).slice(0,0,nz).abs().view({nz});
+        // Invert the authoritative perturbation alpha relation. The imported
+        // PH base is rounded FP32; replacing analytic alpha_base with its
+        // geometric difference would define a different native EOS state.
+        const auto dphi=(alpha_target*full_layer_mass-alpha_base*base_layer_mass)/
+            rdnw_abs.view({1,nz,1});
+
+        auto packed=torch::zeros({total},torch::kFloat64);
+        const int64_t ph0=su+sv+sw, theta0=su+sv+2*sw, mu0=total-sm;
+        packed.slice(0,theta0,theta0+st).view({ny,nz,nx})
+            .copy_(theta_increment.expand({ny,nz,nx}));
+        packed.slice(0,mu0,total).fill_(mass_perturbation);
+        auto ph=packed.slice(0,ph0,ph0+sw).view({ny,nw,nx});
+        for(int k=0;k<nz;++k)
+            ph.select(1,k+1).copy_(ph.select(1,k)+dphi.select(1,k));
+
+        const auto native=wrf::sdirk3::calc_p_rho_wrf(
+            ph,packed.slice(0,theta0,theta0+st).view({ny,nz,nx}),
+            packed.slice(0,mu0,total).view({ny,nx}),mubase,alpha_base,pbase,
+            rdnw_abs,c1h.view({nz}),c2h.view({nz}),
+            287.0f,717.5f,1004.5f,100000.0f,300.0f);
+        const double pressure_error=(native.p_pert-p_perturbation).abs().max().item<double>();
+        const double pressure_floor=4096.0*std::numeric_limits<double>::epsilon()*
+            std::max(1.0,pbase.abs().max().item<double>());
+        const double alpha_error=(native.alt-alpha_target).abs().max().item<double>()/
+            alpha_target.abs().max().item<double>();
+        const double alpha_floor=512.0*std::numeric_limits<double>::epsilon();
+        TORCH_CHECK(pressure_error<=pressure_floor && alpha_error<=alpha_floor,
+                    "native calc_p_rho_wrf does not reproduce target p/alpha: dp=",pressure_error,
+                    " dp_floor=",pressure_floor," dalpha_rel=",alpha_error,
+                    " dalpha_floor=",alpha_floor);
+        const auto ph_full=ph+solver.ph_base_.to(torch::kFloat64);
+        const auto geometric_alpha=rdnw_abs.view({1,nz,1})*
+            (ph_full.slice(1,1,nw)-ph_full.slice(1,0,nz))/full_layer_mass;
+        const double geometric_error=((geometric_alpha-alpha_target)/alpha_target)
+            .abs().max().item<double>();
+        const double geometric_floor=16.0*std::numeric_limits<float>::epsilon();
+        TORCH_CHECK(geometric_error<=geometric_floor,
+                    "full-PH hydrostatic geometry exceeds imported FP32 base precision: ",geometric_error);
+        std::cout<<"BALANCED_NATIVE_EOS ptop="<<p_top
+                 <<" theta_full_min=310 theta_step="<<theta_step<<" total_mu=84000"
+                 <<" base_pressure_error="<<base_pressure_error
+                 <<" expected_ppert_max="<<p_perturbation.abs().max().item<double>()
+                 <<" pressure_error="<<pressure_error<<" pressure_floor="<<pressure_floor
+                 <<" alpha_relative_error="<<alpha_error<<" alpha_floor="<<alpha_floor
+                 <<" geometric_alpha_relative_error="<<geometric_error
+                 <<" geometric_alpha_floor="<<geometric_floor<<"\n";
+        if(native_pressure_floor) *native_pressure_floor=pressure_floor;
+        checkPhysicalState(packed,"nonzero hydrostatic background");
+        return packed;
+    }
+    torch::Tensor dryLayerGeometryFactors() const {
+        const auto maps=torch::tensor(mass_map,torch::kFloat64).view({ny,nx});
+        const double grid_spacing=spacing;
+        const auto area=(grid_spacing*grid_spacing)/maps.square();
+        const auto deta=torch::tensor(metric,torch::kFloat64).slice(0,0,nz).abs().reciprocal();
+        return area.unsqueeze(1)/solver.grid_info_->g*deta.view({1,nz,1});
+    }
+    torch::Tensor dryLayerWeights(const torch::Tensor& packed) const {
+        TORCH_CHECK(packed.scalar_type()==torch::kFloat64 && packed.numel()==total,
+                    "dry-layer budget requires a packed FP64 state");
+        const auto mu_full=packed.slice(0,total-sm,total).view({ny,nx})+
+            solver.mu_base_.to(torch::kFloat64);
+        const auto c1=torch::tensor(one,torch::kFloat64).slice(0,0,nz);
+        const auto c2=torch::tensor(zero,torch::kFloat64).slice(0,0,nz);
+        return dryLayerGeometryFactors()*
+            (c1.view({1,nz,1})*mu_full.unsqueeze(1)+c2.view({1,nz,1}));
+    }
+    torch::Tensor dryLayerMassSensitivity() const {
+        return dryLayerGeometryFactors()*
+            torch::tensor(one,torch::kFloat64).slice(0,0,nz).view({1,nz,1});
+    }
+    torch::Tensor fullMassCenterHeights(const torch::Tensor& packed) const {
+        const auto phi=packed.slice(0,su+sv+sw,su+sv+2*sw).view({ny,nw,nx})+
+            solver.ph_base_.to(torch::kFloat64);
+        return 0.5*(phi.slice(1,1,nw)+phi.slice(1,0,nz))/solver.grid_info_->g;
+    }
+    DryBudgetReport dryTransportBudget(const torch::Tensor& initial,
+                                      const std::vector<torch::Tensor>& checkpoints) const {
+        // Observation sites are a subset, not automatically the owned domain.
+        const bool packed=solver.isPackedPeriodicDomain();
+        const int owned_ny=ny-(packed?1:0),owned_nx=nx-(packed?1:0);
+        const auto core=[=](const torch::Tensor& q) {
+            return q.slice(0,0,owned_ny).slice(2,0,owned_nx);
+        };
+        const auto mu=[](const torch::Tensor& q) {
+            return q.slice(0,total-sm,total).view({ny,1,nx});
+        };
+        const auto theta=[](const torch::Tensor& q) {
+            return q.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+        };
+        const auto sensitivity=core(dryLayerMassSensitivity());
+        const auto initial_weights=core(dryLayerWeights(initial));
+        const auto initial_theta=core(theta(initial));
+        DryBudgetReport report;
+        report.initial_mass=initial_weights.sum().item<double>();
+        report.initial_theta_integral=(initial_weights*(300.0+initial_theta)).sum().item<double>();
+        const double eps=std::numeric_limits<double>::epsilon();
+        report.constant_theta=(initial_theta.max()-initial_theta.min()).item<double>()<=
+            128.0*eps*std::max(1.0,initial_theta.abs().max().item<double>());
+        auto previous=initial;
+        double mass_change=0.0,anomaly_change=0.0,anomaly_allowance=0.0;
+        for(size_t step=0;step<checkpoints.size();++step) {
+            const auto& current=checkpoints[step];
+            const auto weights0=core(dryLayerWeights(previous));
+            const auto weights1=core(dryLayerWeights(current));
+            const auto theta0=core(theta(previous)),theta1=core(theta(current));
+            const auto dtheta=theta1-theta0;
+            const auto dmass=sensitivity*core(mu(current)-mu(previous));
+            // Factored endpoint product; no subtraction of giant base integrals.
+            mass_change+=dmass.sum().item<double>();
+            anomaly_change+=(weights0*dtheta+dmass*theta0+dmass*dtheta).sum().item<double>();
+            report.mass_allowance+=256.0*eps*(sensitivity*
+                core(mu(previous).abs()+mu(current).abs())).sum().item<double>();
+            anomaly_allowance+=512.0*eps*((weights0*theta0).abs()+
+                                          (weights1*theta1).abs()).sum().item<double>();
+            report.theta_allowance=anomaly_allowance+300.0*report.mass_allowance;
+            const double theta_change=anomaly_change+300.0*mass_change;
+            report.max_mass_drift=std::max(report.max_mass_drift,std::abs(mass_change));
+            report.max_theta_drift=std::max(report.max_theta_drift,std::abs(theta_change));
+            TORCH_CHECK(std::abs(mass_change)<=report.mass_allowance,
+                        "dry mass budget failed at step ",step+1," drift=",mass_change,
+                        " allowance=",report.mass_allowance);
+            // Uniform theta is a linear invariant; nonuniform theta makes Q
+            // quadratic and may have an RK defect. The scoped weak-twin gate
+            // bounds the measured drift; it does not assert exact conservation
+            // or give a rigorous time-error bound for arbitrary profiles.
+            TORCH_CHECK(std::abs(theta_change)<=report.theta_allowance,
+                        "dry mass-weighted theta budget failed at step ",step+1," drift=",theta_change,
+                        " allowance=",report.theta_allowance);
+            previous=current;
+        }
+        return report;
+    }
+    PerturbationSize perturbationSize(const torch::Tensor& background,
+                                      const torch::Tensor& increment) {
+        checkPhysicalState(background, "amplitude reference");
+        TORCH_CHECK(increment.dim() == 1 && increment.numel() == total &&
+                    torch::isfinite(increment).all().item<bool>(),
+                    "amplitude increment has an invalid shape/value");
+        const auto w = increment.slice(0, su+sv, su+sv+sw);
+        const auto mass = background.slice(0, total-sm, total).view({ny,nx}) +
+                          solver.mu_base_.to(torch::kFloat64);
+        const auto dmass = increment.slice(0, total-sm, total).view({ny,nx});
+        const auto phi = background.slice(0, su+sv+sw, su+sv+2*sw).view({ny,nw,nx}) +
+                         solver.ph_base_.to(torch::kFloat64);
+        const auto dphi = increment.slice(0, su+sv+sw, su+sv+2*sw).view({ny,nw,nx});
+        const auto layers = phi.slice(1,1,nw) - phi.slice(1,0,nw-1);
+        const auto dlayers = dphi.slice(1,1,nw) - dphi.slice(1,0,nw-1);
+        return {w.abs().max().item<double>(), (dmass/mass).abs().max().item<double>(),
+                (dlayers/layers).abs().max().item<double>()};
     }
     void checkPhysicalState(const torch::Tensor& packed, const char* where) {
         TORCH_CHECK(packed.defined() && packed.dim() == 1 && packed.numel() == total,

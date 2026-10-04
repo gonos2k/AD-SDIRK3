@@ -181,6 +181,31 @@ falsifiers, fixed-R information gain and weak MU posterior variance, then actual
 minimizes the two-time cost. Only explicit physical rejection or reported ordinary
 non-convergence can backtrack; fatal/contract/adjoint errors propagate.
 
+`FP64_Nonlinear_Inverse` (`--nonlinear`) keeps that six-control, two-time
+fixed-R problem and increases the truth increment, bounded initially by 10 m/s
+in W, 20% of dry column mass and 50% of layer geopotential thickness. These
+are initial perturbation bounds, not bounds on the evolved trajectory. A dense
+inverse-BFGS search uses the actual adjoint gradient and positive curvature;
+the weak experiment retains its fixed background metric. The strong case must
+exercise Armijo backtracking and converge within the unchanged 30-update limit.
+It checks a nonlinear-point directional derivative, deterministic replay and a
+tighter Newton solve, and separates its nonlinear MAP from the independent
+background-linear MAP relative to FD, roundoff and solve sensitivity estimates.
+These estimates are engineering comparisons, not rigorous error bounds. This
+large, unbalanced dry twin tests optimizer coupling; it does not validate realistic
+balanced meteorological initial conditions or a full WRF assimilation window.
+
+`FP64_Balanced_Inverse` (`--balanced`) first checks a nonzero horizontally
+uniform dry hydrostatic background: theta=310 K, dry column mass=84000 Pa,
+zero winds and an EOS-consistent geopotential perturbation. For this uniform
+sigma fixture, prescribed pressure perturbations are `eta_mid*4000 Pa`; native
+EOS inversion supplies the layer geopotential increments. The example requires
+native pressure/density consistency, small Full RHS, Full=Explicit+Implicit and
+four-step stationarity before reusing the six-control, fixed-R two-time inverse.
+The truth contains dynamical W/PH/MU perturbations; it is not an equilibrium.
+This rest-state gate does not cover terrain, general hybrid coefficients,
+geostrophic balance or realistic WRF initial-condition assimilation.
+
 The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
 (`share/module_model_constants.F:88`), fixed as `kWrfWAlpha` in
 `wrf_sdirk3_w_damping.h` — WRF exposes no namelist for it, so neither do we.
@@ -274,7 +299,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 114-test CTest inventory**, pinned by
+The CMake tree registers an **exact 119-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
@@ -287,6 +312,23 @@ the pinned file defines the inventory.
   global self-convergence, one-step/two-half-step checks, and a fixed-state
   Full/ExplicitOnly/ImplicitOnly RHS dt-invariance check. It excludes
   Fortran-side updates, physical boundary refresh and MPI.
+- `FP64_Window_Forecast` — the existing six-control, fixed-R inverse at
+  8/16 accepted steps, with unused 3/6 s predictions, full-owned-cell W/PH/MU/
+  theta diagnostics, and dry-mass/weighted-theta endpoint budgets.
+- `FP64_Fixed_Data_Refinement` — one observation dataset at 2/4 s and fixed R
+  compared at h=.25/.125 s, including the inverse solution, 6 s forecast and
+  tighter-solve controls. Two time increments do not establish a convergence order.
+- `FP64_Stable_Column_Inverse` — native EOS-consistent theta=310/312/314/316 K
+  sigma column (Kh=1000, Kv=0), positive discrete N², sixteen-step equilibrium,
+  initial coordinate-correct buoyancy response and the same inverse/forecast.
+  These are short dry single-tile algorithm twins, not operational forecast skill.
+
+Internal FP64 stage quality compares WRMS growth against the larger of the
+initial defect and stage-equation construction precision. The Newton tolerance
+and growth cap are unchanged. A converged roundoff-limited root is retained
+without legacy post-solve damping; resolved post-solve damping remains unsupported
+by the retained converged-stage adjoint and fails explicitly.
+
 - `MPI_Halo_Contract_np{1,2,4}` — halo primitive forward/adjoint/packed AD+BC
   transpose matrices,
 - `MPI_Runtime_Contract_np{1,2,4}` — runtime fail-close contracts (baseline

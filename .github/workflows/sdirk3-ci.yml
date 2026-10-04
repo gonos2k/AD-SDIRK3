@@ -301,7 +301,10 @@ jobs:
   core-linux:
     name: core-linux
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # The identical 119-test gate took ~86 min on one hosted runner; a slower
+    # PR runner hit 90 min during fixed-data refinement. Keep every criterion
+    # and allow enough time for the full test/parity/install gate to finish.
+    timeout-minutes: 150
     env:
       # mpich's UCX netmod probes InfiniBand verbs on some hosted VM nodes and
       # MPI_Init aborts (ibv_create_srq: Operation not supported) — observed

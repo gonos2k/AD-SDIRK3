@@ -1,0 +1,117 @@
+{
+  "numeric_commit": "a3f0ee3af7704ca8580e7b7b2f0c55d4801ac608",
+  "sources": {
+    ".github/ci/expected_ctest_names.txt": "05620e7847a9383efd1b3c13c12fd3fecdce40c7e3d2f5911e3fbedf88b68514",
+    "README.md": "7f13893b336b57d266a95ed7939357037a1cf74f4f02d42c2721bcfb2d0864ac",
+    "external/libtorch_wrf/sdirk3/CMakeLists.txt": "78cf6675dc1003e7858d4a18ca7b151f71fae90ee1b715a4973bb15d974b9f22",
+    "external/libtorch_wrf/sdirk3/README.md": "14d2ad30fe1858a36dc9583b8183e79f8219da3baf30507842fda8ef57e47376",
+    "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp": "eede83cc213ff5627ad9a664a231b7bd5013c6ee3a20edde8f0404cae6fcf5bd",
+    "external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp": "9f2fa6102a2bc6f67609ce7e5c5b7614cdbb560ed1dcec3f33446793393c923e",
+    "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h": "50d2aea06d7bf3673b5e9477642ef17383471d3b8b78723131a197252752c668",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "65bb2d2fb9735e7f98ac73b25de536809156a93aa49304e7aa3db3bcbc5b0fe0",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_wrms_norm.h": "c2428d4bd9561b35ab96c4d093b1fda14ff5a851314f49f2e92c50319ee18b85",
+    "external/sdirk3_lib/CLAUDE.md": "0915ae335b1439a7db36ca6be4c547135dc2b680d5590937c6f75b9b882cf096"
+  },
+  "binaries": {
+    "test_fp64_carry_adjoint": "b7093ad5276dfe67ee5a6e1e6f94f0e05dfcc7e50e96a154d45a101ff92ff8a2",
+    "test_wrms_gate_metric": "5d1c34f066216a9dd3b68880c8b13c8ad96409b4c6d71617a4679d7785423521",
+    "libwrf_sdirk3_libtorch.a": "45254e272f00550633b6035b71c4c38fdd514dccf432ac9766308478905c1ca3"
+  },
+  "graph": [
+    {
+      "file": "wrf_sdirk3_tile_unified.h",
+      "sha256": "c5b817595b9b92a4e9b778b98978fb4452a96cb62aa8709a575b1f747db6fcbf",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_config.h",
+      "sha256": "4df759250f15ed9e897f796a601b060cb1854b2006f5efeaaa40fa93b61f860c",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_wrms_norm.h",
+      "sha256": "c2428d4bd9561b35ab96c4d093b1fda14ff5a851314f49f2e92c50319ee18b85",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_interface_params.h",
+      "sha256": "539e1df6f2f99de89ef4ffa5fc6e4a0dab90ff97c85d2ecb3b831838f3e8cae6",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "8a7d5f072ab7c5419cb1c95cd495cd55584a0b8cd9bade9a69ffe7eed4e278e3",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_interface.h",
+      "sha256": "de92b28e23ba7251a2032b9ad9ec1446757c63253bf28e7b5b1060e085f88e2a",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_config.cpp",
+      "sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_ark324_composition.h",
+      "sha256": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "65bb2d2fb9735e7f98ac73b25de536809156a93aa49304e7aa3db3bcbc5b0fe0",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_base_state_zerocopy.cpp",
+      "sha256": "6374f05622afa25d92b285b04fdaa09a9b7d404563532acefe5186c3cb787ea7",
+      "matches": true
+    },
+    {
+      "file": "wrf_hydrostatic_pressure.h",
+      "sha256": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+      "matches": true
+    },
+    {
+      "file": "wrf_sdirk3_hydrostatic_balance.h",
+      "sha256": "707ff6f84137db8129779931cf4fa5c281bd5a3a6c233bb81881f1858b22e133",
+      "matches": true
+    },
+    {
+      "file": "tests/tile_test_fixture.h",
+      "sha256": "50d2aea06d7bf3673b5e9477642ef17383471d3b8b78723131a197252752c668",
+      "matches": true
+    },
+    {
+      "file": "tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "afe214ec0d94139cf6e4ede3c148a4a30da2d3084c75175ac8bf012f9fec2592",
+      "matches": true
+    },
+    {
+      "file": "tests/test_base_state_checked_abi.cpp",
+      "sha256": "94da99dc441c9bcd4f223700ccf41b69ee818cb73d8e1f5cefa20e32f8eafee1",
+      "matches": true
+    },
+    {
+      "file": "tests/test_config_numeric_contract.cpp",
+      "sha256": "6dd55f1520bc3e648a35ea7dd0366400dbbe21135117ca8d842e4ae46e4e6bbb",
+      "matches": true
+    },
+    {
+      "file": "tests/test_fp64_carry_adjoint.cpp",
+      "sha256": "eede83cc213ff5627ad9a664a231b7bd5013c6ee3a20edde8f0404cae6fcf5bd",
+      "matches": true
+    },
+    {
+      "file": "tests/test_wrms_gate_metric.cpp",
+      "sha256": "9f2fa6102a2bc6f67609ce7e5c5b7614cdbb560ed1dcec3f33446793393c923e",
+      "matches": true
+    },
+    {
+      "file": "tests/test_fixed_trajectory_derivative.cpp",
+      "sha256": "8bb11154215f995894a44c54b03e9c4b46870e73651caa0eb100dd4f1bf4fd71",
+      "matches": true
+    }
+  ]
+}

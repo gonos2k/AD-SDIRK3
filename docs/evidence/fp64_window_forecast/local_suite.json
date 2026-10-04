@@ -1,0 +1,730 @@
+{
+  "numeric_commit": "a3f0ee3af7704ca8580e7b7b2f0c55d4801ac608",
+  "head": "ddc59e1f4a4620b3b0f33e350003cfb86242d36b",
+  "platform": "macOS arm64 AppleClang21 Release -O3 HomebrewTorch2.10",
+  "registered": 119,
+  "passed": 119,
+  "skipped": 0,
+  "failed": 0,
+  "command": "ctest --test-dir /private/tmp/sdirk3-fp64-trajectory-build-20260929 --output-on-failure -j 2",
+  "suite_wall_s": 2083.3,
+  "log_sha256": "a776c8c0e37b364196b5386bc3db7c5b451e107422652c3003282784cd314cc4",
+  "tests": [
+    {
+      "number": 73,
+      "name": "FP64_Balanced_Inverse",
+      "status": "Passed",
+      "duration_s": 53.71
+    },
+    {
+      "number": 71,
+      "name": "FP64_Two_Time_Inverse",
+      "status": "Passed",
+      "duration_s": 54.88
+    },
+    {
+      "number": 72,
+      "name": "FP64_Nonlinear_Inverse",
+      "status": "Passed",
+      "duration_s": 128.76
+    },
+    {
+      "number": 47,
+      "name": "Option2_Momentum_Geometry_Source_Parity",
+      "status": "Passed",
+      "duration_s": 33.21
+    },
+    {
+      "number": 86,
+      "name": "Full_Tile_Temporal_Order",
+      "status": "Passed",
+      "duration_s": 85.68
+    },
+    {
+      "number": 70,
+      "name": "FP64_Initial_Inverse",
+      "status": "Passed",
+      "duration_s": 39.21
+    },
+    {
+      "number": 68,
+      "name": "Fixed_Trajectory_Derivative",
+      "status": "Passed",
+      "duration_s": 30.86
+    },
+    {
+      "number": 69,
+      "name": "FP64_Carry_Adjoint",
+      "status": "Passed",
+      "duration_s": 51.37
+    },
+    {
+      "number": 77,
+      "name": "Fixed_Trajectory_Lifecycle",
+      "status": "Passed",
+      "duration_s": 24.49
+    },
+    {
+      "number": 84,
+      "name": "Full_Tile_Step_Adjoint",
+      "status": "Passed",
+      "duration_s": 21.86
+    },
+    {
+      "number": 49,
+      "name": "Option2_W_Actual_Rhs_Contract",
+      "status": "Passed",
+      "duration_s": 8.74
+    },
+    {
+      "number": 48,
+      "name": "Option2_V_Actual_Rhs_Contract",
+      "status": "Passed",
+      "duration_s": 6.64
+    },
+    {
+      "number": 97,
+      "name": "Stage_Operand_Decomposition_Contract",
+      "status": "Passed",
+      "duration_s": 3.23
+    },
+    {
+      "number": 85,
+      "name": "Full_Tile_Internal_FP64",
+      "status": "Passed",
+      "duration_s": 4.06
+    },
+    {
+      "number": 83,
+      "name": "FP64_State_Handoff_Contract",
+      "status": "Passed",
+      "duration_s": 33.73
+    },
+    {
+      "number": 60,
+      "name": "Coriolis_Contract",
+      "status": "Passed",
+      "duration_s": 2.7
+    },
+    {
+      "number": 67,
+      "name": "Two_Step_Tile_Adjoint",
+      "status": "Passed",
+      "duration_s": 3.72
+    },
+    {
+      "number": 107,
+      "name": "MPI_Runtime_Contract_np4",
+      "status": "Passed",
+      "duration_s": 2.66
+    },
+    {
+      "number": 106,
+      "name": "MPI_Runtime_Contract_np2",
+      "status": "Passed",
+      "duration_s": 2.13
+    },
+    {
+      "number": 105,
+      "name": "MPI_Runtime_Contract_np1",
+      "status": "Passed",
+      "duration_s": 2.1
+    },
+    {
+      "number": 111,
+      "name": "Phi_Horizontal_Coordinate_Contract",
+      "status": "Passed",
+      "duration_s": 2.08
+    },
+    {
+      "number": 62,
+      "name": "W_Damping_Coordinate_Contract",
+      "status": "Passed",
+      "duration_s": 1.58
+    },
+    {
+      "number": 114,
+      "name": "Nonhydrostatic_Pressure_Coordinate_Contract",
+      "status": "Passed",
+      "duration_s": 1.55
+    },
+    {
+      "number": 46,
+      "name": "Scalar_Diffusion_Contract",
+      "status": "Passed",
+      "duration_s": 0.98
+    },
+    {
+      "number": 18,
+      "name": "Global_Ownership_Overlap_Gap_Contract",
+      "status": "Passed",
+      "duration_s": 1.9
+    },
+    {
+      "number": 79,
+      "name": "PGF_Coordinate_Contract",
+      "status": "Passed",
+      "duration_s": 1.39
+    },
+    {
+      "number": 52,
+      "name": "Option2_U_Full_Rhs_Contract_Map125",
+      "status": "Passed",
+      "duration_s": 1.36
+    },
+    {
+      "number": 51,
+      "name": "Option2_U_Full_Rhs_Contract_Map1",
+      "status": "Passed",
+      "duration_s": 1.5
+    },
+    {
+      "number": 108,
+      "name": "Curvature_Coordinate_Contract",
+      "status": "Passed",
+      "duration_s": 1.09
+    },
+    {
+      "number": 53,
+      "name": "Potential_Temperature_Contract",
+      "status": "Passed",
+      "duration_s": 1.3
+    },
+    {
+      "number": 36,
+      "name": "Base_State_Checked_ABI",
+      "status": "Passed",
+      "duration_s": 1.48
+    },
+    {
+      "number": 82,
+      "name": "MSF_Map_Transfer_MPS",
+      "status": "Passed",
+      "duration_s": 1.0
+    },
+    {
+      "number": 61,
+      "name": "Phi_Coordinate_Contract",
+      "status": "Passed",
+      "duration_s": 0.9
+    },
+    {
+      "number": 42,
+      "name": "ARK324_Production_Composition",
+      "status": "Passed",
+      "duration_s": 2.05
+    },
+    {
+      "number": 87,
+      "name": "Full_Tile_Horizontal_PGF",
+      "status": "Passed",
+      "duration_s": 0.91
+    },
+    {
+      "number": 88,
+      "name": "Full_Tile_Symmetric_Walls",
+      "status": "Passed",
+      "duration_s": 0.88
+    },
+    {
+      "number": 80,
+      "name": "RHS_Preconditioner_Contract",
+      "status": "Passed",
+      "duration_s": 0.76
+    },
+    {
+      "number": 58,
+      "name": "Vertical_Momentum_Contract",
+      "status": "Passed",
+      "duration_s": 0.84
+    },
+    {
+      "number": 78,
+      "name": "Horizontal_Mass_Contract",
+      "status": "Passed",
+      "duration_s": 0.84
+    },
+    {
+      "number": 57,
+      "name": "FNM_FNP_Geometry_Contract",
+      "status": "Passed",
+      "duration_s": 0.94
+    },
+    {
+      "number": 55,
+      "name": "Packed_Boundary_Contract",
+      "status": "Passed",
+      "duration_s": 0.78
+    },
+    {
+      "number": 63,
+      "name": "Phase2_D0_Contract",
+      "status": "Passed",
+      "duration_s": 0.76
+    },
+    {
+      "number": 112,
+      "name": "MSF_Pointer_Republication",
+      "status": "Passed",
+      "duration_s": 0.77
+    },
+    {
+      "number": 81,
+      "name": "MSF_Cache_Reset_Contract",
+      "status": "Passed",
+      "duration_s": 0.79
+    },
+    {
+      "number": 50,
+      "name": "Option2_W_Actual_Rhs_AD_Derivative_Contract",
+      "status": "Passed",
+      "duration_s": 0.49
+    },
+    {
+      "number": 102,
+      "name": "MPI_Halo_Contract_np1",
+      "status": "Passed",
+      "duration_s": 0.78
+    },
+    {
+      "number": 104,
+      "name": "MPI_Halo_Contract_np4",
+      "status": "Passed",
+      "duration_s": 0.71
+    },
+    {
+      "number": 103,
+      "name": "MPI_Halo_Contract_np2",
+      "status": "Passed",
+      "duration_s": 0.4
+    },
+    {
+      "number": 7,
+      "name": "Acoustic_Substep_AD",
+      "status": "Passed",
+      "duration_s": 0.76
+    },
+    {
+      "number": 89,
+      "name": "Full_Tile_RHS_Debug_Invariance",
+      "status": "Passed",
+      "duration_s": 0.32
+    },
+    {
+      "number": 118,
+      "name": "Raw_Principal_Factory",
+      "status": "Passed",
+      "duration_s": 0.76
+    },
+    {
+      "number": 117,
+      "name": "Raw_Principal_Actual_Tile_Oracle",
+      "status": "Passed",
+      "duration_s": 0.71
+    },
+    {
+      "number": 54,
+      "name": "Periodic_Staggered_Advection",
+      "status": "Passed",
+      "duration_s": 0.96
+    },
+    {
+      "number": 109,
+      "name": "Curvature_Kernel_Contract",
+      "status": "Passed",
+      "duration_s": 0.72
+    },
+    {
+      "number": 110,
+      "name": "Phi_Horizontal_Kernel_Contract",
+      "status": "Passed",
+      "duration_s": 0.7
+    },
+    {
+      "number": 98,
+      "name": "Stage2_Rejection_Snapshot_Archive",
+      "status": "Passed",
+      "duration_s": 0.24
+    },
+    {
+      "number": 35,
+      "name": "Adjoint_Solve_Authority_Contract",
+      "status": "Passed",
+      "duration_s": 0.69
+    },
+    {
+      "number": 45,
+      "name": "Scalar_Advection_Contract",
+      "status": "Passed",
+      "duration_s": 0.62
+    },
+    {
+      "number": 22,
+      "name": "AD_Tangent_Contract",
+      "status": "Passed",
+      "duration_s": 0.84
+    },
+    {
+      "number": 113,
+      "name": "Nonhydrostatic_Pressure_Kernel_Contract",
+      "status": "Passed",
+      "duration_s": 0.69
+    },
+    {
+      "number": 41,
+      "name": "Trust_Model_Contract",
+      "status": "Passed",
+      "duration_s": 0.73
+    },
+    {
+      "number": 96,
+      "name": "WW_CP_Parity_Contract",
+      "status": "Passed",
+      "duration_s": 0.21
+    },
+    {
+      "number": 2,
+      "name": "Diag_IO_Concurrency",
+      "status": "Passed",
+      "duration_s": 0.74
+    },
+    {
+      "number": 95,
+      "name": "WDamp_WRF_Reference_Contract",
+      "status": "Passed",
+      "duration_s": 0.2
+    },
+    {
+      "number": 39,
+      "name": "VJP_Semantics",
+      "status": "Passed",
+      "duration_s": 0.59
+    },
+    {
+      "number": 11,
+      "name": "Base_EOS_Contract",
+      "status": "Passed",
+      "duration_s": 1.02
+    },
+    {
+      "number": 59,
+      "name": "Horizontal_Momentum_Contract",
+      "status": "Passed",
+      "duration_s": 0.83
+    },
+    {
+      "number": 64,
+      "name": "Phase2_D0_Uncapped",
+      "status": "Passed",
+      "duration_s": 0.21
+    },
+    {
+      "number": 99,
+      "name": "Core_Full_Object_Link",
+      "status": "Passed",
+      "duration_s": 0.72
+    },
+    {
+      "number": 40,
+      "name": "FGMRES_Contract",
+      "status": "Passed",
+      "duration_s": 0.6
+    },
+    {
+      "number": 65,
+      "name": "Phase2_D0_Floor",
+      "status": "Passed",
+      "duration_s": 0.22
+    },
+    {
+      "number": 23,
+      "name": "Response_Probe_Contract",
+      "status": "Passed",
+      "duration_s": 0.77
+    },
+    {
+      "number": 26,
+      "name": "State_Layout_Contract",
+      "status": "Passed",
+      "duration_s": 0.2
+    },
+    {
+      "number": 21,
+      "name": "JVP_Fallback_Invalidates_Verdict_Contract",
+      "status": "Passed",
+      "duration_s": 0.58
+    },
+    {
+      "number": 92,
+      "name": "WDamp_Tangent_Contract",
+      "status": "Passed",
+      "duration_s": 0.21
+    },
+    {
+      "number": 34,
+      "name": "Right_Preconditioner_Quality_Contract",
+      "status": "Passed",
+      "duration_s": 0.91
+    },
+    {
+      "number": 16,
+      "name": "Diagnostic_Observer_Noninterference_Contract",
+      "status": "Passed",
+      "duration_s": 0.59
+    },
+    {
+      "number": 25,
+      "name": "Transpose_Probe_Contract",
+      "status": "Passed",
+      "duration_s": 0.74
+    },
+    {
+      "number": 66,
+      "name": "Phase2_D0_Phi_Unity",
+      "status": "Passed",
+      "duration_s": 0.21
+    },
+    {
+      "number": 115,
+      "name": "WRF_Dynamics_Config",
+      "status": "Passed",
+      "duration_s": 0.89
+    },
+    {
+      "number": 6,
+      "name": "WRMS_Gate_Metric",
+      "status": "Passed",
+      "duration_s": 0.67
+    },
+    {
+      "number": 90,
+      "name": "Krylov_Metric_Coordinate_Contract",
+      "status": "Passed",
+      "duration_s": 0.72
+    },
+    {
+      "number": 1,
+      "name": "U_Slow_Closures",
+      "status": "Passed",
+      "duration_s": 0.82
+    },
+    {
+      "number": 29,
+      "name": "Stage_State_Identity_Contract",
+      "status": "Passed",
+      "duration_s": 0.82
+    },
+    {
+      "number": 119,
+      "name": "Raw_Principal_Disabled",
+      "status": "Passed",
+      "duration_s": 0.73
+    },
+    {
+      "number": 116,
+      "name": "Raw_Principal_Contract",
+      "status": "Passed",
+      "duration_s": 0.74
+    },
+    {
+      "number": 94,
+      "name": "RW_Term_Capture_Contract",
+      "status": "Passed",
+      "duration_s": 0.21
+    },
+    {
+      "number": 20,
+      "name": "Failed_Step_Map_Is_Invalid_Contract",
+      "status": "Passed",
+      "duration_s": 0.71
+    },
+    {
+      "number": 14,
+      "name": "Stats_Reset_Contract",
+      "status": "Passed",
+      "duration_s": 0.58
+    },
+    {
+      "number": 8,
+      "name": "Acoustic_Schedule_Invalid_Matrix",
+      "status": "Passed",
+      "duration_s": 0.8
+    },
+    {
+      "number": 17,
+      "name": "Operational_Primal_Tangent_Contract",
+      "status": "Passed",
+      "duration_s": 0.69
+    },
+    {
+      "number": 31,
+      "name": "Mu_Coupling_Orientation_Experiment_Contract",
+      "status": "Passed",
+      "duration_s": 0.73
+    },
+    {
+      "number": 24,
+      "name": "Implicit_Diff_Contract",
+      "status": "Passed",
+      "duration_s": 0.74
+    },
+    {
+      "number": 13,
+      "name": "Metric_Policy_Contract",
+      "status": "Passed",
+      "duration_s": 0.71
+    },
+    {
+      "number": 93,
+      "name": "WDamp_Preconditioner_Policy_Contract",
+      "status": "Passed",
+      "duration_s": 0.2
+    },
+    {
+      "number": 30,
+      "name": "Phi_Unity_Experiment_Enabled_Contract",
+      "status": "Passed",
+      "duration_s": 0.72
+    },
+    {
+      "number": 5,
+      "name": "Dump_Contract",
+      "status": "Passed",
+      "duration_s": 0.58
+    },
+    {
+      "number": 12,
+      "name": "Hydrostatic_Pressure_Orientation_Contract",
+      "status": "Passed",
+      "duration_s": 0.77
+    },
+    {
+      "number": 91,
+      "name": "Stage_Krylov_Policy_Contract",
+      "status": "Passed",
+      "duration_s": 0.2
+    },
+    {
+      "number": 32,
+      "name": "Discrete_Adjoint_Pair_Contract",
+      "status": "Passed",
+      "duration_s": 0.7
+    },
+    {
+      "number": 28,
+      "name": "MuPhi_Coupling_Structure_Contract",
+      "status": "Passed",
+      "duration_s": 0.57
+    },
+    {
+      "number": 27,
+      "name": "Mass_Coordinate_Mode_Contract",
+      "status": "Passed",
+      "duration_s": 0.2
+    },
+    {
+      "number": 43,
+      "name": "Krylov_Budget_Config",
+      "status": "Passed",
+      "duration_s": 0.76
+    },
+    {
+      "number": 15,
+      "name": "First_Failure_Classification_Contract",
+      "status": "Passed",
+      "duration_s": 0.58
+    },
+    {
+      "number": 56,
+      "name": "AD_Safe_Math_Contract",
+      "status": "Passed",
+      "duration_s": 0.79
+    },
+    {
+      "number": 19,
+      "name": "Memory_Tile_Offset_Contract",
+      "status": "Passed",
+      "duration_s": 0.74
+    },
+    {
+      "number": 100,
+      "name": "Core_Archive_Manifest",
+      "status": "Passed",
+      "duration_s": 0.07
+    },
+    {
+      "number": 101,
+      "name": "Core_Archive_MakeParity",
+      "status": "Passed",
+      "duration_s": 0.06
+    },
+    {
+      "number": 37,
+      "name": "MSF_Raw_Stats_Matrix",
+      "status": "Passed",
+      "duration_s": 0.0
+    },
+    {
+      "number": 33,
+      "name": "AcousticGravity_Shadow_Contract",
+      "status": "Passed",
+      "duration_s": 0.0
+    },
+    {
+      "number": 9,
+      "name": "Base_State_Layout_Contract",
+      "status": "Passed",
+      "duration_s": 0.0
+    },
+    {
+      "number": 10,
+      "name": "Hydrostatic_Balance_Contract",
+      "status": "Passed",
+      "duration_s": 0.0
+    },
+    {
+      "number": 3,
+      "name": "Config_Provenance",
+      "status": "Passed",
+      "duration_s": 0.0
+    },
+    {
+      "number": 4,
+      "name": "Experiment_Config_Parser",
+      "status": "Passed",
+      "duration_s": 0.0
+    },
+    {
+      "number": 38,
+      "name": "Geometry_Contract_Matrix",
+      "status": "Passed",
+      "duration_s": 0.0
+    },
+    {
+      "number": 44,
+      "name": "Config_Numeric_Contract",
+      "status": "Passed",
+      "duration_s": 0.73
+    },
+    {
+      "number": 74,
+      "name": "FP64_Window_Forecast",
+      "status": "Passed",
+      "duration_s": 405.49
+    },
+    {
+      "number": 76,
+      "name": "FP64_Stable_Column_Inverse",
+      "status": "Passed",
+      "duration_s": 109.58
+    },
+    {
+      "number": 75,
+      "name": "FP64_Fixed_Data_Refinement",
+      "status": "Passed",
+      "duration_s": 1752.63
+    }
+  ],
+  "numeric_files_unchanged_from_commit": true,
+  "raw_metric_scope": "The final local suite asserts all numerical criteria but stdout retains only per-test outcomes. Detailed macOS numerical values in pilot_summary.json are earlier pilots; final exact-source Linux LastTest.log will be inspected separately."
+}
