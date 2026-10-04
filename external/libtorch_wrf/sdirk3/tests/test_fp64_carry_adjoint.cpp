@@ -1656,7 +1656,8 @@ torch::Tensor wave_observation(const torch::Tensor& background,const WaveState& 
     return physical_w_values(background+wave_field(q));
 }
 struct WaveModes { WaveState q0{},q1{}; WaveComplex eigenvalue{}; };
-WaveModes dominant_sub_nmax_mode(const torch::Tensor& matrix,const WaveReference& column) {
+WaveModes dominant_sub_nmax_mode(const torch::Tensor& matrix,const WaveReference& column,
+                                 int branch_rank=0) {
     auto eig=torch::linalg_eig(matrix);
     const auto values=std::get<0>(eig).contiguous();
     const auto vectors=std::get<1>(eig).contiguous();
@@ -1665,17 +1666,22 @@ WaveModes dominant_sub_nmax_mode(const torch::Tensor& matrix,const WaveReference
     for(int k=0;k<nz;++k)
         nmax=std::max(nmax,std::sqrt(column.gravity/column.theta[k]*column.theta_z[k]));
     std::cout<<"WAVE_MODE_SPECTRUM N_max_rad_s="<<nmax<<" positive_oscillatory_candidates_rad_s=";
-    int selected=-1;
+    std::vector<int> candidates;
     for(int n=0;n<wave_size;++n) {
         const WaveComplex candidate(lambda[n].real(),lambda[n].imag());
         if(candidate.imag()>1e-7) std::cout<<candidate.imag()<<",";
-        // The stable-column buoyancy frequency sets a profile-derived cutoff;
-        // choose the highest positive oscillatory branch below N_max.
-        if(candidate.imag()>1e-7 && candidate.imag()<=nmax &&
-           (selected<0 || candidate.imag()>lambda[selected].imag())) selected=n;
+        // Rank branches by frequency below the source-profile N_max cutoff.
+        if(candidate.imag()>1e-7 && candidate.imag()<=nmax) candidates.push_back(n);
     }
-    std::cout<<" selected_rad_s="<<(selected>=0?lambda[selected].imag():-1.0)<<"\n";
-    TORCH_CHECK(selected>=0,"independent reference has no positive oscillatory branch below stable-column N_max");
+    std::sort(candidates.begin(),candidates.end(),[&](int a,int b) {
+        return lambda[a].imag()>lambda[b].imag();
+    });
+    const int selected=branch_rank>=0 && branch_rank<static_cast<int>(candidates.size())
+        ? candidates[branch_rank] : -1;
+    std::cout<<" selected_rad_s="<<(selected>=0?lambda[selected].imag():-1.0)
+             <<" branch_rank="<<branch_rank<<"\n";
+    TORCH_CHECK(selected>=0,"independent reference has no requested positive oscillatory branch below stable-column N_max: ",
+                branch_rank);
     const auto selected_vector=vectors.select(1,selected).contiguous();
     const auto eigenvalue=values.select(0,selected);
     const double matrix_norm=matrix.norm().item<double>();
@@ -1750,33 +1756,86 @@ WaveModes dominant_sub_nmax_mode(const torch::Tensor& matrix,const WaveReference
 WaveState wave_combine(const WaveState& q0,const WaveState& q1,double a,double b) {
     WaveState result{};for(int k=0;k<wave_size;++k) result[k]=a*q0[k]+b*q1[k];return result;
 }
+WaveState wave_combine(const std::vector<WaveModes>& modes,const torch::Tensor& coefficients) {
+    TORCH_CHECK(coefficients.dim()==1 && coefficients.numel()==2*static_cast<int64_t>(modes.size()),
+                "wave controls must contain two quadratures per selected mode");
+    WaveState result{};
+    for(size_t m=0;m<modes.size();++m) {
+        const double a=coefficients[2*m].item<double>();
+        const double b=coefficients[2*m+1].item<double>();
+        for(int k=0;k<wave_size;++k)
+            result[k]+=a*modes[m].q0[k]+b*modes[m].q1[k];
+    }
+    return result;
+}
+torch::Tensor wave_basis_coordinates(const std::vector<WaveModes>& modes,const WaveState& state) {
+    const int controls=2*static_cast<int>(modes.size());
+    TORCH_CHECK(controls>0,"wave projection requires at least one selected mode");
+    auto gram=torch::zeros({controls,controls},torch::kFloat64);
+    auto rhs=torch::zeros({controls},torch::kFloat64);
+    const auto basis_value=[&](int column) -> const WaveState& {
+        const auto& mode=modes[column/2];
+        return column%2==0 ? mode.q0 : mode.q1;
+    };
+    for(int i=0;i<controls;++i) {
+        const auto& bi=basis_value(i);
+        for(int k=0;k<wave_size;++k)
+            rhs[i]+=std::real(std::conj(bi[k])*state[k]);
+        for(int j=0;j<controls;++j) {
+            const auto& bj=basis_value(j);
+            for(int k=0;k<wave_size;++k)
+                gram[i][j]+=std::real(std::conj(bi[k])*bj[k]);
+        }
+    }
+    return torch::linalg_solve(gram,rhs);
+}
 struct WaveMap {
     double value=0.0;
     torch::Tensor gradient;
     Result simulation;
 };
-WaveMap evaluate_wave_inverse(const torch::Tensor& background,const WaveState& q0,const WaveState& q1,
+WaveMap evaluate_wave_inverse(const torch::Tensor& background,const std::vector<WaveModes>& modes,
         const torch::Tensor& observations,double physical_std,int steps,
         const torch::Tensor& coefficients,bool pullback,float newton_tol=1e-10f) {
-    const auto a=coefficients[0].item<double>(),b=coefficients[1].item<double>();
-    const auto state=wave_combine(q0,q1,a,b);
+    const auto state=wave_combine(modes,coefficients);
     std::vector<torch::Tensor> timed(steps);
     timed[steps/2-1]=observations.select(0,0);
     timed[steps-1]=observations.select(0,1);
     auto simulation=run(background+wave_field(state),steps,false,pullback,
         torch::Tensor(),0.1,timed,physical_std,false,newton_tol,10.0f,0.0f,true);
-    auto gradient=torch::zeros({2},torch::TensorOptions().dtype(torch::kFloat64));
+    auto gradient=torch::zeros_like(coefficients);
     if(pullback) {
         const auto gx=wave_coefficients(simulation.gradient);
-        double ga=0.0,gb=0.0;
-        for(int k=0;k<wave_size;++k) {
-            ga+=gx[k].real()*q0[k].real()+gx[k].imag()*q0[k].imag();
-            gb+=gx[k].real()*q1[k].real()+gx[k].imag()*q1[k].imag();
-        }
         const double quadrature_weight=0.5*nx*ny;
-        gradient[0]=quadrature_weight*ga;gradient[1]=quadrature_weight*gb;
+        for(size_t m=0;m<modes.size();++m) {
+            double ga=0.0,gb=0.0;
+            for(int k=0;k<wave_size;++k) {
+                ga+=gx[k].real()*modes[m].q0[k].real()+gx[k].imag()*modes[m].q0[k].imag();
+                gb+=gx[k].real()*modes[m].q1[k].real()+gx[k].imag()*modes[m].q1[k].imag();
+            }
+            gradient[2*m]=quadrature_weight*ga;
+            gradient[2*m+1]=quadrature_weight*gb;
+        }
     }
     return {simulation.value,gradient,std::move(simulation)};
+}
+torch::Tensor source_wave_observation_jacobian(const torch::Tensor& background,
+        const torch::Tensor& matrix,const std::vector<WaveModes>& modes,
+        const std::array<double,2>& observation_times) {
+    const auto background_w=physical_w_values(background);
+    std::vector<torch::Tensor> columns;
+    columns.reserve(2*modes.size());
+    for(const auto& mode:modes) for(const auto* quadrature:{&mode.q0,&mode.q1}) {
+        std::vector<torch::Tensor> samples;
+        samples.reserve(observation_times.size());
+        for(double seconds:observation_times) {
+            const auto prediction=wave_observation(background,
+                wave_reference_advance(matrix,*quadrature,seconds));
+            samples.push_back(prediction-background_w);
+        }
+        columns.push_back(torch::cat(samples));
+    }
+    return torch::stack(columns,1);
 }
 struct WaveFixture {
     TileCase tile;
@@ -1971,37 +2030,72 @@ void run_wave_forward_experiment() {
              <<" top_surface_candidate_end="<<reference_energy.top_surface_candidate
              <<" energy_conservation_asserted=0 boundary_work_unclosed=1\n";
 }
-void run_wave_inverse_experiment() {
+void run_wave_inverse_experiment(int mode_count=1) {
+    TORCH_CHECK(mode_count==1 || mode_count==2,"wave inverse supports one or two source modes");
     WaveFixture fixture;
     constexpr int steps=30;
     constexpr double step_dt=10.0;
     constexpr double physical_std=3.0e-4;
-    const WaveState truth=wave_combine(fixture.mode,fixture.quadrature,0.78,-0.36);
+    const std::array<double,2> observation_times{{0.5*steps*step_dt,steps*step_dt}};
+    std::vector<WaveModes> modes{{fixture.mode,fixture.quadrature,fixture.eigenvalue}};
+    if(mode_count==2) modes.push_back(dominant_sub_nmax_mode(fixture.matrix,fixture.reference,1));
+    const int control_count=2*mode_count;
+    auto truth=torch::zeros({control_count},torch::TensorOptions().dtype(torch::kFloat64));
+    truth[0]=0.78; truth[1]=-0.36;
+    if(mode_count==2) { truth[2]=0.35; truth[3]=0.24; }
+    const WaveState truth_state=wave_combine(modes,truth);
+    if(mode_count==2) {
+        // This source-derived Jacobian is a cheap identifiability gate before any
+        // 30-step native trajectory. Its rows are the same 105 physical W points
+        // at 150 s and 300 s that define the unchanged data-only objective.
+        const auto source_h=source_wave_observation_jacobian(fixture.background,fixture.matrix,
+            modes,observation_times);
+        const auto source_a=source_h/physical_std;
+        const auto singular=torch::linalg_svdvals(source_a);
+        const double smax=singular.max().item<double>(),smin=singular.min().item<double>();
+        const double floor=256.0*std::numeric_limits<double>::epsilon()*
+            std::max(1.0,source_a.norm().item<double>());
+        TORCH_CHECK(source_h.dim()==2 && source_h.size(0)==2*physical_w_indices().size() &&
+                    source_h.size(1)==control_count &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(source_a).all()) &&
+                    std::isfinite(smin) && smin>floor && smax/smin<1e6,
+                    "source-wave physical-W observation Jacobian is unobservable: smin=",smin,
+                    " floor=",floor," condition=",smax/smin);
+        std::cout<<"WAVE_INVERSE_SOURCE_IDENTIFIABILITY observations="<<source_h.size(0)
+                 <<" controls="<<control_count<<" rank="<<control_count
+                 <<" sigma_m_s="<<physical_std<<" singular_values="<<singular
+                 <<" condition="<<smax/smin<<" source_eigenvalues="
+                 <<modes[0].eigenvalue<<","<<modes[1].eigenvalue<<"\n";
+    }
     const auto obs_first=wave_observation(fixture.background,
-        wave_reference_advance(fixture.matrix,truth,0.5*steps*step_dt));
+        wave_reference_advance(fixture.matrix,truth_state,observation_times[0]));
     const auto obs_final=wave_observation(fixture.background,
-        wave_reference_advance(fixture.matrix,truth,steps*step_dt));
+        wave_reference_advance(fixture.matrix,truth_state,observation_times[1]));
     const auto observations=torch::stack({obs_first,obs_final});
-    auto x=torch::zeros({2},torch::TensorOptions().dtype(torch::kFloat64));
-    auto current=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,observations,
+    auto x=torch::zeros_like(truth);
+    auto current=evaluate_wave_inverse(fixture.background,modes,observations,
         physical_std,steps,x,true);
     TORCH_CHECK(std::isfinite(current.value) && torch::isfinite(current.gradient).all().item<bool>(),
                 "multi-output gravity wave inverse returned nonfinite objective or gradient");
-    auto direction=torch::tensor({0.6,-0.8},x.options());
+    auto direction=mode_count==1 ? torch::tensor({0.6,-0.8},x.options())
+        : torch::tensor({0.6,-0.8,0.3,0.7},x.options());
+    direction/=direction.norm();
     const double epsilon=0.01;
-    const auto plus=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,observations,
+    const auto plus=evaluate_wave_inverse(fixture.background,modes,observations,
         physical_std,steps,x+epsilon*direction,false);
-    const auto minus=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,observations,
+    const auto minus=evaluate_wave_inverse(fixture.background,modes,observations,
         physical_std,steps,x-epsilon*direction,false);
     const double fd=(plus.value-minus.value)/(2.0*epsilon);
     const double adjoint=current.gradient.dot(direction).item<double>();
     const double gradient_error=std::abs(fd-adjoint)/std::max({1.0,std::abs(fd),std::abs(adjoint)});
     std::cout<<"WAVE_INVERSE_FD epsilon="<<epsilon<<" directional_fd="<<fd
              <<" adjoint="<<adjoint<<" relative_error="<<gradient_error<<"\n";
-    for(double width:{0.02,0.005}) {
-        const auto width_plus=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,
+    const std::vector<double> fd_widths=mode_count==1?std::vector<double>{0.02,0.005}:
+        std::vector<double>{0.02};
+    for(double width:fd_widths) {
+        const auto width_plus=evaluate_wave_inverse(fixture.background,modes,
             observations,physical_std,steps,x+width*direction,false);
-        const auto width_minus=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,
+        const auto width_minus=evaluate_wave_inverse(fixture.background,modes,
             observations,physical_std,steps,x-width*direction,false);
         const double width_fd=(width_plus.value-width_minus.value)/(2.0*width);
         const double width_error=std::abs(width_fd-adjoint)/
@@ -2011,46 +2105,48 @@ void run_wave_inverse_experiment() {
         TORCH_CHECK(std::isfinite(width_error) && width_error<2.0e-3,
                     "wave adjoint failed directional FD at width ",width,": ",width_error);
     }
-    const auto tight=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,
-        observations,physical_std,steps,x,true,1e-11f);
-    const auto tight_plus=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,
-        observations,physical_std,steps,x+0.01*direction,false,1e-11f);
-    const auto tight_minus=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,
-        observations,physical_std,steps,x-0.01*direction,false,1e-11f);
-    const double tight_fd=(tight_plus.value-tight_minus.value)/0.02;
-    const double tight_adjoint=tight.gradient.dot(direction).item<double>();
-    const double tight_error=std::abs(tight_fd-tight_adjoint)/
-        std::max({1.0,std::abs(tight_fd),std::abs(tight_adjoint)});
-    TORCH_CHECK(std::isfinite(tight_error) && tight_error<2.0e-3,
-                "tighter-Newton wave adjoint disagrees with directional FD: ",tight_error);
-    std::cout<<"WAVE_INVERSE_NEWTON_TOL loose=1e-10 tight=1e-11"
-             <<" loose_gradient_norm="<<current.gradient.norm().item<double>()
-             <<" tight_gradient_norm="<<tight.gradient.norm().item<double>()
-             <<" gradient_delta="<<(current.gradient-tight.gradient).norm().item<double>()
-             <<" tight_fd_epsilon=0.01 tight_fd="<<tight_fd
-             <<" tight_adjoint="<<tight_adjoint<<" tight_relative_error="<<tight_error<<"\n";
+    if(mode_count==1) {
+        const auto tight=evaluate_wave_inverse(fixture.background,modes,observations,
+            physical_std,steps,x,true,1e-11f);
+        const auto tight_plus=evaluate_wave_inverse(fixture.background,modes,observations,
+            physical_std,steps,x+0.01*direction,false,1e-11f);
+        const auto tight_minus=evaluate_wave_inverse(fixture.background,modes,observations,
+            physical_std,steps,x-0.01*direction,false,1e-11f);
+        const double tight_fd=(tight_plus.value-tight_minus.value)/0.02;
+        const double tight_adjoint=tight.gradient.dot(direction).item<double>();
+        const double tight_error=std::abs(tight_fd-tight_adjoint)/
+            std::max({1.0,std::abs(tight_fd),std::abs(tight_adjoint)});
+        TORCH_CHECK(std::isfinite(tight_error) && tight_error<2.0e-3,
+                    "tighter-Newton wave adjoint disagrees with directional FD: ",tight_error);
+        std::cout<<"WAVE_INVERSE_NEWTON_TOL loose=1e-10 tight=1e-11"
+                 <<" loose_gradient_norm="<<current.gradient.norm().item<double>()
+                 <<" tight_gradient_norm="<<tight.gradient.norm().item<double>()
+                 <<" gradient_delta="<<(current.gradient-tight.gradient).norm().item<double>()
+                 <<" tight_fd_epsilon=0.01 tight_fd="<<tight_fd
+                 <<" tight_adjoint="<<tight_adjoint<<" tight_relative_error="<<tight_error<<"\n";
+    }
     TORCH_CHECK(std::isfinite(fd) && gradient_error<2.0e-3,
                 "multi-output FP64 adjoint disagrees with independent directional FD: ",gradient_error);
     std::cout<<"WAVE_INVERSE_CHECK directional_fd="<<fd<<" adjoint="<<adjoint
              <<" relative_gradient_error="<<gradient_error<<" observations=2 output_times_s="
              <<(steps*step_dt/2.0)<<","<<(steps*step_dt)<<" physical_W_sigma_m_s="
-             <<physical_std<<" controls=modal_amplitude,modal_phase_quadrature\n";
-    torch::Tensor hessian=torch::eye(2,x.options());
+             <<physical_std<<" modes="<<mode_count<<" controls="<<control_count<<"\n";
+    torch::Tensor inverse_metric=torch::eye(control_count,x.options());
     int accepted=0;
     const double start_value=current.value,start_gradient=current.gradient.norm().item<double>();
     for(int iteration=0;iteration<12;++iteration) {
         const auto grad=current.gradient;
         if(grad.norm().item<double>()<1e-5) break;
-        auto direction_step=-hessian.mv(grad);
+        auto direction_step=-inverse_metric.mv(grad);
         if(grad.dot(direction_step).item<double>()>=0.0) {
-            hessian=torch::eye(2,x.options());direction_step=-grad;
+            inverse_metric=torch::eye(control_count,x.options());direction_step=-grad;
         }
         const double direction_norm=direction_step.norm().item<double>();
         if(direction_norm>0.2) direction_step*=0.2/direction_norm;
         double alpha=1.0;bool found=false;
         WaveMap trial;
         for(int backtrack=0;backtrack<18;++backtrack,alpha*=0.5) {
-            trial=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,observations,
+            trial=evaluate_wave_inverse(fixture.background,modes,observations,
                 physical_std,steps,x+alpha*direction_step,false);
             if(trial.value<=current.value+1e-4*alpha*grad.dot(direction_step).item<double>()) {
                 found=true;break;
@@ -2058,14 +2154,14 @@ void run_wave_inverse_experiment() {
         }
         TORCH_CHECK(found,"gravity modal inverse Armijo search found no admissible descent step");
         auto next_x=x+alpha*direction_step;
-        auto next=evaluate_wave_inverse(fixture.background,fixture.mode,fixture.quadrature,observations,
+        auto next=evaluate_wave_inverse(fixture.background,modes,observations,
             physical_std,steps,next_x,true);
         const auto s=next_x-x,y=next.gradient-grad;
         const double ys=y.dot(s).item<double>();
         if(ys>1e-12) {
             const double rho=1.0/ys;
-            auto identity=torch::eye(2,x.options());
-            hessian=(identity-rho*torch::ger(s,y)).mm(hessian)
+            auto identity=torch::eye(control_count,x.options());
+            inverse_metric=(identity-rho*torch::ger(s,y)).mm(inverse_metric)
                 .mm(identity-rho*torch::ger(y,s))+rho*torch::ger(s,s);
         }
         x=next_x;current=std::move(next);++accepted;
@@ -2078,12 +2174,17 @@ void run_wave_inverse_experiment() {
     TORCH_CHECK(accepted>0 && current.value<start_value &&
                 final_gradient_norm<start_gradient && final_gradient_norm<1e-5,
                 "wave amplitude/phase inverse did not reduce cost and gradient");
-    const double amplitude=std::hypot(x[0].item<double>(),x[1].item<double>());
-    const double phase=std::atan2(x[1].item<double>(),x[0].item<double>());
-    TORCH_CHECK(std::abs(amplitude-std::hypot(0.78,0.36))<0.15,
-                "wave inverse failed to recover modal amplitude within discretization tolerance");
-    TORCH_CHECK(std::abs(std::remainder(phase-std::atan2(-0.36,0.78),2.0*std::acos(-1.0)))<0.2,
-                "wave inverse failed to recover modal phase within discretization tolerance");
+    for(int m=0;m<mode_count;++m) {
+        const double amplitude=std::hypot(x[2*m].item<double>(),x[2*m+1].item<double>());
+        const double phase=std::atan2(x[2*m+1].item<double>(),x[2*m].item<double>());
+        const double truth_amplitude=std::hypot(truth[2*m].item<double>(),truth[2*m+1].item<double>());
+        const double truth_phase=std::atan2(truth[2*m+1].item<double>(),truth[2*m].item<double>());
+        TORCH_CHECK(std::abs(amplitude-truth_amplitude)<0.15 &&
+                    std::abs(std::remainder(phase-truth_phase,2.0*std::acos(-1.0)))<0.2,
+                    "wave inverse failed to recover mode ",m,
+                    " amplitude/phase within discretization tolerance: amplitude=",amplitude,
+                    " phase=",phase," expected=",truth_amplitude,",",truth_phase);
+    }
     const double analysis_time=steps*step_dt;
     const double withheld_duration=600.0;
     const int withheld_steps=static_cast<int>(withheld_duration/step_dt);
@@ -2092,32 +2193,42 @@ void run_wave_inverse_experiment() {
     const auto withheld=run(current.simulation.states.back(),withheld_steps,
         false,false,torch::Tensor(),0.1,{},0.0,false,1e-10f,step_dt,0.0f,true);
     const auto withheld_native=wave_coefficients(withheld.states.back()-fixture.background);
-    const auto withheld_truth=wave_reference_advance(fixture.matrix,truth,analysis_time+withheld_duration);
+    const auto withheld_truth=wave_reference_advance(fixture.matrix,truth_state,analysis_time+withheld_duration);
     double withheld_state_delta=0.0,withheld_state_norm=0.0;
     for(int k=0;k<wave_size;++k) {
         withheld_state_delta+=std::norm(withheld_native[k]-withheld_truth[k]);
         withheld_state_norm+=std::norm(withheld_truth[k]);
     }
     const double withheld_state_error=std::sqrt(withheld_state_delta/std::max(withheld_state_norm,1e-300));
-    const auto withheld_coordinates=wave_temporal_coordinates(fixture.mode,fixture.quadrature,withheld_native);
-    const auto truth_coordinates=wave_temporal_coordinates(fixture.mode,fixture.quadrature,withheld_truth);
-    const double withheld_phase_error=std::remainder(
-        std::atan2(withheld_coordinates[1],withheld_coordinates[0])-
-        std::atan2(truth_coordinates[1],truth_coordinates[0]),2.0*std::acos(-1.0));
-    const double withheld_amplitude=std::hypot(withheld_coordinates[0],withheld_coordinates[1]);
-    const double truth_amplitude=std::hypot(truth_coordinates[0],truth_coordinates[1]);
-    const double withheld_amplitude_error=std::abs(withheld_amplitude-truth_amplitude)/
-        std::max(truth_amplitude,1e-300);
+    const auto withheld_coordinates=wave_basis_coordinates(modes,withheld_native);
+    const auto truth_coordinates=wave_basis_coordinates(modes,withheld_truth);
+    double maximum_phase_error=0.0,maximum_amplitude_error=0.0;
+    for(int m=0;m<mode_count;++m) {
+        const double phase_error=std::remainder(
+            std::atan2(withheld_coordinates[2*m+1].item<double>(),withheld_coordinates[2*m].item<double>())-
+            std::atan2(truth_coordinates[2*m+1].item<double>(),truth_coordinates[2*m].item<double>()),
+            2.0*std::acos(-1.0));
+        const double amplitude=std::hypot(withheld_coordinates[2*m].item<double>(),
+                                          withheld_coordinates[2*m+1].item<double>());
+        const double truth_amplitude=std::hypot(truth_coordinates[2*m].item<double>(),
+                                                truth_coordinates[2*m+1].item<double>());
+        const double amplitude_error=std::abs(amplitude-truth_amplitude)/
+            std::max(truth_amplitude,1e-300);
+        maximum_phase_error=std::max(maximum_phase_error,std::abs(phase_error));
+        maximum_amplitude_error=std::max(maximum_amplitude_error,amplitude_error);
+        TORCH_CHECK(std::abs(phase_error)<0.12 && amplitude_error<0.02,
+                    "withheld wave projection disagrees for mode ",m,
+                    ": phase_error=",phase_error," amplitude_error=",amplitude_error);
+    }
     const auto withheld_w=physical_w_values(withheld.states.back());
     const auto withheld_truth_w=wave_observation(fixture.background,withheld_truth);
     const double withheld_w_error=(withheld_w-withheld_truth_w).norm().item<double>()/
         std::max(withheld_truth_w.norm().item<double>(),1e-300);
     const double baseline_w_error=(physical_w_values(fixture.background)-withheld_truth_w).norm().item<double>()/
         std::max(withheld_truth_w.norm().item<double>(),1e-300);
-    TORCH_CHECK(withheld_state_error<0.01 && std::abs(withheld_phase_error)<0.12 &&
-                withheld_amplitude_error<0.02 && withheld_w_error<0.01 &&
+    TORCH_CHECK(withheld_state_error<0.01 && withheld_w_error<0.01 &&
                 withheld_w_error<baseline_w_error,
-                "withheld gravity wave phase/amplitude forecast exceeded reference error budgets");
+                "withheld gravity wave full physical-W forecast exceeded reference error budgets");
     long peak_rss_kib=0;
 #if defined(__linux__) || defined(__APPLE__)
     struct rusage usage{};
@@ -2129,21 +2240,39 @@ void run_wave_inverse_experiment() {
 #endif
     }
 #endif
-    std::cout<<"WAVE_INVERSE_RESULT amplitude="<<amplitude<<" phase_rad="<<phase
-             <<" recovered_controls="<<x[0].item<double>()<<","<<x[1].item<double>()
-             <<" start_cost="<<start_value<<" final_cost="<<current.value
+    const double first_amplitude=std::hypot(x[0].item<double>(),x[1].item<double>());
+    const double first_phase=std::atan2(x[1].item<double>(),x[0].item<double>());
+    const double first_phase_error=std::remainder(
+        std::atan2(withheld_coordinates[1].item<double>(),withheld_coordinates[0].item<double>())-
+        std::atan2(truth_coordinates[1].item<double>(),truth_coordinates[0].item<double>()),
+        2.0*std::acos(-1.0));
+    const double first_withheld_amplitude=std::hypot(withheld_coordinates[0].item<double>(),
+                                                      withheld_coordinates[1].item<double>());
+    const double first_truth_amplitude=std::hypot(truth_coordinates[0].item<double>(),
+                                                   truth_coordinates[1].item<double>());
+    const double first_amplitude_error=std::abs(first_withheld_amplitude-first_truth_amplitude)/
+        std::max(first_truth_amplitude,1e-300);
+    std::cout<<"WAVE_INVERSE_RESULT modes="<<mode_count<<" amplitude="<<first_amplitude
+             <<" phase_rad="<<first_phase<<" recovered_controls=";
+    if(mode_count==1) std::cout<<x[0].item<double>()<<","<<x[1].item<double>();
+    else for(int c=0;c<control_count;++c)
+        std::cout<<(c==0 ? "" : ",")<<x[c].item<double>();
+    std::cout<<" start_cost="<<start_value<<" final_cost="<<current.value
              <<" start_gradient_norm="<<start_gradient
              <<" final_gradient_norm="<<final_gradient_norm<<" gradient_stop_tolerance=1e-5"
              <<" optimizer_iterations="<<accepted<<" adjoint_checkpoints="<<steps
              <<" withheld_time_s="<<(analysis_time+withheld_duration)
              <<" withheld_state_relative_error="<<withheld_state_error
-             <<" withheld_phase_error_rad="<<withheld_phase_error
-             <<" withheld_amplitude_relative_error="<<withheld_amplitude_error
+             <<" withheld_phase_error_rad="<<first_phase_error
+             <<" withheld_amplitude_relative_error="<<first_amplitude_error
+             <<" withheld_max_phase_error_rad="<<maximum_phase_error
+             <<" withheld_max_amplitude_relative_error="<<maximum_amplitude_error
              <<" withheld_W_baseline_relative_error="<<baseline_w_error
              <<" withheld_W_relative_error="<<withheld_w_error
              <<" withheld_W_residual_reduction="<<(baseline_w_error-withheld_w_error)
              <<" checkpoint_payload_MiB="<<(steps*total*sizeof(double)/(1024.0*1024.0))
              <<" peak_rss_kib="<<peak_rss_kib
+             <<" analysis_end_s="<<analysis_time<<" withheld_duration_s="<<withheld_duration
              <<" observations_from_independent_reference=1 observation_times=2\n";
 }
 
@@ -2241,6 +2370,11 @@ int main(int argc,char** argv) {
         if(argc==2 && std::string(argv[1])=="--wave-inverse") {
             run_wave_inverse_experiment();
             std::cout<<"FP64 carry independent-observation wave inverse passed\n";
+            return 0;
+        }
+        if(argc==2 && std::string(argv[1])=="--wave-two-modes") {
+            run_wave_inverse_experiment(2);
+            std::cout<<"FP64 carry two-mode independent-observation wave inverse passed\n";
             return 0;
         }
         if(argc==2 && std::string(argv[1])=="--refinement") { run_refinement_experiment();return 0; }

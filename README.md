@@ -31,10 +31,15 @@ with the restored stock-RK3 archive using identical primary initial fields; see
 This validates that run and configuration. Long-duration stability, whole-WRF third-order
 accuracy, forecast quality and the full trajectory adjoint remain **unverified**.
 
-Verification is an **exact 123-test CTest inventory** pinned by
+Verification is an **exact 126-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
+
+The wave energy and spatial-convergence checks use the source-transcribed linear
+reference, with NumPy 2.2.6 and SciPy 1.15.3 pinned in
+`.github/ci/requirements-core.txt`. They do not qualify a native-grid WRF forecast
+or production data-assimilation workflow.
 
 Earlier RHS singular-value and solver-probe amplitudes below predate the horizontal-PGF
 and dry-theta corrections. They are historical measurements, not current operator, forecast

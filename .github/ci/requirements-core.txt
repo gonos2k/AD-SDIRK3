@@ -3,3 +3,6 @@
 # (macOS homebrew pytorch 2.10.0); the Linux CPU wheel of the same version.
 # Update ONLY together with a green core-linux run on the new pin.
 torch==2.10.0
+# Source-derived wave energy and spatial convergence contracts.
+numpy==2.2.6
+scipy==1.15.3

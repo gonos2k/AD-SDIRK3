@@ -1,0 +1,54 @@
+{
+  "cases": [
+    {
+      "bulk_change_pct": 2.916224836545471,
+      "bulk_exact_quarter": 588778384.6726533,
+      "bulk_start": 572094813.6290154,
+      "closure": {
+        "max_block_relative_frobenius": 9.252824516936541e-17,
+        "max_elementwise_relative": 1.3454074421205385e-16,
+        "natural_relative_frobenius": 7.184381808745587e-17,
+        "stratification_removed_mutant_relative": 7.720263224699054e-05
+      },
+      "interior_top_stencil_residual": 18005008.205950167,
+      "native_740s_bulk": 588776902.4880365,
+      "nz": 4,
+      "omega_rad_s": 0.002109960322283989,
+      "period_s": 2977.86893943966,
+      "rho_top_eos": 0.3481725692229149,
+      "rho_top_last_cell_candidate": 0.4721432259374215,
+      "row_power_integrals": {
+        "buoyancy_thermodynamic": 3074692.6086083455,
+        "horizontal_momentum": -2.31722241051111e-08,
+        "pressure_thermodynamic": 12007424.746400252,
+        "surface_kinematic": 0.0,
+        "vertical_momentum_interior": 2952521.641683221,
+        "vertical_momentum_top": -29683.361402543822
+      },
+      "surface_delta_eos": 1321437.1597614267,
+      "theta_z_analytic_bulk_change_pct_same_q": 0.44010453764806723,
+      "theta_z_legacy_bulk_change_pct_same_q": 2.916224836545478,
+      "top_flux_integral": -1321437.1599282506
+    },
+    {
+      "buoyancy_commutator_max_abs": 2.310599272937667e-07,
+      "closure": {
+        "max_block_relative_frobenius": 7.687760824157241e-17,
+        "max_elementwise_relative": 1.7299049454744742e-16,
+        "natural_relative_frobenius": 6.492494835190083e-17,
+        "stratification_removed_mutant_relative": 7.776662948749139e-05
+      },
+      "nz": 8,
+      "physical_H_min_eigenvalue": 4163427.4199853814,
+      "physical_weights_min": 0.006939045699975636,
+      "pressure_commutator_max_abs": 0.10597105997727407,
+      "selected_mode_omega_rad_s": 0.002219942313159954
+    }
+  ],
+  "module_sha256": "accaa05a56e6e04b435f5a03b44b3d7332362f14be78168012f1bb83596cc85b",
+  "numpy": "2.2.6",
+  "python": "3.10.11",
+  "scipy": "1.15.3",
+  "source_revision": "d6a0e3179989878f4787537cea7e00472e95c1f0",
+  "status": "passed"
+}

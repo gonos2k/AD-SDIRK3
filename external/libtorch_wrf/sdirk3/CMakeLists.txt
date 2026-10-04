@@ -604,7 +604,9 @@ add_test(NAME FP64_Fixed_Data_Refinement COMMAND test_fp64_carry_adjoint --refin
 add_test(NAME FP64_Stable_Column_Inverse COMMAND test_fp64_carry_adjoint --stable)
 add_test(NAME FP64_Stable_Wave_Forward COMMAND test_fp64_carry_adjoint --wave)
 add_test(NAME FP64_Stable_Wave_Inverse COMMAND test_fp64_carry_adjoint --wave-inverse)
+add_test(NAME FP64_Stable_Wave_Two_Mode_Inverse COMMAND test_fp64_carry_adjoint --wave-two-modes)
 set_tests_properties(FP64_Stable_Wave_Forward FP64_Stable_Wave_Inverse
+    FP64_Stable_Wave_Two_Mode_Inverse
     PROPERTIES TIMEOUT 600)
 add_executable(test_horizontal_pgf_actual_rhs tests/test_horizontal_pgf_actual_rhs.cpp)
 target_link_libraries(test_horizontal_pgf_actual_rhs PRIVATE wrf_sdirk3::core)
@@ -613,6 +615,15 @@ add_test(NAME Stable_Wave_Fortran_Source_Rows
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/test_stable_wave_reference_rows.py
             --repo ${CMAKE_CURRENT_SOURCE_DIR}/../../..)
+add_test(NAME Wave_Physical_Energy_Budget
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/test_wave_energy_budget.py)
+add_test(NAME Wave_Source_Spatial_Convergence
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/test_wave_spatial_convergence.py
+            --out ${CMAKE_CURRENT_BINARY_DIR}/wave_spatial_convergence.json)
+set_tests_properties(Wave_Physical_Energy_Budget Wave_Source_Spatial_Convergence
+    PROPERTIES ENVIRONMENT "OPENBLAS_NUM_THREADS=1;OMP_NUM_THREADS=1")
 
 add_executable(test_fixed_trajectory_lifecycle tests/test_fixed_trajectory_lifecycle.cpp)
 target_link_libraries(test_fixed_trajectory_lifecycle PRIVATE wrf_sdirk3::core)

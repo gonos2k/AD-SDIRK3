@@ -5,9 +5,21 @@
 set -euo pipefail
 
 python3 -m pip install --upgrade pip >/dev/null
+REQUIREMENTS_FILE="$(dirname "$0")/requirements-core.txt"
+INSTALL_REQUIREMENTS_DIR="$(mktemp -d)"
+trap 'rm -rf "$INSTALL_REQUIREMENTS_DIR"' EXIT
+awk -v torch_file="$INSTALL_REQUIREMENTS_DIR/torch.txt" \
+    -v other_file="$INSTALL_REQUIREMENTS_DIR/other.txt" '
+    /^[[:space:]]*($|#)/ { next }
+    tolower($1) ~ /^torch($|[<=>!~])/ { print > torch_file; next }
+    { print > other_file }
+' "$REQUIREMENTS_FILE"
+python3 -m pip install \
+    --index-url https://pypi.org/simple \
+    -r "$INSTALL_REQUIREMENTS_DIR/other.txt"
 python3 -m pip install \
     --index-url https://download.pytorch.org/whl/cpu \
-    -r "$(dirname "$0")/requirements-core.txt"
+    -r "$INSTALL_REQUIREMENTS_DIR/torch.txt"
 
 TORCH_ROOT="$(python3 - <<'PY'
 import pathlib, torch
