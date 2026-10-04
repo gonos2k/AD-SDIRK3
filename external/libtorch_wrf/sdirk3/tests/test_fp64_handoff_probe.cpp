@@ -252,8 +252,10 @@ int main() {
         check_rhs_dt_invariance();
         check_imported_diagnostic_independence();
 
-        std::array<int,4> counts{4,8,16,32};
-        std::array<Result,4> rounded, continuous;
+        // T=4 convergence ladder. Keep n=4 to expose the non-asymptotic coarse
+        // interval, and extend through n=64 to establish the fine-step range.
+        std::array<int,5> counts{4,8,16,32,64};
+        std::array<Result,5> rounded, continuous;
         for (size_t n = 0; n < counts.size(); ++n) {
             rounded[n] = integrate(counts[n], false);
             continuous[n] = integrate(counts[n], true);
@@ -279,27 +281,61 @@ int main() {
             std::cout << std::setprecision(12) << names[block];
             for (int arm = 0; arm < 2; ++arm) {
                 const auto& runs = arm == 0 ? rounded : continuous;
-                const auto d1 = block_rms(runs[0].internal-runs[1].internal,
-                                          starts[block],sizes[block]);
-                const auto d2 = block_rms(runs[1].internal-runs[2].internal,
-                                          starts[block],sizes[block]);
-                const auto d3 = block_rms(runs[2].internal-runs[3].internal,
-                                          starts[block],sizes[block]);
+                std::array<double,4> defect{};
+                for(size_t n=0;n<defect.size();++n)
+                    defect[n]=block_rms(runs[n].internal-runs[n+1].internal,
+                                        starts[block],sizes[block]);
                 std::cout << (arm == 0 ? " rounded" : " continuous")
-                          << " D=" << d1 << "," << d2 << "," << d3
-                          << " p=" << std::log2(d1/d2) << "," << std::log2(d2/d3);
+                          << " D4_8_16_32_64=" << defect[0] << "," << defect[1] << ","
+                          << defect[2] << "," << defect[3]
+                          << " p_coarse=" << std::log2(defect[0]/defect[1])
+                          << " p_fine=" << std::log2(defect[1]/defect[2])
+                          << "," << std::log2(defect[2]/defect[3]);
                 if (arm == 1) {
-                    TORCH_CHECK(std::isfinite(d1) && std::isfinite(d2) &&
-                                std::isfinite(d3) && d3 > 0.0 &&
-                                std::log2(d1/d2) > 2.6 && std::log2(d1/d2) < 3.4 &&
-                                std::log2(d2/d3) > 2.6 && std::log2(d2/d3) < 3.4,
-                                "continuous FP64 handoff lost third-order convergence in ",
+                    // n=4/h=1 is retained and reported but is outside the
+                    // asymptotic order gate. Apply the unchanged p3 thresholds
+                    // to the three successive fine intervals at n=8,16,32,64.
+                    TORCH_CHECK(std::all_of(defect.begin(),defect.end(),[](double x) {
+                                    return std::isfinite(x) && x>0.0;
+                                }) &&
+                                std::log2(defect[1]/defect[2]) > 2.6 &&
+                                std::log2(defect[1]/defect[2]) < 3.4 &&
+                                std::log2(defect[2]/defect[3]) > 2.6 &&
+                                std::log2(defect[2]/defect[3]) < 3.4,
+                                "fine-range continuous FP64 handoff lost third-order convergence in ",
                                 names[block]);
                 }
             }
             std::cout << " handoff="
                       << block_rms(rounded[3].internal-continuous[3].internal,
                                    starts[block],sizes[block]) << '\n';
+        }
+        // Hold h=.125 s (N=32 over T=4 s) fixed and compare only the Newton
+        // solve tolerance. This distinguishes temporal truncation from a
+        // solver-accuracy floor without changing the production solver.
+        const auto& same_h_loose=continuous[3];  // N=32, h=.125 s, default 1e-9.
+        const float saved_newton_tol=cfg.newton_tol;
+        cfg.newton_tol=1.0e-11f;
+        const auto same_h_tight=integrate(32,true,4.0f);
+        cfg.newton_tol=saved_newton_tol;
+        for(size_t block=0;block<names.size();++block) {
+            const double final_delta=block_rms(same_h_loose.internal-same_h_tight.internal,
+                                               starts[block],sizes[block]);
+            const double first_delta=block_rms(same_h_loose.first_internal-
+                                               same_h_tight.first_internal,
+                                               starts[block],sizes[block]);
+            const double fine_temporal_delta=block_rms(continuous[3].internal-
+                continuous[4].internal,starts[block],sizes[block]);
+            TORCH_CHECK(std::isfinite(final_delta) && std::isfinite(first_delta) &&
+                        std::isfinite(fine_temporal_delta) && fine_temporal_delta>0.0 &&
+                        final_delta<0.05*fine_temporal_delta,
+                        "unresolved Newton-tolerance sensitivity diagnostic in ",names[block]);
+            std::cout<<"NEWTON_TOL_SENSITIVITY block="<<names[block]
+                     <<" steps=32 dt=0.125 tol_loose=1e-9 tol_tight=1e-11"
+                     <<" first_state_delta_rms="<<first_delta
+                     <<" final_state_delta_rms="<<final_delta
+                     <<" time_D32_64_rms="<<fine_temporal_delta
+                     <<" solver_to_time_ratio="<<final_delta/fine_temporal_delta<<'\n';
         }
         std::array<double,3> local_u{}, local_t{};
         for (size_t i = 0; i < local_u.size(); ++i) {

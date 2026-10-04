@@ -69,6 +69,10 @@ FP64_Balanced_Inverse
 FP64_Window_Forecast
 FP64_Fixed_Data_Refinement
 FP64_Stable_Column_Inverse
+FP64_Stable_Wave_Forward
+FP64_Stable_Wave_Inverse
+Horizontal_PGF_Actual_RHS
+Stable_Wave_Fortran_Source_Rows
 Full_Tile_Temporal_Order
 Full_Tile_Horizontal_PGF
 Full_Tile_Symmetric_Walls

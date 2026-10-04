@@ -19582,9 +19582,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             
             // Determine interior range based on boundary conditions
             // PARITY FIX 2025-12-14: Use runtime tensor sizes for interior range
-            int i_start_interior = 1;  // Always skip first point for interior
-            int i_end_interior = (u_nx > static_cast<int64_t>(nx_)) ? static_cast<int>(u_nx) - 1 : static_cast<int>(u_nx);  // Skip last if periodic
-            if (i_end_interior > 1) i_end_interior -= 1;  // Leave last point for boundary
+            const int64_t physical_mass_nx = t_full.size(2) - (isPackedPeriodicDomain() ? 1 : 0);
+            const int i_start_interior = 1;
+            // slice end is exclusive: all faces between physical mass cells
+            // are interior. Only face 0 and the periodic closing face wrap.
+            const int i_end_interior = static_cast<int>(std::min(u_nx, physical_mass_nx));
 
             if (i_end_interior > i_start_interior) {
                 // VECTORIZED INTERIOR COMPUTATION
@@ -19729,19 +19731,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 } else {
                     // Baseline behavior: periodic wrap gradients at boundaries.
                     auto ph_top_ip0 = ph_cont.index({Slice(), Slice(1, u_nz+1), 0});        // [ny, nz]
-                    auto ph_top_im1 = ph_cont.index({Slice(), Slice(1, u_nz+1), mass_nx-1});// [ny, nz]
+                    auto ph_top_im1 = ph_cont.index({Slice(), Slice(1, u_nz+1), physical_mass_nx-1});// [ny, nz]
                     auto ph_bot_ip0 = ph_cont.index({Slice(), Slice(0, u_nz), 0});          // [ny, nz]
-                    auto ph_bot_im1 = ph_cont.index({Slice(), Slice(0, u_nz), mass_nx-1});  // [ny, nz]
+                    auto ph_bot_im1 = ph_cont.index({Slice(), Slice(0, u_nz), physical_mass_nx-1});  // [ny, nz]
 
                     auto p_pert_ip0 = p_pert_cont.index({Slice(), Slice(), 0});            // [ny, nz]
-                    auto p_pert_im1 = p_pert_cont.index({Slice(), Slice(), mass_nx-1});    // [ny, nz]
+                    auto p_pert_im1 = p_pert_cont.index({Slice(), Slice(), physical_mass_nx-1});    // [ny, nz]
                     auto p_base_ip0 = p_base_cont.index({Slice(), Slice(), 0});            // [ny, nz]
-                    auto p_base_im1 = p_base_cont.index({Slice(), Slice(), mass_nx-1});    // [ny, nz]
+                    auto p_base_im1 = p_base_cont.index({Slice(), Slice(), physical_mass_nx-1});    // [ny, nz]
 
                     auto alt_ip0 = alt_cont.index({Slice(), Slice(), 0});                  // [ny, nz]
-                    auto alt_im1 = alt_cont.index({Slice(), Slice(), mass_nx-1});          // [ny, nz]
+                    auto alt_im1 = alt_cont.index({Slice(), Slice(), physical_mass_nx-1});          // [ny, nz]
                     auto al_ip0 = al_pert_cont.index({Slice(), Slice(), 0});               // [ny, nz]
-                    auto al_im1 = al_pert_cont.index({Slice(), Slice(), mass_nx-1});       // [ny, nz]
+                    auto al_im1 = al_pert_cont.index({Slice(), Slice(), physical_mass_nx-1});       // [ny, nz]
 
                     auto dph_dx_bdy = (ph_top_ip0 - ph_top_im1) + (ph_bot_ip0 - ph_bot_im1);  // [ny, nz]
                     auto dp_dx_bdy = p_pert_ip0 - p_pert_im1;                                  // [ny, nz]

@@ -87,8 +87,14 @@ install:
 cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3 -G Ninja \
       -DCMAKE_PREFIX_PATH=/path/to/torch
 cmake --build build/sdirk3 --parallel
-ctest --test-dir build/sdirk3 --output-on-failure
+FC=/absolute/path/to/gfortran ctest --test-dir build/sdirk3 --output-on-failure
 ```
+
+The C++ core is built with the C++ compiler selected by CMake. The full CTest
+suite also runs source-extracted Fortran oracles, which compile WRF routine
+bodies at test time and require GNU Fortran (`gfortran`). Set `FC` to the
+absolute path of a GNU Fortran executable when running CTest; these oracles use
+GNU compiler flags including `-cpp` and `-fdefault-real-8`.
 
 ## Runtime Configuration: Namelist First (WRF)
 
@@ -299,7 +305,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 119-test CTest inventory**, pinned by
+The CMake tree registers an **exact 123-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
@@ -317,11 +323,28 @@ the pinned file defines the inventory.
   theta diagnostics, and dry-mass/weighted-theta endpoint budgets.
 - `FP64_Fixed_Data_Refinement` — one observation dataset at 2/4 s and fixed R
   compared at h=.25/.125 s, including the inverse solution, 6 s forecast and
-  tighter-solve controls. Two time increments do not establish a convergence order.
+  tighter-solve controls. The withheld endpoint difference is split into a
+  same-control integration component and a reoptimization component; their sum
+  is not labelled pure time error. Two time increments do not establish a
+  convergence order.
 - `FP64_Stable_Column_Inverse` — native EOS-consistent theta=310/312/314/316 K
   sigma column (Kh=1000, Kv=0), positive discrete N², sixteen-step equilibrium,
   initial coordinate-correct buoyancy response and the same inverse/forecast.
   These are short dry single-tile algorithm twins, not operational forecast skill.
+- `FP64_Stable_Wave_Forward` — a source-derived four-layer stable gravity mode
+  with `phi_adv_z=2`, compared with a one-period native forecast for phase,
+  amplitude, and kinetic/available-potential exchange. The test does not assert
+  closed full-energy conservation.
+- `FP64_Stable_Wave_Inverse` — a two-time modal amplitude/quadrature inverse,
+  directional finite-difference check, tighter Newton check, and withheld
+  forecast against the source-derived linear reference.
+- `Horizontal_PGF_Actual_RHS` — actual Full-RHS pressure-gradient checks on
+  physical and packed periodic layouts, using a constant-density pressure wave
+  set by the dry EOS. It checks every owned U face, including the west seam and
+  last interior face.
+- `Stable_Wave_Fortran_Source_Rows` — compiled source-extracted WRF Fortran
+  pressure/EOS, vertical-force, geopotential, omega, and horizontal-PGF rows;
+  this is a row oracle, not a full coupled-wave forecast.
 
 Internal FP64 stage quality compares WRMS growth against the larger of the
 initial defect and stage-equation construction precision. The Newton tolerance

@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-10-04T17:31:19.627485+09:00",
+  "production_commit": "ccee4100e34af655570ed16aabb25c8577216039",
+  "count": 123,
+  "inventory_exact": true,
+  "source_hashes": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "28588df9ea75d326fbe46840b9e12e0dd8eabc307f380bab9adbd2d0f9a2f6ab",
+    "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp": "358e89285ffc190d3eb53058063ded0aa73bb087c66bb0d3aa112728f55ea523",
+    "external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+    "external/libtorch_wrf/sdirk3/tests/test_horizontal_pgf_actual_rhs.cpp": "08e120677158c98e9c83dc69cbc7b9e58f28991ac9143b5dd8bb8cfdff513acf",
+    "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+    "tools/test_stable_wave_reference_rows.py": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+    "external/libtorch_wrf/sdirk3/CMakeLists.txt": "dd69aa6f52e0bd4b751f6c2086ac15ee369feaa26eb5a85acf5f6b34650b3b0c"
+  },
+  "binary_hashes": {
+    "test_fp64_carry_adjoint": "c16866acf806232db470bf11e47b756437ed17678a701bf8403d1ffed548fbd6",
+    "test_horizontal_pgf_actual_rhs": "5ae281ec3a953f3b781f0662480485f824becea0a44531dab7e55f42722d716e",
+    "libwrf_sdirk3_libtorch.a": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108"
+  },
+  "cmake_build": "/private/tmp/stable-wave-build-20261004"
+}

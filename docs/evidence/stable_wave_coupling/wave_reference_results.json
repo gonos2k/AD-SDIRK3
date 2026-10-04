@@ -1,0 +1,281 @@
+{
+  "archive_log_sha256": {
+    "frozen_inverse_receipt": "9e0c68ba04b02ef390431ad9159c5e038eb34bad2257086065b04d99867f7a15",
+    "wave_inverse_frozen_head": "52d47efd8c2376573c49b1293fe3380a420582b25dc77d21efa5955888a2e748"
+  },
+  "forward": {
+    "binary_sha256": "c16866acf806232db470bf11e47b756437ed17678a701bf8403d1ffed548fbd6",
+    "boundary_work_closed": false,
+    "elapsed_seconds": 205.8,
+    "energy_conservation_asserted": false,
+    "log": "/tmp/stable-wave-final-portable-forward-20261004.log",
+    "log_sha256": "1438669318953628a4fb6f13545228ec6445adbb6b61ca4e364e60b2a2129150",
+    "metrics": {
+      "A_vs_Ahalf_scaling_error": 5.813811876366269e-05,
+      "amplitude_decay_error": 2.3973880757477417e-05,
+      "boundary_work_unclosed": 1,
+      "decay_rate_s": -1.7347234759768065e-18,
+      "dt_s": 10,
+      "duration_s": 2980,
+      "endpoint_relative_state_error": 0.00012300043018697782,
+      "energy_acoustic_end": 15.657652185174449,
+      "energy_available_potential_end": 11888.237448596024,
+      "energy_available_potential_quarter": 588003941.7630705,
+      "energy_bulk_end": 572095150.937319,
+      "energy_bulk_quarter": 588778384.6729351,
+      "energy_bulk_start": 572094813.6290175,
+      "energy_conservation_asserted": 0,
+      "energy_half_bulk": 572094813.6290202,
+      "energy_half_time_s": 1490,
+      "energy_kinetic_u_end": 424388506.47370625,
+      "energy_kinetic_w_end": 147694740.56851205,
+      "energy_kinetic_w_quarter": 2.4512084883406725e-17,
+      "energy_qtr_time_s": 740,
+      "expected_amplitude": 0.9999999999999948,
+      "half_amplitude_reference_error": 6.859577999608933e-05,
+      "initial_peak_W_m_s": 0.01,
+      "max_energy_component_relative_error": 0.0017106428108599608,
+      "mode": "gravity",
+      "native_end_available_potential": 11880.90259674169,
+      "native_end_kinetic_w": 147687682.34206387,
+      "native_half_available_potential": 2970.5589632141914,
+      "native_half_kinetic_w": 147693329.15072706,
+      "native_qtr_available_potential": 587944743.7067864,
+      "native_qtr_kinetic_w": 13107.740261880452,
+      "omega_rad_s": 0.002109960322284018,
+      "period_s": 2977.868939439619,
+      "phase_error_rad": -2.0221412455612153e-06,
+      "quarter_w_buoyancy_rhs_norm": 9.706790485597319e-05,
+      "quarter_w_pressure_rhs_norm": 7.241324165928346e-05,
+      "reference_end_available_potential": 11888.237448596024,
+      "reference_end_kinetic_w": 147694740.56851205,
+      "reference_half_available_potential": 2972.074384565959,
+      "reference_half_kinetic_w": 147696980.17420748,
+      "reference_qtr_available_potential": 587951702.9234716,
+      "reference_qtr_kinetic_w": 13121.609157627207,
+      "steps": 298,
+      "temporal_amplitude": 0.9999760261192373,
+      "top_surface_candidate_end": 36.229551642903004
+    },
+    "operator_relative_frobenius_error": 3.9488377150213603e-10,
+    "operator_tolerance": 2e-06,
+    "source_snapshot": "standalone_source_receipt.json at 17:31 JST",
+    "spectrum": {
+      "N_max_rad_s": 0.005357502663694755,
+      "positive_oscillatory_candidates_rad_s": "0.25663269499422831,0.17113334066992522,0.1195160135908781,0.066830097918887221,0.035513636959828482,0.0021099603222840182,0.00098721299541833793,0.000420822821035695,",
+      "selected_rad_s": 0.002109960322284018
+    }
+  },
+  "frozen_head_inverse": {
+    "binary_sha256": "42fd07c38389048341087ccfefb503c1486d7ebdcd83ed7ce0d48474e6eaadcf",
+    "controls": {
+      "initial": [
+        0,
+        0
+      ],
+      "observation_times_s": [
+        150,
+        300
+      ],
+      "prior": "none",
+      "sigma_m_s": 0.0003,
+      "truth": [
+        0.78,
+        -0.36
+      ],
+      "variable": "physical W"
+    },
+    "elapsed_seconds": 376.35,
+    "fd_width_checks": [
+      {
+        "adjoint": -60490.3713678136,
+        "directional_fd": -60490.37022539633,
+        "epsilon": 0.01,
+        "relative_error": 1.8885935795116736e-08
+      },
+      {
+        "adjoint": -60490.3713678136,
+        "directional_fd": -60490.36827051441,
+        "epsilon": 0.02,
+        "relative_error": 5.120317693623023e-08
+      },
+      {
+        "adjoint": -60490.3713678136,
+        "directional_fd": -60490.37093025472,
+        "epsilon": 0.005,
+        "relative_error": 7.233529338755182e-09
+      }
+    ],
+    "log_path": "/private/tmp/stable-wave-frozen-head-inverse.log",
+    "log_sha256": "52d47efd8c2376573c49b1293fe3380a420582b25dc77d21efa5955888a2e748",
+    "mode_spectrum": {
+      "N_max_rad_s": 0.005357502663694755,
+      "positive_oscillatory_candidates_rad_s": "0.25663269499422831,0.17113334066992522,0.1195160135908781,0.066830097918887221,0.035513636959828482,0.0021099603222840182,0.00098721299541833793,0.000420822821035695,",
+      "selected_rad_s": 0.002109960322284018
+    },
+    "newton_tolerance_comparison": {
+      "gradient_delta": 0,
+      "loose": 1e-10,
+      "loose_gradient_norm": 67296.58120307607,
+      "tight": 1e-11,
+      "tight_adjoint": -60490.3713678136,
+      "tight_fd": -60490.37022539633,
+      "tight_fd_epsilon": 0.01,
+      "tight_gradient_norm": 67296.58120307607,
+      "tight_relative_error": 1.8885935795116736e-08
+    },
+    "note": "Final inverse execution with source, executable, and static-library hashes recorded before launch.",
+    "result": {
+      "adjoint_checkpoints": 30,
+      "amplitude": 0.8590658995088155,
+      "checkpoint_payload_MiB": 0.2655029296875,
+      "elapsed_seconds": 376.35,
+      "final_cost": 5.517501451862192e-05,
+      "final_gradient_norm": 1.4758935744282526e-07,
+      "gradient_stop_tolerance": 1e-05,
+      "observation_times": 2,
+      "observations_from_independent_reference": 1,
+      "optimizer_iterations": 7,
+      "peak_rss_kib": 622880,
+      "phase_rad": -0.4323983443574561,
+      "recovered_controls": "0.78000034055207446,-0.35999123383429521",
+      "start_cost": 28881.586559166033,
+      "start_gradient_norm": 67296.58120307607,
+      "withheld_W_baseline_relative_error": 1,
+      "withheld_W_relative_error": 0.0002991572974519748,
+      "withheld_W_residual_reduction": 0.999700842702548,
+      "withheld_amplitude_relative_error": 7.266513876132318e-06,
+      "withheld_phase_error_rad": 1.0966774451226513e-05,
+      "withheld_state_relative_error": 7.640164033008122e-06,
+      "withheld_time_s": 900
+    },
+    "source_hashes": {
+      "stable_wave_reference.h": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+      "test_fp64_carry_adjoint.cpp": "5c6ed5b61b52867e15c6cb8666b1fd1107891bd213b562fd4a6c20c3e0296fc7",
+      "tile_test_fixture.h": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+    },
+    "source_receipt": "frozen_inverse_receipt_before_run.json",
+    "source_receipt_sha256": "9e0c68ba04b02ef390431ad9159c5e038eb34bad2257086065b04d99867f7a15",
+    "static_library_sha256": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108"
+  },
+  "handoff_receipt": "handoff_receipt.json",
+  "production_commit": "ccee4100e34af655570ed16aabb25c8577216039",
+  "refinement": {
+    "all_six_gates_passed": true,
+    "blocks": [
+      {
+        "block": "U",
+        "closure_budget": 1.4210854715202004e-14,
+        "coarseopt_minus_fineopt_norm": 7.571406016483897e-08,
+        "coarseopt_samecontrol_time_norm": 1.0352467815052882e-07,
+        "dot_samecontrol_reoptimization": -6.503843584811777e-15,
+        "duration_seconds": 6,
+        "fine_dt": 0.125,
+        "reoptimization_norm": 8.957090537723634e-08,
+        "squared_norm_closure": 0,
+        "steps": 48,
+        "twice_dot": -1.3007687169623553e-14,
+        "vector_closure_norm": 0
+      },
+      {
+        "block": "V",
+        "closure_budget": 1.4210854715202004e-14,
+        "coarseopt_minus_fineopt_norm": 3.9630668730929774e-11,
+        "coarseopt_samecontrol_time_norm": 3.8832165966369854e-11,
+        "dot_samecontrol_reoptimization": 3.0951219478940626e-23,
+        "duration_seconds": 6,
+        "fine_dt": 0.125,
+        "reoptimization_norm": 8.662282973448433e-13,
+        "squared_norm_closure": 1.88079096131566e-37,
+        "steps": 48,
+        "twice_dot": 6.190243895788125e-23,
+        "vector_closure_norm": 0
+      },
+      {
+        "block": "W",
+        "closure_budget": 1.4210854715202004e-14,
+        "coarseopt_minus_fineopt_norm": 1.5644961723563706e-07,
+        "coarseopt_samecontrol_time_norm": 2.0321732036663933e-07,
+        "dot_samecontrol_reoptimization": -1.4671324859022532e-14,
+        "duration_seconds": 6,
+        "fine_dt": 0.125,
+        "reoptimization_norm": 1.1190108647473043e-07,
+        "squared_norm_closure": 3.1554436208840472e-30,
+        "steps": 48,
+        "twice_dot": -2.9342649718045064e-14,
+        "vector_closure_norm": 0
+      },
+      {
+        "block": "PH",
+        "closure_budget": 8.391153186431256e-10,
+        "coarseopt_minus_fineopt_norm": 8.637162419175135e-06,
+        "coarseopt_samecontrol_time_norm": 4.337721584585886e-06,
+        "dot_samecontrol_reoptimization": -3.7140987922501774e-11,
+        "duration_seconds": 6,
+        "fine_dt": 0.125,
+        "reoptimization_norm": 1.1404679826932124e-05,
+        "squared_norm_closure": 0,
+        "steps": 48,
+        "twice_dot": -7.428197584500355e-11,
+        "vector_closure_norm": 0
+      },
+      {
+        "block": "THETA",
+        "closure_budget": 1.9691137908567697e-12,
+        "coarseopt_minus_fineopt_norm": 6.896749751963321e-13,
+        "coarseopt_samecontrol_time_norm": 6.888784196300489e-13,
+        "dot_samecontrol_reoptimization": 5.427363027920561e-28,
+        "duration_seconds": 6,
+        "fine_dt": 0.125,
+        "reoptimization_norm": 3.552713678800501e-15,
+        "squared_norm_closure": 0,
+        "steps": 48,
+        "twice_dot": 1.0854726055841122e-27,
+        "vector_closure_norm": 0
+      },
+      {
+        "block": "MU",
+        "closure_budget": 3.938160209222056e-10,
+        "coarseopt_minus_fineopt_norm": 2.1195639661686163e-06,
+        "coarseopt_samecontrol_time_norm": 1.7110633563253459e-06,
+        "dot_samecontrol_reoptimization": -5.807168960551205e-12,
+        "duration_seconds": 6,
+        "fine_dt": 0.125,
+        "reoptimization_norm": 3.630310113258024e-06,
+        "squared_norm_closure": 0,
+        "steps": 48,
+        "twice_dot": -1.161433792110241e-11,
+        "vector_closure_norm": 0
+      }
+    ],
+    "closure_gate": {
+      "evidence": "The registered --refinement command exited 0 after emitting all six per-block closure rows.",
+      "squared_norm": "abs(combined^2 - (same_control_time^2 + reoptimization^2 + 2*dot)) <= 256 * eps * max(1, endpoint norms)^2",
+      "vector": "||combined - (same_control_time + reoptimization)|| <= 64 * eps * max(1, endpoint norms)"
+    },
+    "elapsed_seconds": 4858.59,
+    "fixed_data": {
+      "baseline_gradient_delta": 0.0003973729112391619,
+      "coarse_steps": 16,
+      "control_delta": 1.5184429799831815e-07,
+      "data_equal": 1,
+      "fine_steps": 32,
+      "forecast_t": 6,
+      "max_solve_gradient_delta": 0,
+      "objective_delta": 1.183062594851264e-08,
+      "obs_t1": 2,
+      "obs_t2": 4,
+      "sigma": 0.010246950765959599,
+      "time_signal_resolved": 1,
+      "withheld_MU_delta": 3.059327066080204e-07,
+      "withheld_PH_delta": 5.575264367992311e-07,
+      "withheld_W_delta": 1.0098779367902455e-08,
+      "withheld_theta_delta": 4.977300407286885e-14
+    },
+    "log": "/private/tmp/stable-wave-refinement-after-hpg.log",
+    "log_sha256": "1c29c2bd583c38790e774fd1b28e06e87577ccad0cfdc7775cb11bb8d60b8afd",
+    "six_blocks_reported": true
+  },
+  "schema_version": 1,
+  "wrf_receipt": "wrf_receipt.json"
+}

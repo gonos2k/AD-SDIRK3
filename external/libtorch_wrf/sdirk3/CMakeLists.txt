@@ -602,6 +602,17 @@ add_test(NAME FP64_Balanced_Inverse COMMAND test_fp64_carry_adjoint --balanced)
 add_test(NAME FP64_Window_Forecast COMMAND test_fp64_carry_adjoint --windows)
 add_test(NAME FP64_Fixed_Data_Refinement COMMAND test_fp64_carry_adjoint --refinement)
 add_test(NAME FP64_Stable_Column_Inverse COMMAND test_fp64_carry_adjoint --stable)
+add_test(NAME FP64_Stable_Wave_Forward COMMAND test_fp64_carry_adjoint --wave)
+add_test(NAME FP64_Stable_Wave_Inverse COMMAND test_fp64_carry_adjoint --wave-inverse)
+set_tests_properties(FP64_Stable_Wave_Forward FP64_Stable_Wave_Inverse
+    PROPERTIES TIMEOUT 600)
+add_executable(test_horizontal_pgf_actual_rhs tests/test_horizontal_pgf_actual_rhs.cpp)
+target_link_libraries(test_horizontal_pgf_actual_rhs PRIVATE wrf_sdirk3::core)
+add_test(NAME Horizontal_PGF_Actual_RHS COMMAND test_horizontal_pgf_actual_rhs)
+add_test(NAME Stable_Wave_Fortran_Source_Rows
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/test_stable_wave_reference_rows.py
+            --repo ${CMAKE_CURRENT_SOURCE_DIR}/../../..)
 
 add_executable(test_fixed_trajectory_lifecycle tests/test_fixed_trajectory_lifecycle.cpp)
 target_link_libraries(test_fixed_trajectory_lifecycle PRIVATE wrf_sdirk3::core)

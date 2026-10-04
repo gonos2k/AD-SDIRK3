@@ -1,0 +1,92 @@
+{
+ "timestamp": "2026-10-04T20:20:23+09:00",
+ "baseline_head": "4b39fb4f759834a3bf4ba1b327e02562253a3e71",
+ "production_commit": "ccee4100e34af655570ed16aabb25c8577216039",
+ "scope": "Test/evidence closure only; no production C++, WRF Fortran, solver tolerance, or guard changes.",
+ "sources": {
+  "producer_sha256": "28588df9ea75d326fbe46840b9e12e0dd8eabc307f380bab9adbd2d0f9a2f6ab",
+  "wave_reference_sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+  "wave_test_at_execution_sha256": "688ae51ffe9a8b296d47dc3c9bc1d80f3ad8d50996de1dccdff0bcc70afa5959",
+  "wave_test_current_sha256": "b21f35d66a0d081d5460e760a3844e6d230f408d8e843aa23183d3f697951d39",
+  "hpg_test_sha256": "c5ee2f733069f32ed6161eb4cf2aeaf251712c8ffa6965de422d75c7cb35f8f5",
+  "readme_sha256": "2d39a8527ebf3bea4b2b277c9d25a392468dd45f250aa341c34d15ed22405fdc",
+  "wave_test_postrun_diff": "One stdout success-label string only; formulas, assertions, and control flow byte-match the archived source."
+ },
+ "build": {
+  "directory": "/private/tmp/stable-wave-build-20261004",
+  "cmake_cache_sha256": "575073ed24d7724ae8093c9411cc0f3078e091379ba2ab8c76880581fc408bcc",
+  "static_library_sha256": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108"
+ },
+ "wave_ctest": {
+  "result": "2/2 passed",
+  "elapsed_seconds": 426.54,
+  "forward_seconds": 135.39,
+  "inverse_seconds": 291.13,
+  "binary_sha256": "f0fb6575f4e297b55eebc8781ce14cc137026b196fcd3df52b6dd70a323c2757",
+  "LastTest_log_sha256": "68febf6a243ee7151e4090fa64699813ab50356c3a0c7c9e3d56a0a695531fee",
+  "session_log_sha256": "16dfad157a3bda16de32faf896a9e2b4c60f3e2b7b58a49512de74d446bd4f37",
+  "source_receipt_sha256": "7d27618511e5369bf15e9503a536140ccef6682222ef8683d227907cec81c6e6",
+  "mode": "coupled_sub_Nmax_mode",
+  "eigenpair_relative_residual": 3.438193422430225e-17,
+  "forward_phase_error_rad": -2.0221412455612153e-06,
+  "forward_amplitude_decay_relative_error": 2.3973880757477542e-05,
+  "max_energy_component_relative_error": 0.0017106428108599608,
+  "reference_quarter_delta_kinetic_APE": [
+   -572043988.1714257,
+   587951702.9234716
+  ],
+  "native_quarter_delta_kinetic_APE": [
+   -572044008.7220986,
+   587944743.7067864
+  ],
+  "total_energy_conservation_claimed": false,
+  "boundary_work_closed": false,
+  "inverse_withheld_time_s": 900,
+  "inverse_state_error": 7.640164033008122e-06,
+  "inverse_phase_error_rad": 1.0966774451226513e-05,
+  "inverse_amplitude_error": 7.266513876132318e-06,
+  "inverse_physical_W_error": 0.0002991572974519748,
+  "inverse_W_samples": 105,
+  "inverse_peak_rss_kib": 623296
+ },
+ "hpg_direct_run": {
+  "result": "exit 0; all three layouts passed",
+  "source_sha256": "c5ee2f733069f32ed6161eb4cf2aeaf251712c8ffa6965de422d75c7cb35f8f5",
+  "executable_sha256": "a4f0fd31776d43e201a4ec7b5f6beffab7e1389f8498a9d83d3068da8733758d",
+  "log_sha256": "8b533afaf8516e120e69e66123878f205ef940877bcc24617a73c443d2bed0e5",
+  "physical": "192 samples; max error 1.37074e-8, budget 4.39059e-6 m/s^2",
+  "packed": "140 samples; max error 1.13621e-8, budget 5.25308e-6 m/s^2",
+  "guarded_nonperiodic": "168 samples; Omega off; one-sided signal 0.143871; max error 1.37074e-8, budget 4.39059e-6 m/s^2",
+  "guard_setup": "Open X, symmetric Y, Legacy and precond_type=0 only in test fixture; selector set before construction; RHS verdict uses independent EOS oracle."
+ },
+ "setup_failures_classified_not_production_bugs": [
+  "Legacy/Omega-off fixture initially entered default WRFParity-only raw preconditioner.",
+  "Skipping setup priming left a required internal RHS tensor undefined.",
+  "Setting precond_type=0 after solver construction did not replace the preselected preconditioner."
+ ],
+ "graphify": {
+  "corpus": "/private/tmp/sdirk3-fp64-carry-adjoint-graph",
+  "code_files": 25,
+  "words": 380404,
+  "updated_files": [
+   "tests/test_fp64_carry_adjoint.cpp",
+   "tests/test_horizontal_pgf_actual_rhs.cpp"
+  ],
+  "graph_nodes": 563,
+  "graph_edges": 1444,
+  "graph_json_sha256": "bc2ed24cd9018974422f43c231d560dd93bb4cfb615bd0f49e5ee65618df2e79",
+  "manifest_sha256": "a1a8054e51d397489397939895dd5da6d293af75da0847268f170b55f9544203",
+  "readme_digest_recorded_code_only": true
+ },
+ "wrf_ci": {
+  "new_WRF_model_run": false,
+  "RK3_comparison": "Existing same-setup em_b_wave field/runtime comparison in the validation report remains the evidence.",
+  "run_id": 37194609801,
+  "queried_at_utc": "2026-10-04T11:22:23Z",
+  "run_updated_at_utc": "2026-10-04T10:12:31Z",
+  "status": "in_progress",
+  "fast_contracts": "success",
+  "build_contract_negatives": "success",
+  "core_linux": "step 14 CTest inventory running; this old-HEAD run does not validate final test-source edits."
+ }
+}

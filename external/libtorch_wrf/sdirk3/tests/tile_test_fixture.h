@@ -146,6 +146,11 @@ struct TileCase {
     torch::Tensor coriolisE() const { return solver.e_; }
     void checkFixedInputs() const { solver.checkFixedTrajectoryFingerprint(); }
     bool packedPeriodicLayout() const { return solver.isPackedPeriodicDomain(); }
+    // Read-only prescribed inputs for independent source-equation references.
+    torch::Tensor baseMass() const { return solver.mu_base_.detach().clone(); }
+    torch::Tensor basePressure() const { return solver.p_base_.detach().clone(); }
+    torch::Tensor baseTheta() const { return solver.th_base_.detach().clone(); }
+    torch::Tensor basePhi() const { return solver.ph_base_.detach().clone(); }
     void useDoubleGridMetrics() {
         solver.rdnw_.clear();
         solver.rdn_.clear();
