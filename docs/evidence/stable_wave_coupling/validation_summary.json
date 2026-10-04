@@ -1,0 +1,353 @@
+{
+  "archive_log_sha256": {
+    "core120": "c2adb0744e59231c3f48d16597f1e55b865eacd584a46f9f1c8339654f42cc30",
+    "current_ctest_inventory_json_bytes": "28f23e600074b75f6ab80783721322d90028800eb2ff6ff09231c0610518cd53",
+    "default_wave_damping_control": "cf3c758509cf4b39db938dbb70fd537c5885c56725b24926ccd3d046fb72d83d",
+    "fortran_rows": "0d9929ac5f738872c1fd64dbacd28250f457e4c32fff67c78444d07a08e5a5fe",
+    "frozen_inverse_receipt": "9e0c68ba04b02ef390431ad9159c5e038eb34bad2257086065b04d99867f7a15",
+    "handoff_receipt_copy": "6960f99bd97157de697a7cae23f8bcf3b7bf1f24535387e0b327cfb6eec487c8",
+    "handoff_rerun": "04c4ddeaa4ef3cacd906d5cf4708f1251933b4174c199606f43bd254e7498725",
+    "hpg_probe": "33301d0af8309a7fa7b734b512e7fe808a428dd8f0afc5ff2960063e951e2370",
+    "nonlinear_rerun": "efb3cd574ebeb7a1672460c9aaaa8af1aff2989122abecb0f83ccd3cad3d1f1f",
+    "refinement": "1c29c2bd583c38790e774fd1b28e06e87577ccad0cfdc7775cb11bb8d60b8afd",
+    "standalone_source_receipt_copy": "e7e4aedeb72298a9db8aa69210c419a907aa98edb52c3fb6291f10fd321d22fd",
+    "wave_forward": "1438669318953628a4fb6f13545228ec6445adbb6b61ca4e364e60b2a2129150",
+    "wave_inverse_frozen_head": "52d47efd8c2376573c49b1293fe3380a420582b25dc77d21efa5955888a2e748",
+    "wave_inverse_pre_freeze": "785f8729b52f06f2cb6108a27e7167289e051e1bb23fe6434beb7966c3868972",
+    "wrf_receipt_copy": "d655ecfc3a8cf5e7777a7c02fe1ec792a5bbfdfbb4f060a7bc94c791d248c581"
+  },
+  "build": {
+    "standalone_sdirk3_cmake": {
+      "binary_receipt": "standalone_source_receipt.json",
+      "build_dir": "/tmp/stable-wave-build-20261004",
+      "build_type": "Release",
+      "compiler": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ (Apple clang 21.0.0)",
+      "cxx_standard": "C++17",
+      "frozen_inverse_binary_sha256": "42fd07c38389048341087ccfefb503c1486d7ebdcd83ed7ce0d48474e6eaadcf",
+      "frozen_inverse_static_library_sha256": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108",
+      "libtorch": "Homebrew PyTorch 2.10, ABI 1",
+      "receipt_binary_sha256": {
+        "libwrf_sdirk3_libtorch.a": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108",
+        "test_fp64_carry_adjoint": "c16866acf806232db470bf11e47b756437ed17678a701bf8403d1ffed548fbd6",
+        "test_horizontal_pgf_actual_rhs": "5ae281ec3a953f3b781f0662480485f824becea0a44531dab7e55f42722d716e"
+      },
+      "release_flags": "-O3 -DNDEBUG"
+    },
+    "wrf_production_archive": {
+      "archive_object_members": 24,
+      "archive_sha256": "37ff619b59bc3e444d3f49bbb3fc9b510f12e721dec39593be9f25cccffb3342",
+      "compiler": "/opt/homebrew/opt/llvm/bin/clang++ 22.1.4",
+      "cxx_standard": "C++17",
+      "fortran_compiler": "GNU Fortran 15.2.0",
+      "mpi": "OpenMPI 5.0.9",
+      "netcdf": "4.9.3_2 / Fortran 4.6.2",
+      "optimization": "-O2",
+      "wrf_executable_sha256": "529c1709a29755b11632bbd8da53502f2df02d9a6b6d035bbc575010c6d45d05"
+    }
+  },
+  "ctest_coverage": {
+    "all_123_have_passing_partition": true,
+    "core_log_subresults": {
+      "Horizontal_PGF_Actual_RHS": "passed in core partition",
+      "MSF_Map_Transfer_MPS": "passed in core partition",
+      "Stable_Wave_Fortran_Source_Rows": "passed in core partition"
+    },
+    "core_partition": {
+      "elapsed_seconds": 2145.72,
+      "failed_names": [
+        "FP64_Nonlinear_Inverse",
+        "FP64_State_Handoff_Contract"
+      ],
+      "initial_failed": 2,
+      "initial_passed": 118,
+      "log": "/private/tmp/stable-wave-core-ctest.log",
+      "reruns": [
+        {
+          "elapsed_seconds": 247.21,
+          "log": "/private/tmp/stable-wave-nonlinear-final-ctest.log",
+          "sha256": "efb3cd574ebeb7a1672460c9aaaa8af1aff2989122abecb0f83ccd3cad3d1f1f",
+          "status": "passed",
+          "test": "FP64_Nonlinear_Inverse"
+        },
+        {
+          "elapsed_seconds": 119.04,
+          "log": "/private/tmp/stable-wave-handoff-final-ctest.log",
+          "receipt": "handoff_receipt.json",
+          "sha256": "04c4ddeaa4ef3cacd906d5cf4708f1251933b4174c199606f43bd254e7498725",
+          "status": "passed",
+          "test": "FP64_State_Handoff_Contract"
+        }
+      ],
+      "sha256": "c2adb0744e59231c3f48d16597f1e55b865eacd584a46f9f1c8339654f42cc30",
+      "test_count": 120
+    },
+    "covered_unique_test_names": 123,
+    "current_inventory_count": 123,
+    "current_inventory_names": [
+      "U_Slow_Closures",
+      "Diag_IO_Concurrency",
+      "Config_Provenance",
+      "Experiment_Config_Parser",
+      "Dump_Contract",
+      "WRMS_Gate_Metric",
+      "Acoustic_Substep_AD",
+      "Acoustic_Schedule_Invalid_Matrix",
+      "Base_State_Layout_Contract",
+      "Hydrostatic_Balance_Contract",
+      "Base_EOS_Contract",
+      "Hydrostatic_Pressure_Orientation_Contract",
+      "Metric_Policy_Contract",
+      "Stats_Reset_Contract",
+      "First_Failure_Classification_Contract",
+      "Diagnostic_Observer_Noninterference_Contract",
+      "Operational_Primal_Tangent_Contract",
+      "Global_Ownership_Overlap_Gap_Contract",
+      "Memory_Tile_Offset_Contract",
+      "Failed_Step_Map_Is_Invalid_Contract",
+      "JVP_Fallback_Invalidates_Verdict_Contract",
+      "AD_Tangent_Contract",
+      "Response_Probe_Contract",
+      "Implicit_Diff_Contract",
+      "Transpose_Probe_Contract",
+      "State_Layout_Contract",
+      "Mass_Coordinate_Mode_Contract",
+      "MuPhi_Coupling_Structure_Contract",
+      "Stage_State_Identity_Contract",
+      "Phi_Unity_Experiment_Enabled_Contract",
+      "Mu_Coupling_Orientation_Experiment_Contract",
+      "Discrete_Adjoint_Pair_Contract",
+      "AcousticGravity_Shadow_Contract",
+      "Right_Preconditioner_Quality_Contract",
+      "Adjoint_Solve_Authority_Contract",
+      "Base_State_Checked_ABI",
+      "MSF_Raw_Stats_Matrix",
+      "Geometry_Contract_Matrix",
+      "VJP_Semantics",
+      "FGMRES_Contract",
+      "Trust_Model_Contract",
+      "ARK324_Production_Composition",
+      "Krylov_Budget_Config",
+      "Config_Numeric_Contract",
+      "Scalar_Advection_Contract",
+      "Scalar_Diffusion_Contract",
+      "Option2_Momentum_Geometry_Source_Parity",
+      "Option2_V_Actual_Rhs_Contract",
+      "Option2_W_Actual_Rhs_Contract",
+      "Option2_W_Actual_Rhs_AD_Derivative_Contract",
+      "Option2_U_Full_Rhs_Contract_Map1",
+      "Option2_U_Full_Rhs_Contract_Map125",
+      "Potential_Temperature_Contract",
+      "Periodic_Staggered_Advection",
+      "Packed_Boundary_Contract",
+      "AD_Safe_Math_Contract",
+      "FNM_FNP_Geometry_Contract",
+      "Vertical_Momentum_Contract",
+      "Horizontal_Momentum_Contract",
+      "Coriolis_Contract",
+      "Phi_Coordinate_Contract",
+      "W_Damping_Coordinate_Contract",
+      "Phase2_D0_Contract",
+      "Phase2_D0_Uncapped",
+      "Phase2_D0_Floor",
+      "Phase2_D0_Phi_Unity",
+      "Two_Step_Tile_Adjoint",
+      "Fixed_Trajectory_Derivative",
+      "FP64_Carry_Adjoint",
+      "FP64_Initial_Inverse",
+      "FP64_Two_Time_Inverse",
+      "FP64_Nonlinear_Inverse",
+      "FP64_Balanced_Inverse",
+      "FP64_Window_Forecast",
+      "FP64_Fixed_Data_Refinement",
+      "FP64_Stable_Column_Inverse",
+      "FP64_Stable_Wave_Forward",
+      "FP64_Stable_Wave_Inverse",
+      "Horizontal_PGF_Actual_RHS",
+      "Stable_Wave_Fortran_Source_Rows",
+      "Fixed_Trajectory_Lifecycle",
+      "Horizontal_Mass_Contract",
+      "PGF_Coordinate_Contract",
+      "RHS_Preconditioner_Contract",
+      "MSF_Cache_Reset_Contract",
+      "MSF_Map_Transfer_MPS",
+      "FP64_State_Handoff_Contract",
+      "Full_Tile_Step_Adjoint",
+      "Full_Tile_Internal_FP64",
+      "Full_Tile_Temporal_Order",
+      "Full_Tile_Horizontal_PGF",
+      "Full_Tile_Symmetric_Walls",
+      "Full_Tile_RHS_Debug_Invariance",
+      "Krylov_Metric_Coordinate_Contract",
+      "Stage_Krylov_Policy_Contract",
+      "WDamp_Tangent_Contract",
+      "WDamp_Preconditioner_Policy_Contract",
+      "RW_Term_Capture_Contract",
+      "WDamp_WRF_Reference_Contract",
+      "WW_CP_Parity_Contract",
+      "Stage_Operand_Decomposition_Contract",
+      "Stage2_Rejection_Snapshot_Archive",
+      "Core_Full_Object_Link",
+      "Core_Archive_Manifest",
+      "Core_Archive_MakeParity",
+      "MPI_Halo_Contract_np1",
+      "MPI_Halo_Contract_np2",
+      "MPI_Halo_Contract_np4",
+      "MPI_Runtime_Contract_np1",
+      "MPI_Runtime_Contract_np2",
+      "MPI_Runtime_Contract_np4",
+      "Curvature_Coordinate_Contract",
+      "Curvature_Kernel_Contract",
+      "Phi_Horizontal_Kernel_Contract",
+      "Phi_Horizontal_Coordinate_Contract",
+      "MSF_Pointer_Republication",
+      "Nonhydrostatic_Pressure_Kernel_Contract",
+      "Nonhydrostatic_Pressure_Coordinate_Contract",
+      "WRF_Dynamics_Config",
+      "Raw_Principal_Contract",
+      "Raw_Principal_Actual_Tile_Oracle",
+      "Raw_Principal_Factory",
+      "Raw_Principal_Disabled"
+    ],
+    "current_inventory_sha256": "28f23e600074b75f6ab80783721322d90028800eb2ff6ff09231c0610518cd53",
+    "linux_remote_ci": "pending",
+    "post_core_partition": [
+      {
+        "elapsed_seconds": 4858.59,
+        "execution": "direct execution of registered command, not CTest",
+        "log": "/private/tmp/stable-wave-refinement-after-hpg.log",
+        "sha256": "1c29c2bd583c38790e774fd1b28e06e87577ccad0cfdc7775cb11bb8d60b8afd",
+        "status": "passed",
+        "test": "FP64_Fixed_Data_Refinement"
+      },
+      {
+        "elapsed_seconds": 205.8,
+        "execution": "direct execution of registered command, not CTest",
+        "log": "/tmp/stable-wave-final-portable-forward-20261004.log",
+        "sha256": "1438669318953628a4fb6f13545228ec6445adbb6b61ca4e364e60b2a2129150",
+        "status": "passed",
+        "test": "FP64_Stable_Wave_Forward"
+      },
+      {
+        "elapsed_seconds": 376.35,
+        "execution": "direct execution of registered command, not CTest",
+        "launch_binary_sha256": "42fd07c38389048341087ccfefb503c1486d7ebdcd83ed7ce0d48474e6eaadcf",
+        "log": "/private/tmp/stable-wave-frozen-head-inverse.log",
+        "memory_peak_rss_kib": 622880,
+        "sha256": "52d47efd8c2376573c49b1293fe3380a420582b25dc77d21efa5955888a2e748",
+        "source_receipt": "frozen_inverse_receipt_before_run.json",
+        "status": "passed",
+        "test": "FP64_Stable_Wave_Inverse"
+      }
+    ],
+    "single_all_123_invocation": false
+  },
+  "generated_local": "2026-10-04T19:00:52+09:00",
+  "preserved_failure_and_tolerance_controls": {
+    "default_test_wave_damping_diagnostic": {
+      "K_fast_rms": 1.54603e-15,
+      "Newton_residual": 1.97517e-15,
+      "R_fast": 2.83883e-13,
+      "R_over_K": 183.621,
+      "WRMS": 1.95566e-09,
+      "log": "/tmp/stable-wave-inverse-zero-default-probe-20261004.log",
+      "production_threshold_changed": false,
+      "sha256": "cf3c758509cf4b39db938dbb70fd537c5885c56725b24926ccd3d046fb72d83d",
+      "stage": 2,
+      "timestep": 2,
+      "wave_test_threshold": 1000000.0
+    },
+    "initial_core_log_preserved": true,
+    "wrf_internal_fp64_off": {
+      "first_failure_timestep_index": 0,
+      "krylov_tol": 1e-07,
+      "last_scaled_residual": 1.297e-06,
+      "newton_atol": 1e-07,
+      "nonfinite": false,
+      "only_flags_changed": [
+        "sdirk3_internal_fp64",
+        "sdirk3_internal_fp64_state_carry"
+      ],
+      "same_candidate_executable": true,
+      "stage": 2,
+      "stage2_gate_threshold": 100,
+      "terminal_newton_iteration": 9
+    },
+    "wrf_on_off_control_receipt": "wrf_receipt.json"
+  },
+  "purpose": "Reproducible evidence record. Validation was partitioned; no single all-123 CTest invocation is claimed.",
+  "revision_scopes": {
+    "current_worktree_snapshot": {
+      "combined_source_hash_sha256": "eb14d20c01fc1829b86091af9c748d57ca17c910988eae6acdca26534802f843",
+      "feature_commit": "pending",
+      "file_sha256": {
+        "external/libtorch_wrf/sdirk3/CMakeLists.txt": "dd69aa6f52e0bd4b751f6c2086ac15ee369feaa26eb5a85acf5f6b34650b3b0c",
+        "external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+        "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp": "5c6ed5b61b52867e15c6cb8666b1fd1107891bd213b562fd4a6c20c3e0296fc7",
+        "external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f",
+        "external/libtorch_wrf/sdirk3/tests/test_horizontal_pgf_actual_rhs.cpp": "08e120677158c98e9c83dc69cbc7b9e58f28991ac9143b5dd8bb8cfdff513acf",
+        "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+        "tools/test_stable_wave_reference_rows.py": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e"
+      }
+    },
+    "final_frozen_inverse": {
+      "binary_sha256": "42fd07c38389048341087ccfefb503c1486d7ebdcd83ed7ce0d48474e6eaadcf",
+      "command": [
+        "/private/tmp/stable-wave-build-20261004/test_fp64_carry_adjoint",
+        "--wave-inverse"
+      ],
+      "elapsed_seconds": 376.35,
+      "note": "Exact pre-run source/header/fixture/executable/static-library hashes from frozen_inverse_receipt_before_run.json.",
+      "peak_rss_kib": 622880,
+      "production_archive_sha256": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108",
+      "receipt_file": "frozen_inverse_receipt_before_run.json",
+      "receipt_sha256": "9e0c68ba04b02ef390431ad9159c5e038eb34bad2257086065b04d99867f7a15",
+      "source_file_hashes": {
+        "stable_wave_reference.h": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+        "test_fp64_carry_adjoint.cpp": "5c6ed5b61b52867e15c6cb8666b1fd1107891bd213b562fd4a6c20c3e0296fc7",
+        "tile_test_fixture.h": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+      },
+      "timestamp": "2026-10-04T18:49:14.611949+09:00"
+    },
+    "historical_inverse_without_launch_receipt": {
+      "launch_binary_sha256": "not recorded at launch",
+      "note": "Historical pre-frozen inverse evidence only; do not attribute a binary hash. The final frozen-head inverse below supersedes it.",
+      "production_commit": "ccee4100e34af655570ed16aabb25c8577216039"
+    },
+    "production": {
+      "base_commit": "5201af93a8f41252956dda050ce43df690234e61",
+      "commit": "ccee4100e34af655570ed16aabb25c8577216039",
+      "production_archive_sha256": "37ff619b59bc3e444d3f49bbb3fc9b510f12e721dec39593be9f25cccffb3342",
+      "production_file": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "production_source_sha256": "28588df9ea75d326fbe46840b9e12e0dd8eabc307f380bab9adbd2d0f9a2f6ab",
+      "wrf_executable_sha256": "529c1709a29755b11632bbd8da53502f2df02d9a6b6d035bbc575010c6d45d05"
+    },
+    "test_only_snapshot_at_2026_10_04T17_31_19_627485_0900": {
+      "binary_hashes": {
+        "libwrf_sdirk3_libtorch.a": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108",
+        "test_fp64_carry_adjoint": "c16866acf806232db470bf11e47b756437ed17678a701bf8403d1ffed548fbd6",
+        "test_horizontal_pgf_actual_rhs": "5ae281ec3a953f3b781f0662480485f824becea0a44531dab7e55f42722d716e"
+      },
+      "note": "Exact pre-withheld forward snapshot; feature commit remained pending.",
+      "receipt_sha256": "e7e4aedeb72298a9db8aa69210c419a907aa98edb52c3fb6291f10fd321d22fd",
+      "source_hashes": {
+        "external/libtorch_wrf/sdirk3/CMakeLists.txt": "dd69aa6f52e0bd4b751f6c2086ac15ee369feaa26eb5a85acf5f6b34650b3b0c",
+        "external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+        "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp": "358e89285ffc190d3eb53058063ded0aa73bb087c66bb0d3aa112728f55ea523",
+        "external/libtorch_wrf/sdirk3/tests/test_horizontal_pgf_actual_rhs.cpp": "08e120677158c98e9c83dc69cbc7b9e58f28991ac9143b5dd8bb8cfdff513acf",
+        "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "28588df9ea75d326fbe46840b9e12e0dd8eabc307f380bab9adbd2d0f9a2f6ab",
+        "tools/test_stable_wave_reference_rows.py": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e"
+      },
+      "source_receipt": "standalone_source_receipt.json"
+    }
+  },
+  "schema_version": 1,
+  "scope_caveats": [
+    "Test wave post-damp threshold 1e6 is a test-only setting applied consistently to wave primal/FD/VJP runs; no production tolerance or gate changed.",
+    "The independent reference uses phi_adv_z=2 matching the ordinary native centered stencil; this is not a claim about WRF\u2019s separate option-1 default.",
+    "Inverse uses two synthetic independent-reference physical-W observations at 150 and 300 s, sigma 3e-4 m s-1, two temporal quadratures, and no prior.",
+    "The energy diagnostic reports bulk terms and a separate free-surface candidate; total energy closure and boundary-work closure remain unclaimed.",
+    "Mac MPS passed; Linux remote CI is pending.",
+    "The final inverse rerun uses a before-run receipt with exact source, test binary, and static-library hashes; the earlier inverse log is retained separately as historical evidence."
+  ]
+}

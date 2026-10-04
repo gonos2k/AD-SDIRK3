@@ -1,0 +1,160 @@
+{
+  "timestamp": "2026-10-04T19:02:31.601757+09:00",
+  "source_base": "5201af93a8f41252956dda050ce43df690234e61",
+  "production_commit": "ccee4100e34af655570ed16aabb25c8577216039",
+  "worktree": "/private/tmp/pr274-ci-20261004",
+  "corpus": "/private/tmp/sdirk3-fp64-carry-adjoint-graph",
+  "files": [
+    {
+      "source": "external/libtorch_wrf/sdirk3/CMakeLists.txt",
+      "corpus": "CMakeLists.txt",
+      "sha256": "dd69aa6f52e0bd4b751f6c2086ac15ee369feaa26eb5a85acf5f6b34650b3b0c",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h",
+      "corpus": "tests/stable_wave_reference.h",
+      "sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp",
+      "corpus": "tests/test_base_state_checked_abi.cpp",
+      "sha256": "94da99dc441c9bcd4f223700ccf41b69ee818cb73d8e1f5cefa20e32f8eafee1",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_config_numeric_contract.cpp",
+      "corpus": "tests/test_config_numeric_contract.cpp",
+      "sha256": "6dd55f1520bc3e648a35ea7dd0366400dbbe21135117ca8d842e4ae46e4e6bbb",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_derivative.cpp",
+      "corpus": "tests/test_fixed_trajectory_derivative.cpp",
+      "sha256": "8bb11154215f995894a44c54b03e9c4b46870e73651caa0eb100dd4f1bf4fd71",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "corpus": "tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "afe214ec0d94139cf6e4ede3c148a4a30da2d3084c75175ac8bf012f9fec2592",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp",
+      "corpus": "tests/test_fp64_carry_adjoint.cpp",
+      "sha256": "5c6ed5b61b52867e15c6cb8666b1fd1107891bd213b562fd4a6c20c3e0296fc7",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_horizontal_pgf_actual_rhs.cpp",
+      "corpus": "tests/test_horizontal_pgf_actual_rhs.cpp",
+      "sha256": "08e120677158c98e9c83dc69cbc7b9e58f28991ac9143b5dd8bb8cfdff513acf",
+      "bytes_match": true
+    },
+    {
+      "source": "tools/test_stable_wave_reference_rows.py",
+      "corpus": "tests/test_stable_wave_reference_rows.py",
+      "sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp",
+      "corpus": "tests/test_wrms_gate_metric.cpp",
+      "sha256": "9f2fa6102a2bc6f67609ce7e5c5b7614cdbb560ed1dcec3f33446793393c923e",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+      "corpus": "tests/tile_test_fixture.h",
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h",
+      "corpus": "wrf_hydrostatic_pressure.h",
+      "sha256": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_ark324_composition.h",
+      "corpus": "wrf_sdirk3_ark324_composition.h",
+      "sha256": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp",
+      "corpus": "wrf_sdirk3_base_state_zerocopy.cpp",
+      "sha256": "6374f05622afa25d92b285b04fdaa09a9b7d404563532acefe5186c3cb787ea7",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp",
+      "corpus": "wrf_sdirk3_config.cpp",
+      "sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+      "corpus": "wrf_sdirk3_config.h",
+      "sha256": "4df759250f15ed9e897f796a601b060cb1854b2006f5efeaaa40fa93b61f860c",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_hydrostatic_balance.h",
+      "corpus": "wrf_sdirk3_hydrostatic_balance.h",
+      "sha256": "707ff6f84137db8129779931cf4fa5c281bd5a3a6c233bb81881f1858b22e133",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h",
+      "corpus": "wrf_sdirk3_interface.h",
+      "sha256": "de92b28e23ba7251a2032b9ad9ec1446757c63253bf28e7b5b1060e085f88e2a",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_params.h",
+      "corpus": "wrf_sdirk3_interface_params.h",
+      "sha256": "539e1df6f2f99de89ef4ffa5fc6e4a0dab90ff97c85d2ecb3b831838f3e8cae6",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "corpus": "wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "8a7d5f072ab7c5419cb1c95cd495cd55584a0b8cd9bade9a69ffe7eed4e278e3",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "corpus": "wrf_sdirk3_tile_unified.h",
+      "sha256": "c5b817595b9b92a4e9b778b98978fb4452a96cb62aa8709a575b1f747db6fcbf",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "corpus": "wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "28588df9ea75d326fbe46840b9e12e0dd8eabc307f380bab9adbd2d0f9a2f6ab",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_wrms_norm.h",
+      "corpus": "wrf_sdirk3_wrms_norm.h",
+      "sha256": "c2428d4bd9561b35ab96c4d093b1fda14ff5a851314f49f2e92c50319ee18b85",
+      "bytes_match": true
+    },
+    {
+      "source": "tools/test_stable_wave_reference_rows.py",
+      "corpus": "tools/test_stable_wave_reference_rows.py",
+      "sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+      "bytes_match": true
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp",
+      "corpus": "tests/test_fp64_handoff_probe.cpp",
+      "sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f",
+      "bytes_match": true
+    }
+  ],
+  "extraction_scope": "Navigation only; Fortran/macros/templates/anonymous namespace may omit edges; numerical claims checked against source and executable evidence."
+}

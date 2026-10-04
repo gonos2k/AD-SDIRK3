@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "source_commit": "ccee4100e34af655570ed16aabb25c8577216039",
+  "test": "FP64_State_Handoff_Contract",
+  "ctest_targeted_result": "Passed",
+  "ctest_seconds": 119.04,
+  "ctest_inventory": 123,
+  "production_source_changes": false,
+  "newton_tolerance_baseline": 1e-9,
+  "same_h_solver_sensitivity": {
+    "steps": 32,
+    "dt_seconds": 0.125,
+    "comparison_tolerance": 1e-11,
+    "reference_tolerance": 1e-9,
+    "first_state_delta_rms_all_six_blocks": 0.0,
+    "final_state_delta_rms_all_six_blocks": 0.0
+  },
+  "T4_continuous_fp64_refinement": {
+    "step_counts": [4, 8, 16, 32, 64],
+    "coarse_4_to_8_U_order_report_only": 4.51454350119,
+    "fine_order_gate": [2.6, 3.4],
+    "fine_orders_by_block_8_16_32_64": {
+      "U": [3.02156344047, 3.01225364393],
+      "V": [3.03245353195, 3.01823565861],
+      "W": [3.01975860943, 3.01191079647],
+      "PH": [2.96678444277, 2.9838674545],
+      "T": [2.98478056864, 2.99273992241],
+      "MU": [2.98782095985, 2.99428442026]
+    }
+  },
+  "local_one_step_vs_two_half_step_orders": {
+    "gate": [3.5, 4.5],
+    "U": [4.22819849226, 4.08690267238],
+    "T": [3.96986844281, 3.99189324131]
+  },
+  "baseline_failure": {
+    "preserved_in": "../baseline/baseline_receipt.json",
+    "observation": "coarse N=4 to N=8 U ratio 4.5145 was outside the unchanged third-order gate; N=8 to N=16 ratio was 3.0216",
+    "interpretation": "non-asymptotic coarse interval; refined N=8/16/32/64 ratios establish the resolved range"
+  },
+  "source_sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f",
+  "fixture_sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+  "production_impl_sha256": "28588df9ea75d326fbe46840b9e12e0dd8eabc307f380bab9adbd2d0f9a2f6ab",
+  "executable_sha256": "78788a32cb5d9c3ef9fdda33d9cbd68618b6dc29c7134294dd6a070fdaf8a661",
+  "ctest_log_sha256": "fcd9e44529e8f897cc128d4e6d91c05063b37af3c29af5c293856b5f07e3b347"
+}

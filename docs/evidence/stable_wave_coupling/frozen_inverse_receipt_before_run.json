@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-10-04T18:49:14.611949+09:00",
+  "production_commit": "ccee4100e34af655570ed16aabb25c8577216039",
+  "command": [
+    "/private/tmp/stable-wave-build-20261004/test_fp64_carry_adjoint",
+    "--wave-inverse"
+  ],
+  "files": {
+    "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp": {
+      "sha256": "5c6ed5b61b52867e15c6cb8666b1fd1107891bd213b562fd4a6c20c3e0296fc7"
+    },
+    "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h": {
+      "sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c"
+    },
+    "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h": {
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+    },
+    "/private/tmp/stable-wave-build-20261004/test_fp64_carry_adjoint": {
+      "sha256": "42fd07c38389048341087ccfefb503c1486d7ebdcd83ed7ce0d48474e6eaadcf"
+    },
+    "/private/tmp/stable-wave-build-20261004/libwrf_sdirk3_libtorch.a": {
+      "sha256": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108"
+    }
+  },
+  "purpose": "Repeat after final non-wave test edits to retain exact source/executable provenance; no parameter or wave-code change."
+}
