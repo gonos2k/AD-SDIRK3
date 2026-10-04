@@ -1,0 +1,31 @@
+{
+  "recorded_at": "2026-10-04T11:04:41+09:00",
+  "failed_run": 37119240099,
+  "pr": 274,
+  "head_before": "c1c4adf9acfd9691298b55e65f81a26d08bd6711",
+  "failed_job": "core-linux",
+  "failure": "90-minute wall-clock cancellation at test75; required fails on cancellation",
+  "assertion_failure_reported": false,
+  "exact_inventory": 119,
+  "completed_first_tests": 74,
+  "timeout_change_minutes": [
+    90,
+    150
+  ],
+  "semantic_change_only": "jobs.core-linux.timeout-minutes",
+  "preserved": [
+    "all119tests",
+    "allnumericaltolerances",
+    "ABI/parity/install",
+    "requireddependsandrequiresall3success"
+  ],
+  "failed_log_sha256": "eeaaab9d5700f3231309b70ec30b020a0669d9a95d29b1c61fc82d964bd0b490",
+  "local_checks": [
+    "workflowparse/semanticdelta",
+    "actionpins8selftests+allworkflowchecks",
+    "repositoryratchets",
+    "gitdiff--check"
+  ],
+  "no_new_model_run": true,
+  "final_ci": "pending automatic PR run"
+}
