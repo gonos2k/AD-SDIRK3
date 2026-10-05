@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /tmp/stable-wave-build-20261004
+Test project /tmp/stable-wave-build-20261004
+    Start 80: Native_Stable_Wave_Refinement
+1/1 Test #80: Native_Stable_Wave_Refinement ....   Passed   52.54 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =  52.54 sec

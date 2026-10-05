@@ -609,6 +609,16 @@ set_tests_properties(FP64_Stable_Wave_Forward FP64_Stable_Wave_Inverse
     PROPERTIES TIMEOUT 600)
 # Hosted Linux measured 579 s; retain a finite limit with load variation margin.
 set_tests_properties(FP64_Stable_Wave_Two_Mode_Inverse PROPERTIES TIMEOUT 900)
+add_executable(test_native_wave_refinement tests/test_native_wave_refinement.cpp)
+target_link_libraries(test_native_wave_refinement PRIVATE wrf_sdirk3::core)
+add_test(NAME Native_Stable_Wave_Refinement
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/test_native_wave_refinement.py
+            --exe $<TARGET_FILE:test_native_wave_refinement>
+            --output ${CMAKE_CURRENT_BINARY_DIR}/native_wave_refinement.json)
+set_tests_properties(Native_Stable_Wave_Refinement
+    PROPERTIES TIMEOUT 900 ENVIRONMENT "OPENBLAS_NUM_THREADS=1;OMP_NUM_THREADS=1;PYTHONDONTWRITEBYTECODE=1")
+
 add_executable(test_horizontal_pgf_actual_rhs tests/test_horizontal_pgf_actual_rhs.cpp)
 target_link_libraries(test_horizontal_pgf_actual_rhs PRIVATE wrf_sdirk3::core)
 add_test(NAME Horizontal_PGF_Actual_RHS COMMAND test_horizontal_pgf_actual_rhs)

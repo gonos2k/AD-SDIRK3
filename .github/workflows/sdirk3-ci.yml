@@ -567,6 +567,8 @@ jobs:
             build/sdirk3-core/CMakeFiles/CMakeOutput.log
             build/sdirk3-core/Testing/Temporary/
             build/sdirk3-core/wave_spatial_convergence.json
+            build/sdirk3-core/native_wave_refinement.json
+            build/sdirk3-core/native_wave_refinement.log
             build/numerical-evidence/
             /tmp/ctest_actual.txt
             /tmp/ctest_expected.txt

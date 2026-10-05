@@ -25522,7 +25522,9 @@ void TileSDIRK3UnifiedSolver::applyDivergenceDamping(torch::Tensor& rhs,
                                                      const torch::Tensor& v,
                                                      const torch::Tensor& w) {
     // WRF-style divergence damping for acoustic mode stabilization
-    // Reference: module_big_step_utilities_em.F divergence_driver
+    // Sign reference: module_small_step_em.F advance_mu_t/advance_uv.
+    // WRF MUDF contains negative mass-flux divergence; its negative gradient
+    // contributes +grad(div) here, where div is positive velocity divergence.
     // Critical for preventing tendency explosion in implicit SDIRK3
     
     // Check if divergence damping is enabled
@@ -25624,7 +25626,8 @@ void TileSDIRK3UnifiedSolver::applyDivergenceDamping(torch::Tensor& rhs,
 
     // Step 2: Compute gradient of divergence for momentum damping
     
-    // U-momentum damping: -kdamp * ∂(div)/∂x at u-points
+    // U-momentum damping: +kdamp * ∂(div)/∂x at u-points.
+    // On a longitudinal Fourier mode grad(div) = -kappa^2 u.
     // Only apply to interior u-points (i=1 to nx-1 in Fortran, 1 to nx in C++)
     if (nx_ > 2) {
         auto ddiv_dx = rdx * (div.slice(2, 1, nx_) - div.slice(2, 0, nx_-1));
@@ -25642,14 +25645,14 @@ void TileSDIRK3UnifiedSolver::applyDivergenceDamping(torch::Tensor& rhs,
         // AD FIX 2026-02-01: Out-of-place damping application.
         // ru_tend is a view from extractStateVariables(rhs). In-place .sub_() on a
         // view-of-view can trigger autograd "modified a view" errors. Use
-        // constant_pad_nd + subtraction (out-of-place, graph-safe).
+        // constant_pad_nd + addition (out-of-place, graph-safe).
         // ddiv_dx: [ny, nz, nx-1], pad to match ru_tend [ny, nz, nx_u]
         auto damp_u = torch::constant_pad_nd(kdamp * ddiv_dx,
             {1, ru_tend.size(2) - nx_});  // {dim2_left=1, dim2_right=nx_u-nx_}
-        ru_tend = ru_tend - damp_u;
+        ru_tend = ru_tend + damp_u;
     }
 
-    // V-momentum damping: -kdamp * ∂(div)/∂y at v-points
+    // V-momentum damping: +kdamp * ∂(div)/∂y at v-points
     // Only apply to interior v-points (j=1 to ny-1 in Fortran, 1 to ny in C++)
     if (ny_ > 2) {
         auto ddiv_dy = rdy * (div.slice(0, 1, ny_) - div.slice(0, 0, ny_-1));
@@ -25668,7 +25671,7 @@ void TileSDIRK3UnifiedSolver::applyDivergenceDamping(torch::Tensor& rhs,
         // ddiv_dy: [ny-1, nz, nx], pad dim 0 to match rv_tend [ny_v, nz, nx]
         auto damp_v = torch::constant_pad_nd(kdamp * ddiv_dy,
             {0, 0, 0, 0, 1, rv_tend.size(0) - ny_});  // {d2l,d2r, d1l,d1r, d0l,d0r}
-        rv_tend = rv_tend - damp_v;
+        rv_tend = rv_tend + damp_v;
     }
     
     // Note: W-momentum doesn't get divergence damping in WRF

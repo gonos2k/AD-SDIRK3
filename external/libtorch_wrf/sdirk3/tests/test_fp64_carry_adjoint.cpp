@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <complex>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <string>
@@ -1869,6 +1870,133 @@ std::array<double,2> wave_temporal_coordinates(const WaveState& q0,const WaveSta
                 "standing-wave temporal quadratures are not independent");
     return {(r0*g11-r1*g01)/determinant,(r1*g00-r0*g01)/determinant};
 }
+struct TopBoundaryEOS { double pressure,theta,temperature,density; };
+TopBoundaryEOS top_boundary_eos(const WaveReference& reference) {
+    const double pressure=reference.p_bar[nz-1]-
+        0.5*reference.layer_mass[nz-1]*reference.eta_delta;
+    const double theta=reference.theta[nz-1]+
+        0.5*(reference.theta[nz-1]-reference.theta[nz-2]);
+    const double temperature=theta*std::pow(pressure/reference.p0,reference.rd/reference.cp);
+    const double density=pressure/(reference.rd*temperature);
+    TORCH_CHECK(std::isfinite(pressure) && std::abs(pressure-20000.0)<1e-8 &&
+                std::isfinite(theta) && std::abs(theta-317.0)<1e-12 &&
+                std::isfinite(temperature) && temperature>0.0 &&
+                std::isfinite(density) && density>0.0,
+                "physical-energy projection requires the EOS-extrapolated fixture top boundary");
+    return {pressure,theta,temperature,density};
+}
+double wave_total_physical_energy(const WaveReference& reference,const WaveState& q) {
+    const auto parts=reference.physicalEnergy(q);
+    const auto top=top_boundary_eos(reference);
+    const double area=reference.dx*reference.dy*nx*ny;
+    const auto phi_top=q[wrf::sdirk3::test::stable_wave_reference::phi_offset+nz-1];
+    const double zeta_top=std::norm(phi_top/reference.gravity);
+    return parts.bulk()+0.25*area*top.density*reference.gravity*zeta_top;
+}
+double wave_physical_energy_bilinear(const WaveReference& reference,
+                                     const WaveState& a,const WaveState& b) {
+    return 0.25*(wave_total_physical_energy(reference,wave_combine(a,b,1.0,1.0))-
+                 wave_total_physical_energy(reference,wave_combine(a,b,1.0,-1.0)));
+}
+std::array<double,4> wave_physical_energy_coordinates(const WaveReference& reference,
+        const std::vector<WaveModes>& modes,const WaveState& q) {
+    TORCH_CHECK(modes.size()==2,"physical-energy wave projection requires two selected modes");
+    const std::array<const WaveState*,4> columns{{&modes[0].q0,&modes[0].q1,
+                                                  &modes[1].q0,&modes[1].q1}};
+    auto gram=torch::empty({4,4},torch::kFloat64);
+    auto rhs=torch::empty({4},torch::kFloat64);
+    for(int i=0;i<4;++i) {
+        rhs[i]=wave_physical_energy_bilinear(reference,*columns[i],q);
+        for(int j=0;j<4;++j)
+            gram[i][j]=wave_physical_energy_bilinear(reference,*columns[i],*columns[j]);
+    }
+    TORCH_CHECK(torch::isfinite(gram).all().item<bool>() && torch::isfinite(rhs).all().item<bool>(),
+                "physical-energy projection Gram or RHS is nonfinite");
+    const auto eigenvalues=torch::linalg_eigvalsh(gram);
+    TORCH_CHECK(torch::isfinite(eigenvalues).all().item<bool>() &&
+                eigenvalues.min().item<double>()>0.0,
+                "physical-energy projection Gram is not positive definite");
+    const auto coordinates=torch::linalg_solve(gram,rhs);
+    TORCH_CHECK(torch::isfinite(coordinates).all().item<bool>(),
+                "physical-energy wave projection returned nonfinite coordinates");
+    return {coordinates[0].item<double>(),coordinates[1].item<double>(),
+            coordinates[2].item<double>(),coordinates[3].item<double>()};
+}
+WaveState wave_projected_state(const std::vector<WaveModes>& modes,
+                               const std::array<double,4>& coordinates) {
+    WaveState projected{};
+    for(int m=0;m<2;++m) for(int k=0;k<wave_size;++k)
+        projected[k]+=coordinates[2*m]*modes[m].q0[k]+coordinates[2*m+1]*modes[m].q1[k];
+    return projected;
+}
+double owned_w_dual_mass(const WaveReference& reference,int k) {
+    TORCH_CHECK(k>=1 && k<nw,"owned W face lies outside the active vertical range");
+    const double mass=k<nz
+        ? 0.5*(reference.layer_mass[k-1]+reference.layer_mass[k])*reference.eta_delta/reference.gravity
+        : 0.5*reference.layer_mass[nz-1]*reference.eta_delta/reference.gravity;
+    TORCH_CHECK(std::isfinite(mass) && mass>0.0,"owned W dual mass is not positive and finite");
+    return mass;
+}
+double owned_w_inner(const WaveReference& reference,const torch::Tensor& a,
+                     const torch::Tensor& b) {
+    TORCH_CHECK(a.numel()==total && b.numel()==total && a.scalar_type()==torch::kFloat64 &&
+                b.scalar_type()==torch::kFloat64,"owned-W norm requires packed FP64 states");
+    const auto aa=a.contiguous(),bb=b.contiguous();
+    const auto* av=aa.data_ptr<double>();const auto* bv=bb.data_ptr<double>();
+    const double cell_area=reference.dx*reference.dy;
+    double result=0.0;
+    for(int k=1;k<nw;++k) {
+        const double dual_mass=owned_w_dual_mass(reference,k);
+        const double weight=0.5*cell_area*dual_mass;
+        for(int j=0;j<ny;++j) for(int i=0;i<nx;++i) {
+            const int64_t index=su+sv+(j*nw+k)*nx+i;
+            result+=weight*av[index]*bv[index];
+        }
+    }
+    TORCH_CHECK(std::isfinite(result),"owned-W physical inner product is nonfinite");
+    return result;
+}
+struct OwnedWSpectrum {
+    std::array<double,4> energy{}; // m=0, m=1 pair, m=2 pair, remaining bins
+    double direct_energy=0.0;
+    double parseval_error=0.0;
+};
+OwnedWSpectrum owned_w_spectrum(const WaveReference& reference,const torch::Tensor& state) {
+    TORCH_CHECK(state.numel()==total && state.scalar_type()==torch::kFloat64,
+                "owned-W spectrum requires a packed FP64 state");
+    const auto packed=state.contiguous();const auto* values=packed.data_ptr<double>();
+    const int64_t offset=su+sv;
+    const double cell_area=reference.dx*reference.dy,pi=std::acos(-1.0);
+    OwnedWSpectrum result;
+    for(int k=1;k<nw;++k) {
+        const double dual_mass=owned_w_dual_mass(reference,k);
+        const double factor=0.5*cell_area*nx*dual_mass;
+        for(int j=0;j<ny;++j) {
+            std::array<std::complex<double>,nx> coefficient{};
+            double direct_row=0.0;
+            for(int i=0;i<nx;++i) {
+                const double value=values[offset+(j*nw+k)*nx+i];
+                direct_row+=value*value;
+                for(int m=0;m<nx;++m)
+                    coefficient[m]+=value*std::polar(1.0,-2.0*pi*m*i/nx)/static_cast<double>(nx);
+            }
+            result.direct_energy+=0.5*cell_area*dual_mass*direct_row;
+            for(int m=0;m<nx;++m) {
+                const int group=m==0?0:(m==1 || m==nx-1)?1:(m==2 || m==nx-2)?2:3;
+                result.energy[group]+=factor*std::norm(coefficient[m]);
+            }
+        }
+    }
+    double spectral=0.0;for(const double energy:result.energy) spectral+=energy;
+    result.parseval_error=std::abs(spectral-result.direct_energy)/
+        std::max(result.direct_energy,1e-300);
+    TORCH_CHECK(std::all_of(result.energy.begin(),result.energy.end(),[](double value) {
+                    return std::isfinite(value) && value>=0.0;
+                }) && std::isfinite(result.direct_energy) && result.direct_energy>=0.0 &&
+                std::isfinite(result.parseval_error),
+                "owned-W spectrum produced a nonfinite or negative metric");
+    return result;
+}
 double energy_component_relative_error(double native,double reference) {
     return std::abs(native-reference)/std::max(std::abs(reference),1.0);
 }
@@ -2226,6 +2354,191 @@ void run_wave_inverse_experiment(int mode_count=1) {
         std::max(withheld_truth_w.norm().item<double>(),1e-300);
     const double baseline_w_error=(physical_w_values(fixture.background)-withheld_truth_w).norm().item<double>()/
         std::max(withheld_truth_w.norm().item<double>(),1e-300);
+    if(mode_count==2) {
+        WaveState modal_residual{};
+        for(int k=0;k<wave_size;++k) modal_residual[k]=withheld_native[k]-withheld_truth[k];
+        const auto coordinates=wave_physical_energy_coordinates(fixture.reference,modes,modal_residual);
+        const auto projected=wave_projected_state(modes,coordinates);
+        WaveState modal_remainder{};
+        for(int k=0;k<wave_size;++k) modal_remainder[k]=modal_residual[k]-projected[k];
+        const std::array<const WaveState*,4> columns{{&modes[0].q0,&modes[0].q1,
+                                                      &modes[1].q0,&modes[1].q1}};
+        double maximum_orthogonality=0.0;
+        for(const auto* column:columns) {
+            const double denominator=std::sqrt(wave_total_physical_energy(fixture.reference,*column)*
+                wave_total_physical_energy(fixture.reference,modal_remainder));
+            maximum_orthogonality=std::max(maximum_orthogonality,
+                std::abs(wave_physical_energy_bilinear(fixture.reference,*column,modal_remainder)) /
+                std::max(denominator,1e-300));
+        }
+        auto gram=torch::empty({4,4},torch::kFloat64);
+        double polarization_roundoff=0.0;
+        for(int i=0;i<4;++i) for(int j=0;j<4;++j)
+            gram[i][j]=wave_physical_energy_bilinear(fixture.reference,*columns[i],*columns[j]);
+        for(int i=0;i<4;++i) {
+            const double diagonal=gram[i][i].item<double>();
+            const double energy=wave_total_physical_energy(fixture.reference,*columns[i]);
+            polarization_roundoff=std::max(polarization_roundoff,
+                std::abs(diagonal-energy)/std::max(std::abs(energy),1e-300));
+            for(int j=i+1;j<4;++j) {
+                const double reverse=wave_physical_energy_bilinear(fixture.reference,*columns[j],*columns[i]);
+                polarization_roundoff=std::max(polarization_roundoff,
+                    std::abs(gram[i][j].item<double>()-reverse)/
+                    std::max({std::abs(gram[i][j].item<double>()),std::abs(reverse),1e-300}));
+            }
+        }
+        const auto gram_singular=torch::linalg_svdvals(gram);
+        const double gram_condition=gram_singular.max().item<double>() /
+            std::max(gram_singular.min().item<double>(),1e-300);
+        const double residual_energy=wave_total_physical_energy(fixture.reference,modal_residual);
+        const double projected_energy=wave_total_physical_energy(fixture.reference,projected);
+        const double remainder_energy=wave_total_physical_energy(fixture.reference,modal_remainder);
+        const double modal_identity_error=std::abs(residual_energy-projected_energy-remainder_energy)/
+            std::max(residual_energy,1e-300);
+        const auto top=top_boundary_eos(fixture.reference);
+        TORCH_CHECK(std::isfinite(gram_condition) && gram_condition>=1.0 &&
+                    std::isfinite(residual_energy) && residual_energy>=0.0 &&
+                    std::isfinite(projected_energy) && projected_energy>=0.0 &&
+                    std::isfinite(remainder_energy) && remainder_energy>=0.0 &&
+                    std::all_of(coordinates.begin(),coordinates.end(),[](double value) {
+                        return std::isfinite(value);
+                    }),"physical-energy modal residual diagnostics are nonfinite");
+        TORCH_CHECK(std::isfinite(maximum_orthogonality) && maximum_orthogonality<1e-9 &&
+                    std::isfinite(modal_identity_error) && modal_identity_error<1e-10 &&
+                    std::isfinite(polarization_roundoff) && gram_condition>=1.0,
+                    "physical-energy modal residual decomposition failed its algebraic checks: orthogonality=",
+                    maximum_orthogonality," norm_identity=",modal_identity_error,
+                    " polarization_roundoff=",polarization_roundoff," Gram_condition=",gram_condition);
+        std::cout<<"WAVE_INVERSE_MODAL_RESIDUAL time_s="<<(analysis_time+withheld_duration)
+                 <<" scope=selected_m1_fourier_coefficients fullfield_partition=0"
+                 <<" metric=bulk_plus_eos_top_surface p_top_Pa="<<top.pressure
+                 <<" theta_top_K="<<top.theta<<" temperature_top_K="<<top.temperature
+                 <<" rho_top_kg_m3="<<top.density
+                 <<" basis_condition="<<gram_condition<<" coefficients=";
+        for(int c=0;c<4;++c) std::cout<<(c==0?"":",")<<coordinates[c];
+        std::cout<<" residual_energy="<<residual_energy<<" selected_energy="<<projected_energy
+                 <<" remainder_energy="<<remainder_energy
+                 <<" norm_identity_relative_error="<<modal_identity_error
+                 <<" normalized_max_orthogonality="<<maximum_orthogonality
+                 <<" polarization_roundoff_relative="<<polarization_roundoff<<"\n";
+
+        const auto native_full=withheld.states.back();
+        const auto reference_full=fixture.background+wave_field(withheld_truth);
+        const auto delta_full=native_full-reference_full;
+        const auto native_spec=owned_w_spectrum(fixture.reference,native_full);
+        const auto reference_spec=owned_w_spectrum(fixture.reference,reference_full);
+        const auto delta_spec=owned_w_spectrum(fixture.reference,delta_full);
+        const double outside_energy=delta_spec.energy[0]+delta_spec.energy[2]+delta_spec.energy[3];
+        const double owned_error=std::sqrt(std::max(delta_spec.direct_energy,0.0)/
+            std::max(owned_w_inner(fixture.reference,wave_field(withheld_truth),
+                                   wave_field(withheld_truth)),1e-300));
+        const auto obs_delta=physical_w_values(native_full)-physical_w_values(reference_full);
+        const double obs_subset_error=obs_delta.norm().item<double>()/
+            std::max(physical_w_values(reference_full).norm().item<double>(),1e-300);
+        TORCH_CHECK(delta_spec.parseval_error<1e-12 && native_spec.parseval_error<1e-12 &&
+                    reference_spec.parseval_error<1e-12 && std::isfinite(owned_error) &&
+                    std::isfinite(obs_subset_error),
+                    "full-owned W horizontal DFT failed weighted Parseval closure or finite metrics");
+        std::cout<<"WAVE_INVERSE_OWNED_W_DFT time_s="<<(analysis_time+withheld_duration)
+                 <<" owned_points="<<(ny*nx*(nw-1))<<" observation_subset_points="
+                 <<physical_w_indices().size()<<" levels=interior_plus_top_owned"
+                 <<" native_energy_m0="<<native_spec.energy[0]<<" native_energy_m1pair="
+                 <<native_spec.energy[1]<<" native_energy_m2pair="<<native_spec.energy[2]
+                 <<" native_energy_other="<<native_spec.energy[3]
+                 <<" truth_energy_m0="<<reference_spec.energy[0]<<" truth_energy_m1pair="
+                 <<reference_spec.energy[1]<<" truth_energy_m2pair="<<reference_spec.energy[2]
+                 <<" truth_energy_other="<<reference_spec.energy[3]
+                 <<" delta_energy_m0="<<delta_spec.energy[0]<<" delta_energy_m1pair="
+                 <<delta_spec.energy[1]<<" delta_energy_m2pair="<<delta_spec.energy[2]
+                 <<" delta_energy_other="<<delta_spec.energy[3]
+                 <<" delta_selected_m1_norm="<<std::sqrt(std::max(delta_spec.energy[1],0.0))
+                 <<" delta_outside_m1_norm="<<std::sqrt(std::max(outside_energy,0.0))
+                 <<" delta_total_norm="<<std::sqrt(std::max(delta_spec.direct_energy,0.0))
+                 <<" parseval_relative_error="<<delta_spec.parseval_error
+                 <<" full_owned_signal_relative_error="<<owned_error
+                 <<" objective_105_subset_relative_error="<<obs_subset_error<<"\n";
+
+        std::array<torch::Tensor,2> mode_waves;
+        std::array<double,2> mode_norm_squared{};
+        for(int m=0;m<2;++m) {
+            WaveState initial_mode{};
+            for(int k=0;k<wave_size;++k)
+                initial_mode[k]=truth[2*m].item<double>()*modes[m].q0[k]+
+                    truth[2*m+1].item<double>()*modes[m].q1[k];
+            const auto terminal_mode=wave_reference_advance(fixture.matrix,initial_mode,
+                analysis_time+withheld_duration);
+            mode_waves[m]=wave_field(terminal_mode);
+            mode_norm_squared[m]=owned_w_inner(fixture.reference,mode_waves[m],mode_waves[m]);
+        }
+        const double cross_twice=2.0*owned_w_inner(fixture.reference,mode_waves[0],mode_waves[1]);
+        const double truth_signal_norm_squared=owned_w_inner(fixture.reference,
+            wave_field(withheld_truth),wave_field(withheld_truth));
+        const double mode_norm_sum=mode_norm_squared[0]+mode_norm_squared[1];
+        const double cancellation_ratio=std::sqrt(mode_norm_sum/
+            std::max(truth_signal_norm_squared,1e-300));
+        const double orthogonal_reference_error=std::sqrt(std::max(delta_spec.direct_energy,0.0)/
+            std::max(mode_norm_sum,1e-300));
+        const double relative_error_amplification=owned_error/
+            std::max(orthogonal_reference_error,1e-300);
+        const double superposition_identity=std::abs(truth_signal_norm_squared-mode_norm_sum-cross_twice)/
+            std::max(truth_signal_norm_squared,1e-300);
+        const auto obs_mode0=physical_w_values(mode_waves[0]);
+        const auto obs_mode1=physical_w_values(mode_waves[1]);
+        const auto obs_truth_signal=physical_w_values(wave_field(withheld_truth));
+        const double obs_mode0_norm_squared=obs_mode0.square().sum().item<double>();
+        const double obs_mode1_norm_squared=obs_mode1.square().sum().item<double>();
+        const double obs_mode_norm_sum=obs_mode0_norm_squared+obs_mode1_norm_squared;
+        const double obs_cross_twice=2.0*obs_mode0.dot(obs_mode1).item<double>();
+        const double obs_truth_signal_norm_squared=obs_truth_signal.square().sum().item<double>();
+        const auto obs_full_truth=physical_w_values(reference_full);
+        const double obs_full_truth_norm_squared=obs_full_truth.square().sum().item<double>();
+        const double obs_cancellation_ratio=std::sqrt(obs_mode_norm_sum/
+            std::max(obs_truth_signal_norm_squared,1e-300));
+        const double obs_superposition_identity=std::abs(obs_truth_signal_norm_squared-
+            obs_mode_norm_sum-obs_cross_twice)/std::max(obs_truth_signal_norm_squared,1e-300);
+        const double obs_error_against_mode_rss=obs_delta.norm().item<double>()/
+            std::max(std::sqrt(obs_mode_norm_sum),1e-300);
+        const double obs_error_amplification=obs_subset_error/
+            std::max(obs_error_against_mode_rss,1e-300);
+        TORCH_CHECK(std::all_of(mode_norm_squared.begin(),mode_norm_squared.end(),[](double value) {
+                        return std::isfinite(value) && value>=0.0;
+                    }) && std::isfinite(cross_twice) && std::isfinite(truth_signal_norm_squared) &&
+                    truth_signal_norm_squared>=0.0 && std::isfinite(mode_norm_sum) &&
+                    std::isfinite(superposition_identity) && superposition_identity<1e-12 &&
+                    std::isfinite(cancellation_ratio) && std::isfinite(relative_error_amplification) &&
+                    std::isfinite(obs_mode0_norm_squared) && obs_mode0_norm_squared>=0.0 &&
+                    std::isfinite(obs_mode1_norm_squared) && obs_mode1_norm_squared>=0.0 &&
+                    std::isfinite(obs_cross_twice) && std::isfinite(obs_truth_signal_norm_squared) &&
+                    obs_truth_signal_norm_squared>=0.0 && std::isfinite(obs_full_truth_norm_squared) &&
+                    obs_full_truth_norm_squared>=0.0 && std::isfinite(obs_superposition_identity) &&
+                    obs_superposition_identity<1e-12 && std::isfinite(obs_cancellation_ratio) &&
+                    std::isfinite(obs_error_against_mode_rss) && std::isfinite(obs_error_amplification),
+                    "900-second two-mode W denominator/cross-term identity failed");
+        std::cout<<"WAVE_INVERSE_W_DENOMINATOR time_s="<<(analysis_time+withheld_duration)
+                 <<" mode0_truth_W_norm="<<std::sqrt(std::max(mode_norm_squared[0],0.0))
+                 <<" mode1_truth_W_norm="<<std::sqrt(std::max(mode_norm_squared[1],0.0))
+                 <<" orthogonal_mode_norm_rss="<<std::sqrt(mode_norm_sum)
+                 <<" twice_cross_term="<<cross_twice
+                 <<" combined_truth_W_norm="<<std::sqrt(std::max(truth_signal_norm_squared,0.0))
+                 <<" superposition_identity_relative_error="<<superposition_identity
+                 <<" denominator_cancellation_ratio="<<cancellation_ratio
+                 <<" relative_error_against_mode_rss="<<orthogonal_reference_error
+                 <<" relative_error_against_combined_truth="<<owned_error
+                 <<" relative_error_amplification="<<relative_error_amplification<<"\n";
+        std::cout<<"WAVE_INVERSE_W_DENOMINATOR_OBS105 time_s="<<(analysis_time+withheld_duration)
+                 <<" mask=unweighted_objective_105_points"
+                 <<" mode0_truth_W_norm="<<std::sqrt(obs_mode0_norm_squared)
+                 <<" mode1_truth_W_norm="<<std::sqrt(obs_mode1_norm_squared)
+                 <<" orthogonal_mode_norm_rss="<<std::sqrt(obs_mode_norm_sum)
+                 <<" twice_cross_term="<<obs_cross_twice
+                 <<" combined_truth_signal_W_norm="<<std::sqrt(obs_truth_signal_norm_squared)
+                 <<" score_reference_W_norm="<<std::sqrt(obs_full_truth_norm_squared)
+                 <<" superposition_identity_relative_error="<<obs_superposition_identity
+                 <<" denominator_cancellation_ratio="<<obs_cancellation_ratio
+                 <<" score_relative_error="<<obs_subset_error
+                 <<" relative_error_against_mode_rss="<<obs_error_against_mode_rss
+                 <<" score_error_amplification="<<obs_error_amplification<<"\n";
+    }
     TORCH_CHECK(withheld_state_error<0.01 && withheld_w_error<0.01 &&
                 withheld_w_error<baseline_w_error,
                 "withheld gravity wave full physical-W forecast exceeded reference error budgets");
@@ -2274,6 +2587,108 @@ void run_wave_inverse_experiment(int mode_count=1) {
              <<" peak_rss_kib="<<peak_rss_kib
              <<" analysis_end_s="<<analysis_time<<" withheld_duration_s="<<withheld_duration
              <<" observations_from_independent_reference=1 observation_times=2\n";
+}
+
+double parse_finite_cli_double(const char* text,const char* name) {
+    size_t consumed=0;
+    const std::string value(text);
+    const double parsed=std::stod(value,&consumed);
+    TORCH_CHECK(consumed==value.size() && std::isfinite(parsed),
+                "invalid finite numeric argument for ",name,": ",value);
+    return parsed;
+}
+void run_wave_amplitude_probe(double amplitude_fraction,const std::array<double,4>& controls,
+                              const std::string& endpoint_path) {
+    TORCH_CHECK(std::isfinite(amplitude_fraction) && amplitude_fraction>0.0 &&
+                std::all_of(controls.begin(),controls.end(),[](double value) {
+                    return std::isfinite(value);
+                }),"wave amplitude probe requires finite controls and a positive amplitude fraction");
+    WaveFixture fixture;
+    std::vector<WaveModes> modes{{fixture.mode,fixture.quadrature,fixture.eigenvalue},
+        dominant_sub_nmax_mode(fixture.matrix,fixture.reference,1)};
+    auto scaled=torch::empty({4},torch::TensorOptions().dtype(torch::kFloat64));
+    for(int i=0;i<4;++i) scaled[i]=amplitude_fraction*controls[i];
+    const auto initial_wave=wave_combine(modes,scaled);
+    const auto initial_state=fixture.background+wave_field(initial_wave);
+    constexpr int analysis_steps=30,forecast_steps=60;
+    constexpr float step_dt=10.0f;
+    const auto analysis=run(initial_state,analysis_steps,false,false,torch::Tensor(),0.1,
+        {},0.0,false,1e-10f,step_dt,0.0f,true);
+    TORCH_CHECK(analysis.states.size()==analysis_steps,
+                "wave amplitude probe lost its retained analysis endpoint");
+    const auto forecast=run(analysis.states.back(),forecast_steps,false,false,
+        torch::Tensor(),0.1,{},0.0,false,1e-10f,step_dt,0.0f,true);
+    TORCH_CHECK(forecast.states.size()==forecast_steps,
+                "wave amplitude probe lost its retained forecast endpoint");
+    const auto endpoint=forecast.states.back();
+    const auto reference_wave=wave_reference_advance(fixture.matrix,initial_wave,
+        (analysis_steps+forecast_steps)*static_cast<double>(step_dt));
+    const auto reference_state=fixture.background+wave_field(reference_wave);
+    const auto delta_state=endpoint-reference_state;
+    const auto native_spectrum=owned_w_spectrum(fixture.reference,endpoint);
+    const auto reference_spectrum=owned_w_spectrum(fixture.reference,reference_state);
+    const auto delta_spectrum=owned_w_spectrum(fixture.reference,delta_state);
+    const auto native_signal_spectrum=owned_w_spectrum(fixture.reference,endpoint-fixture.background);
+    const double reference_signal_norm=std::sqrt(std::max(owned_w_inner(fixture.reference,
+        wave_field(reference_wave),wave_field(reference_wave)),0.0));
+    const double native_delta_norm=std::sqrt(std::max(delta_spectrum.direct_energy,0.0));
+    const double full_owned_relative_error=native_delta_norm/
+        std::max(reference_signal_norm,1e-300);
+    const auto obs_delta=physical_w_values(endpoint)-physical_w_values(reference_state);
+    const double observation_subset_error=obs_delta.norm().item<double>()/
+        std::max(physical_w_values(reference_state).norm().item<double>(),1e-300);
+    TORCH_CHECK(native_spectrum.parseval_error<1e-12 &&
+                reference_spectrum.parseval_error<1e-12 && delta_spectrum.parseval_error<1e-12 &&
+                std::isfinite(full_owned_relative_error) && std::isfinite(observation_subset_error),
+                "wave amplitude probe produced invalid W spectrum or relative error");
+    std::cout<<"WAVE_AMPLITUDE_PROBE amplitude_fraction="<<amplitude_fraction
+             <<" input_controls=";
+    for(int i=0;i<4;++i) std::cout<<(i==0?"":",")<<controls[i];
+    std::cout<<" scaled_controls=";
+    for(int i=0;i<4;++i) std::cout<<(i==0?"":",")<<scaled[i].item<double>();
+    std::cout<<" analysis_steps="<<analysis_steps<<" forecast_steps="<<forecast_steps
+             <<" analysis_endpoint_s="<<(analysis_steps*step_dt)
+             <<" forecast_endpoint_s="<<((analysis_steps+forecast_steps)*step_dt)
+             <<" retained_fp64_reentry=1 owned_points="<<(ny*nx*(nw-1))
+             <<" observation_subset_points="<<physical_w_indices().size()
+             <<" native_energy_m0="<<native_spectrum.energy[0]
+             <<" native_energy_m1pair="<<native_spectrum.energy[1]
+             <<" native_energy_m2pair="<<native_spectrum.energy[2]
+             <<" native_energy_other="<<native_spectrum.energy[3]
+             <<" truth_energy_m0="<<reference_spectrum.energy[0]
+             <<" truth_energy_m1pair="<<reference_spectrum.energy[1]
+             <<" truth_energy_m2pair="<<reference_spectrum.energy[2]
+             <<" truth_energy_other="<<reference_spectrum.energy[3]
+             <<" delta_energy_m0="<<delta_spectrum.energy[0]
+             <<" delta_energy_m1pair="<<delta_spectrum.energy[1]
+             <<" delta_energy_m2pair="<<delta_spectrum.energy[2]
+             <<" delta_energy_other="<<delta_spectrum.energy[3]
+             <<" native_signal_norm="<<std::sqrt(std::max(native_signal_spectrum.direct_energy,0.0))
+             <<" reference_signal_norm="<<reference_signal_norm
+             <<" native_reference_delta_norm="<<native_delta_norm
+             <<" full_owned_signal_relative_error="<<full_owned_relative_error
+             <<" observation_105_subset_relative_error="<<observation_subset_error
+             <<" native_parseval_relative_error="<<native_spectrum.parseval_error
+             <<" truth_parseval_relative_error="<<reference_spectrum.parseval_error
+             <<" delta_parseval_relative_error="<<delta_spectrum.parseval_error
+             <<" endpoint_file="<<(endpoint_path.empty()?"none":endpoint_path)<<"\n";
+    if(!endpoint_path.empty()) {
+        std::ofstream output(endpoint_path);
+        TORCH_CHECK(output.good(),"cannot open wave amplitude endpoint file: ",endpoint_path);
+        output<<std::setprecision(17);
+        output<<"# format=packed-fp64-state-v1 count="<<total
+              <<" endpoint_s="<<((analysis_steps+forecast_steps)*step_dt)
+              <<" analysis_steps="<<analysis_steps<<" forecast_steps="<<forecast_steps
+              <<" amplitude_fraction="<<amplitude_fraction<<" controls=";
+        for(int i=0;i<4;++i) output<<(i==0?"":",")<<controls[i];
+        output<<" scaled_controls=";
+        for(int i=0;i<4;++i) output<<(i==0?"":",")<<scaled[i].item<double>();
+        output<<" source=native-fp64-primal metric=packed-state-components\n";
+        const auto packed=endpoint.contiguous();
+        const auto* values=packed.data_ptr<double>();
+        for(int64_t i=0;i<packed.numel();++i) output<<values[i]<<"\n";
+        TORCH_CHECK(output.good(),"failed while writing wave amplitude endpoint file: ",endpoint_path);
+    }
 }
 
 void run_stable_experiment() {
@@ -2370,6 +2785,19 @@ int main(int argc,char** argv) {
         if(argc==2 && std::string(argv[1])=="--wave-inverse") {
             run_wave_inverse_experiment();
             std::cout<<"FP64 carry independent-observation wave inverse passed\n";
+            return 0;
+        }
+        if(argc>1 && std::string(argv[1])=="--wave-amplitude-probe") {
+            TORCH_CHECK(argc==7 || argc==8,
+                "usage: --wave-amplitude-probe <fraction> <c0> <c1> <c2> <c3> [endpoint.txt]");
+            const double fraction=parse_finite_cli_double(argv[2],"amplitude fraction");
+            const std::array<double,4> controls{{
+                parse_finite_cli_double(argv[3],"control 0"),
+                parse_finite_cli_double(argv[4],"control 1"),
+                parse_finite_cli_double(argv[5],"control 2"),
+                parse_finite_cli_double(argv[6],"control 3")}};
+            run_wave_amplitude_probe(fraction,controls,argc==8?argv[7]:"");
+            std::cout<<"FP64 carry wave amplitude forward probe passed\n";
             return 0;
         }
         if(argc==2 && std::string(argv[1])=="--wave-two-modes") {

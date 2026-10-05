@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-10-05T15:12:10.616229+09:00",
+  "base_main": "8c3adea8065645832a6872f86e6b48eb7ed81f7e",
+  "command": [
+    "ctest",
+    "--test-dir",
+    "/private/tmp/stable-wave-build-20261004",
+    "-R",
+    "^Native_Stable_Wave_Refinement$",
+    "--output-on-failure"
+  ],
+  "files": [
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/native_final/test_native_wave_refinement.cpp",
+      "sha256": "910c4c1d9261cdfcf73b270fb2d82ae9e03e61c81342d37381a146194410d157"
+    },
+    {
+      "source": "/private/tmp/pr274-ci-20261004/tools/test_native_wave_refinement.py",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/native_final/test_native_wave_refinement.py",
+      "sha256": "17381cbbe85cfb191e158de15cdebee4c574e5766249bacc75c5aaa738aa8115"
+    },
+    {
+      "source": "/private/tmp/pr274-ci-20261004/tools/wave_energy_spatial_reference.py",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/native_final/wave_energy_spatial_reference.py",
+      "sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2"
+    },
+    {
+      "source": "/private/tmp/stable-wave-build-20261004/test_native_wave_refinement",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/native_final/test_native_wave_refinement",
+      "sha256": "ca7771fe4f8b8feb88ddebe84e86ceee9ffead90fdf63865303659a476fc0bdf"
+    },
+    {
+      "source": "/private/tmp/stable-wave-build-20261004/libwrf_sdirk3_libtorch.a",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/native_final/libwrf_sdirk3_libtorch.a",
+      "sha256": "8a072cbc40d831220736d6fee0a8b2b0b90e5797d73162645be1f12152831785"
+    }
+  ],
+  "scope": "Allnative17/33Fouriercolumns overfullownedfields,V/zeros,actualimportedstate,and90s/1-2stepWPHMUadjoint; inviscidcfgimplicitdivfalsekdamp0, positive-control dampprobes separately explicit."
+}

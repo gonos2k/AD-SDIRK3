@@ -1,0 +1,12 @@
+COMMAND: /private/tmp/stable-wave-build-20261004/test_native_wave_refinement 8 6 4 /var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-wave-kk8ngk7v/native.csv --descriptor-only
+NATIVE_WAVE_EOS p_pert_error=4.36557e-11 p_pert_budget=8.18545e-08 alpha_relative_error=1.04837e-16 geometry_relative_error=1.59405e-07
+COMMAND: /private/tmp/stable-wave-build-20261004/test_native_wave_refinement 8 6 4 /var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-wave-kk8ngk7v/native.csv /var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-wave-kk8ngk7v/initial_state.txt
+NATIVE_WAVE_EOS p_pert_error=4.36557e-11 p_pert_budget=8.18545e-08 alpha_relative_error=1.04837e-16 geometry_relative_error=1.59405e-07
+COMMAND: /private/tmp/stable-wave-build-20261004/test_native_wave_refinement 16 12 8 /var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-wave-o7u3v0qn/native.csv --descriptor-only
+NATIVE_WAVE_EOS p_pert_error=2.91038e-11 p_pert_budget=8.6402e-08 alpha_relative_error=9.14594e-17 geometry_relative_error=2.15219e-07
+COMMAND: /private/tmp/stable-wave-build-20261004/test_native_wave_refinement 16 12 8 /var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-wave-o7u3v0qn/native.csv /var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-wave-o7u3v0qn/initial_state.txt
+NATIVE_WAVE_EOS p_pert_error=2.91038e-11 p_pert_budget=8.6402e-08 alpha_relative_error=9.14594e-17 geometry_relative_error=2.15219e-07
+COMMAND: /private/tmp/stable-wave-build-20261004/test_native_wave_refinement 8 6 4 /var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-damp-probe-qs3t3mua/probe.csv --damping-probe U
+NATIVE_WAVE_EOS p_pert_error=4.36557e-11 p_pert_budget=8.18545e-08 alpha_relative_error=1.04837e-16 geometry_relative_error=1.59405e-07
+COMMAND: /private/tmp/stable-wave-build-20261004/test_native_wave_refinement 8 6 4 /var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-damp-probe-hjnt56al/probe.csv --damping-probe V
+NATIVE_WAVE_EOS p_pert_error=4.36557e-11 p_pert_budget=8.18545e-08 alpha_relative_error=1.04837e-16 geometry_relative_error=1.59405e-07

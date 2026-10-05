@@ -1,0 +1,18 @@
+Post-sign-fix mixed-wave native run preflight
+Captured: 2026-10-05T15:24:17+0900
+Worktree: /private/tmp/pr274-ci-20261004
+Branch: agent/native-wave-refinement-20261005
+HEAD: 8c3adea8065645832a6872f86e6b48eb7ed81f7e
+HEAD tree: ba0204dbc7865a7596fe647866e10ab076032603
+Build directory: /private/tmp/stable-wave-build-20261004
+Build type/compiler/generator: Release; /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++; /opt/local/bin/ninja
+Torch_DIR: /opt/homebrew/share/cmake/Torch
+Frozen test source SHA-256: 66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829
+Production producer source SHA-256: b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144
+Static library SHA-256: 4c7aa4f098999b0aa5fcef577c532aeba7d051143f8bf6c0e70d466569fd4607
+Test executable SHA-256: e4e3279006f3d64595fdcad5b2974a58efe0089701bb393ed84da7f8f1f72e74
+Command: cd /private/tmp/stable-wave-build-20261004 && ./test_fp64_carry_adjoint --wave-two-modes
+Output log: /Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/mixed_residual/run.log
+Then parse exact four controls from WAVE_INVERSE_RESULT recovered_controls and run once:
+cd /private/tmp/stable-wave-build-20261004 && ./test_fp64_carry_adjoint --wave-amplitude-probe 0.5 <c0> <c1> <c2> <c3> /Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/half_amplitude/endpoint_fp64.txt
+Producer is post-sign-fix wrf_sdirk3_tile_unified_impl.cpp. No sources are changed during these runs.

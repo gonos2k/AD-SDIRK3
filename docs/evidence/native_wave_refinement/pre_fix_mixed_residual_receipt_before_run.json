@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-10-05T13:31:57.990318+09:00",
+  "base_main": "8c3adea8065645832a6872f86e6b48eb7ed81f7e",
+  "command": [
+    "/usr/bin/time",
+    "-l",
+    "/private/tmp/stable-wave-build-20261004/test_fp64_carry_adjoint",
+    "--wave-two-modes"
+  ],
+  "files": [
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/mixed_residual/test_fp64_carry_adjoint.cpp",
+      "sha256": "acc785c91ac1d955ef3bf83abce114c27e9c85744212c1f6dbc189f09b53815b"
+    },
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/mixed_residual/stable_wave_reference.h",
+      "sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c"
+    },
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/mixed_residual/tile_test_fixture.h",
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+    },
+    {
+      "source": "/private/tmp/stable-wave-build-20261004/test_fp64_carry_adjoint",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/mixed_residual/test_fp64_carry_adjoint",
+      "sha256": "6472c444b8b0a21381dbf370f9bf69a4f539b38c5dab89743ccc65fccf4f8f00"
+    },
+    {
+      "source": "/private/tmp/stable-wave-build-20261004/libwrf_sdirk3_libtorch.a",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/mixed_residual/libwrf_sdirk3_libtorch.a",
+      "sha256": "8a072cbc40d831220736d6fee0a8b2b0b90e5797d73162645be1f12152831785"
+    }
+  ],
+  "source_delta": "Test-only endpoint decomposition; originalobjective/truth/optimizer/Newtontolerances unchanged"
+}
