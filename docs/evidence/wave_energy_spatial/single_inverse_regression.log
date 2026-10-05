@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /tmp/stable-wave-build-20261004
+Test project /tmp/stable-wave-build-20261004
+    Start 78: FP64_Stable_Wave_Inverse
+1/1 Test #78: FP64_Stable_Wave_Inverse .........   Passed  272.39 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) = 272.39 sec

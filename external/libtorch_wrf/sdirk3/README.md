@@ -95,6 +95,9 @@ suite also runs source-extracted Fortran oracles, which compile WRF routine
 bodies at test time and require GNU Fortran (`gfortran`). Set `FC` to the
 absolute path of a GNU Fortran executable when running CTest; these oracles use
 GNU compiler flags including `-cpp` and `-fdefault-real-8`.
+The source-derived wave energy and spatial-convergence checks use NumPy 2.2.6
+and SciPy 1.15.3, pinned with the CPU Torch dependency in
+`.github/ci/requirements-core.txt`.
 
 ## Runtime Configuration: Namelist First (WRF)
 
@@ -305,7 +308,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 123-test CTest inventory**, pinned by
+The CMake tree registers an **exact 126-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
@@ -338,6 +341,17 @@ the pinned file defines the inventory.
 - `FP64_Stable_Wave_Inverse` — a two-time modal amplitude/quadrature inverse,
   directional finite-difference check, tighter Newton check, and withheld
   forecast against the source-derived linear reference.
+- `FP64_Stable_Wave_Two_Mode_Inverse` — a four-control inverse for two
+  independently selected source-derived stable modes, with a source-matrix
+  observation-rank check and a 600-second withheld forecast scored at every
+  physical W observation point. This remains a dry single-tile synthetic twin.
+- `Wave_Physical_Energy_Budget` — source-derived four- and eight-layer wave
+  energy, top-boundary work, and pressure/buoyancy coupling contracts. This
+  Python check does not run the native solver or establish WRF forecast quality.
+- `Wave_Source_Spatial_Convergence` — source-discrete mode tracking under
+  horizontal and vertical refinement, compared with a separate continuum
+  boundary-value problem. It is a reference-model study, not a native-grid WRF
+  convergence or forecast qualification.
 - `Horizontal_PGF_Actual_RHS` — actual Full-RHS pressure-gradient checks on
   physical and packed periodic layouts, using a constant-density pressure wave
   set by the dry EOS. It checks every owned U face, including the west seam and

@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-10-05T02:04:16.989093+09:00",
+  "base_main": "d6a0e3179989878f4787537cea7e00472e95c1f0",
+  "command": [
+    "/private/tmp/stable-wave-build-20261004/test_fp64_carry_adjoint",
+    "--wave-two-modes"
+  ],
+  "files": [
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/wave_energy_spatial/two_mode_native/test_fp64_carry_adjoint.cpp",
+      "sha256": "35e88d529687fdb48909814c84aa41fda1e7f98cdbcb03b0d021b5735688a66f"
+    },
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/wave_energy_spatial/two_mode_native/stable_wave_reference.h",
+      "sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c"
+    },
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/wave_energy_spatial/two_mode_native/tile_test_fixture.h",
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+    },
+    {
+      "source": "/private/tmp/stable-wave-build-20261004/test_fp64_carry_adjoint",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/wave_energy_spatial/two_mode_native/test_fp64_carry_adjoint",
+      "sha256": "3e4f966dee878cfed0297453f98d91522ed4a8ba2b1a040857474139c2b68dd5"
+    },
+    {
+      "source": "/private/tmp/stable-wave-build-20261004/libwrf_sdirk3_libtorch.a",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/wave_energy_spatial/two_mode_native/libwrf_sdirk3_libtorch.a",
+      "sha256": "dee309d8812ebcc20c16fc60cc23aa1e28a341f5d972df227dd6b42b1a4e4108"
+    }
+  ]
+}

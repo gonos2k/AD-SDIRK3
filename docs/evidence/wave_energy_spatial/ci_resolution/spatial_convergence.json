@@ -1,0 +1,569 @@
+{
+  "schema": "sdirk3.wave-spatial-convergence.v1",
+  "source_revision": "34ac3bade555265e038e3a66bf3bb299c69bfec4",
+  "generated_at_local": "2026-10-05T09:49:04+09:00",
+  "setup": {
+    "lx_m": 40000.0,
+    "ly_m": 30000.0,
+    "k_physical_m-1": 0.00015707963267948965,
+    "theta_profile": "317 - 8*eta K",
+    "p_top_pa": 20000.0,
+    "mass_total_pa": 84000.0,
+    "base_mass_pa": 80000.0,
+    "base_theta_k": 300.0,
+    "legacy_fp32_coefficients": false,
+    "theta_gradient": "analytic"
+  },
+  "horizontal": [
+    {
+      "nx": 8,
+      "nz": 4,
+      "dx_m": 5000.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015307336907907727,
+      "overlap": 1.0,
+      "runner_up_overlap": 0.0884946981262759,
+      "overlap_gap": 0.9115053018737241,
+      "oscillatory_candidates": 8,
+      "phase_rate": 1.4701213161293423e-17,
+      "omega": 0.0021099603507595452,
+      "eigenvalue": [
+        1.4701213161293423e-17,
+        0.0021099603507595452
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": 1.3630372386330691e-08,
+      "profile_participation_b": 0.7438942133003525,
+      "profile_participation_w": 0.639010579726357
+    },
+    {
+      "nx": 16,
+      "nz": 4,
+      "dx_m": 2500.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015607225367018573,
+      "overlap": 0.999982245782346,
+      "runner_up_overlap": 0.08859536733979664,
+      "overlap_gap": 0.9113868784425493,
+      "oscillatory_candidates": 8,
+      "phase_rate": 6.5052130349130335e-18,
+      "omega": 0.002140640186777895,
+      "eigenvalue": [
+        6.5052130349130335e-18,
+        0.002140640186777895
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.7439201885088047,
+      "profile_participation_w": 0.6393191268878177
+    },
+    {
+      "nx": 32,
+      "nz": 4,
+      "dx_m": 1250.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015682742056550298,
+      "overlap": 0.9999988875046423,
+      "runner_up_overlap": 0.08855967008451233,
+      "overlap_gap": 0.9114392174201299,
+      "oscillatory_candidates": 8,
+      "phase_rate": -1.3541689315285057e-17,
+      "omega": 0.0021482947622558104,
+      "eigenvalue": [
+        -1.3541689315285057e-17,
+        0.0021482947622558104
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.7439265731026353,
+      "profile_participation_w": 0.6393971902076437
+    },
+    {
+      "nx": 64,
+      "nz": 4,
+      "dx_m": 625.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015701655388116576,
+      "overlap": 0.9999999304265648,
+      "runner_up_overlap": 0.08855046691594695,
+      "overlap_gap": 0.9114494635106178,
+      "oscillatory_candidates": 8,
+      "phase_rate": -2.0383000842727493e-17,
+      "omega": 0.0021502074024085734,
+      "eigenvalue": [
+        -2.0383000842727493e-17,
+        0.0021502074024085734
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.7439281619998193,
+      "profile_participation_w": 0.6394167636445305
+    }
+  ],
+  "vertical": [
+    {
+      "nx": 8,
+      "nz": 4,
+      "dx_m": 5000.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015307336907907727,
+      "overlap": 1.0,
+      "runner_up_overlap": 0.0884946981262759,
+      "overlap_gap": 0.9115053018737241,
+      "oscillatory_candidates": 8,
+      "phase_rate": 1.4701213161293423e-17,
+      "omega": 0.0021099603507595452,
+      "eigenvalue": [
+        1.4701213161293423e-17,
+        0.0021099603507595452
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.7438942133003525,
+      "profile_participation_w": 0.639010579726357
+    },
+    {
+      "nx": 8,
+      "nz": 8,
+      "dx_m": 5000.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015307336907907727,
+      "overlap": 0.9948734197007659,
+      "runner_up_overlap": 0.0770046300801965,
+      "overlap_gap": 0.9178687896205694,
+      "oscillatory_candidates": 16,
+      "phase_rate": -2.6020852139652106e-18,
+      "omega": 0.0022199423380768004,
+      "eigenvalue": [
+        -2.6020852139652106e-18,
+        0.0022199423380768004
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.6777055879627004,
+      "profile_participation_w": 0.6529789853350515
+    },
+    {
+      "nx": 8,
+      "nz": 16,
+      "dx_m": 5000.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015307336907907727,
+      "overlap": 0.9993470994348258,
+      "runner_up_overlap": 0.020453291649397094,
+      "overlap_gap": 0.9788938077854287,
+      "oscillatory_candidates": 32,
+      "phase_rate": -9.625930872450975e-17,
+      "omega": 0.0022498533392582695,
+      "eigenvalue": [
+        -9.625930872450975e-17,
+        0.0022498533392582695
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.6677653452910071,
+      "profile_participation_w": 0.6552824216763224
+    },
+    {
+      "nx": 8,
+      "nz": 32,
+      "dx_m": 5000.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015307336907907727,
+      "overlap": 0.9999168946480222,
+      "runner_up_overlap": 0.00530856577079632,
+      "overlap_gap": 0.994608328877226,
+      "oscillatory_candidates": 64,
+      "phase_rate": 1.6115020905849727e-16,
+      "omega": 0.0022575546751840356,
+      "eigenvalue": [
+        1.6115020905849727e-16,
+        0.0022575546751840356
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.6665375067517691,
+      "profile_participation_w": 0.6557955639415561
+    },
+    {
+      "nx": 8,
+      "nz": 64,
+      "dx_m": 5000.0,
+      "k_physical": 0.00015707963267948965,
+      "kappa_source": 0.00015307336907907727,
+      "overlap": 0.9999893250392624,
+      "runner_up_overlap": 0.0013084311996711068,
+      "overlap_gap": 0.9986808938395914,
+      "oscillatory_candidates": 128,
+      "phase_rate": -1.9463597400459776e-15,
+      "omega": 0.002259496095417437,
+      "eigenvalue": [
+        -1.9463597400459776e-15,
+        0.002259496095417437
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.66640659716753,
+      "profile_participation_w": 0.6559213818084126
+    }
+  ],
+  "coupled": [
+    {
+      "nx": 8,
+      "nz": 4,
+      "dx_m": 5000.0,
+      "kappa_source": 0.00015307336907907727,
+      "overlap": 1.0,
+      "runner_up_overlap": 0.0884946981262759,
+      "overlap_gap": 0.9115053018737241,
+      "oscillatory_candidates": 8,
+      "phase_rate": 1.4701213161293423e-17,
+      "omega": 0.0021099603507595452,
+      "eigenvalue": [
+        1.4701213161293423e-17,
+        0.0021099603507595452
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": 1.3630372386330691e-08,
+      "profile_participation_b": 0.7438942133003525,
+      "profile_participation_w": 0.639010579726357,
+      "continuum_physical_fractional_error": -0.08441696450751313
+    },
+    {
+      "nx": 16,
+      "nz": 8,
+      "dx_m": 2500.0,
+      "kappa_source": 0.00015607225367018573,
+      "overlap": 0.9948900031028387,
+      "runner_up_overlap": 0.0770002953062887,
+      "overlap_gap": 0.91788970779655,
+      "oscillatory_candidates": 16,
+      "phase_rate": -1.777075123339522e-17,
+      "omega": 0.002252507802753161,
+      "eigenvalue": [
+        -1.777075123339522e-17,
+        0.002252507802753161
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.6777215693791389,
+      "profile_participation_w": 0.6531735113333432,
+      "continuum_physical_fractional_error": -0.022560812210124292
+    },
+    {
+      "nx": 32,
+      "nz": 16,
+      "dx_m": 1250.0,
+      "kappa_source": 0.00015682742056550298,
+      "overlap": 0.999350399710191,
+      "runner_up_overlap": 0.02043942113633026,
+      "overlap_gap": 0.9789109785738608,
+      "oscillatory_candidates": 32,
+      "phase_rate": 7.067115504843941e-17,
+      "omega": 0.0022912096536467337,
+      "eigenvalue": [
+        7.067115504843941e-17,
+        0.0022912096536467337
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.6678120294123032,
+      "profile_participation_w": 0.65551858680282,
+      "continuum_physical_fractional_error": -0.005766772403850706
+    },
+    {
+      "nx": 64,
+      "nz": 32,
+      "dx_m": 625.0,
+      "kappa_source": 0.00015701655388116576,
+      "overlap": 0.9999173435871623,
+      "runner_up_overlap": 0.00530307598926873,
+      "overlap_gap": 0.9946142675978936,
+      "oscillatory_candidates": 64,
+      "phase_rate": 3.4607439710089897e-16,
+      "omega": 0.002301156757688496,
+      "eigenvalue": [
+        3.4607439710089897e-16,
+        0.002301156757688496
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.6665931116826419,
+      "profile_participation_w": 0.6560449626583394,
+      "continuum_physical_fractional_error": -0.0014503881127251317
+    },
+    {
+      "nx": 128,
+      "nz": 64,
+      "dx_m": 312.5,
+      "kappa_source": 0.00015706385857887175,
+      "overlap": 0.9999893824723824,
+      "runner_up_overlap": 0.0013069668783854563,
+      "overlap_gap": 0.998682415593997,
+      "oscillatory_candidates": 128,
+      "phase_rate": 6.986598799496591e-16,
+      "omega": 0.002303662822829728,
+      "eigenvalue": [
+        6.986598799496591e-16,
+        0.002303662822829728
+      ],
+      "profile_node_count_b": 0,
+      "profile_node_count_w": 1,
+      "baseline_frequency_relative_error": null,
+      "profile_participation_b": 0.6664640749525913,
+      "profile_participation_w": 0.6561743200874162,
+      "continuum_physical_fractional_error": -0.00036292183482788953
+    }
+  ],
+  "continuum": {
+    "success": true,
+    "message": "The algorithm converged to the desired accuracy.",
+    "iterations": 1,
+    "nodes": 241,
+    "height_m": 12204.334225757806,
+    "eigenvalue": [
+      2.215713192845061e-14,
+      0.0023044991758990048
+    ],
+    "omega": 0.0023044991758990048,
+    "growth_rate": 2.215713192845061e-14,
+    "profile_node_count_w": 1,
+    "boundary_residual_max": 4.1443766764488303e-07,
+    "k_physical": 0.00015707963267948965
+  },
+  "original_fixture": {
+    "nx": 8,
+    "ny": 6,
+    "nz": 4,
+    "dx_m": 5000.0,
+    "omega_reference": 0.002109960322,
+    "frequency_delta_fraction": 1.3630372386330691e-08,
+    "note": "Historical four-level source reference; fixed-domain inputs are reproduced separately."
+  },
+  "horizontal_symbol_endpoint_nz4": {
+    "kappa_source_endpoint": 0.00015707963267948965,
+    "basis": "same source-transcribed vertical operator with exact continuous horizontal derivative symbol",
+    "overlap": 0.9999999922674034,
+    "runner_up_overlap": 0.08854868376177377,
+    "overlap_gap": 0.9114513085056297,
+    "oscillatory_candidates": 8,
+    "phase_rate": 1.1703086413252382e-17,
+    "omega": 0.0021508448990546912,
+    "eigenvalue": [
+      1.1703086413252382e-17,
+      0.0021508448990546912
+    ],
+    "profile_node_count_b": 0,
+    "profile_node_count_w": 1,
+    "baseline_frequency_relative_error": null,
+    "profile_participation_b": 0.743928691011149,
+    "profile_participation_w": 0.6394232936477721
+  },
+  "continuum_nx8_symbol": {
+    "success": true,
+    "message": "The algorithm converged to the desired accuracy.",
+    "iterations": 1,
+    "nodes": 241,
+    "height_m": 12204.334225757806,
+    "eigenvalue": [
+      7.118840292781134e-14,
+      0.0022601454732442926
+    ],
+    "omega": 0.0022601454732442926,
+    "growth_rate": 7.118840292781134e-14,
+    "profile_node_count_w": 1,
+    "boundary_residual_max": 2.838180691582928e-07,
+    "k_physical": 0.00015307336907907727
+  },
+  "continuum_comparison": {
+    "horizontal_nx64_nz4": {
+      "source_omega": 0.0021502074024086185,
+      "continuum_omega": 0.0023044991758990048,
+      "frequency_delta_fraction": -0.06695240992229723,
+      "continuum_overlap": 0.9895642680423594,
+      "optimal_amplitude_ratio": 0.8568023305648788,
+      "optimal_phase_offset_rad": 2.7880783315868844e-11,
+      "source_top_w_magnitude_after_normalization": 1.0,
+      "source_top_zeta_magnitude": 465.0714153805732,
+      "continuum_top_zeta_magnitude": 433.9337633348866,
+      "relative_profile_residual": 0.14409219067593193
+    },
+    "vertical_nx8_nz64": {
+      "source_omega": 0.002259496095418189,
+      "continuum_omega": 0.0022601454732442926,
+      "frequency_delta_fraction": -0.00028731682707627826,
+      "continuum_overlap": 0.9999972294381371,
+      "optimal_amplitude_ratio": 0.9992304745923413,
+      "optimal_phase_offset_rad": -8.329512154147055e-11,
+      "source_top_w_magnitude_after_normalization": 1.0,
+      "source_top_zeta_magnitude": 442.57655590950407,
+      "continuum_top_zeta_magnitude": 442.4493962172111,
+      "relative_profile_residual": 0.0023539575291960583
+    }
+  },
+  "sampled_continuum_row_residuals": {
+    "horizontal_nx64_nz4": {
+      "u": {
+        "relative_tendency_residual": 0.00040143388272069713,
+        "max_abs_residual": 0.0002411154582765418,
+        "max_residual_eta": 0.125,
+        "max_abs_source_tendency": 0.6001462070250858,
+        "max_abs_continuum_tendency": 0.6003873224833624
+      },
+      "w": {
+        "relative_tendency_residual": 0.9884744086134243,
+        "max_abs_residual": 0.47073299891853587,
+        "max_residual_eta": 0.0,
+        "max_abs_source_tendency": 0.4684284997426369,
+        "max_abs_continuum_tendency": 0.33364026805494634
+      },
+      "pressure_eulerian": {
+        "relative_tendency_residual": 23.43195113545825,
+        "max_abs_residual": 150.0670404074536,
+        "max_residual_eta": 0.875,
+        "max_abs_source_tendency": 158.46288619276652,
+        "max_abs_continuum_tendency": 8.395845785312938
+      },
+      "buoyancy": {
+        "relative_tendency_residual": 0.10104149822131234,
+        "max_abs_residual": 0.0003510718930142629,
+        "max_residual_eta": 0.375,
+        "max_abs_source_tendency": 0.0027910739488759707,
+        "max_abs_continuum_tendency": 0.0031421458418902336
+      },
+      "surface_displacement": {
+        "relative_tendency_residual": 1.1102230246251568e-16,
+        "max_abs_residual": 1.1102230246251565e-16,
+        "max_residual_eta": 0.0,
+        "max_abs_source_tendency": 0.9999999999999998,
+        "max_abs_continuum_tendency": 0.9999999999999999
+      },
+      "pressure_tendency_source_blocks": {
+        "U": 0.0,
+        "W": 0.0,
+        "PHI": 252.1576284874791,
+        "THETA": 40.15325009575164,
+        "MU": 32.570788441069105
+      }
+    },
+    "vertical_nx8_nz64": {
+      "u": {
+        "relative_tendency_residual": 7.036568334081877e-07,
+        "max_abs_residual": 5.589124761826159e-07,
+        "max_residual_eta": 0.4921875,
+        "max_abs_source_tendency": 0.6640590452732091,
+        "max_abs_continuum_tendency": 0.6640590670095772
+      },
+      "w": {
+        "relative_tendency_residual": 0.022721918727780243,
+        "max_abs_residual": 0.04413489411824448,
+        "max_residual_eta": 0.0,
+        "max_abs_source_tendency": 0.346717217378,
+        "max_abs_continuum_tendency": 0.3470736105127884
+      },
+      "pressure_eulerian": {
+        "relative_tendency_residual": 0.08776345093877978,
+        "max_abs_residual": 0.9616144023342461,
+        "max_residual_eta": 0.0078125,
+        "max_abs_source_tendency": 9.973264994757375,
+        "max_abs_continuum_tendency": 9.530856986874044
+      },
+      "buoyancy": {
+        "relative_tendency_residual": 0.0004054464637415406,
+        "max_abs_residual": 1.3216733363513936e-06,
+        "max_residual_eta": 0.3359375,
+        "max_abs_source_tendency": 0.003263037387136238,
+        "max_abs_continuum_tendency": 0.003264267038311535
+      },
+      "surface_displacement": {
+        "relative_tendency_residual": 3.9788968083538634e-27,
+        "max_abs_residual": 3.9788968083538634e-27,
+        "max_residual_eta": 0.0,
+        "max_abs_source_tendency": 1.0,
+        "max_abs_continuum_tendency": 1.0
+      },
+      "pressure_tendency_source_blocks": {
+        "U": 0.0,
+        "W": 0.0,
+        "PHI": 87.64272198986289,
+        "THETA": 165.94198552681908,
+        "MU": 122.52782815662964
+      }
+    }
+  },
+  "source_fp32_phb_diagnostic": {
+    "nx": 8,
+    "nz": 4,
+    "overlap": 1.0000000000000002,
+    "runner_up_overlap": 0.08849469811962646,
+    "overlap_gap": 0.9115053018803738,
+    "oscillatory_candidates": 8,
+    "phase_rate": 7.765899815673143e-34,
+    "omega": 0.002109960322283989,
+    "eigenvalue": [
+      7.765899815673143e-34,
+      0.002109960322283989
+    ],
+    "profile_node_count_b": 0,
+    "profile_node_count_w": 1,
+    "baseline_frequency_relative_error": 1.3459455772135698e-10,
+    "profile_participation_b": 0.7438942134154636,
+    "profile_participation_w": 0.6390105763583284,
+    "omega_delta_from_analytic_fp64": -2.8475556114460066e-11
+  },
+  "provenance": {
+    "runner_sha256": "29d4d412e43f0daae6efc42242c661511b6e60bddf36c4ce39f076d575e19c76",
+    "reference_sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+    "source_sha256": {
+      "stable_wave_reference.h": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+      "tile_test_fixture.h": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+      "module_big_step_utilities_em.F": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "solve_em.F": "7d2e25b77710c3f36135f0d58a7066d570129407537f1ec5785ff1b989689ade",
+      "test_stable_wave_reference_rows.py": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e"
+    },
+    "graphify_navigation": "Graph and source-binding provenance are maintained by the task receipt; not needed to run this numerical reference.",
+    "python": "3.10.11",
+    "numpy": "2.2.6",
+    "platform": "macOS-26.7-arm64-arm-64bit",
+    "scipy": "1.15.3"
+  },
+  "coupled_observed_orders": [
+    1.9037139463052035,
+    1.9679830169780994,
+    1.9913250789177437,
+    1.9987082431801435
+  ],
+  "coupled_relative_frequency_errors": [
+    0.08441696450751313,
+    0.022560812210124292,
+    0.005766772403850706,
+    0.0014503881127251317,
+    0.00036292183482788953
+  ],
+  "contract": {
+    "passed": true,
+    "failures": [],
+    "source_baseline_relative_tolerance": 1e-07,
+    "continuum_boundary_residual_max": 1e-05,
+    "coupled_observed_order_window": [
+      1.7,
+      2.3
+    ],
+    "coupled_final_relative_frequency_error_max": 0.001,
+    "tracked_w_node_count": 1,
+    "scope": "source-discrete modal reference; no WRF/native-grid forecast claim"
+  }
+}

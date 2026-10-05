@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-10-05T02:46:04.889073+09:00",
+  "base_main": "d6a0e3179989878f4787537cea7e00472e95c1f0",
+  "executed_test_sha256": "35e88d529687fdb48909814c84aa41fda1e7f98cdbcb03b0d021b5735688a66f",
+  "current_test_sha256": "5c06d7c84cc106e7f5123c94577dc607c5662b63f6f2956ded363ae8d2899ccc",
+  "post_run_difference": "Only recovered_controls console printing changed from a 4-digit Tensor print to individual double precision values; no numerical evaluation changed. Existing single-mode inverse regression uses the final source; full mixed-mode exact-head CI is pending.",
+  "raw_log_sha256": "7f12ab53fdb5edd5bf613d481f045b1f7dbab418142f0fd54379507c981f22b5",
+  "raw_log_archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/wave_energy_spatial/two_mode_native/native.log",
+  "run_exit_code": 0,
+  "wall_time_s": 349.99,
+  "peak_rss_bytes": 693796864,
+  "compiler": "AppleClang 21; Release C++17; Torch 2.10.0 ABI1",
+  "forward_scope": "dry, inviscid, single CPU tile, periodic X/symmetric Y, fixed sigma/background, ARK mode3, FP64 carry, retained trajectory adjoint, native phi_adv_z=2 stencil, research stage_damp_rel_threshold=1e6, Newton1e-10",
+  "observations": "independent source matrix at150/300s; 105 physical W positions per time; sigma3e-4m/s; no prior",
+  "forecast": "accepted native Z300 continued60steps dt10s toZ900",
+  "summary": {
+    "modes": 2,
+    "controls": 4,
+    "start_cost": 34815.89723470209,
+    "final_cost": 0.000861601183814359,
+    "final_gradient_norm": 3.0463127497126373e-07,
+    "accepted_updates": 11,
+    "updates_requiring_backtracking": 1,
+    "minimum_accepted_alpha": 0.25,
+    "withheld_W_relative_error": 0.006375156369260953
+  },
+  "affected_regressions": {
+    "Wave_Physical_Energy_Budget": {
+      "status": "passed",
+      "time_s": 0.5
+    },
+    "Wave_Source_Spatial_Convergence": {
+      "status": "passed",
+      "time_s": 1.31
+    },
+    "FP64_Stable_Wave_Inverse": {
+      "status": "passed",
+      "time_s": 272.39
+    },
+    "Horizontal_PGF_Actual_RHS": {
+      "status": "passed",
+      "time_s": 0.31
+    },
+    "Stable_Wave_Fortran_Source_Rows": {
+      "status": "passed",
+      "time_s": 1.45
+    }
+  },
+  "final_source_executable_sha256": "a8f0ecd4e58fceca5c5ec6ad2f5ca5c073d248cc19e4b16980cc9a361dc9e75a",
+  "registered_expected_ctest_count": 126,
+  "remote_ci": "not yet dispatched; new PR will run complete exact-head checks once",
+  "final_review": {
+    "Green": "dependency/index split and CMake inventory audit passed",
+    "Red_energy_spatial": "passed; documentation rate/unit and stale artifact link corrections applied",
+    "Red_mixed_mode": "passed: direct real-Fourier cotangent, four-mode joint Gram projection, full rank observation sensitivity and archived executed/current console-only delta"
+  },
+  "final_review_timestamp": "2026-10-05T02:50:57.852064+09:00"
+}

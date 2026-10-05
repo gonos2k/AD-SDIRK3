@@ -1,0 +1,79 @@
+{
+  "cases": [
+    {
+      "bulk_change_pct": 2.916224836545471,
+      "bulk_exact_quarter": 588778384.6726533,
+      "bulk_start": 572094813.6290154,
+      "closure": {
+        "max_block_relative_frobenius": 9.252824516936541e-17,
+        "max_elementwise_relative": 1.3454074421205385e-16,
+        "natural_relative_frobenius": 7.184381808745587e-17,
+        "stratification_removed_mutant_relative": 7.720263224699054e-05
+      },
+      "generated_numpy_omega_rad_s": 0.002109960322283989,
+      "generated_numpy_phb_faces": [
+        0.0,
+        18565.9453125,
+        40782.5390625,
+        69034.890625,
+        109727.734375
+      ],
+      "generated_power_paths_bitwise_differ": true,
+      "generated_scalar_math_omega_rad_s": 0.0021099603264972825,
+      "generated_scalar_math_phb_faces": [
+        0.0,
+        18565.947265625,
+        40782.5390625,
+        69034.890625,
+        109727.734375
+      ],
+      "imported_phb_one_ulp_face1_relative_frequency_shift": 1.996845268401698e-09,
+      "imported_phb_u32": [
+        0,
+        1183910884,
+        1193234058,
+        1200018802,
+        1205227486
+      ],
+      "interior_top_stencil_residual": 18005008.205950167,
+      "native_740s_bulk": 588776902.4880365,
+      "nz": 4,
+      "omega_rad_s": 0.002109960322283989,
+      "period_s": 2977.86893943966,
+      "rho_top_eos": 0.3481725692229149,
+      "rho_top_last_cell_candidate": 0.4721432259374215,
+      "row_power_integrals": {
+        "buoyancy_thermodynamic": 3074692.6086083455,
+        "horizontal_momentum": -2.31722241051111e-08,
+        "pressure_thermodynamic": 12007424.746400252,
+        "surface_kinematic": 0.0,
+        "vertical_momentum_interior": 2952521.641683221,
+        "vertical_momentum_top": -29683.361402543822
+      },
+      "surface_delta_eos": 1321437.1597614267,
+      "theta_z_analytic_bulk_change_pct_same_q": 0.44010453764806723,
+      "theta_z_legacy_bulk_change_pct_same_q": 2.916224836545478,
+      "top_flux_integral": -1321437.1599282506
+    },
+    {
+      "buoyancy_commutator_max_abs": 2.310599272937667e-07,
+      "closure": {
+        "max_block_relative_frobenius": 7.687760824157241e-17,
+        "max_elementwise_relative": 1.7299049454744742e-16,
+        "natural_relative_frobenius": 6.492494835190083e-17,
+        "stratification_removed_mutant_relative": 7.776662948749139e-05
+      },
+      "nz": 8,
+      "physical_H_min_eigenvalue": 4163427.4199853814,
+      "physical_weights_min": 0.006939045699975636,
+      "pressure_commutator_max_abs": 0.10597105997727407,
+      "selected_mode_omega_rad_s": 0.002219942313159954
+    }
+  ],
+  "module_sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+  "numpy": "2.2.6",
+  "python": "3.10.11",
+  "scipy": "1.15.3",
+  "source_revision": "34ac3bade555265e038e3a66bf3bb299c69bfec4",
+  "status": "passed"
+}

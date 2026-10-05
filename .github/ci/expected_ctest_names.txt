@@ -71,6 +71,9 @@ FP64_Fixed_Data_Refinement
 FP64_Stable_Column_Inverse
 FP64_Stable_Wave_Forward
 FP64_Stable_Wave_Inverse
+FP64_Stable_Wave_Two_Mode_Inverse
+Wave_Physical_Energy_Budget
+Wave_Source_Spatial_Convergence
 Horizontal_PGF_Actual_RHS
 Stable_Wave_Fortran_Source_Rows
 Full_Tile_Temporal_Order

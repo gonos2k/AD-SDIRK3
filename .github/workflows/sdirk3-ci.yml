@@ -328,6 +328,16 @@ jobs:
       - name: install pinned CPU torch + fingerprint
         run: bash .github/ci/setup_torch_env.sh
 
+      # Source-only checks need no compiler or native binaries. Keep the later
+      # complete CTest gate, but expose portability failures before native builds.
+      - name: wave reference contracts before native builds
+        env:
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+        run: |
+          python3 tools/test_wave_energy_budget.py --output build/numerical-evidence/wave-energy-budget.json
+          python3 tools/test_wave_spatial_convergence.py --out build/numerical-evidence/wave-spatial-convergence.json
+
       - name: install build tools
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache mpich libmpich-dev
 
@@ -556,6 +566,7 @@ jobs:
             build/sdirk3-core/CMakeCache.txt
             build/sdirk3-core/CMakeFiles/CMakeOutput.log
             build/sdirk3-core/Testing/Temporary/
+            build/sdirk3-core/wave_spatial_convergence.json
             build/numerical-evidence/
             /tmp/ctest_actual.txt
             /tmp/ctest_expected.txt
