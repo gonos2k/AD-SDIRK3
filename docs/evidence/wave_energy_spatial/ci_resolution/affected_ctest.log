@@ -1,0 +1,10 @@
+Internal ctest changing into directory: /tmp/stable-wave-build-20261004
+Test project /tmp/stable-wave-build-20261004
+    Start 82: Wave_Physical_Energy_Budget
+1/2 Test #82: Wave_Physical_Energy_Budget .......   Passed    0.42 sec
+    Start 83: Wave_Source_Spatial_Convergence
+2/2 Test #83: Wave_Source_Spatial_Convergence ...   Passed    1.17 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   1.60 sec

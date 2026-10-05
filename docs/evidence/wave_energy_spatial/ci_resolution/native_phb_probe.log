@@ -1,0 +1,64 @@
+[CONFIG PROVENANCE] tile=0 experiment{uv_slow=none stage1_substeps=1} digest=0xd4cfc4696c08b97c diagnostics{trace_u_terms=0 dump_advect_u_split=0}
+[PRECOND] w_acoustic_boost = 2 (from config)
+[PRECOND] theta_acoustic_factor = 0 (from config)
+[PRECOND CTOR] STEP A: Damping config done, creating diagonal arrays with nz=4
+[PRECOND CTOR] STEP A1: About to create TensorOptions
+[PRECOND CTOR] STEP A2: TensorOptions created, calling torch::ones({nz+1})
+[PRECOND CTOR] STEP A3: vertical_diag_w_ created
+[PRECOND CTOR] STEP B: Diagonal arrays created
+[PRECOND CTOR] STEP C: Off-diagonal arrays done, checking dz
+[PRECOND CTOR] STEP D: dz_effective computed, caching...
+[PRECOND CTOR] STEP E: dz_effective_cached_ done, size=4
+[BC RECEIPT] first_emit_at_setter_call=1 proc_grid=1x1 my=(0,0) projection_is_identity=1 gcfg_matches_effective=1
+[BC RECEIPT] periodic     raw_x=1 raw_y=0 | eff_x=1 eff_y=0  (unprojected: global-domain metadata)
+[BC RECEIPT] symmetric    raw=0011 | eff=0011  (xs,xe,ys,ye)
+[BC RECEIPT] open         raw=0000 | eff=0000  (xs,xe,ys,ye)
+[BC RECEIPT] mode         specified=0 nested=0  consumers: grid_info_/newton<-EFFECTIVE, g_sdirk3_config<-RAW
+[SDIRK3] U west halo max: 0, east halo max: 0
+[SDIRK3] V west halo max: 0, east halo max: 0
+[PRECOND CTOR] STEP A: Damping config done, creating diagonal arrays with nz=4
+[PRECOND CTOR] STEP A1: About to create TensorOptions
+[PRECOND CTOR] STEP A2: TensorOptions created, calling torch::ones({nz+1})
+[PRECOND CTOR] STEP A3: vertical_diag_w_ created
+[PRECOND CTOR] STEP B: Diagonal arrays created
+[PRECOND CTOR] STEP C: Off-diagonal arrays done, checking dz
+[PRECOND CTOR] STEP D: dz_effective computed, caching...
+[PRECOND CTOR] STEP E: dz_effective_cached_ done, size=4
+[RHS CONFIG] split_mode=0 omega_update_ref_per_newton=0 omega_w_blend=1 imex_enabled=0 imex_split_mode=0 precond_relaxation=0 w_acoustic_boost=2
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+[RHS DEBUG GUARD] debug_level=0, ENABLE_RHS_DEBUG=FALSE
+[PRECOND PHI-W GS] Active with boost=2 (boost=diagonal quality, GS=off-diagonal RHS correction)
+[PRECOND CTOR] STEP A: Damping config done, creating diagonal arrays with nz=4
+[PRECOND CTOR] STEP A1: About to create TensorOptions
+[PRECOND CTOR] STEP A2: TensorOptions created, calling torch::ones({nz+1})
+[PRECOND CTOR] STEP A3: vertical_diag_w_ created
+[PRECOND CTOR] STEP B: Diagonal arrays created
+[PRECOND CTOR] STEP C: Off-diagonal arrays done, checking dz
+[PRECOND CTOR] STEP D: dz_effective computed, caching...
+[PRECOND CTOR] STEP E: dz_effective_cached_ done, size=4
+[Newton] CONVERGED stage=1 iters=1 ||S⁻¹R||_rms=7.000425e-11 [scaled-RMS] (||R||=2.384259e-09 [unscaled-L2])
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+[PRECOND CTOR] STEP A: Damping config done, creating diagonal arrays with nz=4
+[PRECOND CTOR] STEP A1: About to create TensorOptions
+[PRECOND CTOR] STEP A2: TensorOptions created, calling torch::ones({nz+1})
+[PRECOND CTOR] STEP A3: vertical_diag_w_ created
+[PRECOND CTOR] STEP B: Diagonal arrays created
+[PRECOND CTOR] STEP C: Off-diagonal arrays done, checking dz
+[PRECOND CTOR] STEP D: dz_effective computed, caching...
+[PRECOND CTOR] STEP E: dz_effective_cached_ done, size=4
+[Newton] CONVERGED stage=2 iters=1 ||S⁻¹R||_rms=4.262129e-07 [scaled-RMS] (||R||=1.451629e-05 [unscaled-L2])
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+[PRECOND CTOR] STEP A: Damping config done, creating diagonal arrays with nz=4
+[PRECOND CTOR] STEP A1: About to create TensorOptions
+[PRECOND CTOR] STEP A2: TensorOptions created, calling torch::ones({nz+1})
+[PRECOND CTOR] STEP A3: vertical_diag_w_ created
+[PRECOND CTOR] STEP B: Diagonal arrays created
+[PRECOND CTOR] STEP C: Off-diagonal arrays done, checking dz
+[PRECOND CTOR] STEP D: dz_effective computed, caching...
+[PRECOND CTOR] STEP E: dz_effective_cached_ done, size=4
+[Newton] CONVERGED stage=3 iters=1 ||S⁻¹R||_rms=8.524894e-07 [scaled-RMS] (||R||=2.903475e-05 [unscaled-L2])
+PHB_PAYLOAD k=0 value=0 bits=0
+PHB_PAYLOAD k=1 value=18565.9453125 bits=46910be4
+PHB_PAYLOAD k=2 value=40782.5390625 bits=471f4e8a
+PHB_PAYLOAD k=3 value=69034.890625 bits=4786d572
+PHB_PAYLOAD k=4 value=109727.734375 bits=47d64fde

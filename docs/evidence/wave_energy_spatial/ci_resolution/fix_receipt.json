@@ -1,0 +1,72 @@
+{
+  "timestamp": "2026-10-05T09:54:01.149592+09:00",
+  "initial_head": "34ac3bade555265e038e3a66bf3bb299c69bfec4",
+  "failed_ci_run": 37222200925,
+  "failed_ctest": {
+    "registered": 126,
+    "passed": 124,
+    "failed": 1,
+    "skipped": 1,
+    "name": "Wave_Physical_Energy_Budget",
+    "failure": "FP32 NumPy PHB reconstruction differs from archived native input; frequency relative1.99685e-9 exceedsunchanged1e-9 gate"
+  },
+  "physical_input": {
+    "source": "live native TileCase(5000,0,true).basePhi(), exact unchanged fixture/source compiled with current core archive",
+    "phi_base_w_m2_s2": [
+      0.0,
+      18565.9453125,
+      40782.5390625,
+      69034.890625,
+      109727.734375
+    ],
+    "float32_uint32_bits": [
+      "0x0",
+      "0x46910be4",
+      "0x471f4e8a",
+      "0x4786d572",
+      "0x47d64fde"
+    ],
+    "probe_source_sha256": "bee9bf8554a93045b81f6f9b7082e8c49998a313583717e5db3d4d6002f4f088",
+    "probe_executable_sha256": "cc8eb49f46bf1374d532c9ccbe0960c07b7162933c971fb5573abcc8262a69bd",
+    "probe_log_sha256": "eeea2ba25ced78b1e63b816be4c5bcbd8e1a689bb734466c97b7df23df7a8d02",
+    "fixture_sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+    "core_library_sha256": "8a072cbc40d831220736d6fee0a8b2b0b90e5797d73162645be1f12152831785",
+    "compiler": "AppleClang21, C++17 ReleaseO3, Torch2.10.0 ABI1"
+  },
+  "reproduction": {
+    "generated_numpy_omega_rad_s": 0.002109960322283989,
+    "generated_scalar_math_omega_rad_s": 0.0021099603264972825,
+    "linux_failed_omega_rad_s": 0.00210996032649729,
+    "linux_native_cpp_omega_rad_s": 0.0021099603222840286,
+    "scalar_first_phb_face": 18565.947265625,
+    "alpha0_uint32_steps": 2,
+    "phb_face1_uint32_steps": 1
+  },
+  "fix": "Bind strict N4 snapshot/budget to actual imported native PHB faces; preserve genericN8/spatial construction and all equations/eigensolver/numerical budgets",
+  "contracts": {
+    "fixed_phb_A_H_invariant_across_pow_paths": "passed",
+    "one_ulp_imported_face_mutation_relative_frequency_shift": 1.9968452684e-09,
+    "one_ulp_mutation_rejected_by_unchanged_gate": true,
+    "linux_equivalent_scalar_only_N4_full_case": "Redteam passed",
+    "theta_z_sensitivity_uses_same_imported_geometry": true
+  },
+  "local_checks": {
+    "energy_and_spatial_ctest": "2/2passed1.60s",
+    "expected_actual_inventory_count": 126,
+    "mixed_mode_timeout_s": 900,
+    "previous_linux_mixed_mode_s": 579.19,
+    "forward_and_single_inverse_timeout_s": 600
+  },
+  "changed_source_hashes": {
+    "tools/test_wave_energy_budget.py": "0de67788f59a93b91558c3174de973ed179a7cda4e9b96e2974b943ec52b4da7",
+    "tools/wave_energy_spatial_reference.py": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+    "external/libtorch_wrf/sdirk3/CMakeLists.txt": "b0efe5e02591a989b8afb07d446ef789fcaa79c0417db3f922aeeae35c8adb7f",
+    ".github/workflows/sdirk3-ci.yml": "d0eb79983f562303d0419d5d961a8c0631298ea8f421c0818ef61720aec6008c"
+  },
+  "reviews": {
+    "Green": "implementation and CI/package audit",
+    "Red": "energyinput/mutation and Linux-equivalent backend simulation; passed"
+  },
+  "remote_ci": "corrected exact-head run pending push; do not claim CI completion",
+  "WRF_RK3": "No new model run or RK3 comparison. Production source unchanged, previousPR275same-source validation is reused."
+}

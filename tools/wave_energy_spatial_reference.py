@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import math
 
 
 RD = 287.0
@@ -32,8 +33,8 @@ def _alpha(theta: np.ndarray | float, pressure: np.ndarray | float) -> np.ndarra
     return RD * theta / P0 * (pressure / P0) ** (-CV / CP)
 
 
-def _alpha_fp32(theta: np.ndarray, pressure: np.ndarray) -> np.ndarray:
-    """Legacy fixture alpha calculation with single-precision operations."""
+def _alpha_fp32(theta: np.ndarray, pressure: np.ndarray, power_method: str = "numpy") -> np.ndarray:
+    """Legacy alpha diagnostic; the power backend is explicit for portability checks."""
     f = np.float32
     th, p = np.asarray(theta, dtype=np.float32), np.asarray(pressure, dtype=np.float32)
     # Mirrors compute_inverse_density: double-formed scalar constants are
@@ -41,7 +42,13 @@ def _alpha_fp32(theta: np.ndarray, pressure: np.ndarray) -> np.ndarray:
     coeff = f(float(RD) / float(P0))
     exponent = f(-float(CV) / float(CP))
     ratio = np.asarray(p / f(P0), dtype=np.float32)
-    powered = np.power(ratio, exponent, dtype=np.float32)
+    if power_method == "numpy":
+        powered = np.power(ratio, exponent, dtype=np.float32)
+    elif power_method == "scalar_math":
+        powered = np.asarray([f(math.pow(float(r), float(exponent))) for r in ratio.flat],
+                             dtype=np.float32).reshape(ratio.shape)
+    else:
+        raise ValueError("phb_alpha_method must be 'numpy' or 'scalar_math'")
     return np.asarray(np.asarray(coeff * th, dtype=np.float32) * powered, dtype=np.float32)
 
 
@@ -346,6 +353,8 @@ def column(
     mode_k: float | None = None,
     legacy_fp32: bool = True,
     theta_gradient: str = "legacy_fd",
+    phb_alpha_method: str = "numpy",
+    imported_phb_faces: np.ndarray | None = None,
 ) -> dict:
     """Construct the generalized equal-sigma dry reference for N>=4 layers.
 
@@ -353,9 +362,9 @@ def column(
     centered-difference symbol is ``2 sin(k dx/2)/dx`` and is retained in
     ``kappa``.  The legacy PHB uses FP32 alpha from base theta=300 K; the
     geometric comparison uses the physical EOS background and is reported
-    separately.  ``theta_gradient='legacy_fd'`` opts into the old center
-    finite-difference diagnostic; the default energy map uses dtheta/dz from
-    the specified analytic profile.
+    separately.  The default ``theta_gradient='legacy_fd'`` reproduces the
+    archived center finite-difference diagnostic.  Pass
+    ``theta_gradient='analytic'`` to use dtheta/dz from the physical profile.
     """
     if nz < 4:
         raise ValueError("nz must be at least 4")
@@ -377,7 +386,7 @@ def column(
     p_bar = PTOP + M_TOTAL * eta_mass
     theta = 317.0 - 8.0 * eta_mass
     alpha_base_analytic = _alpha(np.full(n, 300.0), p_base)
-    alpha_phb_fp32 = _alpha_fp32(np.full(n, 300.0), p_base).astype(float)
+    alpha_phb_fp32 = _alpha_fp32(np.full(n, 300.0), p_base, phb_alpha_method).astype(float)
     # The source linearization reads its analytic double alphaBase.  The base
     # PHB fixture was separately integrated from its legacy FP32 alpha.
     alpha_base = alpha_base_analytic
@@ -401,6 +410,15 @@ def column(
             phi_base_w[k + 1] = phi_base_w[k] - alpha_base_analytic[k] * MUB / rdnw[k]
     for k in range(n):
         phi_base_analytic_w[k + 1] = phi_base_analytic_w[k] - alpha_base_analytic[k] * MUB / rdnw[k]
+    phi_base_source = "legacy_fp32_reconstruction" if legacy_fp32 else "analytic_geometry"
+    if imported_phb_faces is not None:
+        supplied = np.asarray(imported_phb_faces)
+        if supplied.shape != (n + 1,) or not np.all(np.isfinite(supplied)):
+            raise ValueError(f"imported_phb_faces must be a finite vector of length {n + 1}")
+        # WRF stores the imported PHB faces in default REAL.  Cast once here so
+        # caller-side JSON/Python float parsing cannot widen those payload bits.
+        phi_base_w = np.asarray(supplied, dtype=np.float32).astype(float)
+        phi_base_source = "imported_fp32_faces"
     # Source alpha/PH balance determines the perturbation geopotential faces.
     dphi = (-layer_mass * (alpha_bar - alpha_base) - alpha_base * MU_BAR) / rdnw
     phi_pert_w = np.r_[0.0, np.cumsum(dphi)]
@@ -440,6 +458,7 @@ def column(
         "theta_z_analytic": theta_z_analytic,
         "theta_z_legacy_fd": theta_z_legacy_fd,
         "phi_base_w": phi_base_w, "phi_base_analytic_w": phi_base_analytic_w,
+        "phi_base_source": phi_base_source,
         "phi_pert_w": phi_pert_w,
         "phi_total_w": phi_total_w, "rho_top": rho_top,
         "rho_top_last_cell_candidate": float(rho[-1]),

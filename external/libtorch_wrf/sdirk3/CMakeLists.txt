@@ -606,8 +606,9 @@ add_test(NAME FP64_Stable_Wave_Forward COMMAND test_fp64_carry_adjoint --wave)
 add_test(NAME FP64_Stable_Wave_Inverse COMMAND test_fp64_carry_adjoint --wave-inverse)
 add_test(NAME FP64_Stable_Wave_Two_Mode_Inverse COMMAND test_fp64_carry_adjoint --wave-two-modes)
 set_tests_properties(FP64_Stable_Wave_Forward FP64_Stable_Wave_Inverse
-    FP64_Stable_Wave_Two_Mode_Inverse
     PROPERTIES TIMEOUT 600)
+# Hosted Linux measured 579 s; retain a finite limit with load variation margin.
+set_tests_properties(FP64_Stable_Wave_Two_Mode_Inverse PROPERTIES TIMEOUT 900)
 add_executable(test_horizontal_pgf_actual_rhs tests/test_horizontal_pgf_actual_rhs.cpp)
 target_link_libraries(test_horizontal_pgf_actual_rhs PRIVATE wrf_sdirk3::core)
 add_test(NAME Horizontal_PGF_Actual_RHS COMMAND test_horizontal_pgf_actual_rhs)

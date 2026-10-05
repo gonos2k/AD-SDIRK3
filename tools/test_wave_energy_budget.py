@@ -21,6 +21,15 @@ import wave_energy_spatial_reference as ref  # noqa: E402
 
 
 EXPECTED_OMEGA_N4 = 0.0021099603222840182
+N4_IMPORTED_PHB_U32 = np.asarray(
+    [0x00000000, 0x46910BE4, 0x471F4E8A, 0x4786D572, 0x47D64FDE],
+    dtype="<u4",
+)
+
+
+def n4_imported_phb_faces() -> np.ndarray:
+    """Default-REAL PHB payload captured from the archived TileCase fixture."""
+    return N4_IMPORTED_PHB_U32.view("<f4").astype(np.float32, copy=True)
 
 
 def _check(condition: bool, message: str) -> None:
@@ -154,7 +163,9 @@ def _mode_q0(column: dict) -> tuple[np.ndarray, complex]:
 
 
 def _run_case(n: int) -> dict:
-    c = ref.column(nz=n, nx=8, lx=40000.0, ly=30000.0, theta_gradient="legacy_fd")
+    imported_faces = n4_imported_phb_faces() if n == 4 else None
+    c = ref.column(nz=n, nx=8, lx=40000.0, ly=30000.0,
+                   theta_gradient="legacy_fd", imported_phb_faces=imported_faces)
     n2 = c["N2"]
     _check(np.all(np.isfinite(n2)) and np.all(n2 > 0.0), f"N={n} N² is not positive")
     weights = c["weights"]
@@ -233,7 +244,7 @@ def _run_case(n: int) -> dict:
 
         # Controlled same-q sensitivity: only the energy-map theta_z changes.
         analytic = ref.column(nz=4, nx=8, lx=40000.0, ly=30000.0,
-                              theta_gradient="analytic")
+                              theta_gradient="analytic", imported_phb_faces=imported_faces)
         quarter_state = expm(0.25 * period * c["A"]) @ q0
         bulk_pct = lambda case: 100.0 * (
             0.5 * np.real(np.vdot(quarter_state, case["H_bulk"] @ quarter_state)) /
@@ -244,6 +255,34 @@ def _run_case(n: int) -> dict:
                "same-state analytic theta_z sensitivity was not resolved")
         _check(c["rho_top"] != c["rho_top_last_cell_candidate"],
                "top EOS density accidentally collapsed to the last mass-cell density")
+
+        # Record generated geometry from both power paths, then prove that
+        # pinned imported PHB bits make A/H independent of either path. Their
+        # generated results may match on one platform and differ by an FP32
+        # ulp on another; the contract does not require either outcome.
+        generated_numpy = ref.column(nz=4, nx=8, lx=40000.0, ly=30000.0,
+                                     theta_gradient="legacy_fd", phb_alpha_method="numpy")
+        generated_scalar = ref.column(nz=4, nx=8, lx=40000.0, ly=30000.0,
+                                      theta_gradient="legacy_fd", phb_alpha_method="scalar_math")
+        fixed_numpy = ref.column(nz=4, nx=8, lx=40000.0, ly=30000.0,
+                                 theta_gradient="legacy_fd", phb_alpha_method="numpy",
+                                 imported_phb_faces=imported_faces)
+        fixed_scalar = ref.column(nz=4, nx=8, lx=40000.0, ly=30000.0,
+                                  theta_gradient="legacy_fd", phb_alpha_method="scalar_math",
+                                  imported_phb_faces=imported_faces)
+        _check(np.array_equal(fixed_numpy["A"], fixed_scalar["A"]) and
+               np.array_equal(fixed_numpy["H"], fixed_scalar["H"]),
+               "fixed imported PHB faces did not make A and H independent of pow implementation")
+
+        one_ulp_faces = imported_faces.copy()
+        one_ulp_faces[1] = np.nextafter(one_ulp_faces[1], np.float32(np.inf), dtype=np.float32)
+        one_ulp = ref.column(nz=4, nx=8, lx=40000.0, ly=30000.0,
+                             theta_gradient="legacy_fd", imported_phb_faces=one_ulp_faces)
+        one_ulp_q0, one_ulp_lambda = _mode_q0(one_ulp)
+        del one_ulp_q0
+        one_ulp_relative_shift = abs(one_ulp_lambda.imag - EXPECTED_OMEGA_N4) / EXPECTED_OMEGA_N4
+        _check(one_ulp_relative_shift > 1.0e-9,
+               "one-ULP PHB-face mutation did not fail the preserved frequency gate")
 
         return {
             "nz": 4, "omega_rad_s": eigenvalue.imag, "period_s": period,
@@ -256,6 +295,14 @@ def _run_case(n: int) -> dict:
             "theta_z_legacy_bulk_change_pct_same_q": legacy_pct,
             "theta_z_analytic_bulk_change_pct_same_q": analytic_pct,
             "rho_top_eos": c["rho_top"], "rho_top_last_cell_candidate": c["rho_top_last_cell_candidate"],
+            "imported_phb_u32": [int(x) for x in N4_IMPORTED_PHB_U32],
+            "generated_numpy_phb_faces": generated_numpy["phi_base_w"].tolist(),
+            "generated_numpy_omega_rad_s": _mode_q0(generated_numpy)[1].imag,
+            "generated_scalar_math_phb_faces": generated_scalar["phi_base_w"].tolist(),
+            "generated_scalar_math_omega_rad_s": _mode_q0(generated_scalar)[1].imag,
+            "generated_power_paths_bitwise_differ": bool(not np.array_equal(
+                generated_numpy["phi_base_w"], generated_scalar["phi_base_w"])),
+            "imported_phb_one_ulp_face1_relative_frequency_shift": one_ulp_relative_shift,
             "closure": closure,
             "native_740s_bulk": native_sample["bulk_end"],
         }
