@@ -1,0 +1,27 @@
+{
+  "timestamp_local": "2026-10-06T14:44:07.466247+09:00",
+  "base": "0ae8ae2d6cc700b1c70428cf1fccecdbd2c2ac59",
+  "files": {
+    "tools/test_wave_quadratic_forcing.py": {
+      "sha256": "4c31dcf28906ddc47e0880a0e9313334654e94e06d1f3a3611dc33cb4727d6a6",
+      "snapshot": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/quadratic_wave_forcing/final_gate/test_wave_quadratic_forcing.py"
+    },
+    "tools/wave_quadratic_reference.py": {
+      "sha256": "2a46ae321644dfb7a3e04912bf39acb47fa2832767990fa02a736d3a1616294d",
+      "snapshot": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/quadratic_wave_forcing/final_gate/wave_quadratic_reference.py"
+    },
+    "tools/wave_quadratic_transport.py": {
+      "sha256": "303eed70c600df499e784c4289a4e83d52149b5129521e6387beb4bfb0526172",
+      "snapshot": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/quadratic_wave_forcing/final_gate/wave_quadratic_transport.py"
+    },
+    "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp": {
+      "sha256": "aa5246f4fbcd92169bd79b31e7d76246df9a9be29ee55eab0b23f19e34c65e2d",
+      "snapshot": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/quadratic_wave_forcing/final_gate/test_native_wave_refinement.cpp"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "sha256": "b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144",
+      "snapshot": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/quadratic_wave_forcing/final_gate/wrf_sdirk3_tile_unified_impl.cpp"
+    }
+  },
+  "executable_sha256": "59ec738c82ded5c8b1faedb427f2397c57a6fb954ae9423e61a8e5a97dc918fb"
+}

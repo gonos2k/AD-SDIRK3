@@ -1,0 +1,257 @@
+{
+  "status": "final-local-evidence",
+  "timestamp_local": "2026-10-06T14:55:56+09:00",
+  "repository_base": "0ae8ae2d6cc700b1c70428cf1fccecdbd2c2ac59",
+  "worktree": "/private/tmp/pr274-ci-20261004",
+  "scope": "source-transcribed fixture-scope complete Q2; AD only supplies native forward/VJP responses",
+  "native_validation": {
+    "status": "pass",
+    "ctest_log": "affected_ctest.log",
+    "ctest_log_sha256": "6e6fbefdbd311844a1bb956681526c53d1f941b544571922d6682cab892a3165",
+    "tests": {
+      "Native_Stable_Wave_Refinement_seconds": 55.79,
+      "Native_Quadratic_Wave_Forcing_seconds": 161.45
+    },
+    "total_seconds": 217.23999999999998,
+    "tests_failed": 0
+  },
+  "environment": {
+    "native_compiler": "Apple LLVM 21.0.0 (clang-2100.3.34.2)",
+    "native_torch": "2.10.0",
+    "python": "3.10.11",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3"
+  },
+  "source_hashes": {
+    "production_tile_impl_sha256": "b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144",
+    "native_test_sha256": "aa5246f4fbcd92169bd79b31e7d76246df9a9be29ee55eab0b23f19e34c65e2d",
+    "reference_sha256": "2a46ae321644dfb7a3e04912bf39acb47fa2832767990fa02a736d3a1616294d",
+    "transport_sha256": "303eed70c600df499e784c4289a4e83d52149b5129521e6387beb4bfb0526172",
+    "runner_sha256": "4c31dcf28906ddc47e0880a0e9313334654e94e06d1f3a3611dc33cb4727d6a6",
+    "linear_source_sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+    "executable_sha256": "59ec738c82ded5c8b1faedb427f2397c57a6fb954ae9423e61a8e5a97dc918fb"
+  },
+  "input_receipt": {
+    "path": "inputs_receipt.json",
+    "sha256": "be016f999a5b2f537d042748a8b246084a87df204c3109580cac0167a99aacae",
+    "bytes": 12612
+  },
+  "full_report_external": {
+    "path": "/private/tmp/stable-wave-build-20261004/quadratic_wave_forcing/wave_quadratic_forcing_report.json",
+    "sha256": "9466af7fceaaa4820cc196d8c22208a10a8253c6695b559606f75ad98a85f994",
+    "bytes": 1855774
+  },
+  "instantaneous_coefficients": {
+    "16x12x8": {
+      "scaled_error": 3.13767996719792e-07,
+      "absolute_error": 1.9969791642814825e-13,
+      "halfshift_parity_abs": 0.0,
+      "halfshift_scatter_abs": 1.7113612452477502e-12,
+      "component_errors": {
+        "MU": {
+          "absolute_error": 9.302645269749766e-18,
+          "accepted_error_budget": 5.932832833195902e-10,
+          "eos_pressure_floor_norm": 5.932832833195902e-10,
+          "relative_error": 1.8309656569937205e-09,
+          "signal_norm": 5.080731708001485e-09
+        },
+        "PH": {
+          "absolute_error": 2.250640606261788e-16,
+          "accepted_error_budget": 3.99657435705812e-08,
+          "eos_pressure_floor_norm": 3.99657435705812e-08,
+          "relative_error": 3.7197451628054715e-10,
+          "signal_norm": 6.050523645454063e-07
+        },
+        "THETA": {
+          "absolute_error": 8.962792911870701e-20,
+          "accepted_error_budget": 2.063423930429235e-10,
+          "eos_pressure_floor_norm": 2.063423930429235e-10,
+          "relative_error": 7.620722510459155e-12,
+          "signal_norm": 1.1761080264462596e-08
+        },
+        "U": {
+          "absolute_error": 6.408730726261838e-14,
+          "accepted_error_budget": 1.941625019363612e-10,
+          "eos_pressure_floor_norm": 2.0974158958875142e-11,
+          "relative_error": 3.3007046480902714e-07,
+          "signal_norm": 1.941625019363612e-07
+        },
+        "V": {
+          "eos_pressure_floor_norm": 2.183059678604418e-11,
+          "source_expected_zero": true
+        },
+        "W": {
+          "absolute_error": 1.8913493631053947e-13,
+          "accepted_error_budget": 3.34385995629638e-11,
+          "eos_pressure_floor_norm": 2.5692279788400015e-11,
+          "relative_error": 5.656185928313311e-06,
+          "signal_norm": 3.34385995629638e-08
+        }
+      },
+      "branch_config": {
+        "advection_order_config": 2.0,
+        "do_curvature_config": 1.0,
+        "effective_wrf_omega_ww_cp": 1.0,
+        "implicit_divergence": 0.0,
+        "kdamp_config": 0.0,
+        "map_input_max_deviation": 0.0,
+        "non_hydrostatic_config": 1.0,
+        "omega_w_blend_config": 1.0,
+        "sign_smooth_delta_config": 0.0010000000474974513
+      }
+    },
+    "8x6x4": {
+      "scaled_error": 5.790569344825351e-07,
+      "absolute_error": 2.1103592977713676e-13,
+      "halfshift_parity_abs": 0.0,
+      "halfshift_scatter_abs": 4.633873651215313e-13,
+      "component_errors": {
+        "MU": {
+          "absolute_error": 4.7991750721198284e-18,
+          "accepted_error_budget": 1.7028656690370923e-10,
+          "eos_pressure_floor_norm": 1.7028656690370923e-10,
+          "relative_error": 1.5349653498320001e-09,
+          "signal_norm": 3.1265689956096347e-09
+        },
+        "PH": {
+          "absolute_error": 8.838756055249963e-17,
+          "accepted_error_budget": 7.076290417865222e-09,
+          "eos_pressure_floor_norm": 7.076290417865222e-09,
+          "relative_error": 2.5343957803560476e-10,
+          "signal_norm": 3.487520032884619e-07
+        },
+        "THETA": {
+          "absolute_error": 6.4446841476541e-20,
+          "accepted_error_budget": 3.4615184820893766e-11,
+          "eos_pressure_floor_norm": 3.4615184820893766e-11,
+          "relative_error": 1.0238841295853356e-11,
+          "signal_norm": 6.294349098138812e-09
+        },
+        "U": {
+          "absolute_error": 7.84680220379538e-14,
+          "accepted_error_budget": 1.0260987969651557e-10,
+          "eos_pressure_floor_norm": 8.662505762148979e-12,
+          "relative_error": 7.647218988077463e-07,
+          "signal_norm": 1.0260987969651556e-07
+        },
+        "V": {
+          "eos_pressure_floor_norm": 9.35657560715858e-12,
+          "source_expected_zero": true
+        },
+        "W": {
+          "absolute_error": 1.959053989530526e-13,
+          "accepted_error_budget": 2.4818068467770165e-11,
+          "eos_pressure_floor_norm": 6.0815902790263334e-12,
+          "relative_error": 7.893660185822436e-06,
+          "signal_norm": 2.4818068467770166e-08
+        }
+      },
+      "branch_config": {
+        "advection_order_config": 2.0,
+        "do_curvature_config": 1.0,
+        "effective_wrf_omega_ww_cp": 1.0,
+        "implicit_divergence": 0.0,
+        "kdamp_config": 0.0,
+        "map_input_max_deviation": 0.0,
+        "non_hydrostatic_config": 1.0,
+        "omega_w_blend_config": 1.0,
+        "sign_smooth_delta_config": 0.0010000000474974513
+      }
+    }
+  },
+  "trajectory": {
+    "16x12x8": {
+      "duration_s": 30.0,
+      "dt_values_s": [
+        1.0,
+        0.5
+      ],
+      "run_count": 10,
+      "times": {
+        "10": {
+          "temporal_scatter_norm": 1.3205528506923808e-09,
+          "amplitude_scatter_norm": 1.8668327435003572e-11,
+          "source_tightening_to_native_scatter": null
+        },
+        "20": {
+          "temporal_scatter_norm": 5.982059165910638e-09,
+          "amplitude_scatter_norm": 4.8183490462747925e-11,
+          "source_tightening_to_native_scatter": null
+        },
+        "30": {
+          "temporal_scatter_norm": 1.038555406497723e-08,
+          "amplitude_scatter_norm": 8.752011831232776e-11,
+          "source_tightening_to_native_scatter": 4.722124782109201e-08
+        }
+      }
+    },
+    "8x6x4": {
+      "duration_s": 30.0,
+      "dt_values_s": [
+        1.0,
+        0.5
+      ],
+      "run_count": 10,
+      "times": {
+        "10": {
+          "temporal_scatter_norm": 1.0895037599028618e-10,
+          "amplitude_scatter_norm": 2.2815615738964547e-11,
+          "source_tightening_to_native_scatter": null
+        },
+        "20": {
+          "temporal_scatter_norm": 6.110368550569678e-10,
+          "amplitude_scatter_norm": 3.117921267661357e-11,
+          "source_tightening_to_native_scatter": null
+        },
+        "30": {
+          "temporal_scatter_norm": 7.305630343089154e-10,
+          "amplitude_scatter_norm": 7.214020465713365e-11,
+          "source_tightening_to_native_scatter": 3.725319514327111e-07
+        }
+      }
+    }
+  },
+  "adjoint_directional_check": {
+    "absolute_error": 1.47818612581676e-12,
+    "adjoint_directional_derivative": -1.4849983423989113e-08,
+    "budget": 0.002,
+    "control_state_direction_norm": 0.750195208321806,
+    "dt": 1.0,
+    "epsilon_scatter_relative": 0.00022953227672781393,
+    "finite_difference_directional_derivative": -1.4848505237863296e-08,
+    "finite_difference_roundoff_floor": 2.1934670237598486e-19,
+    "objective_center": -3.843919834344012e-08,
+    "relative_error": 9.954126436456847e-05,
+    "seconds": 6.0,
+    "source_direction_norm": 0.3236550652196296,
+    "steps": 6,
+    "terminal_m2_w_norm": 0.5,
+    "terminal_other_blocks_norm": 0.0
+  },
+  "raw_payload_manifest": {
+    "path": "receipt_after_run.json artifacts/* entries",
+    "files": 64,
+    "bytes": 84043937,
+    "external_archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/quadratic_wave_forcing/final_gate",
+    "repository_contains_raw_payloads": false
+  },
+  "graph": {
+    "receipt": "graph_refresh_receipt.json",
+    "graph_sha256": "0729a8ad7b34f3f18179b11bf22b34fb97abd293ea277cc32387ea8641b59c93",
+    "nodes": 1016,
+    "edges": 3155,
+    "sources_hash_verified": 39,
+    "manual_non_ast_config_hashes": 3,
+    "extraction_gaps": [
+      "Graphify AST does not represent CMake test-registration/configuration relationships; current CMake SHA is bound in manual_non_ast_source_hashes.",
+      "Graphify did not extract WRF Fortran sources for this C++ fixture dependency chain; Fortran mass-flux reference is manually cited from module_big_step_utilities_em.F:640-782.",
+      "Graphify edges are navigation aids, not numerical proof."
+    ]
+  },
+  "wrf_rk3_comparison": {
+    "new_run_performed": false,
+    "production_solver_source_unchanged": true,
+    "reused_qualified_pr277_em_b_wave": "dt=15 s, T=240 s, 48 positive finite stages; same-input archived RK3 endpoint RMS U=0.00210824 m/s, V=0.000952211 m/s, W=0.000598811 m/s, PH=1.3042 m2/s2, T=0.0414245 K, MU=0.0995476 Pa. Timing 7.73706 s vs 0.26754 s is descriptive across different build recipes, not a controlled performance result."
+  },
+  "ci_status": "Exact-head full GitHub CI remains pending; local affected CTest pass does not imply full CI completion."
+}

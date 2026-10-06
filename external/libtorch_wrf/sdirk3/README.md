@@ -308,7 +308,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 127-test CTest inventory**, pinned by
+The CMake tree registers an **exact 128-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
@@ -350,6 +350,12 @@ the pinned file defines the inventory.
   with the source operator and testing FP64 carry propagation and W/PH/MU
   directional pullbacks. This is a limited native-grid contract, not whole-WRF
   spatial or operational forecast qualification.
+- `Native_Quadratic_Wave_Forcing` — independently transcribed second-harmonic
+  forcing from EOS/PGF, transport, moving sigma coordinates and curvature;
+  modal self/cross coefficients, matched-time coarse/fine propagation and a
+  finite-amplitude W-m2 objective pullback. Uses the same fixed dry fixture,
+  actual input bits and componentwise error budgets; does not construct a
+  producer Hessian or claim a new spatial convergence order.
 - `Wave_Physical_Energy_Budget` — source-derived four- and eight-layer wave
   energy, top-boundary work, and pressure/buoyancy coupling contracts. This
   Python check does not run the native solver or establish WRF forecast quality.
