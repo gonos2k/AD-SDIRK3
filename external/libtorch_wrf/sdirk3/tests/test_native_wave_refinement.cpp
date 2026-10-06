@@ -164,6 +164,22 @@ void put(std::ofstream& o,const std::string& name,const torch::Tensor& t) {
     for(int64_t i=0;i<x.numel();++i) o<<','<<std::setprecision(17)<<x[i].item<double>();
     o<<'\n';
 }
+torch::Tensor read_fp64_vector(const std::string& path,int64_t expected,const char* name) {
+    std::ifstream input(path);
+    TORCH_CHECK(input,"cannot open ",name," file: ",path);
+    int64_t count=0;
+    input>>count;
+    TORCH_CHECK(input && count==expected,name," length mismatch: expected ",expected,
+                " values, got ",count);
+    std::vector<double> values(static_cast<size_t>(count));
+    for(double& value:values)
+        TORCH_CHECK(static_cast<bool>(input>>value),"malformed ",name," file: ",path);
+    input>>std::ws;
+    TORCH_CHECK(input.eof(),"extra data in ",name," file: ",path);
+    auto result=torch::from_blob(values.data(),{count},torch::kFloat64).clone();
+    TORCH_CHECK(torch::isfinite(result).all().item<bool>(),name," contains nonfinite values");
+    return result;
+}
 torch::Tensor wave_direction(const Grid& g,int block) {
     const int sizes[]={g.ny*g.nz*g.nu,g.nv*g.nz*g.nx,g.ny*g.nw*g.nx,g.ny*g.nw*g.nx,g.ny*g.nz*g.nx,g.ny*g.nx};
     int offset=0; for(int b=0;b<block;++b) offset+=sizes[b];
@@ -332,8 +348,12 @@ std::array<double,3> validate_eos_target(Grid& g,const torch::Tensor& state) {
 
 int main(int argc,char** argv) {
     const bool damping_probe=argc==7 && std::string(argv[5])=="--damping-probe";
-    TORCH_CHECK(argc==5 || argc==6 || damping_probe,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V>]");
+    const bool quadratic_probe=argc==7 && std::string(argv[5])=="--quadratic-probe";
+    const bool quadratic_forward=argc==9 && std::string(argv[5])=="--quadratic-forward";
+    const bool quadratic_trajectory=argc==9 && std::string(argv[5])=="--quadratic-trajectory";
+    const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory;
+    TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode,
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt]");
     const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     bool implicit_divergence=false;
     float kdamp=0.0f;
@@ -345,6 +365,18 @@ int main(int argc,char** argv) {
         implicit_divergence=true;
         kdamp=0.2f;
     }
+    int quadratic_steps=0;
+    float quadratic_dt=0.0f;
+    if(quadratic_trajectory_mode) {
+        quadratic_steps=std::stoi(argv[7]);
+        quadratic_dt=std::stof(argv[8]);
+        TORCH_CHECK(quadratic_steps>0 && quadratic_steps<=90,
+                    "quadratic trajectory steps must be between 1 and 90");
+        TORCH_CHECK(std::isfinite(quadratic_dt) && quadratic_dt>0.0f,
+                    "quadratic trajectory dt must be finite and positive");
+        TORCH_CHECK(static_cast<double>(quadratic_steps)*quadratic_dt<=90.0,
+                    "quadratic trajectory physical duration must not exceed 90 seconds");
+    }
     configure(implicit_divergence,kdamp); // solver policy is captured by its constructor.
     Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]));
     auto base=background_state(g);
@@ -355,6 +387,8 @@ int main(int argc,char** argv) {
     for(int b=0;b<6;++b) {
         auto db=wave_direction(g,b); d.slice(0,off,off+sizes[b]).copy_(db.slice(0,off,off+sizes[b])); off+=sizes[b];
     }
+    if(quadratic_probe || quadratic_trajectory_mode)
+        d=read_fp64_vector(argv[6],base.numel(),"perturbation direction");
     g.set(base);
     g.solver.requestFixedTrajectory(1,{0.25f},base);
     g.step(0.25f,0);
@@ -374,7 +408,19 @@ int main(int argc,char** argv) {
     out<<"T,rdy_fp32_bits,0x"<<std::hex<<rdy_bits<<std::dec<<"\n";
     out<<"M,kdamp_config,"<<std::setprecision(17)<<g_sdirk3_config.kdamp<<"\n";
     out<<"M,implicit_divergence,"<<(g_sdirk3_config.implicit_divergence?1:0)<<"\n";
-    out<<"M,kdamp_grid,"<<g.solver.getGridInfo()->kdamp<<"\n";
+    auto native_grid=std::static_pointer_cast<WRFGridInfoExtended>(g.solver.getGridInfo());
+    out<<"M,kdamp_grid,"<<native_grid->kdamp<<"\n";
+    out<<"M,reradius_grid,"<<native_grid->reradius<<"\n";
+    out<<"M,sign_smooth_delta_config,"<<g_sdirk3_config.sign_smooth_delta<<"\n";
+    out<<"M,omega_w_blend_config,"<<g_sdirk3_config.omega_w_blend<<"\n";
+    out<<"M,do_curvature_config,"<<(g_sdirk3_config.do_curvature?1:0)<<"\n";
+    out<<"M,effective_wrf_omega_ww_cp,"<<(g_sdirk3_config.effective_wrf_omega_ww_cp()?1:0)<<"\n";
+    out<<"M,advection_order_config,"<<g_sdirk3_config.advection_order<<"\n";
+    out<<"M,non_hydrostatic_config,"<<(g_sdirk3_config.non_hydrostatic?1:0)<<"\n";
+    double map_input_max_deviation=0.0;
+    for(const float value:g.maps)
+        map_input_max_deviation=std::max(map_input_max_deviation,std::abs(static_cast<double>(value)-1.0));
+    out<<"M,map_input_max_deviation,"<<std::setprecision(17)<<map_input_max_deviation<<"\n";
     out<<"M,eos_pressure_error,"<<std::setprecision(17)<<eos_errors[0]<<"\n";
     out<<"M,eos_alpha_relative_error,"<<eos_errors[1]<<"\n";
     out<<"M,eos_geometry_relative_error,"<<eos_errors[2]<<"\n";
@@ -383,6 +429,81 @@ int main(int argc,char** argv) {
     put(out,"mubase",torch::from_blob(g.mubase.data(),{static_cast<int64_t>(g.mubase.size())},torch::kFloat32).clone());
     put(out,"base",base); put(out,"direction",d); put(out,"rhs_base",rb);
     if(descriptor_only) { put(out,"initial",base); return 0; }
+    if(quadratic_trajectory_mode) {
+        const auto initial=base+d;
+        g.set(initial);
+        g.solver.requestFixedTrajectory(quadratic_steps,
+            std::vector<float>(quadratic_steps,quadratic_dt),initial);
+        for(int n=0;n<quadratic_steps;++n) g.step(quadratic_dt,n);
+        const auto checkpoints=g.solver.getFixedTrajectoryFp64Checkpoints();
+        TORCH_CHECK(checkpoints.size()==static_cast<size_t>(quadratic_steps),
+                    "quadratic trajectory did not retain every accepted endpoint");
+        out<<"M,quadratic_trajectory,1\n";
+        out<<"M,objective_x_harmonic,2\n";
+        out<<"M,trajectory_steps,"<<quadratic_steps<<"\n";
+        out<<"M,trajectory_dt_fp32,"<<std::setprecision(17)<<quadratic_dt<<"\n";
+        put(out,"initial",initial);
+        auto terminal=torch::zeros_like(base);
+        const int w0=sizes[0]+sizes[1];
+        double terminal_norm2=0.0;
+        for(int j=0;j<g.ny;++j) for(int k=1;k<=g.nz;++k) for(int i=0;i<g.nx;++i) {
+            const double value=std::cos(4.0*pi*(i+0.5)*g.dx/g.lx)*
+                std::sin(pi*k/(g.nz+1.0));
+            terminal[w0+(j*g.nw+k)*g.nx+i]=value;
+            terminal_norm2+=value*value;
+        }
+        terminal/=std::sqrt(terminal_norm2);
+        put(out,"terminal_cotangent",terminal);
+        for(int n=0;n<quadratic_steps;++n) {
+            put(out,"checkpoint_"+std::to_string(n),checkpoints[n]);
+            out<<"M,checkpoint_time_"<<n<<','<<std::setprecision(17)
+               <<(n+1)*static_cast<double>(quadratic_dt)<<"\n";
+        }
+        const auto& final_state=checkpoints.back();
+        const double objective=(final_state*terminal).sum().item<double>();
+        put(out,"final",final_state);
+        out<<"S,objective_w_m2_projection,"<<std::setprecision(17)<<objective<<"\n";
+        if(quadratic_trajectory) {
+            const auto initial_pullback=g.solver.pullbackFixedTrajectory(terminal);
+            put(out,"initial_pullback",initial_pullback);
+        }
+        g.solver.closeFixedTrajectory();
+        return 0;
+    }
+    if(quadratic_probe) {
+        constexpr double h=1.0;
+        const auto rhs_e_center=g.rhs(base,RhsMode::ExplicitOnly);
+        const auto rhs_i_center=g.rhs(base,RhsMode::ImplicitOnly);
+        std::array<torch::Tensor,3> explicit_positive,implicit_positive;
+        put(out,"rhs_E_center",rhs_e_center); put(out,"rhs_I_center",rhs_i_center);
+        std::array<torch::Tensor,3> positive,negative;
+        for(int level=0;level<3;++level) {
+            const double amplitude=h/std::pow(2.0,level);
+            positive[level]=g.rhs(base+amplitude*d);
+            negative[level]=g.rhs(base-amplitude*d);
+            explicit_positive[level]=g.rhs(base+amplitude*d,RhsMode::ExplicitOnly);
+            implicit_positive[level]=g.rhs(base+amplitude*d,RhsMode::ImplicitOnly);
+            put(out,"rhs_plus_"+std::to_string(level),positive[level]);
+            put(out,"rhs_minus_"+std::to_string(level),negative[level]);
+            put(out,"rhs_E_plus_"+std::to_string(level),explicit_positive[level]);
+            put(out,"rhs_I_plus_"+std::to_string(level),implicit_positive[level]);
+            out<<"M,probe_amplitude_"<<level<<','<<std::setprecision(17)<<amplitude<<"\n";
+        }
+        auto quadratic_positive=(positive[0]-2.0*positive[1]+rb)/(2.0*(h/2.0)*(h/2.0));
+        auto quadratic_negative=(negative[0]-2.0*negative[1]+rb)/(2.0*(h/2.0)*(h/2.0));
+        auto quadratic_positive_small=(positive[1]-2.0*positive[2]+rb)/(2.0*(h/4.0)*(h/4.0));
+        auto quadratic_negative_small=(negative[1]-2.0*negative[2]+rb)/(2.0*(h/4.0)*(h/4.0));
+        put(out,"quadratic_positive",quadratic_positive); put(out,"quadratic_negative",quadratic_negative);
+        put(out,"quadratic_positive_small",quadratic_positive_small); put(out,"quadratic_negative_small",quadratic_negative_small);
+        put(out,"quadratic_mean",0.5*(quadratic_positive+quadratic_negative));
+        put(out,"quadratic_mean_small",0.5*(quadratic_positive_small+quadratic_negative_small));
+        put(out,"quadratic_side_difference",quadratic_positive-quadratic_negative);
+        put(out,"quadratic_E_positive",2.0*(explicit_positive[0]-2.0*explicit_positive[1]+rhs_e_center)/(h*h));
+        put(out,"quadratic_I_positive",2.0*(implicit_positive[0]-2.0*implicit_positive[1]+rhs_i_center)/(h*h));
+        put(out,"quadratic_E_positive_small",8.0*(explicit_positive[1]-2.0*explicit_positive[2]+rhs_e_center)/(h*h));
+        put(out,"quadratic_I_positive_small",8.0*(implicit_positive[1]-2.0*implicit_positive[2]+rhs_i_center)/(h*h));
+        return 0;
+    }
     if(damping_probe) {
         const auto direction=divergence_probe_direction(g,damping_component);
         // Terminal is dE/dx for E=0.5*sum(m*velocity^2): the 0.5
