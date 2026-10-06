@@ -308,7 +308,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 126-test CTest inventory**, pinned by
+The CMake tree registers an **exact 127-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
@@ -345,6 +345,11 @@ the pinned file defines the inventory.
   independently selected source-derived stable modes, with a source-matrix
   observation-rank check and a 600-second withheld forecast scored at every
   physical W observation point. This remains a dry single-tile synthetic twin.
+- `Native_Stable_Wave_Refinement` — the same dry hydrostatic wave problem on
+  native 8×6×4 and 16×12×8 grids, comparing all canonical Fourier RHS columns
+  with the source operator and testing FP64 carry propagation and W/PH/MU
+  directional pullbacks. This is a limited native-grid contract, not whole-WRF
+  spatial or operational forecast qualification.
 - `Wave_Physical_Energy_Budget` — source-derived four- and eight-layer wave
   energy, top-boundary work, and pressure/buoyancy coupling contracts. This
   Python check does not run the native solver or establish WRF forecast quality.

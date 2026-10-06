@@ -1,0 +1,27 @@
+Internal ctest changing into directory: /tmp/stable-wave-build-20261004
+Test project /tmp/stable-wave-build-20261004
+    Start 46: Scalar_Diffusion_Contract
+1/3 Test #46: Scalar_Diffusion_Contract ........   Passed    1.14 sec
+    Start 80: Native_Stable_Wave_Refinement
+2/3 Test #80: Native_Stable_Wave_Refinement ....***Failed   57.00 sec
+Traceback (most recent call last):
+  File "/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/../../../tools/test_native_wave_refinement.py", line 637, in <module>
+    main()
+  File "/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/../../../tools/test_native_wave_refinement.py", line 544, in main
+    damping_probe = {component: run_damping_probe(exe,component) for component in ("U","V")}
+  File "/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/../../../tools/test_native_wave_refinement.py", line 544, in <dictcomp>
+    damping_probe = {component: run_damping_probe(exe,component) for component in ("U","V")}
+  File "/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/../../../tools/test_native_wave_refinement.py", line 485, in run_damping_probe
+    raise AssertionError(f"{component} damping probe did not read back kdamp=.2/implicit_divergence=on")
+AssertionError: U damping probe did not read back kdamp=.2/implicit_divergence=on
+
+    Start 81: Horizontal_PGF_Actual_RHS
+3/3 Test #81: Horizontal_PGF_Actual_RHS ........   Passed    0.28 sec
+
+67% tests passed, 1 tests failed out of 3
+
+Total Test time (real) =  58.43 sec
+
+The following tests FAILED:
+	 80 - Native_Stable_Wave_Refinement (Failed)
+Errors while running CTest

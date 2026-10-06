@@ -1,0 +1,11 @@
+Post-sign-fix two-mode inverse completion receipt
+Command: cd /private/tmp/stable-wave-build-20261004 && ./test_fp64_carry_adjoint --wave-two-modes
+Exit status: 0
+Log SHA-256: 0134bd0635a7ee2ecfc273ad5a6286e3ed4edd55431cf88b3c6b16e44b0e44e1
+Frozen test source SHA-256: 66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829
+Production producer source SHA-256: b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144
+Static library SHA-256: 4c7aa4f098999b0aa5fcef577c532aeba7d051143f8bf6c0e70d466569fd4607
+Test executable SHA-256: e4e3279006f3d64595fdcad5b2974a58efe0089701bb393ed84da7f8f1f72e74
+Recovered input controls for half-amplitude probe:
+0.77998406458075109,-0.35997271519301632,0.35000068647687177,0.23998213728770962
+Terminal status: FP64 carry two-mode independent-observation wave inverse passed

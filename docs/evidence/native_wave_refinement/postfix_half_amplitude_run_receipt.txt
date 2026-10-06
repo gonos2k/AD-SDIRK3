@@ -1,0 +1,11 @@
+Post-sign-fix half-amplitude pure-forward probe receipt
+Command: cd /private/tmp/stable-wave-build-20261004 && ./test_fp64_carry_adjoint --wave-amplitude-probe 0.5 0.77998406458075109 -0.35997271519301632 0.35000068647687177 0.23998213728770962 /Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/half_amplitude/endpoint_fp64.txt
+Exit status: 0
+Log SHA-256: d407780c8b60d73a9c00afaf40932603f22e42721f5c97831f8b982eb3177c05
+Endpoint SHA-256: ca6de20064181dc1a53e210d183075e6c3fa9bf19fe1a4f6ac88fa779b00271e
+Endpoint format: packed-fp64-state-v1, 1160 components after one descriptive header line, 17 significant digits
+Frozen test source SHA-256: 66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829
+Production producer source SHA-256: b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144
+Static library SHA-256: 4c7aa4f098999b0aa5fcef577c532aeba7d051143f8bf6c0e70d466569fd4607
+Test executable SHA-256: e4e3279006f3d64595fdcad5b2974a58efe0089701bb393ed84da7f8f1f72e74
+Terminal status: FP64 carry wave amplitude forward probe passed

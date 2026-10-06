@@ -1,0 +1,14 @@
+Internal ctest changing into directory: /tmp/stable-wave-build-20261004
+Test project /tmp/stable-wave-build-20261004
+    Start 81: Horizontal_PGF_Actual_RHS
+1/4 Test #81: Horizontal_PGF_Actual_RHS .........   Passed    0.26 sec
+    Start 82: Stable_Wave_Fortran_Source_Rows
+2/4 Test #82: Stable_Wave_Fortran_Source_Rows ...   Passed    1.23 sec
+    Start 83: Wave_Physical_Energy_Budget
+3/4 Test #83: Wave_Physical_Energy_Budget .......   Passed    0.65 sec
+    Start 84: Wave_Source_Spatial_Convergence
+4/4 Test #84: Wave_Source_Spatial_Convergence ...   Passed    1.15 sec
+
+100% tests passed, 0 tests failed out of 4
+
+Total Test time (real) =   3.29 sec

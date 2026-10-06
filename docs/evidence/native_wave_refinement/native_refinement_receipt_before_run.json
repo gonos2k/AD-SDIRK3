@@ -1,0 +1,31 @@
+{
+  "timestamp_local": "2026-10-05T15:54:02.016955+09:00",
+  "base_commit": "8c3adea8065645832a6872f86e6b48eb7ed81f7e",
+  "files": {
+    "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp": {
+      "sha256": "16959eeabf0ed94f286c3b09b61b083ac1a673c0a6d2aac22bb588ecbb9daa35",
+      "archived": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/native/test_native_wave_refinement.cpp"
+    },
+    "/private/tmp/pr274-ci-20261004/tools/test_native_wave_refinement.py": {
+      "sha256": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022",
+      "archived": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/native/test_native_wave_refinement.py"
+    },
+    "/private/tmp/pr274-ci-20261004/tools/wave_energy_spatial_reference.py": {
+      "sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+      "archived": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/native/wave_energy_spatial_reference.py"
+    },
+    "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "sha256": "b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144",
+      "archived": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/native/wrf_sdirk3_tile_unified_impl.cpp"
+    },
+    "/private/tmp/stable-wave-build-20261004/test_native_wave_refinement": {
+      "sha256": "1a4b4979a70a17718297789cb79ed408f30b56d3c7c8dabad143639b26c539bd",
+      "archived": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/native/test_native_wave_refinement"
+    },
+    "/private/tmp/stable-wave-build-20261004/libwrf_sdirk3_libtorch.a": {
+      "sha256": "4c7aa4f098999b0aa5fcef577c532aeba7d051143f8bf6c0e70d466569fd4607",
+      "archived": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/native/libwrf_sdirk3_libtorch.a"
+    }
+  },
+  "command": "ctest --test-dir /private/tmp/stable-wave-build-20261004 -R ^Native_Stable_Wave_Refinement$ --output-on-failure"
+}

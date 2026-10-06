@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-10-05T13:51:40.594482+09:00",
+  "base": "8c3adea8065645832a6872f86e6b48eb7ed81f7e",
+  "fraction": 0.5,
+  "initial_controls": [
+    0.7799840196513836,
+    -0.3599700383302931,
+    0.350000599625606,
+    0.23998427551942594
+  ],
+  "algorithm": "Same30+60nativeprimalcarry/reentryfromscaledinitialcontrols; no newoptimization/observations",
+  "files": [
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/half_amplitude/test_fp64_carry_adjoint.cpp",
+      "sha256": "66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829"
+    },
+    {
+      "source": "/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/half_amplitude/stable_wave_reference.h",
+      "sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c"
+    },
+    {
+      "source": "/private/tmp/stable-wave-build-20261004/test_fp64_carry_adjoint",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/half_amplitude/test_fp64_carry_adjoint",
+      "sha256": "b104d8759e45e199623e2e41e8623fcf73a2134153fc952faa40135b523cb7ed"
+    },
+    {
+      "source": "/private/tmp/stable-wave-build-20261004/libwrf_sdirk3_libtorch.a",
+      "archive": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/half_amplitude/libwrf_sdirk3_libtorch.a",
+      "sha256": "8a072cbc40d831220736d6fee0a8b2b0b90e5797d73162645be1f12152831785"
+    }
+  ]
+}

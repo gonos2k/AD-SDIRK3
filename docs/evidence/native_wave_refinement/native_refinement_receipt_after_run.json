@@ -1,0 +1,9 @@
+{
+  "timestamp_local": "2026-10-05T15:56:03.710760+09:00",
+  "status": "pass",
+  "artifact_sha256": {
+    "native_wave_refinement.json": "de771c7f2f1495ffa61f1928f55ecf9017c4866f59d06cb7e2958119afe18b8d",
+    "native_wave_refinement.log": "00fc26c01289aa9a16df90ef9a247f0caaafc9b6ec46d2ac8a2bd3d6565c640e",
+    "ctest.log": "a0ab52301aac67f8b904c39aae0e0a115643b7a1dc45857d5486930d966f7cc5"
+  }
+}

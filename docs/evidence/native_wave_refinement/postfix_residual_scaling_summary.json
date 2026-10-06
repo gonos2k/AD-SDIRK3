@@ -1,0 +1,202 @@
+{
+  "archives": {
+    "half_amplitude_log": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/half_amplitude/run.log",
+    "half_amplitude_log_sha256": "d407780c8b60d73a9c00afaf40932603f22e42721f5c97831f8b982eb3177c05",
+    "half_endpoint": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/half_amplitude/endpoint_fp64.txt",
+    "half_endpoint_components": 1160,
+    "half_endpoint_header_lines": 1,
+    "half_endpoint_sha256": "ca6de20064181dc1a53e210d183075e6c3fa9bf19fe1a4f6ac88fa779b00271e",
+    "mixed_residual_log": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/mixed_residual/run.log",
+    "mixed_residual_log_sha256": "0134bd0635a7ee2ecfc273ad5a6286e3ed4edd55431cf88b3c6b16e44b0e44e1"
+  },
+  "commands": {
+    "half_amplitude_probe": "./test_fp64_carry_adjoint --wave-amplitude-probe 0.5 0.77998406458075109 -0.35997271519301632 0.35000068647687177 0.23998213728770962 /Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/half_amplitude/endpoint_fp64.txt",
+    "inverse": "./test_fp64_carry_adjoint --wave-two-modes",
+    "statuses": {
+      "half_probe_exit": 0,
+      "inverse_exit": 0
+    }
+  },
+  "created_local": "2026-10-05T15:33:10+09:00",
+  "full_inverse_900s": {
+    "denominator_observation_105": {
+      "combined_truth_signal_W_norm": 0.005996646139269386,
+      "denominator_cancellation_ratio": 0.9384217873893217,
+      "mask": "unweighted_objective_105_points",
+      "mode0_truth_W_norm": 0.005376735005136282,
+      "mode1_truth_W_norm": 0.0016607722553287655,
+      "orthogonal_mode_norm_rss": 0.005627383388354453,
+      "relative_error_against_mode_rss": 0.00679063525192174,
+      "score_error_amplification": 0.9384217873893216,
+      "score_reference_W_norm": 0.005996646139269386,
+      "score_relative_error": 0.006372480070617336,
+      "superposition_identity_relative_error": 7.066505711156208e-16,
+      "time_s": 900.0,
+      "twice_cross_term": 4.292321120086817e-06
+    },
+    "denominator_owned_192": {
+      "combined_truth_W_norm": 1211.5793053791122,
+      "denominator_cancellation_ratio": 0.9384210887462999,
+      "mode0_truth_W_norm": 1086.330365315088,
+      "mode1_truth_W_norm": 335.5453625516947,
+      "orthogonal_mode_norm_rss": 1136.9715708563522,
+      "relative_error_against_combined_truth": 0.006002546456086898,
+      "relative_error_against_mode_rss": 0.006396431759761608,
+      "relative_error_amplification": 0.9384210887462998,
+      "superposition_identity_relative_error": 2.3791822135719525e-15,
+      "time_s": 900.0,
+      "twice_cross_term": 175220.0602873743
+    },
+    "inverse_result": {
+      "adjoint_checkpoints": 30.0,
+      "amplitude": 0.8590433613522321,
+      "analysis_end_s": 300.0,
+      "checkpoint_payload_MiB": 0.2655029296875,
+      "final_cost": 0.0008616008373374518,
+      "final_gradient_norm": 1.5818814438080085e-07,
+      "gradient_stop_tolerance": 1e-05,
+      "modes": 2.0,
+      "observation_times": 2.0,
+      "observations_from_independent_reference": 1.0,
+      "optimizer_iterations": 11.0,
+      "peak_rss_kib": 652048.0,
+      "phase_rad": -0.4323867107097601,
+      "recovered_controls": [
+        0.7799840645807511,
+        -0.3599727151930163,
+        0.35000068647687177,
+        0.23998213728770962
+      ],
+      "start_cost": 34815.89723470209,
+      "start_gradient_norm": 76946.85083564355,
+      "withheld_W_baseline_relative_error": 1.0,
+      "withheld_W_relative_error": 0.006372480070617336,
+      "withheld_W_residual_reduction": 0.9936275199293827,
+      "withheld_amplitude_relative_error": 3.710300002535354e-05,
+      "withheld_duration_s": 600.0,
+      "withheld_max_amplitude_relative_error": 4.732678374772331e-05,
+      "withheld_max_phase_error_rad": 2.3078083426719687e-05,
+      "withheld_phase_error_rad": 2.3078083426719687e-05,
+      "withheld_state_relative_error": 3.7031556961152916e-05,
+      "withheld_time_s": 900.0
+    },
+    "modal_residual": {
+      "basis_condition": 1.7171201263349307,
+      "coefficients": [
+        -2.3035486340436086e-05,
+        -3.047121330353597e-05,
+        4.186492368239528e-06,
+        -1.952731016421259e-05
+      ],
+      "fullfield_partition": 0.0,
+      "metric": "bulk_plus_eos_top_surface",
+      "norm_identity_relative_error": 1.837139062057578e-12,
+      "normalized_max_orthogonality": 2.3623386958210317e-11,
+      "p_top_Pa": 20000.0,
+      "polarization_roundoff_relative": 0.0,
+      "remainder_energy": 0.02503746688017858,
+      "residual_energy": 1.2134043475835268,
+      "rho_top_kg_m3": 0.3481725692229149,
+      "scope": "selected_m1_fourier_coefficients",
+      "selected_energy": 1.1883668807055774,
+      "temperature_top_K": 200.1490562721774,
+      "theta_top_K": 317.0,
+      "time_s": 900.0
+    },
+    "owned_w_dft": {
+      "delta_energy_m0": 0.0013694705028902336,
+      "delta_energy_m1pair": 0.08165316819115338,
+      "delta_energy_m2pair": 52.80500545894251,
+      "delta_energy_other": 0.0021163577407163864,
+      "delta_outside_m1_norm": 7.2669451138140655,
+      "delta_selected_m1_norm": 0.2857501849363415,
+      "delta_total_norm": 7.272561065771616,
+      "full_owned_signal_relative_error": 0.006002546456086898,
+      "levels": "interior_plus_top_owned",
+      "native_energy_m0": 0.0013694705028944691,
+      "native_energy_m1pair": 1467256.3086149276,
+      "native_energy_m2pair": 52.805005458942865,
+      "native_energy_other": 0.0021163577407134495,
+      "objective_105_subset_relative_error": 0.006372480070617336,
+      "observation_subset_points": 105.0,
+      "owned_points": 192.0,
+      "parseval_relative_error": 1.746460642147518e-15,
+      "time_s": 900.0,
+      "truth_energy_m0": 1.6277810349147725e-26,
+      "truth_energy_m1pair": 1467924.413222932,
+      "truth_energy_m2pair": 1.1393183178351747e-25,
+      "truth_energy_other": 1.2408444408318663e-25
+    }
+  },
+  "half_amplitude_probe_900s": {
+    "probe": {
+      "amplitude_fraction": 0.5,
+      "analysis_endpoint_s": 300.0,
+      "analysis_steps": 30.0,
+      "delta_energy_m0": 8.55853220259251e-05,
+      "delta_energy_m1pair": 0.0028372135249390513,
+      "delta_energy_m2pair": 3.300517059529706,
+      "delta_energy_other": 0.00012791624125657803,
+      "delta_parseval_relative_error": 8.065629164846007e-16,
+      "endpoint_file": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/post_sign_fix/half_amplitude/endpoint_fp64.txt",
+      "forecast_endpoint_s": 900.0,
+      "forecast_steps": 60.0,
+      "full_owned_signal_relative_error": 0.0030007650491290522,
+      "input_controls": [
+        0.7799840645807511,
+        -0.3599727151930163,
+        0.35000068647687177,
+        0.23998213728770962
+      ],
+      "native_energy_m0": 8.558532202659742e-05,
+      "native_energy_m1pair": 366834.60552309523,
+      "native_energy_m2pair": 3.3005170595296924,
+      "native_energy_other": 0.00012791624125602438,
+      "native_parseval_relative_error": 0.0,
+      "native_reference_delta_norm": 1.8175719448258232,
+      "native_signal_norm": 605.6714507500385,
+      "observation_105_subset_relative_error": 0.0031694260237128853,
+      "observation_subset_points": 105.0,
+      "owned_points": 192.0,
+      "reference_signal_norm": 605.7028507957858,
+      "retained_fp64_reentry": 1.0,
+      "scaled_controls": [
+        0.38999203229037555,
+        -0.17998635759650816,
+        0.17500034323843588,
+        0.11999106864385481
+      ],
+      "truth_energy_m0": 3.1000392363937814e-27,
+      "truth_energy_m1pair": 366875.9434621416,
+      "truth_energy_m2pair": 2.2423078671424047e-26,
+      "truth_energy_other": 3.8119526890750584e-26,
+      "truth_parseval_relative_error": 9.519456691137448e-16
+    }
+  },
+  "limits": [
+    "The modal residual projection is only over selected m=1 Fourier coefficients; it is not a full-field energy partition.",
+    "The full-owned W metric covers 192 points with interior and top-face dual-mass weights; the objective score covers a separate unweighted 105-point subset.",
+    "These weighted quantities are diagnostic norms; no physical energy conservation claim is made.",
+    "The full inverse reference is the fixed C_true source state; the amplitude probe reference is the same scaled accepted xhat controls used to initialize that probe."
+  ],
+  "provenance": {
+    "branch": "agent/native-wave-refinement-20261005",
+    "build_directory": "/private/tmp/stable-wave-build-20261004",
+    "build_type": "Release",
+    "compiler": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++",
+    "frozen_test_cpp_sha256": "66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829",
+    "sign_fixed_producer_cpp_sha256": "b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144",
+    "source_head": "8c3adea8065645832a6872f86e6b48eb7ed81f7e",
+    "static_library_sha256": "4c7aa4f098999b0aa5fcef577c532aeba7d051143f8bf6c0e70d466569fd4607",
+    "test_executable_sha256": "e4e3279006f3d64595fdcad5b2974a58efe0089701bb393ed84da7f8f1f72e74",
+    "worktree": "/private/tmp/pr274-ci-20261004"
+  },
+  "scaling": {
+    "delta_energy_m2pair_fraction_half_over_full": 0.06250386740506936,
+    "delta_norm_m2pair_fraction_half_over_full": 0.2500077346904878,
+    "full_owned_relative_error_fraction_half_over_full": 0.4999153394449981,
+    "interpretation": "The full-run m=2 W error dominates. Under half initial amplitude, m=2 error energy is approximately 1/16 and its norm approximately 1/4. Positive cross terms make the mixed truth norm larger than the mode RSS (cancellation ratio below 1), so the denominator does not amplify this mixed-wave relative error.",
+    "observation_105_relative_error_fraction_half_over_full": 0.4973614650168449
+  },
+  "scope": "post_sign_fix mixed-wave 900 s residual separation and half-amplitude primal scaling"
+}
