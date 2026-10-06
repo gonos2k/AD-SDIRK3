@@ -5396,47 +5396,16 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         }
     }
     
-    // CFL condition for 2nd-order diffusion: dt < dx²/(2K)
-    float Kh2 = 100.0f;  // Typical horizontal diffusion coefficient
-    float cfl_diff2 = Kh2 * dt / (dx_min * dx_min);
-    
-    // CFL condition for 4th-order (biharmonic) diffusion: dt < dx⁴/(16K₄)
-    float Kh4 = 1.0e12f;  // Typical biharmonic coefficient (m⁴/s)
-    float dx4 = dx_min * dx_min * dx_min * dx_min;
-    float cfl_diff4 = 16.0f * Kh4 * dt / dx4;
-    
-    // Check CFL conditions and abort if violated
+    // A diffusion stability bound must use an active RHS operator's actual
+    // coefficients, metrics and time-integration placement. Hypothetical
+    // "typical" diffusivities cannot impose a hard timestep limit here,
+    // especially when diffusion is disabled. Keep the advection check separate.
     if (cfl_adv > 1.0f) {
         std::ostringstream msg;
         msg << "FATAL ERROR: Advection CFL = " << cfl_adv << " > 1.0\n"
             << "  dt = " << dt << " s, dx_min = " << dx_min << " m, dy_min = " << dy_min << " m\n"
             << "  Maximum stable timestep for advection: " << std::min(dx_min, dy_min) / u_max << " s\n"
             << "  Please reduce the timestep or use implicit advection scheme.";
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-
-            std::cerr << msg.str() << std::endl;
-
-        }
-        throw std::runtime_error(msg.str());
-    }
-    if (cfl_diff2 > 0.5f) {
-        std::ostringstream msg;
-        msg << "FATAL ERROR: 2nd-order diffusion CFL = " << cfl_diff2 << " > 0.5\n"
-            << "  dt = " << dt << " s, dx_min = " << dx_min << " m, Kh2 = " << Kh2 << " m²/s\n"
-            << "  Maximum stable timestep for 2nd-order diffusion: " << 0.5f * dx_min * dx_min / Kh2 << " s";
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-
-            std::cerr << msg.str() << std::endl;
-
-        }
-        throw std::runtime_error(msg.str());
-    }
-    if (cfl_diff4 > 0.5f) {
-        std::ostringstream msg;
-        msg << "FATAL ERROR: Biharmonic diffusion CFL = " << cfl_diff4 << " > 0.5\n"
-            << "  dt = " << dt << " s, dx_min = " << dx_min << " m, Kh4 = " << Kh4 << " m⁴/s\n"
-            << "  Maximum stable timestep for biharmonic diffusion: " << 0.5f * dx4 / (16.0f * Kh4) << " s\n"
-            << "  Consider reducing dt or Kh4 for stability!";
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
 
             std::cerr << msg.str() << std::endl;

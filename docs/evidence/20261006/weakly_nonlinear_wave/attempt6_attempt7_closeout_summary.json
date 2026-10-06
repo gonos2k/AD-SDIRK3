@@ -1,0 +1,213 @@
+{
+  "status": "attempt6_pair_and_attempt7_quadratic_pass",
+  "timestamp_local": "2026-10-06T22:32:22+09:00",
+  "worktree": "/private/tmp/pr274-ci-20261004",
+  "branch": "agent/weakly-nonlinear-wave-20261006",
+  "head": "04b298b9c9fd6cf71fb6996261922d47253e9a72",
+  "tree": "aec0d443b7d1d7d648060338daf8fcd3c540610a",
+  "attempt6": {
+    "tests": {
+      "Native_Stable_Wave_Refinement": "passed, 51.92s",
+      "Native_Quadratic_Wave_Forcing": "passed, 359.06s"
+    },
+    "total_seconds": 410.98,
+    "source_diff_binding": "0f5aae0f77bf22a2c9390c384fa3b56d931313a1bb272fd71f5592d4c41644ae",
+    "ctest_log_sha256": "30376f056f1b2e9d33f086990ac4cf5e8dd36347c5b30bd9e3c45707d54aa1e8",
+    "report_path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/final_gate/attempt6_passed/quadratic_wave_forcing/wave_quadratic_forcing_report.json",
+    "report_sha256": "2395e34961b3f612181d50045ac7ef07a2684dc0560a1e4189e583828f46d366"
+  },
+  "attempt7": {
+    "test": "Native_Quadratic_Wave_Forcing",
+    "result": "passed 1/1, 359.31s",
+    "Native_Stable_Wave_Refinement": "not rerun after runner scope-string-only edit",
+    "source_diff_binding": "1292e2482248b0be1307b38a994493ab180543ed3f1fdafa6bf8a2c7f5f80ca7",
+    "ctest_log_sha256": "5165a502b945b8c761452365d50a86df6625ee5db20792e2dddcb0171d69ca3f",
+    "report_path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/final_gate/attempt7_scopewording_passed/quadratic_wave_forcing/wave_quadratic_forcing_report.json",
+    "report_sha256": "883a3d634daf36ef6d36bde32d774fdab74aae2aee8599c7727d44586f071cd7",
+    "source_hashes": {
+      "runner": "954b49fb820d2eaf388a96759118293ae008d3b5496072c777d8f1a868cdfcb6",
+      "reference": "d5673eea98ab45ba0babab2a46c272ea944de0cd50f069f4063e51c34b560bac",
+      "transport": "8aa1e81e188f930ff69df17f06f484dfd9bf5a1dfc3ee179d3748e749188ce66",
+      "native_test": "c3a0e392f1c66d627f4e4ec837f252f6a1b24b17453e6a7656a332569839fbf0",
+      "production_tile": "199874f3666604a57a177937784bb4fa0a13a31836e8224259f57101c166ae18",
+      "executable": "e064b6bb440deac90fe549ebdbc0d5617c5db8f263329518915c6d5cd0a4ac62",
+      "library": "c33f7c03fce2b99a1b7b888e08bd6f02a764ffcd1f7ed73db60b370eaef8a3ef"
+    }
+  },
+  "prior_failures": {
+    "attempt4": "Native_Stable_Wave_Refinement passed 59.76s; quadratic failed after 251.77s: Q0 W coefficient error 2.69027e-7 m/s exceeded 2.02224e-7 m/s budget.",
+    "attempt5": "Native_Stable_Wave_Refinement passed 52.50s; quadratic numerical work reached final JSON serialization, then raised TypeError because a NumPy bool was not JSON serializable."
+  },
+  "coefficient_checks": {
+    "16x12x8": {
+      "scaled_error": 3.13767996719792e-07,
+      "quartershift_covariance_abs": 2.8289912241344906e-18
+    },
+    "8x6x4": {
+      "scaled_error": 5.790569344825351e-07,
+      "quartershift_covariance_abs": 8.360965605127191e-20
+    }
+  },
+  "long_forecast": {
+    "grid": "coarse 8x6x4",
+    "endpoints_seconds": [
+      300,
+      600,
+      900
+    ],
+    "dt_seconds": [
+      2.5,
+      5.0
+    ],
+    "amplitudes": [
+      0.5,
+      1.0
+    ],
+    "q0_w_dt2p5_error_of_signal": {
+      "300s": 4.75,
+      "600s": 13.44,
+      "900s": 5.75,
+      "units": "relative signal percent; signed Q0-W coefficients are m/s"
+    },
+    "full_residual_degree_estimate": {
+      "300": 1.9787194261798848,
+      "600": 1.989039358016879,
+      "900": null
+    },
+    "full_residual_resolved_above_time_fp64_floor": {
+      "300": {
+        "0.5": true,
+        "1.0": true
+      },
+      "600": {
+        "0.5": true,
+        "1.0": true
+      },
+      "900": {
+        "0.5": false,
+        "1.0": false
+      }
+    },
+    "second_order_resolved_above_temporal_scatter": {
+      "300": {
+        "0.5": true,
+        "1.0": true
+      },
+      "600": {
+        "0.5": true,
+        "1.0": true
+      },
+      "900": {
+        "0.5": true,
+        "1.0": true
+      }
+    },
+    "claim_boundary": "900-second full residual is unresolved above time/FP64 scatter. Degree observations at 300/600 seconds are empirical only; report claims no temporal order or universal cubic law."
+  },
+  "DQ2_sensitivity": {
+    "source_prediction": -1.4848316632864999e-08,
+    "native_temporal_Richardson": -1.4848241737879078e-08,
+    "absolute_error": 7.489498592135483e-14,
+    "budget": 5.490412651789797e-13,
+    "native_vjp_fd_relative_error": 9.954126436456847e-05,
+    "native_vjp_fd_budget": 0.002,
+    "scope": "selected m2-W terminal/control only; no global Hessian bound"
+  },
+  "mass_weighted_theta_calibration": {
+    "16x12x8": {
+      "actual_integral_change": 10275228918281.586,
+      "domain_area_M_over_g": 10275228918281.586,
+      "absolute_error": 0.0
+    },
+    "8x6x4": {
+      "actual_integral_change": 10275228918281.586,
+      "domain_area_M_over_g": 10275228918281.586,
+      "absolute_error": 0.0
+    }
+  },
+  "omega_sign_regime": {
+    "omega1_peak_pa_per_s": 0.06245537774429321,
+    "sign_smooth_delta_config": 0.0010000000474974513,
+    "omega_to_configured_delta_ratio_by_amplitude": {
+      "0.5": 31.227687388911043,
+      "1.0": 62.45537477782209
+    }
+  },
+  "forward360_memory_measurement": {
+    "receipt": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/forward360_memory_sample/receipt.json",
+    "steps": 360,
+    "grid_scope": "single coarse-grid prototype",
+    "rss_bytes": 3144138752,
+    "elapsed_seconds": 59.96,
+    "generality_claim": false
+  },
+  "wrf_run": {
+    "receipt": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/wrf_runs/sdirk3_guardfix_dt15_240/wrf_receipt.json",
+    "validation_summary": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/wrf_runs/sdirk3_guardfix_dt15_240/comparison_summary.json",
+    "production_tile_sha256": "199874f3666604a57a177937784bb4fa0a13a31836e8224259f57101c166ae18",
+    "incremental_link_with_cached_fortran_objects": true,
+    "configuration": {
+      "dt_seconds": 15,
+      "final_time_seconds": 240,
+      "integrator": "SDIRK3",
+      "internal_fp64": true,
+      "internal_fp64_state_carry": true,
+      "mpi_ranks": 1,
+      "nproc_x": 1,
+      "nproc_y": 1,
+      "omp_threads": 1
+    },
+    "solver": {
+      "converged_stages": 48,
+      "expected_stages": 48,
+      "fp64_carry_internal_input_count": 15,
+      "fp64_carry_published_count": 16,
+      "max_scaled_converged_stage_residual": 5.152e-09,
+      "nan_diagnostics": "none (all 174 float netCDF variables finite at every frame)",
+      "stage_counts": {
+        "2": 16,
+        "3": 16,
+        "4": 16
+      }
+    },
+    "physical_checks": {
+      "all_layer_thickness_positive": true,
+      "minimum_full_dry_column_mass_pa": 89088.63069200516,
+      "minimum_w_face_thickness_from_PH_plus_PHB_m": 942.6573649337411,
+      "thickness_definition": "min over every output time/cell of diff(PH+PHB, vertical W-face axis)/9.81"
+    },
+    "endpoint_rms_vs_archived_same_input_rk3": {
+      "MU": 0.09954757453213466,
+      "P": 0.06418965502328489,
+      "PH": 1.3041995699030506,
+      "T": 0.04142453131604256,
+      "U": 0.0021082389648302774,
+      "V": 0.0009522107022260285,
+      "W": 0.0005988114011859875
+    },
+    "timing_claim": "descriptive only; not controlled performance"
+  },
+  "raw_payloads_external": {
+    "manifest": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/final_gate/attempt6_attempt7_payload_manifest.json",
+    "files": 166,
+    "bytes": 224052013
+  },
+  "solver_tolerance_crosscheck": {
+    "path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/solver_tightening/solver_accuracy_crosscheck.json",
+    "sha256": "5b2e5c35b6938529c4d142339c0be1b233eb62d8ac1375fc20a1aaac7bdc351c",
+    "receipt": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/solver_tightening/solver_tightening_receipt.json",
+    "endpoint_comparison": {
+      "dt10_vs_dt20_tol_1e-12": 7.161000820410683e-07,
+      "newton_tol_1e-12_vs_1e-13_dt10": 2.0714704907984216e-12
+    }
+  },
+  "graph": {
+    "receipt": "/private/tmp/pr274-ci-20261004/docs/evidence/20261006/weakly_nonlinear_wave/graph_refresh_receipt.json",
+    "sha256": "2dec45b4e846980e981f5a86793083bfec2a2ec04731cc77d9d9b61f9e20edd2",
+    "nodes": 1073,
+    "edges": 3350,
+    "ast_sources_verified": 39,
+    "manual_non_ast_sources": 3
+  },
+  "ci_status": "Exact-head full GitHub CI remains pending."
+}

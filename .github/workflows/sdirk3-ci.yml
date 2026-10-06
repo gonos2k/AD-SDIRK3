@@ -570,6 +570,7 @@ jobs:
             build/sdirk3-core/native_wave_refinement.json
             build/sdirk3-core/native_wave_refinement.log
             build/sdirk3-core/quadratic_wave_forcing/wave_quadratic_forcing_report.json
+            build/sdirk3-core/quadratic_wave_forcing/wave_quadratic_inputs_receipt.json
             build/numerical-evidence/
             /tmp/ctest_actual.txt
             /tmp/ctest_expected.txt

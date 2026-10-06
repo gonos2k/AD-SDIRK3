@@ -1,0 +1,87 @@
+{
+  "status": "verified-pre-edit-cache-and-dependency-navigation",
+  "local_timestamp": "2026-10-06T18:49:04+09:00",
+  "worktree": "/private/tmp/pr274-ci-20261004",
+  "branch": "agent/weakly-nonlinear-wave-20261006",
+  "head": "04b298b9c9fd6cf71fb6996261922d47253e9a72",
+  "tree": "aec0d443b7d1d7d648060338daf8fcd3c540610a",
+  "previous_graph_receipt": {
+    "path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph-pr278-20261006-refresh-receipt.json",
+    "sha256": "1d6f47f453f4af52b336ccf423787f439aab0c3503d5d67c9b62025d5d5e7c7d"
+  },
+  "graph_cache": {
+    "root": "/private/tmp/sdirk3-fp64-carry-adjoint-graph",
+    "graph_json_sha256": "0729a8ad7b34f3f18179b11bf22b34fb97abd293ea277cc32387ea8641b59c93",
+    "nodes": 1016,
+    "edges": 3155,
+    "ast_sources_verified_against_current_tree": 39,
+    "manual_non_ast_source_bindings_verified": 3,
+    "refresh_committed_tree": "aec0d443b7d1d7d648060338daf8fcd3c540610a"
+  },
+  "focus_source_hashes": {
+    "tools/wave_quadratic_reference.py": "2a46ae321644dfb7a3e04912bf39acb47fa2832767990fa02a736d3a1616294d",
+    "tools/wave_quadratic_transport.py": "303eed70c600df499e784c4289a4e83d52149b5129521e6387beb4bfb0526172",
+    "tools/test_wave_quadratic_forcing.py": "4c31dcf28906ddc47e0880a0e9313334654e94e06d1f3a3611dc33cb4727d6a6",
+    "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp": "aa5246f4fbcd92169bd79b31e7d76246df9a9be29ee55eab0b23f19e34c65e2d",
+    "external/libtorch_wrf/sdirk3/CMakeLists.txt": "b0e687cde669073ca20854564eab0cbc3f5405860427c034e5294d2272a8c75c"
+  },
+  "graph_navigation_paths": [
+    {
+      "query": "total_quadratic_forcing -> quadratic_forcing_channels",
+      "result": "EXTRACTED calls"
+    },
+    {
+      "query": "quadratic_forcing_channels -> transport_channels",
+      "result": "INFERRED calls"
+    },
+    {
+      "query": "run_trajectory -> run_native",
+      "result": "EXTRACTED calls"
+    },
+    {
+      "query": "sample_source_path -> propagate_forcing",
+      "result": "EXTRACTED reference path through the reference module"
+    }
+  ],
+  "manual_call_and_cli_trace": [
+    {
+      "source": "tools/test_wave_quadratic_forcing.py:172-185",
+      "finding": "run_native constructs [executable,nx,ny,nz,output,*extra] and validates returned grid and branch metadata."
+    },
+    {
+      "source": "tools/test_wave_quadratic_forcing.py:287-388",
+      "finding": "run_probe packs each source mode and invokes --quadratic-probe; it compares projected signed m=2 channels and the current negated-direction phase case."
+    },
+    {
+      "source": "tools/test_wave_quadratic_forcing.py:401-535",
+      "finding": "run_trajectory invokes --quadratic-forward for base and signed perturbed states at the declared time steps."
+    },
+    {
+      "source": "tools/test_wave_quadratic_forcing.py:536-603",
+      "finding": "run_adjoint_check invokes --quadratic-trajectory for the center path and --quadratic-forward for finite-difference controls."
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp:349-432",
+      "finding": "native main decodes descriptor, quadratic probe, quadratic forward, and quadratic trajectory CLI flags."
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/CMakeLists.txt:621-626",
+      "finding": "Native_Quadratic_Wave_Forcing CTest runs tools/test_wave_quadratic_forcing.py with the built native executable."
+    },
+    {
+      "source": "tools/wave_quadratic_reference.py:149-160",
+      "finding": "source reference composes transport_channels, EOS/PGF, and total fixture-scope Q2."
+    },
+    {
+      "source": "tools/wave_quadratic_transport.py:127-145",
+      "finding": "transport reference declares its uniform periodic-x/symmetric-y fixture and source-state ordering."
+    }
+  ],
+  "extraction_gaps": [
+    "Graphify AST does not represent the CMake CTest registration; source and CI hashes are manually bound and CMake lines were read directly.",
+    "Graphify edges do not capture the runner subprocess argv to native C++ flags reliably; those calls were manually traced.",
+    "WRF Fortran call sites are not in this scoped graph; prior source comments provide manual locations.",
+    "Graph relationships aid navigation and do not establish equation correctness."
+  ],
+  "review_scope_note": "This is a pre-edit navigation receipt. It records accepted PR278 fixture evidence separately from the new P2 quarter-period/negative-control, Q0+Q2 mean/mass, polarized sensitivity, and longer fixed-control forecast questions. No post-edit graph refresh was run."
+}

@@ -1,0 +1,329 @@
+{
+  "status": "preserved-pre-fix-graph-stale-only-at-runner",
+  "timestamp_local": "2026-10-06T19:38:31+09:00",
+  "worktree_head": "04b298b9c9fd6cf71fb6996261922d47253e9a72",
+  "worktree_tree": "aec0d443b7d1d7d648060338daf8fcd3c540610a",
+  "current_source_before_run_receipt": {
+    "path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/final_gate/source_before_run.json",
+    "timestamp_local": "2026-10-06T19:35:38+09:00",
+    "sha256": "1664c10e2c96f02a77e8ad2215df19fe455ccfb9b9986f5513ae25ca8292d157"
+  },
+  "post_q0q2_pre_fix_graph": {
+    "backup_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph-weakly-nonlinear-prefx-20261006.json",
+    "sha256": "5de66e96f82e32cf39f448628a2f5dc0814405165e5746680e52d380a4a57535",
+    "nodes": 1071,
+    "edges": 3345,
+    "ast_source_count": 39,
+    "sources": [
+      {
+        "graph_source": "tests/curvature_scalar_oracle.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/curvature_scalar_oracle.h",
+        "graph_cache_sha256": "4724bcab16a8288c9ffda59aa829f4339109b92b71c19f6da67b76e8abba868c",
+        "source_snapshot_sha256": "4724bcab16a8288c9ffda59aa829f4339109b92b71c19f6da67b76e8abba868c",
+        "current_worktree_sha256": "4724bcab16a8288c9ffda59aa829f4339109b92b71c19f6da67b76e8abba868c"
+      },
+      {
+        "graph_source": "tests/stable_wave_reference.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h",
+        "graph_cache_sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+        "source_snapshot_sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+        "current_worktree_sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c"
+      },
+      {
+        "graph_source": "tests/test_base_state_checked_abi.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp",
+        "graph_cache_sha256": "94da99dc441c9bcd4f223700ccf41b69ee818cb73d8e1f5cefa20e32f8eafee1",
+        "source_snapshot_sha256": "94da99dc441c9bcd4f223700ccf41b69ee818cb73d8e1f5cefa20e32f8eafee1",
+        "current_worktree_sha256": "94da99dc441c9bcd4f223700ccf41b69ee818cb73d8e1f5cefa20e32f8eafee1"
+      },
+      {
+        "graph_source": "tests/test_config_numeric_contract.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_config_numeric_contract.cpp",
+        "graph_cache_sha256": "6dd55f1520bc3e648a35ea7dd0366400dbbe21135117ca8d842e4ae46e4e6bbb",
+        "source_snapshot_sha256": "6dd55f1520bc3e648a35ea7dd0366400dbbe21135117ca8d842e4ae46e4e6bbb",
+        "current_worktree_sha256": "6dd55f1520bc3e648a35ea7dd0366400dbbe21135117ca8d842e4ae46e4e6bbb"
+      },
+      {
+        "graph_source": "tests/test_fixed_trajectory_derivative.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_derivative.cpp",
+        "graph_cache_sha256": "8bb11154215f995894a44c54b03e9c4b46870e73651caa0eb100dd4f1bf4fd71",
+        "source_snapshot_sha256": "8bb11154215f995894a44c54b03e9c4b46870e73651caa0eb100dd4f1bf4fd71",
+        "current_worktree_sha256": "8bb11154215f995894a44c54b03e9c4b46870e73651caa0eb100dd4f1bf4fd71"
+      },
+      {
+        "graph_source": "tests/test_fixed_trajectory_lifecycle.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+        "graph_cache_sha256": "afe214ec0d94139cf6e4ede3c148a4a30da2d3084c75175ac8bf012f9fec2592",
+        "source_snapshot_sha256": "afe214ec0d94139cf6e4ede3c148a4a30da2d3084c75175ac8bf012f9fec2592",
+        "current_worktree_sha256": "afe214ec0d94139cf6e4ede3c148a4a30da2d3084c75175ac8bf012f9fec2592"
+      },
+      {
+        "graph_source": "tests/test_fp64_carry_adjoint.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp",
+        "graph_cache_sha256": "66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829",
+        "source_snapshot_sha256": "66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829",
+        "current_worktree_sha256": "66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829"
+      },
+      {
+        "graph_source": "tests/test_fp64_handoff_probe.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp",
+        "graph_cache_sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f",
+        "source_snapshot_sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f",
+        "current_worktree_sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f"
+      },
+      {
+        "graph_source": "tests/test_horizontal_pgf_actual_rhs.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_horizontal_pgf_actual_rhs.cpp",
+        "graph_cache_sha256": "c5ee2f733069f32ed6161eb4cf2aeaf251712c8ffa6965de422d75c7cb35f8f5",
+        "source_snapshot_sha256": "c5ee2f733069f32ed6161eb4cf2aeaf251712c8ffa6965de422d75c7cb35f8f5",
+        "current_worktree_sha256": "c5ee2f733069f32ed6161eb4cf2aeaf251712c8ffa6965de422d75c7cb35f8f5"
+      },
+      {
+        "graph_source": "tests/test_native_wave_refinement.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+        "graph_cache_sha256": "3258a13b7af7e81d7bde9a0bdc27740ac22d612bb44fbf82c6423eb7a4413bda",
+        "source_snapshot_sha256": "3258a13b7af7e81d7bde9a0bdc27740ac22d612bb44fbf82c6423eb7a4413bda",
+        "current_worktree_sha256": "3258a13b7af7e81d7bde9a0bdc27740ac22d612bb44fbf82c6423eb7a4413bda"
+      },
+      {
+        "graph_source": "tests/test_scalar_diffusion_contract.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_scalar_diffusion_contract.cpp",
+        "graph_cache_sha256": "813b8b246e52b4551856a1a1f68992057e907ec8e702c165eb259d93e58dd363",
+        "source_snapshot_sha256": "813b8b246e52b4551856a1a1f68992057e907ec8e702c165eb259d93e58dd363",
+        "current_worktree_sha256": "813b8b246e52b4551856a1a1f68992057e907ec8e702c165eb259d93e58dd363"
+      },
+      {
+        "graph_source": "tests/test_stable_wave_reference_rows.py",
+        "worktree_source": "tools/test_stable_wave_reference_rows.py",
+        "graph_cache_sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+        "source_snapshot_sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+        "current_worktree_sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e"
+      },
+      {
+        "graph_source": "tests/test_wrms_gate_metric.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp",
+        "graph_cache_sha256": "9f2fa6102a2bc6f67609ce7e5c5b7614cdbb560ed1dcec3f33446793393c923e",
+        "source_snapshot_sha256": "9f2fa6102a2bc6f67609ce7e5c5b7614cdbb560ed1dcec3f33446793393c923e",
+        "current_worktree_sha256": "9f2fa6102a2bc6f67609ce7e5c5b7614cdbb560ed1dcec3f33446793393c923e"
+      },
+      {
+        "graph_source": "tests/tile_test_fixture.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+        "graph_cache_sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+        "source_snapshot_sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+        "current_worktree_sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+      },
+      {
+        "graph_source": "tools/test_native_wave_refinement.py",
+        "worktree_source": "tools/test_native_wave_refinement.py",
+        "graph_cache_sha256": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022",
+        "source_snapshot_sha256": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022",
+        "current_worktree_sha256": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022"
+      },
+      {
+        "graph_source": "tools/test_stable_wave_reference_rows.py",
+        "worktree_source": "tools/test_stable_wave_reference_rows.py",
+        "graph_cache_sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+        "source_snapshot_sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+        "current_worktree_sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e"
+      },
+      {
+        "graph_source": "tools/test_wave_energy_budget.py",
+        "worktree_source": "tools/test_wave_energy_budget.py",
+        "graph_cache_sha256": "0de67788f59a93b91558c3174de973ed179a7cda4e9b96e2974b943ec52b4da7",
+        "source_snapshot_sha256": "0de67788f59a93b91558c3174de973ed179a7cda4e9b96e2974b943ec52b4da7",
+        "current_worktree_sha256": "0de67788f59a93b91558c3174de973ed179a7cda4e9b96e2974b943ec52b4da7"
+      },
+      {
+        "graph_source": "tools/test_wave_quadratic_forcing.py",
+        "worktree_source": "tools/test_wave_quadratic_forcing.py",
+        "graph_cache_sha256": "d3fe579936b66a1c9d65951c6e7943b1988c21874adb72c3cb2e0367ab1d20bb",
+        "source_snapshot_sha256": "280eb2fc1ed60b5d011e61c093c5262b793c458708a00d9cb564b1a860236847",
+        "current_worktree_sha256": "280eb2fc1ed60b5d011e61c093c5262b793c458708a00d9cb564b1a860236847"
+      },
+      {
+        "graph_source": "tools/test_wave_spatial_convergence.py",
+        "worktree_source": "tools/test_wave_spatial_convergence.py",
+        "graph_cache_sha256": "29d4d412e43f0daae6efc42242c661511b6e60bddf36c4ce39f076d575e19c76",
+        "source_snapshot_sha256": "29d4d412e43f0daae6efc42242c661511b6e60bddf36c4ce39f076d575e19c76",
+        "current_worktree_sha256": "29d4d412e43f0daae6efc42242c661511b6e60bddf36c4ce39f076d575e19c76"
+      },
+      {
+        "graph_source": "tools/wave_energy_spatial_reference.py",
+        "worktree_source": "tools/wave_energy_spatial_reference.py",
+        "graph_cache_sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+        "source_snapshot_sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+        "current_worktree_sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2"
+      },
+      {
+        "graph_source": "tools/wave_quadratic_reference.py",
+        "worktree_source": "tools/wave_quadratic_reference.py",
+        "graph_cache_sha256": "d5673eea98ab45ba0babab2a46c272ea944de0cd50f069f4063e51c34b560bac",
+        "source_snapshot_sha256": "d5673eea98ab45ba0babab2a46c272ea944de0cd50f069f4063e51c34b560bac",
+        "current_worktree_sha256": "d5673eea98ab45ba0babab2a46c272ea944de0cd50f069f4063e51c34b560bac"
+      },
+      {
+        "graph_source": "tools/wave_quadratic_transport.py",
+        "worktree_source": "tools/wave_quadratic_transport.py",
+        "graph_cache_sha256": "8aa1e81e188f930ff69df17f06f484dfd9bf5a1dfc3ee179d3748e749188ce66",
+        "source_snapshot_sha256": "8aa1e81e188f930ff69df17f06f484dfd9bf5a1dfc3ee179d3748e749188ce66",
+        "current_worktree_sha256": "8aa1e81e188f930ff69df17f06f484dfd9bf5a1dfc3ee179d3748e749188ce66"
+      },
+      {
+        "graph_source": "wrf_hydrostatic_pressure.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h",
+        "graph_cache_sha256": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+        "source_snapshot_sha256": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+        "current_worktree_sha256": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b"
+      },
+      {
+        "graph_source": "wrf_sdirk3_ark324_composition.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_ark324_composition.h",
+        "graph_cache_sha256": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907",
+        "source_snapshot_sha256": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907",
+        "current_worktree_sha256": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907"
+      },
+      {
+        "graph_source": "wrf_sdirk3_base_state_zerocopy.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp",
+        "graph_cache_sha256": "6374f05622afa25d92b285b04fdaa09a9b7d404563532acefe5186c3cb787ea7",
+        "source_snapshot_sha256": "6374f05622afa25d92b285b04fdaa09a9b7d404563532acefe5186c3cb787ea7",
+        "current_worktree_sha256": "6374f05622afa25d92b285b04fdaa09a9b7d404563532acefe5186c3cb787ea7"
+      },
+      {
+        "graph_source": "wrf_sdirk3_config.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp",
+        "graph_cache_sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "source_snapshot_sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "current_worktree_sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5"
+      },
+      {
+        "graph_source": "wrf_sdirk3_config.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+        "graph_cache_sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+        "source_snapshot_sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+        "current_worktree_sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+      },
+      {
+        "graph_source": "wrf_sdirk3_curvature.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_curvature.h",
+        "graph_cache_sha256": "ee008bd6fb7556fef0ab83119e0faada1b9efc9152a69d25b65ac71ad632eee8",
+        "source_snapshot_sha256": "ee008bd6fb7556fef0ab83119e0faada1b9efc9152a69d25b65ac71ad632eee8",
+        "current_worktree_sha256": "ee008bd6fb7556fef0ab83119e0faada1b9efc9152a69d25b65ac71ad632eee8"
+      },
+      {
+        "graph_source": "wrf_sdirk3_horizontal_momentum.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_horizontal_momentum.h",
+        "graph_cache_sha256": "e604da0fb49e15c4f20369a9dc946aca345a916668d631a6594543ae281b8216",
+        "source_snapshot_sha256": "e604da0fb49e15c4f20369a9dc946aca345a916668d631a6594543ae281b8216",
+        "current_worktree_sha256": "e604da0fb49e15c4f20369a9dc946aca345a916668d631a6594543ae281b8216"
+      },
+      {
+        "graph_source": "wrf_sdirk3_hydrostatic_balance.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_hydrostatic_balance.h",
+        "graph_cache_sha256": "707ff6f84137db8129779931cf4fa5c281bd5a3a6c233bb81881f1858b22e133",
+        "source_snapshot_sha256": "707ff6f84137db8129779931cf4fa5c281bd5a3a6c233bb81881f1858b22e133",
+        "current_worktree_sha256": "707ff6f84137db8129779931cf4fa5c281bd5a3a6c233bb81881f1858b22e133"
+      },
+      {
+        "graph_source": "wrf_sdirk3_interface.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h",
+        "graph_cache_sha256": "de92b28e23ba7251a2032b9ad9ec1446757c63253bf28e7b5b1060e085f88e2a",
+        "source_snapshot_sha256": "de92b28e23ba7251a2032b9ad9ec1446757c63253bf28e7b5b1060e085f88e2a",
+        "current_worktree_sha256": "de92b28e23ba7251a2032b9ad9ec1446757c63253bf28e7b5b1060e085f88e2a"
+      },
+      {
+        "graph_source": "wrf_sdirk3_interface_params.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_params.h",
+        "graph_cache_sha256": "539e1df6f2f99de89ef4ffa5fc6e4a0dab90ff97c85d2ecb3b831838f3e8cae6",
+        "source_snapshot_sha256": "539e1df6f2f99de89ef4ffa5fc6e4a0dab90ff97c85d2ecb3b831838f3e8cae6",
+        "current_worktree_sha256": "539e1df6f2f99de89ef4ffa5fc6e4a0dab90ff97c85d2ecb3b831838f3e8cae6"
+      },
+      {
+        "graph_source": "wrf_sdirk3_interface_zerocopy.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "graph_cache_sha256": "8a7d5f072ab7c5419cb1c95cd495cd55584a0b8cd9bade9a69ffe7eed4e278e3",
+        "source_snapshot_sha256": "8a7d5f072ab7c5419cb1c95cd495cd55584a0b8cd9bade9a69ffe7eed4e278e3",
+        "current_worktree_sha256": "8a7d5f072ab7c5419cb1c95cd495cd55584a0b8cd9bade9a69ffe7eed4e278e3"
+      },
+      {
+        "graph_source": "wrf_sdirk3_nonhydrostatic_pressure.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_nonhydrostatic_pressure.h",
+        "graph_cache_sha256": "a16391b08ffaf355af22ecf409696ca9fb3c8e3bab196614baa685414737c616",
+        "source_snapshot_sha256": "a16391b08ffaf355af22ecf409696ca9fb3c8e3bab196614baa685414737c616",
+        "current_worktree_sha256": "a16391b08ffaf355af22ecf409696ca9fb3c8e3bab196614baa685414737c616"
+      },
+      {
+        "graph_source": "wrf_sdirk3_phi_horizontal.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_phi_horizontal.h",
+        "graph_cache_sha256": "da4f49716e5213cc31bbad7ff9735cec76e73bdcb6bf18ac4e9d9be2f9ca8730",
+        "source_snapshot_sha256": "da4f49716e5213cc31bbad7ff9735cec76e73bdcb6bf18ac4e9d9be2f9ca8730",
+        "current_worktree_sha256": "da4f49716e5213cc31bbad7ff9735cec76e73bdcb6bf18ac4e9d9be2f9ca8730"
+      },
+      {
+        "graph_source": "wrf_sdirk3_tile_unified.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "graph_cache_sha256": "c5b817595b9b92a4e9b778b98978fb4452a96cb62aa8709a575b1f747db6fcbf",
+        "source_snapshot_sha256": "c5b817595b9b92a4e9b778b98978fb4452a96cb62aa8709a575b1f747db6fcbf",
+        "current_worktree_sha256": "c5b817595b9b92a4e9b778b98978fb4452a96cb62aa8709a575b1f747db6fcbf"
+      },
+      {
+        "graph_source": "wrf_sdirk3_tile_unified_impl.cpp",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "graph_cache_sha256": "b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144",
+        "source_snapshot_sha256": "b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144",
+        "current_worktree_sha256": "b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144"
+      },
+      {
+        "graph_source": "wrf_sdirk3_wrms_norm.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_wrms_norm.h",
+        "graph_cache_sha256": "c2428d4bd9561b35ab96c4d093b1fda14ff5a851314f49f2e92c50319ee18b85",
+        "source_snapshot_sha256": "c2428d4bd9561b35ab96c4d093b1fda14ff5a851314f49f2e92c50319ee18b85",
+        "current_worktree_sha256": "c2428d4bd9561b35ab96c4d093b1fda14ff5a851314f49f2e92c50319ee18b85"
+      },
+      {
+        "graph_source": "wrf_sdirk3_ww_cp.h",
+        "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h",
+        "graph_cache_sha256": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+        "source_snapshot_sha256": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+        "current_worktree_sha256": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7"
+      }
+    ],
+    "stale_source_mismatches": [
+      {
+        "source": "tools/test_wave_quadratic_forcing.py",
+        "snapshot": "280eb2fc1ed60b5d011e61c093c5262b793c458708a00d9cb564b1a860236847",
+        "cache": "d3fe579936b66a1c9d65951c6e7943b1988c21874adb72c3cb2e0367ab1d20bb",
+        "current": "280eb2fc1ed60b5d011e61c093c5262b793c458708a00d9cb564b1a860236847"
+      }
+    ]
+  },
+  "manual_config_bindings": [
+    {
+      "worktree_source": "external/libtorch_wrf/sdirk3/CMakeLists.txt",
+      "cached_source": "CMakeLists.txt",
+      "current_sha256": "b0e687cde669073ca20854564eab0cbc3f5405860427c034e5294d2272a8c75c",
+      "source_snapshot_sha256": "b0e687cde669073ca20854564eab0cbc3f5405860427c034e5294d2272a8c75c",
+      "matches": true
+    },
+    {
+      "worktree_source": ".github/ci/expected_ctest_names.txt",
+      "cached_source": null,
+      "current_sha256": "a9b1fd9c36e29223b0f86cf30dc19b328a29f75b4699970d40817dadcbec0545",
+      "source_snapshot_sha256": "a9b1fd9c36e29223b0f86cf30dc19b328a29f75b4699970d40817dadcbec0545",
+      "matches": true
+    },
+    {
+      "worktree_source": ".github/workflows/sdirk3-ci.yml",
+      "cached_source": null,
+      "current_sha256": "21fe5fd830d7a911f1ce87603ba413cb2c39cf4a3bf32246a2d11d5f781e413f",
+      "source_snapshot_sha256": "21fe5fd830d7a911f1ce87603ba413cb2c39cf4a3bf32246a2d11d5f781e413f",
+      "matches": true
+    }
+  ],
+  "preserved_pr278_graph": {
+    "path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph-before-weakly-nonlinear-q0q2-20261006.json",
+    "sha256": "0729a8ad7b34f3f18179b11bf22b34fb97abd293ea277cc32387ea8641b59c93"
+  },
+  "interpretation": "The Q0/Q2 graph reflects all 39 source inputs except the current runner correction: its frozen cache copy is d3fe... while the current source is 280e.... This receipt preserves graph provenance only. Do not treat it as the final post-fix graph. Root asked to wait for the fresh quadratic gate to pass before the runner-only Graphify refresh."
+}
