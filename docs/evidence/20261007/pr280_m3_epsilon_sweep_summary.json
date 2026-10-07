@@ -1,0 +1,92 @@
+{
+  "accepted_pair": {
+    "inherited_budget": 0.002,
+    "native_fd_pair": [
+      "0.04",
+      "0.08"
+    ],
+    "relative_scatter": 0.0007786408727584117,
+    "relative_scatter_source": 1.5947703157234772e-08,
+    "source_fd_pair": [
+      "0.04",
+      "0.08"
+    ]
+  },
+  "all_five_widths_retained": [
+    "0.005",
+    "0.01",
+    "0.02",
+    "0.04",
+    "0.08"
+  ],
+  "inherited_relative_budget": 0.002,
+  "native_AD_directional": -5.565917993426844e-10,
+  "offline_checker_harness_sha256": "1843466caddd2a330184df0dee5a8a98ac615a7787e3125698c229b23697f5e6",
+  "runner_source_sha256": "a52896ad6704d5ea1d959d0b541e3bac4dde6563d150d6cb504bc78b70af0f34",
+  "scan_artifact": {
+    "path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/m3_epsilon_scan.json",
+    "sha256": "5f7b74b93157ef11ea4c006b37b5fab2f8dda096bc644dd8f0db169759970e97"
+  },
+  "scope_limit": "The selected finite-upwind direction is diagnostic evidence only; this does not establish complete cubic closure or a general Hessian.",
+  "source_receipt": "docs/evidence/20261007/pr280_m3_offline_replay_receipt.json",
+  "source_receipt_sha256": "6e95e1fc58348601d936b4eecefde80cd5985c54f8fe028e599863d068879ffa",
+  "status": "five-width m3 epsilon sweep; retain failures and noisy widths",
+  "timestamp_local": "2026-10-07T14:12:04+09:00",
+  "widths": [
+    {
+      "epsilon": 0.005,
+      "gate_pass": false,
+      "interpretation": "noisy/fails inherited 0.2% native FD-to-AD budget",
+      "native_fd_directional": -5.622759202683625e-10,
+      "native_fd_roundoff_floor": 2.3415552384818323e-13,
+      "native_fd_vs_AD_relative_error": 0.010109130981396354,
+      "source_fd_tightening_floor": 1.2536560093917976e-15,
+      "source_fd_vs_native_AD_relative_error": 0.0008476814228787144,
+      "source_fd_vs_native_FD_relative_error": 0.01094824308174069
+    },
+    {
+      "epsilon": 0.01,
+      "gate_pass": true,
+      "interpretation": "passes inherited native FD-to-AD budget; not by itself proof of epsilon convergence",
+      "native_fd_directional": -5.565281308711478e-10,
+      "native_fd_roundoff_floor": 1.170777619240786e-13,
+      "native_fd_vs_AD_relative_error": 0.00011438988431341338,
+      "source_fd_tightening_floor": 6.268260293527827e-16,
+      "source_fd_vs_native_AD_relative_error": 0.000847681169619654,
+      "source_fd_vs_native_FD_relative_error": 0.0007333751760077825
+    },
+    {
+      "epsilon": 0.02,
+      "gate_pass": false,
+      "interpretation": "noisy/fails inherited 0.2% native FD-to-AD budget",
+      "native_fd_directional": -5.550696837927638e-10,
+      "native_fd_roundoff_floor": 5.853888096207212e-14,
+      "native_fd_vs_AD_relative_error": 0.002734707108006659,
+      "source_fd_tightening_floor": 3.134128815450107e-16,
+      "source_fd_vs_native_AD_relative_error": 0.0008476801777239398,
+      "source_fd_vs_native_FD_relative_error": 0.0018886278827019822
+    },
+    {
+      "epsilon": 0.04,
+      "gate_pass": true,
+      "interpretation": "passes inherited native FD-to-AD budget; not by itself proof of epsilon convergence",
+      "native_fd_directional": -5.568880751503913e-10,
+      "native_fd_roundoff_floor": 2.926944048094785e-14,
+      "native_fd_vs_AD_relative_error": 0.0005320203842160691,
+      "source_fd_tightening_floor": 1.5670564972129441e-16,
+      "source_fd_vs_native_AD_relative_error": 0.0008476761976666857,
+      "source_fd_vs_native_FD_relative_error": 0.0013792456008663813
+    },
+    {
+      "epsilon": 0.08,
+      "gate_pass": true,
+      "interpretation": "passes inherited native FD-to-AD budget; not by itself proof of epsilon convergence",
+      "native_fd_directional": -5.564544593335274e-10,
+      "native_fd_roundoff_floor": 1.4634720240374414e-14,
+      "native_fd_vs_AD_relative_error": 0.00024675176551143595,
+      "source_fd_tightening_floor": 7.835030497555171e-17,
+      "source_fd_vs_native_AD_relative_error": 0.0008476602634817626,
+      "source_fd_vs_native_FD_relative_error": 0.0006010568097993173
+    }
+  ]
+}

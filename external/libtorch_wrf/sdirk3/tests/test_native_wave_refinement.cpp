@@ -351,9 +351,10 @@ int main(int argc,char** argv) {
     const bool quadratic_probe=argc==7 && std::string(argv[5])=="--quadratic-probe";
     const bool quadratic_forward=argc==9 && std::string(argv[5])=="--quadratic-forward";
     const bool quadratic_trajectory=argc==9 && std::string(argv[5])=="--quadratic-trajectory";
-    const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory;
+    const bool upwind_trajectory=argc==9 && std::string(argv[5])=="--upwind-trajectory";
+    const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
     TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt]");
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt]");
     const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     bool implicit_divergence=false;
     float kdamp=0.0f;
@@ -424,6 +425,21 @@ int main(int argc,char** argv) {
     out<<"M,effective_wrf_omega_ww_cp,"<<(g_sdirk3_config.effective_wrf_omega_ww_cp()?1:0)<<"\n";
     out<<"M,advection_order_config,"<<g_sdirk3_config.advection_order<<"\n";
     out<<"M,non_hydrostatic_config,"<<(g_sdirk3_config.non_hydrostatic?1:0)<<"\n";
+    auto host_max_abs=[](const std::vector<float>& values) {
+        double result=0.0;
+        for(const float value:values)
+            result=std::max(result,std::abs(static_cast<double>(value)));
+        return result;
+    };
+    out<<"M,f_input_max_abs,"<<host_max_abs(g.f)<<"\n";
+    out<<"M,e_input_max_abs,"<<host_max_abs(g.e)<<"\n";
+    out<<"M,wrf_w_damping_config,"<<g_sdirk3_config.wrf_w_damping<<"\n";
+    out<<"M,wrf_damp_opt_config,"<<g_sdirk3_config.wrf_damp_opt<<"\n";
+    out<<"M,diffusion_option_config,"<<g_sdirk3_config.diffusion_option<<"\n";
+    out<<"M,khdif_config,"<<g_sdirk3_config.khdif<<"\n";
+    out<<"M,kvdif_config,"<<g_sdirk3_config.kvdif<<"\n";
+    out<<"M,rayleigh_damp_coef_config,"<<g_sdirk3_config.rayleigh_damp_coef<<"\n";
+    out<<"M,rayleigh_damp_depth_config,"<<g_sdirk3_config.rayleigh_damp_depth<<"\n";
     double map_input_max_deviation=0.0;
     for(const float value:g.maps)
         map_input_max_deviation=std::max(map_input_max_deviation,std::abs(static_cast<double>(value)-1.0));
@@ -446,7 +462,9 @@ int main(int argc,char** argv) {
         TORCH_CHECK(checkpoints.size()==static_cast<size_t>(quadratic_steps),
                     "quadratic trajectory did not retain every accepted endpoint");
         out<<"M,quadratic_trajectory,1\n";
-        out<<"M,objective_x_harmonic,2\n";
+        const int objective_harmonic=upwind_trajectory?3:2;
+        if(upwind_trajectory) out<<"M,upwind_trajectory,1\n";
+        out<<"M,objective_x_harmonic,"<<objective_harmonic<<"\n";
         out<<"M,trajectory_steps,"<<quadratic_steps<<"\n";
         out<<"M,trajectory_dt_fp32,"<<std::setprecision(17)<<quadratic_dt<<"\n";
         put(out,"initial",initial);
@@ -454,7 +472,7 @@ int main(int argc,char** argv) {
         const int w0=sizes[0]+sizes[1];
         double terminal_norm2=0.0;
         for(int j=0;j<g.ny;++j) for(int k=1;k<=g.nz;++k) for(int i=0;i<g.nx;++i) {
-            const double value=std::cos(4.0*pi*(i+0.5)*g.dx/g.lx)*
+            const double value=std::cos(2.0*pi*objective_harmonic*(i+0.5)*g.dx/g.lx)*
                 std::sin(pi*k/(g.nz+1.0));
             terminal[w0+(j*g.nw+k)*g.nx+i]=value;
             terminal_norm2+=value*value;
@@ -469,8 +487,9 @@ int main(int argc,char** argv) {
         const auto& final_state=checkpoints.back();
         const double objective=(final_state*terminal).sum().item<double>();
         put(out,"final",final_state);
-        out<<"S,objective_w_m2_projection,"<<std::setprecision(17)<<objective<<"\n";
-        if(quadratic_trajectory) {
+        out<<"S,objective_w_m"<<objective_harmonic<<"_projection,"
+           <<std::setprecision(17)<<objective<<"\n";
+        if(quadratic_trajectory || upwind_trajectory) {
             const auto initial_pullback=g.solver.pullbackFixedTrajectory(terminal);
             put(out,"initial_pullback",initial_pullback);
         }
