@@ -2152,7 +2152,8 @@ struct SDIRK3Config {
     // This eliminates FD JVP artifacts where sign() flips at vel≈0.
     // em_b_wave at timestep 1: w ≈ 5e-7 m/s, FD perturbation ≈ 2e-6/DOF.
     // δ must be >> perturbation to avoid sign-flip artifacts.
-    // δ = 1e-3 m/s: smooth over [-1mm/s, +1mm/s] — negligible vs physical velocities.
+    // δ uses the argument's units: m/s for velocity, Pa/s for canonical Omega.
+    // The shared default 1e-3 is therefore not a universal velocity interval.
     // Set to 0 to disable smoothing (revert to hard sign + detach).
     float sign_smooth_delta = 1e-3f;
 

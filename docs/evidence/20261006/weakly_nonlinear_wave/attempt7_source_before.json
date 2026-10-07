@@ -1,0 +1,70 @@
+{
+  "status": "report-scope-wording-final-attempt-source-binding-before-ctest",
+  "timestamp_local": "2026-10-06T22:16:59+09:00",
+  "worktree": "/private/tmp/pr274-ci-20261004",
+  "branch": "agent/weakly-nonlinear-wave-20261006",
+  "head": "04b298b9c9fd6cf71fb6996261922d47253e9a72",
+  "working_tree_diff_sha256": "1292e2482248b0be1307b38a994493ab180543ed3f1fdafa6bf8a2c7f5f80ca7",
+  "frozen_files": [
+    {
+      "path": "tools/test_wave_quadratic_forcing.py",
+      "sha256": "954b49fb820d2eaf388a96759118293ae008d3b5496072c777d8f1a868cdfcb6",
+      "bytes": 102606
+    },
+    {
+      "path": "tools/wave_quadratic_reference.py",
+      "sha256": "d5673eea98ab45ba0babab2a46c272ea944de0cd50f069f4063e51c34b560bac",
+      "bytes": 27210
+    },
+    {
+      "path": "tools/wave_quadratic_transport.py",
+      "sha256": "8aa1e81e188f930ff69df17f06f484dfd9bf5a1dfc3ee179d3748e749188ce66",
+      "bytes": 22645
+    },
+    {
+      "path": "tools/wave_energy_spatial_reference.py",
+      "sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+      "bytes": 30223
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+      "sha256": "c3a0e392f1c66d627f4e4ec837f252f6a1b24b17453e6a7656a332569839fbf0",
+      "bytes": 47793
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+      "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "bytes": 223864
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "199874f3666604a57a177937784bb4fa0a13a31836e8224259f57101c166ae18",
+      "bytes": 2467614
+    },
+    {
+      "path": ".github/workflows/sdirk3-ci.yml",
+      "sha256": "21fe5fd830d7a911f1ce87603ba413cb2c39cf4a3bf32246a2d11d5f781e413f",
+      "bytes": 31699
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/CMakeLists.txt",
+      "sha256": "b0e687cde669073ca20854564eab0cbc3f5405860427c034e5294d2272a8c75c",
+      "bytes": 64389
+    },
+    {
+      "path": "/private/tmp/stable-wave-build-20261004/test_native_wave_refinement",
+      "sha256": "e064b6bb440deac90fe549ebdbc0d5617c5db8f263329518915c6d5cd0a4ac62",
+      "bytes": 5852376
+    },
+    {
+      "path": "/private/tmp/stable-wave-build-20261004/libwrf_sdirk3_libtorch.a",
+      "sha256": "c33f7c03fce2b99a1b7b888e08bd6f02a764ffcd1f7ed73db60b370eaef8a3ef",
+      "bytes": 9698808
+    }
+  ],
+  "compiler": "AppleClang 21",
+  "libtorch": "2.10",
+  "python": "/opt/local/bin/python3",
+  "ctest_selection": "^Native_Quadratic_Wave_Forcing$",
+  "ctest_timeout_seconds": 900
+}

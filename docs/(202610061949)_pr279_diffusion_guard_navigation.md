@@ -1,0 +1,19 @@
+# PR279 diffusion-guard navigation and reusable WRF link entry
+
+Local timestamp: 2026-10-06T19:49:09+09:00.
+
+The production solver file is unchanged at SHA-256 `b997115c8991c26d06f455ea0c01eb01dfb0258e4e511a7912589782bf9e8144`; the preserved scoped Graphify cache copy has the same hash. Graph navigation confirms `advanceZeroCopy() -> unifiedStep() -> computeUnifiedRHS()` and `computeUnifiedRHS() ->` the U/V/W stress and option-2 scalar diffusion helpers. The pre-fix graph receipt is `docs/evidence/20261006/quadratic_wave_forcing/weakly_nonlinear_graph_prefx_receipt.json`; it is current for the unchanged production tile file and marked stale only for the in-flight runner correction.
+
+## Guard and active RHS gates
+
+The unconditional Kh2/Kh4 abort checks are inside `TileSDIRK3UnifiedSolver::unifiedStep` in the accepted step path: `unifiedStep` starts at line 3927, receives `dt`, and applies constant `Kh2=100` and `Kh4=1e12` at lines 5399-5445 before the RHS evaluation. `advanceZeroCopy` passes `rk_step` and `dt` to `unifiedStep` at lines 34819-34842 (the parallel provided-tendency arm calls it at 34861 onward). The native fixture’s `Grid::step` also calls `unifiedStep` directly at [test_native_wave_refinement.cpp](/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp:150); its setup calls `advanceZeroCopy` with `rk_step=2` at line 117.
+
+The fixture sets `diffusion_option=2`, `khdif=0`, and `kvdif=0` in [test_native_wave_refinement.cpp](/private/tmp/pr274-ci-20261004/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp:37). In `computeUnifiedRHS`, the Step 9 horizontal block begins with `diffusion_option>0` at line 23579, then deactivates for zero `khdif` when there is no scalar diffusivity and `kvdif` is zero (lines 23604-23611). The Step 10 vertical block also starts from `diffusion_option>0` and then deactivates when the option-2 momentum/scalar coefficients are absent or zero (lines 23998-24016). The CFL checks do not consult these active-profile values.
+
+The `compute_biharmonic_diffusion` helper at line 28538 has no call sites. The active option-2 horizontal source paths call the variable-metric `compute_horizontal_diffusion_u_wrf`, `..._v_wrf`, `..._w_wrf`, and `compute_horizontal_diffusion_scalar_option2_wrf` from Step 9 (lines 23827-23965); they implement the physical stress/scalar diffusion path. This separates the guard failure from both RHS diffusion gates.
+
+## Reusable incremental WRF/RK3 entry
+
+The prior PR277 WRF validation is archived at `/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/wrf_runs/wrf_receipt.json`. It compiled the C++ source at the recorded `b997...` hash into `prebuild/libwrf_sdirk3_libtorch.a`, then linked that candidate archive into the existing WRF object tree rooted at `/private/tmp/sdirk3-fp64-trajectory-wrf-20260929`. The exact saved link command is [link_command.txt](/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261005/native_wave_refinement/wrf_runs/link/link_command.txt), with structured argv and linker log beside it. Reuse that cached Fortran object tree for a fresh incremental link after rebuilding the changed C++ archive; the archived executable predates the guard change and must not be treated as the candidate binary.
+
+The archived single-rank, single-thread `em_b_wave` run used `dt=15 s`, `T=240 s`, the existing `wrfinput_d01` hash `e71b730a...`, and recorded 48/48 positive finite stages with positive dry column mass and layer thickness. The same-input RK3 result is in the receipt’s `same_setup_rk3` field at `/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20260929/SDIRK3-pr239-cleanbuild/.validation/pr239-cleanbuild/t1_240s_20260926/rk3_dt15`. This is an incremental-link recipe and prior run reference; no WRF or RK3 run was performed for this navigation audit.

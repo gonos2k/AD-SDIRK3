@@ -22,7 +22,7 @@ canonical curvature formula is ``tests/curvature_scalar_oracle.h:65-190``;
 its native caller and final coupled-to-primitive conversion are at
 ``wrf_sdirk3_tile_unified_impl.cpp:23526-23570, 25009-25029, 25065-25083``.
 
-The function includes horizontal and vertical U/W/theta/PH transport,
+The m=2 function includes horizontal and vertical U/W/theta/PH transport,
 column-mass tendency, the PH buoyancy product, canonical curvature, and the
 primitive-variable mass product-rule terms. These are physical RHS channels,
 not a claim that every channel belongs to ``ExplicitOnly``: U/W/theta
@@ -43,6 +43,11 @@ import numpy as np
 def _m2(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Positive second-harmonic amplitude of a product of two real m=1 fields."""
     return 0.5 * np.asarray(a, dtype=np.complex128) * np.asarray(b, dtype=np.complex128)
+
+
+def _mean(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Mean coefficient of two real m=1 fields, including conjugate pairing."""
+    return 0.5 * np.real(np.asarray(a) * np.conjugate(np.asarray(b)))
 
 
 def _omega_modes(c: dict, u: np.ndarray, mu: complex, k1: float,
@@ -81,8 +86,9 @@ def _vertical_interp_u(q: np.ndarray, top: tuple[float, float]) -> np.ndarray:
 
 
 def _u_vertical_advection(u: np.ndarray, omega_u: np.ndarray,
-                          rdnw_abs: np.ndarray, rdn_abs: np.ndarray) -> np.ndarray:
-    """m=2 coefficient of wrf_vert_adv3, omitting its cubic smooth-upwind part."""
+                          rdnw_abs: np.ndarray, rdn_abs: np.ndarray,
+                          product=_m2) -> np.ndarray:
+    """Bilinear wrf_vert_adv3 contraction, omitting cubic smooth-upwind terms."""
     n = u.size
     flux = np.zeros(n + 1, dtype=np.complex128)
     for face in range(1, n):
@@ -96,17 +102,17 @@ def _u_vertical_advection(u: np.ndarray, omega_u: np.ndarray,
             fzm = 0.5 * dnw / dnv
             fzp = 0.5 * (1.0 / rdnw_abs[face]) / dnv
             qf = fzm * u[face] + fzp * u[face - 1]
-        flux[face] = _m2(omega_u[face], np.asarray([qf]))[0]
+        flux[face] = product(omega_u[face], np.asarray([qf]))[0]
     return rdnw_abs[:n] * (flux[1:] - flux[:-1])
 
 
 def _w_vertical_advection(w: np.ndarray, omega: np.ndarray,
-                          rdn_abs: np.ndarray) -> np.ndarray:
-    """m=2 coefficient of wrf_vert_adv3_w, including bottom/top flux rules."""
+                          rdn_abs: np.ndarray, product=_m2) -> np.ndarray:
+    """Bilinear wrf_vert_adv3_w contraction with its native boundary fluxes."""
     n = w.size - 1
     romm = 0.5 * (omega[:-1] + omega[1:])
     vflux = np.zeros(n, dtype=np.complex128)
-    vflux[0] = _m2(romm[0], np.asarray([0.5 * (w[0] + w[1])]))[0]
+    vflux[0] = product(romm[0], np.asarray([0.5 * (w[0] + w[1])]))[0]
     for m in range(1, n - 1):
         if n >= 4:
             # In wrf_vert_adv3_w, vflux[m] uses q_im2=w[m-1], q_im1=w[m],
@@ -114,9 +120,9 @@ def _w_vertical_advection(w: np.ndarray, omega: np.ndarray,
             qf = (7.0 * (w[m + 1] + w[m]) - (w[m + 2] + w[m - 1])) / 12.0
         else:
             qf = 0.5 * (w[m] + w[m + 1])
-        vflux[m] = _m2(romm[m], np.asarray([qf]))[0]
+        vflux[m] = product(romm[m], np.asarray([qf]))[0]
     if n > 1:
-        vflux[-1] = _m2(romm[-1], np.asarray([0.5 * (w[-2] + w[-1])]))[0]
+        vflux[-1] = product(romm[-1], np.asarray([0.5 * (w[-2] + w[-1])]))[0]
     out = np.zeros(n + 1, dtype=np.complex128)
     if n > 1:
         out[1:n] = rdn_abs[1:n] * (vflux[1:] - vflux[:-1])
@@ -286,6 +292,147 @@ def transport_channels(c: dict, q: np.ndarray) -> dict[str, np.ndarray]:
     channels["source_state"] = np.concatenate((out["u"], out["w"][1:],
                                                 out["phi"], out["theta"], out["mu"]))
     return channels
+
+
+def transport_mean_channels(c: dict, q: np.ndarray) -> dict[str, np.ndarray]:
+    """Return named m=0 quadratic transport/curvature channels for one m=1 mode.
+
+    A product of two real first-mode fields contributes
+    ``0.5 * real(A * conjugate(B))``. In this uniform periodic-X fixture, mean
+    horizontal divergences vanish, so mean column-mass tendency and diagnosed
+    mean omega are exactly zero. Vertical transport, PH advection, curvature,
+    and primitive-variable quotient terms can still force nonzero means.
+    """
+    n = int(c["nz"])
+    q = np.asarray(q, dtype=np.complex128)
+    if q.shape != (4 * n + 1,):
+        raise ValueError(f"expected a source state of length {4*n+1}")
+    if n < 4 or int(c.get("nx", 4)) < 4:
+        raise ValueError("the periodic wave transport oracle requires N>=4 and nx>=4")
+    dx = float(c["dx"])
+    lx = float(c["lx"])
+    k1 = float(c.get("k_physical", 2.0 * np.pi / lx))
+    rdx = float(c.get("rdx_f32", c.get("rdx", c.get("rdx_fp32", np.float32(1.0 / dx)))))
+    rdy = float(c.get("rdy_f32", c.get("rdy", np.float32(1.0 / float(c["ly"])))) )
+    g = float(c.get("g_f32", np.float32(c["g"])))
+    reradius = float(c.get("reradius_f32", c.get("reradius", np.float32(1.0 / 6_370_000.0))))
+    mass = float(np.sum(np.asarray(c["eta_delta"]) * np.asarray(c["layer_mass"])))
+    half_cos = float(np.cos(0.5 * k1 * dx))
+    u = q[:n]
+    w = np.r_[0j, q[n:2*n]]
+    phi = np.r_[0j, q[2*n:3*n]]
+    theta = q[3*n:4*n]
+    theta0 = np.asarray(c["theta"], dtype=np.float64) - 300.0
+    mu = complex(q[-1])
+    rdnw_abs = np.abs(np.asarray(c["rdnw"], dtype=np.float64))
+    rdn_abs = np.abs(np.asarray(c["rdn"], dtype=np.float64))
+    if rdnw_abs.size < n or rdn_abs.size < n:
+        raise ValueError("rdnw and rdn must cover every mass level")
+
+    # Keep the authoritative linear omega/Mdot diagnosis: its quadratic mean
+    # is zero because every horizontal divergence is periodic and uniform in Y.
+    omega, _, mdot1, _ = _omega_modes(c, u, mu, k1, rdx, half_cos, mass)
+    channels: dict[str, np.ndarray] = {}
+    # The native recurrence fixes both bottom and top Omega; the periodic mean
+    # divergence is zero at every level, so its Q0 interior is zero too.
+    channels["omega_mean"] = np.zeros(n + 1, dtype=np.complex128)
+    channels["u_horizontal"] = np.zeros(n, dtype=np.complex128)
+    # Smooth-upwind corrections in wrf_vert_adv3/adv3_w are cubic about zero
+    # velocity. The canonical theta branch is centered; its retained theta0
+    # profile enters N1 and the quotient, with its linear third-difference zero.
+    channels["u_vertical"] = _u_vertical_advection(
+        u, half_cos * omega, rdnw_abs, rdn_abs, product=_mean) / mass
+    channels["w_horizontal"] = np.zeros(n + 1, dtype=np.complex128)
+    channels["w_vertical"] = _w_vertical_advection(
+        w, omega, rdn_abs, product=_mean) / mass
+    channels["theta_horizontal"] = np.zeros(n, dtype=np.complex128)
+    theta0_w = np.r_[theta0[0], 0.5 * (theta0[1:] + theta0[:-1]), theta0[-1]]
+    theta1_w = np.r_[theta[0], 0.5 * (theta[1:] + theta[:-1]), theta[-1]]
+    theta_flux_mean = _mean(omega, theta1_w)
+    theta_n2_v = rdnw_abs[:n] * (theta_flux_mean[1:] - theta_flux_mean[:-1])
+    channels["theta_vertical"] = theta_n2_v / mass
+
+    # N1 - theta0*Mdot1 is the linear primitive theta numerator. The
+    # horizontally uniform theta0 flux cancels against mass continuity;
+    # vertical background advection remains in the reciprocal-mass cross term.
+    d1 = 2j * np.sin(0.5 * k1 * dx) * rdx
+    theta_n1_h = -d1 * mass * u * theta0
+    omega_theta0_w = omega * theta0_w
+    theta_n1_v = rdnw_abs[:n] * (omega_theta0_w[1:] - omega_theta0_w[:-1])
+    theta_a1 = theta_n1_h + theta_n1_v - theta0 * mdot1
+    channels["theta_mass_conversion"] = (
+        -_mean(theta, np.full(n, mdot1)) / mass
+        - _mean(np.full(n, mu), theta_a1) / mass**2
+    )
+
+    # Native-W PH horizontal advection is advective-form, so its product can
+    # have a nonzero mean even though the U/W/scalar flux divergences do not.
+    xvel = np.zeros(n + 1, dtype=np.complex128)
+    xvel[1:n] = u[1:] + u[:-1]
+    xvel[n] = 1.5 * u[-1] - 0.5 * u[-2]
+    phi_grad = 2j * np.sin(0.5 * k1 * dx) * phi
+    phi_face_product = 0.25 * mass * _mean(xvel, phi_grad)
+    phi_face_product[-1] *= 2.0
+    channels["phi_horizontal"] = -2.0 * rdx * phi_face_product / mass
+
+    phi_total = np.asarray(c.get("phi_total_w", c.get("phi_base_w", np.zeros(n + 1))), dtype=float)
+    if phi_total.size != n + 1:
+        raise ValueError("phi_total_w/phi_base_w must have nz+1 faces")
+    dph_bg = -rdnw_abs * np.diff(phi_total)
+    dph_q = -rdnw_abs * np.diff(phi)
+    wdwn_up1 = np.zeros(n + 1, dtype=np.complex128)
+    wdwn_lo1 = np.zeros(n + 1, dtype=np.complex128)
+    wdwn_up1[1:n] = dph_q[1:]
+    wdwn_lo1[1:n] = dph_q[:-1]
+    wdwn_up0 = np.zeros(n + 1, dtype=float)
+    wdwn_lo0 = np.zeros(n + 1, dtype=float)
+    wdwn_up0[1:n] = dph_bg[1:]
+    wdwn_lo0[1:n] = dph_bg[:-1]
+    phi_grad_bg = -0.5 * omega * (wdwn_up0 + wdwn_lo0)
+    phi_n2_v = -_mean(omega, 0.5 * (wdwn_up1 + wdwn_lo1))
+    channels["phi_vertical"] = phi_n2_v / mass
+    # Buoyancy's numerator cross cancels exactly with this part of the PH
+    # mass-denominator cross; retain both named terms for closure visibility.
+    channels["phi_buoyancy"] = g * _mean(np.full(n + 1, mu), w) / mass
+    phi_n1 = g * mass * w + phi_grad_bg
+    channels["phi_mass_conversion"] = -_mean(np.full(n + 1, mu), phi_n1) / mass**2
+
+    # Canonical spherical curvature, maps=1 and v=0. The core receives
+    # alpha*u/alpha*w = M*u/M*w to quadratic order and is divided by M here.
+    rw1 = mass * w
+    rw_u = half_cos * 0.5 * (rw1[:-1] + rw1[1:])
+    channels["curvature_u"] = -reradius * _mean(u, rw_u) / mass
+    ru_mass = half_cos * mass * u
+    u_mass = half_cos * u
+    ru_w = np.zeros(n + 1, dtype=np.complex128)
+    u_w = np.zeros(n + 1, dtype=np.complex128)
+    ru_w[1:n] = 0.5 * (ru_mass[1:] + ru_mass[:-1])
+    u_w[1:n] = 0.5 * (u_mass[1:] + u_mass[:-1])
+    channels["curvature_w"] = np.zeros(n + 1, dtype=np.complex128)
+    channels["curvature_w"][1:n] = reradius * _mean(ru_w[1:n], u_w[1:n]) / mass
+    channels["u_mass_conversion"] = -_mean(u, np.full(n, half_cos * mdot1)) / mass
+    channels["w_mass_conversion"] = -_mean(w, np.full(n + 1, mdot1)) / mass
+    channels["mass"] = np.zeros(1, dtype=np.complex128)
+
+    out = {
+        "u": channels["u_horizontal"] + channels["u_vertical"] +
+             channels["curvature_u"] + channels["u_mass_conversion"],
+        "w": channels["w_horizontal"] + channels["w_vertical"] +
+             channels["curvature_w"] + channels["w_mass_conversion"],
+        "phi": (channels["phi_horizontal"] + channels["phi_vertical"] +
+                channels["phi_buoyancy"] + channels["phi_mass_conversion"])[1:],
+        "theta": (channels["theta_horizontal"] + channels["theta_vertical"] +
+                  channels["theta_mass_conversion"]),
+        "mu": channels["mass"],
+    }
+    channels["source_state"] = np.concatenate((out["u"], out["w"][1:],
+                                                out["phi"], out["theta"], out["mu"]))
+    return channels
+
+
+def transport_mean_forcing(c: dict, q: np.ndarray) -> np.ndarray:
+    """Return m=0 transport/curvature forcing in source state order."""
+    return transport_mean_channels(c, q)["source_state"]
 
 
 def transport_forcing(c: dict, q: np.ndarray) -> np.ndarray:

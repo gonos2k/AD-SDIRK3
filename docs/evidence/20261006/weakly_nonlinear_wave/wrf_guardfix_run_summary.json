@@ -1,0 +1,74 @@
+{
+  "status": "prior incremental-link em_b_wave validation; archived external evidence",
+  "receipt_path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/wrf_runs/sdirk3_guardfix_dt15_240/wrf_receipt.json",
+  "receipt_sha256": "7d7f2b8c48bfa12beaccb47a40b1bf9d1881c7c94afc22e6775008cd8cefb84d",
+  "comparison_summary_path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/wrf_runs/sdirk3_guardfix_dt15_240/comparison_summary.json",
+  "comparison_summary_sha256": "3a0aff40f61d485c9e7806f770e76bc0d4fcc0428169d1e141b378a4b6bbca91",
+  "production_cpp_sha256": "199874f3666604a57a177937784bb4fa0a13a31836e8224259f57101c166ae18",
+  "incremental_link_reused_fortran_objects": true,
+  "configuration": {
+    "dt_seconds": 15,
+    "final_time_seconds": 240,
+    "integrator": "SDIRK3",
+    "internal_fp64": true,
+    "internal_fp64_state_carry": true,
+    "mpi_ranks": 1,
+    "nproc_x": 1,
+    "nproc_y": 1,
+    "omp_threads": 1
+  },
+  "run_status": {
+    "OMP_NUM_THREADS": "1",
+    "command": [
+      "mpirun",
+      "-np",
+      "1",
+      "./wrf.exe"
+    ],
+    "concurrency_note": "Parent ran affected native CTests concurrently at CPU=1; timings are descriptive and not a performance claim.",
+    "exit_code": 0,
+    "main_timing_max_seconds": 0.54269,
+    "main_timing_steps": 16,
+    "main_timing_sum_seconds": 6.952940000000001,
+    "wall_seconds": 9.658788204193115
+  },
+  "solver": {
+    "converged_stages": 48,
+    "expected_stages": 48,
+    "fp64_carry_internal_input_count": 15,
+    "fp64_carry_published_count": 16,
+    "max_scaled_converged_stage_residual": 5.152e-09,
+    "nan_diagnostics": "none (all 174 float netCDF variables finite at every frame)",
+    "stage_counts": {
+      "2": 16,
+      "3": 16,
+      "4": 16
+    }
+  },
+  "physical_checks": {
+    "all_layer_thickness_positive": true,
+    "minimum_full_dry_column_mass_pa": 89088.63069200516,
+    "minimum_w_face_thickness_from_PH_plus_PHB_m": 942.6573649337411,
+    "thickness_definition": "min over every output time/cell of diff(PH+PHB, vertical W-face axis)/9.81"
+  },
+  "endpoint_rms_vs_archived_same_input_rk3": {
+    "MU": 0.09954757453213466,
+    "P": 0.06418965502328489,
+    "PH": 1.3041995699030506,
+    "T": 0.04142453131604256,
+    "U": 0.0021082389648302774,
+    "V": 0.0009522107022260285,
+    "W": 0.0005988114011859875
+  },
+  "rk3_reference": {
+    "endpoint_sha256": "829f20ab7dd2f25ac3994aaa9efce90631ffdd527c1524e95a53859ad66fc689",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "main_timing_max_seconds": 0.08173,
+    "main_timing_steps": 16,
+    "main_timing_sum_seconds": 0.26754000000000006,
+    "namelist_sha256": "d23c6899450b7aa394924d639dfffb6efce00eb2ffd0f74e14f89d109af1c914",
+    "path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20260929/SDIRK3-pr239-cleanbuild/.validation/pr239-cleanbuild/t1_240s_20260926/rk3_dt15",
+    "same_input": true
+  },
+  "scope_note": "Same-input archived RK3 field comparison is descriptive; no equal-accuracy or performance-improvement claim."
+}

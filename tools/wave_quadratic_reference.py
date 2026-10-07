@@ -27,7 +27,7 @@ from scipy.integrate import solve_ivp
 from scipy.linalg import expm
 
 from wave_energy_spatial_reference import column, source_matrix
-from wave_quadratic_transport import transport_channels
+from wave_quadratic_transport import transport_channels, transport_mean_channels
 
 
 LX = 40_000.0
@@ -42,6 +42,11 @@ def _product_m2(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return 0.5 * np.asarray(a) * np.asarray(b)
 
 
+def _product_m0(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Real mean coefficient of two fields represented by positive-m phasors."""
+    return 0.5 * np.real(np.asarray(a) * np.conj(np.asarray(b)))
+
+
 def _eos_first_order(c: dict, q: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return alpha', p', and their horizontal m=1 amplitudes from source EOS."""
     n = int(c["nz"])
@@ -54,6 +59,24 @@ def _eos_first_order(c: dict, q: np.ndarray) -> tuple[np.ndarray, np.ndarray, np
     gamma = c["cp"] / c["cv"]
     p1 = gamma * c["p_bar"] * (q[3*n:4*n] / c["theta"] - alpha1 / c["alpha_bar"])
     return alpha1, p1, dphi
+
+
+def _eos_second_order(c: dict, q: np.ndarray, product) -> tuple[np.ndarray, ...]:
+    """Shared dry EOS Taylor formula for m2 or real m0 product operators."""
+    n = int(c["nz"])
+    mbar = float(np.sum(c["eta_delta"]*c["layer_mass"]))
+    alpha1,p1,dphi1 = _eos_first_order(c,q)
+    mu1 = complex(q[-1])
+    A1 = c["alpha_bar"]*mu1+c["rdnw"]*dphi1
+    alpha2 = product(A1,np.full(n,mu1,dtype=np.complex128))/mbar**2
+    r = q[3*n:4*n]/c["theta"]
+    s1 = alpha1/c["alpha_bar"]
+    gamma = c["cp"]/c["cv"]
+    logp1 = gamma*(r-s1)
+    logp2 = gamma*(-0.5*product(r,r)-alpha2/c["alpha_bar"]
+                   +0.5*product(s1,s1))
+    p2 = c["p_bar"]*(logp2+0.5*product(logp1,logp1))
+    return alpha1,p1,alpha2,p2,dphi1,logp1
 
 
 def quadratic_pressure_forcing(c: dict, q: np.ndarray) -> np.ndarray:
@@ -76,14 +99,7 @@ def quadratic_pressure_forcing(c: dict, q: np.ndarray) -> np.ndarray:
     half_cos = np.cos(0.5*k1*dx)
     mbar = float(np.sum(c["eta_delta"]*c["layer_mass"]))
     mu1 = complex(q[-1])
-    alpha1,p1,dphi1 = _eos_first_order(c,q)
-    A1 = c["alpha_bar"]*mu1+c["rdnw"]*dphi1
-    alpha2 = _product_m2(A1,np.full(n,mu1,dtype=np.complex128))/mbar**2
-    r = q[3*n:4*n]/c["theta"]
-    s1 = alpha1/c["alpha_bar"]
-    logp1 = (c["cp"]/c["cv"])*(r-s1)
-    logp2 = (c["cp"]/c["cv"])*(-0.25*r*r-alpha2/c["alpha_bar"]+0.25*s1*s1)
-    p2 = c["p_bar"]*(logp2+0.25*logp1*logp1)
+    alpha1,p1,alpha2,p2,dphi1,logp1 = _eos_second_order(c,q,_product_m2)
 
     out = np.zeros(4*n+1,dtype=np.complex128)
     # Horizontal primary PGF after dividing the coupled mass factor. The native
@@ -116,6 +132,58 @@ def quadratic_pressure_forcing(c: dict, q: np.ndarray) -> np.ndarray:
     num1[-1] = c["g"]*(2.0*c["rdnw"][-1]*(-p1[-1])-mu1)
     num2[-1] = c["g"]*(2.0*c["rdnw"][-1]*(-p2[-1]))
     out[n:2*n] = num2/mbar-_product_m2(mu1,num1)/mbar**2
+    return out
+
+
+def quadratic_mean_pressure_forcing(c: dict, q: np.ndarray) -> np.ndarray:
+    """Dry EOS/PGF contribution to the real x-mean at second order.
+
+    Mean products use Hermitian m=1 amplitudes. In particular the U mean PGF
+    keeps ``-<alpha1_face * D_x(p1)>``; it does not vanish when the modes have
+    different phases. The free-top W extrapolation and native NH term 4 use the
+    same staggered rows and coefficients as :func:`quadratic_pressure_forcing`.
+    """
+    n = int(c["nz"])
+    q = np.asarray(q,dtype=np.complex128)
+    if q.shape != (4*n+1,):
+        raise ValueError(f"expected a source state of length {4*n+1}")
+    dx = float(c["dx"])
+    k1 = 2.0*np.pi/float(c["lx"])
+    rdx = float(c["rdx_fp32"])
+    d1 = 2.0*np.sin(0.5*k1*dx)*rdx
+    half_cos = np.cos(0.5*k1*dx)
+    mbar = float(np.sum(c["eta_delta"]*c["layer_mass"]))
+    mu1 = complex(q[-1])
+    alpha1,p1,alpha2,p2,dphi1,_ = _eos_second_order(c,q,_product_m0)
+    out = np.zeros(4*n+1,dtype=np.complex128)
+
+    # The m=0 derivative of p2/phi2 is zero, but alpha1(x)*D_x(p1)(x)
+    # can have a nonzero mean for phase-mixed vertical modes.
+    out[:n] = -_product_m0(half_cos*alpha1,1j*d1*p1)
+
+    # NH term 4 is a collocated product of the m=1 horizontal PH derivative
+    # and the m=1 vertical pressure-coordinate factor.
+    phi_face1 = np.r_[0j,q[2*n:3*n]]
+    php_mass1 = 0.5*(phi_face1[:-1]+phi_face1[1:])
+    dpn = np.zeros(n+1,dtype=np.complex128)
+    dpn[0] = half_cos*(2.0*p1[0]-1.5*p1[1]+0.5*p1[2])
+    for face in range(1,n):
+        dpn[face] = 0.5*half_cos*(p1[face]+p1[face-1])
+    mu_face1 = half_cos*mu1
+    vertical1 = c["rdnw"]*(dpn[1:]-dpn[:-1])-mu_face1
+    dphp_u1 = 2j*np.sin(0.5*k1*dx)*php_mass1
+    out[:n] += -np.array([rdx*_product_m0(dphp_u1[k],vertical1[k])/mbar
+                          for k in range(n)])
+
+    # W PGF: the quadratic EOS pressure mean enters the vertical difference;
+    # the reciprocal full-column mass contributes the Hermitian mean of mu*N1.
+    num1 = np.empty(n,dtype=np.complex128)
+    num2 = np.empty(n,dtype=np.complex128)
+    num1[:-1] = c["g"]*(c["rdn"][1:]*np.diff(p1)-mu1)
+    num2[:-1] = c["g"]*c["rdn"][1:]*np.diff(p2)
+    num1[-1] = c["g"]*(2.0*c["rdnw"][-1]*(-p1[-1])-mu1)
+    num2[-1] = c["g"]*(2.0*c["rdnw"][-1]*(-p2[-1]))
+    out[n:2*n] = num2/mbar-_product_m0(mu1,num1)/mbar**2
     return out
 
 
@@ -157,6 +225,124 @@ def quadratic_forcing_channels(c: dict, q: np.ndarray) -> dict[str, np.ndarray]:
 def total_quadratic_forcing(c: dict, q: np.ndarray) -> np.ndarray:
     """Independent complete fixture-scope coefficient ``Q2(q)`` in source order."""
     return quadratic_forcing_channels(c,q)["total"]
+
+
+def quadratic_mean_forcing_channels(c: dict, q: np.ndarray) -> dict[str, np.ndarray]:
+    """Return named real-m0 source channels, including Hermitian EOS/PGF terms."""
+    channels = transport_mean_channels(c,q)
+    channels["eos_pgf_term4"] = quadratic_mean_pressure_forcing(c,q)
+    channels["total"] = channels["source_state"]+channels["eos_pgf_term4"]
+    return channels
+
+
+def total_quadratic_mean_forcing(c: dict, q: np.ndarray) -> np.ndarray:
+    """Independent second-order real-mean source forcing in packed source order."""
+    return quadratic_mean_forcing_channels(c,q)["total"]
+
+
+def source_zero_matrix(c: dict) -> np.ndarray:
+    """Source L(m=0); its neutral mean subspace is preserved without inversion."""
+    mean_column = dict(c)
+    mean_column["kappa"] = 0.0
+    return source_matrix(mean_column)
+
+
+def polarized_DQ2(c: dict, q: np.ndarray, r: np.ndarray) -> np.ndarray:
+    """Exact directional derivative of homogeneous quadratic ``Q2`` at q along r.
+
+    Polarization uses ``Q2(q+r)-Q2(q)-Q2(r)``; it is algebra on the
+    source-transcribed quadratic map, not production AD or finite differences.
+    """
+    return total_quadratic_forcing(c,np.asarray(q)+np.asarray(r)) \
+        - total_quadratic_forcing(c,q) - total_quadratic_forcing(c,r)
+
+
+def _mode2_column(c: dict) -> dict:
+    c2 = dict(c)
+    c2["k_physical"] = 2.0*float(c["k_physical"])
+    rdx = float(c["rdx_fp32"])
+    c2["kappa"] = 2.0*np.sin(float(c2["k_physical"])*float(c["dx"])/2.0)*rdx
+    return c2
+
+
+def _checked_times(times: np.ndarray) -> np.ndarray:
+    times = np.asarray(times,dtype=np.float64)
+    if times.ndim != 1 or times.size < 1 or not np.isfinite(times).all():
+        raise ValueError("times must be a finite one-dimensional nonempty vector")
+    if times[0] < 0 or np.any(np.diff(times) <= 0):
+        raise ValueError("times must be nonnegative and strictly increasing")
+    return times
+
+
+def _integrate_forced_matrix(A: np.ndarray, initial: np.ndarray, times: np.ndarray,
+                             rhs_source) -> tuple[np.ndarray,np.ndarray,float,float]:
+    """DOP853 solve plus a tighter repeat; source callback supplies forcing(t)."""
+    if times[-1] == 0:
+        states = np.broadcast_to(initial,(times.size,initial.size)).copy()
+        return states,states.copy(),0.0,0.0
+    def rhs(t: float,z: np.ndarray) -> np.ndarray:
+        return A@z+rhs_source(t)
+    loose = solve_ivp(rhs,(0.0,float(times[-1])),initial,t_eval=times,method="DOP853",
+                      rtol=2e-12,atol=2e-14)
+    tight = solve_ivp(rhs,(0.0,float(times[-1])),initial,t_eval=times,method="DOP853",
+                      rtol=5e-14,atol=5e-16)
+    if not loose.success: raise RuntimeError(loose.message)
+    if not tight.success: raise RuntimeError(tight.message)
+    gap = float(np.linalg.norm(tight.y[:,-1]-loose.y[:,-1]))
+    rel = gap/max(float(np.linalg.norm(tight.y[:,-1])),np.finfo(float).tiny)
+    return loose.y.T,tight.y.T,gap,rel
+
+
+def weak_trajectory(c: dict, q_initial: np.ndarray, times: np.ndarray) -> dict[str,np.ndarray | dict]:
+    """Return m=1, second-order m=0 mean, and m=2 trajectories at requested times.
+
+    The generated q0/q2 start at zero. A0 has a neutral mean subspace, so the
+    implementation uses DOP853 directly and does not invert L0 or select its
+    zero-frequency eigenvectors.
+    """
+    times = _checked_times(times)
+    q_initial = np.asarray(q_initial,dtype=np.complex128)
+    size = 4*int(c["nz"])+1
+    if q_initial.shape != (size,):
+        raise ValueError(f"q_initial must have source-state length {size}")
+    A1 = source_matrix(c)
+    A0 = source_zero_matrix(c)
+    c2 = _mode2_column(c)
+    A2 = source_matrix(c2)
+    mzero = np.zeros(size,dtype=np.complex128)
+    def q_at(t: float) -> np.ndarray:
+        return expm(t*A1)@q_initial
+    a0_loose,a0_tight,a0_gap,a0_rel = _integrate_forced_matrix(
+        A0,mzero,times,lambda t: total_quadratic_mean_forcing(c,q_at(t)))
+    a2_loose,a2_tight,a2_gap,a2_rel = _integrate_forced_matrix(
+        A2,mzero,times,lambda t: total_quadratic_forcing(c,q_at(t)))
+    q1 = np.stack([q_at(float(t)) for t in times])
+    return {"times":times,"q1":q1,"q0_mean":a0_tight,"q2":a2_tight,
+            "q0_tightening_states":a0_tight-a0_loose,
+            "q2_tightening_states":a2_tight-a2_loose,
+            "tightening":{"q0_abs":a0_gap,"q0_relative":a0_rel,
+                          "q2_abs":a2_gap,"q2_relative":a2_rel},
+            "L0":A0,"L2":A2}
+
+
+def propagate_q2_sensitivity(c: dict, q_initial: np.ndarray, r_initial: np.ndarray,
+                             times: np.ndarray) -> dict[str,np.ndarray | float]:
+    """Propagate DQ2[q](r) through L2 for the selected initial direction r."""
+    times = _checked_times(times)
+    q_initial = np.asarray(q_initial,dtype=np.complex128)
+    r_initial = np.asarray(r_initial,dtype=np.complex128)
+    size = 4*int(c["nz"])+1
+    if q_initial.shape != (size,) or r_initial.shape != (size,):
+        raise ValueError(f"q_initial and r_initial must have source-state length {size}")
+    A1 = source_matrix(c)
+    A2 = source_matrix(_mode2_column(c))
+    def source(t: float) -> np.ndarray:
+        propagator = expm(t*A1)
+        return polarized_DQ2(c,propagator@q_initial,propagator@r_initial)
+    loose,tight,gap,rel = _integrate_forced_matrix(
+        A2,np.zeros(size,dtype=np.complex128),times,source)
+    return {"times":times,"dq2":tight,"tightening_states":tight-loose,
+            "tightening_abs":gap,"tightening_relative":rel}
 
 
 def mode_pair(c: dict, rank: int) -> tuple[complex, np.ndarray, np.ndarray]:

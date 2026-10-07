@@ -1,0 +1,26 @@
+{
+  "status": "archived-measured-prototype-only",
+  "timestamp_local": "2026-10-06T22:19:20+09:00",
+  "source_paths": [
+    "/private/tmp/pr279-forward360-full.log",
+    "/private/tmp/pr279-forward360-full.csv"
+  ],
+  "archive_path": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261006/weakly_nonlinear_wave/forward360_memory_sample",
+  "steps": 360,
+  "grid_scope": "single coarse-grid forward prototype; not a general capacity guarantee",
+  "elapsed_seconds": 59.96,
+  "maximum_resident_set_size_bytes": 3144138752,
+  "files": [
+    {
+      "name": "pr279-forward360-full.log",
+      "sha256": "db1fe19de74bb217f59484849928a15f4297e4cb2c9c6c56008a2a93afaecd8a",
+      "bytes": 816445
+    },
+    {
+      "name": "pr279-forward360-full.csv",
+      "sha256": "2972abb00d3625bf14e573f892110a1e07f2d136e8f421ce663daeb7f42f3e93",
+      "bytes": 6600133
+    }
+  ],
+  "limitation": "The measured log/CSV are preserved verbatim. Do not generalize this single run to other grids, trajectories, or memory demands."
+}

@@ -370,14 +370,20 @@ int main(int argc,char** argv) {
     if(quadratic_trajectory_mode) {
         quadratic_steps=std::stoi(argv[7]);
         quadratic_dt=std::stof(argv[8]);
-        TORCH_CHECK(quadratic_steps>0 && quadratic_steps<=90,
-                    "quadratic trajectory steps must be between 1 and 90");
+        // The accepted-step tape retains FP64 input/output graphs. Keep the
+        // memory bound explicit: at most 90 adjoint steps or 360 forward steps.
+        const int max_steps=quadratic_forward ? 360 : 90;
+        TORCH_CHECK(quadratic_steps>0 && quadratic_steps<=max_steps,
+                    "quadratic trajectory steps must be between 1 and ",max_steps);
         TORCH_CHECK(std::isfinite(quadratic_dt) && quadratic_dt>0.0f,
                     "quadratic trajectory dt must be finite and positive");
-        TORCH_CHECK(static_cast<double>(quadratic_steps)*quadratic_dt<=90.0,
-                    "quadratic trajectory physical duration must not exceed 90 seconds");
+        const double max_duration=quadratic_forward ? 900.0 : 90.0;
+        TORCH_CHECK(static_cast<double>(quadratic_steps)*quadratic_dt<=max_duration,
+                    "quadratic ",quadratic_forward?"forward":"adjoint trajectory",
+                    " physical duration must not exceed ",max_duration," seconds");
     }
     configure(implicit_divergence,kdamp); // solver policy is captured by its constructor.
+    if(quadratic_trajectory_mode) g_sdirk3_config.newton_tol=1.0e-12f;
     Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]));
     auto base=background_state(g);
     const auto eos_errors=validate_eos_target(g,base);
@@ -413,6 +419,7 @@ int main(int argc,char** argv) {
     out<<"M,reradius_grid,"<<native_grid->reradius<<"\n";
     out<<"M,sign_smooth_delta_config,"<<g_sdirk3_config.sign_smooth_delta<<"\n";
     out<<"M,omega_w_blend_config,"<<g_sdirk3_config.omega_w_blend<<"\n";
+    out<<"M,newton_tol_config,"<<g_sdirk3_config.newton_tol<<"\n";
     out<<"M,do_curvature_config,"<<(g_sdirk3_config.do_curvature?1:0)<<"\n";
     out<<"M,effective_wrf_omega_ww_cp,"<<(g_sdirk3_config.effective_wrf_omega_ww_cp()?1:0)<<"\n";
     out<<"M,advection_order_config,"<<g_sdirk3_config.advection_order<<"\n";
