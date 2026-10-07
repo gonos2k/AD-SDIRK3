@@ -27,7 +27,8 @@ from scipy.integrate import solve_ivp
 from scipy.linalg import expm
 
 from wave_energy_spatial_reference import column, source_matrix
-from wave_quadratic_transport import transport_channels, transport_mean_channels
+from wave_quadratic_transport import (finite_smooth_upwind_channels,
+                                     transport_channels, transport_mean_channels)
 
 
 LX = 40_000.0
@@ -345,6 +346,96 @@ def propagate_q2_sensitivity(c: dict, q_initial: np.ndarray, r_initial: np.ndarr
             "tightening_abs":gap,"tightening_relative":rel}
 
 
+def finite_smooth_upwind_forcing_bank(c: dict, q1: np.ndarray, amplitude: float,
+                                      velocity_sign: float = 1.0,
+                                      delta: float | None = None) -> dict[int,np.ndarray]:
+    """Project exact finite Omega-sign U/W vertical corrections to m=0..Nyquist.
+
+    DFT phases use U-face x=i*dx and W-center x=(i+1/2)*dx. The m=0 and
+    Nyquist coefficients use factor one; interior positive harmonics use two.
+    Each returned vector is in source order `[U,W_active,PH,THETA,MU]`.
+    """
+    q1 = np.asarray(q1,dtype=np.complex128)
+    n,nx = int(c["nz"]),int(c["nx"])
+    if q1.shape != (4*n+1,):
+        raise ValueError(f"q1 must have source-state length {4*n+1}")
+    delta = float(c.get("sign_smooth_delta",np.float32(1.0e-3))) if delta is None else float(delta)
+    finite = finite_smooth_upwind_channels(c,q1,amplitude,delta=delta,
+                                           velocity_sign=velocity_sign)
+    u_grid = np.asarray(finite["u_upwind"],dtype=np.float64)
+    w_grid = np.asarray(finite["w_upwind"],dtype=np.float64)
+    if u_grid.shape != (n,nx) or w_grid.shape != (n+1,nx):
+        raise ValueError("finite transport correction returned an unexpected staggered shape")
+    idx = np.arange(nx,dtype=np.float64)
+    bank: dict[int,np.ndarray] = {}
+    for harmonic in range(nx//2+1):
+        factor = 1.0 if harmonic == 0 or (nx%2 == 0 and harmonic == nx//2) else 2.0
+        phase_u = np.exp(-2j*np.pi*harmonic*idx/nx)
+        phase_w = np.exp(-2j*np.pi*harmonic*(idx+0.5)/nx)
+        u_hat = factor*np.mean(u_grid*phase_u[None,:],axis=1)
+        w_hat = factor*np.mean(w_grid*phase_w[None,:],axis=1)
+        source = np.zeros(4*n+1,dtype=np.complex128)
+        source[:n] = u_hat
+        source[n:2*n] = w_hat[1:]
+        bank[harmonic] = source
+    return bank
+
+
+def propagate_finite_smooth_upwind(c: dict, q_initial: np.ndarray, amplitude: float,
+                                   times: np.ndarray, velocity_sign: float = 1.0,
+                                   delta: float | None = None) -> dict[str,object]:
+    """Propagate finite smooth-upwind corrections along the same linear q1(t).
+
+    Returns integer-harmonic maps through Nyquist. Each map value has shape
+    `(ntime, 4*nz+1)` in source order. This is a separate finite-amplitude
+    correction; it does not modify Q0/Q2 or reinterpret their Taylor limit.
+    """
+    times = _checked_times(times)
+    q_initial = np.asarray(q_initial,dtype=np.complex128)
+    n,nx = int(c["nz"]),int(c["nx"])
+    size = 4*n+1
+    if q_initial.shape != (size,):
+        raise ValueError(f"q_initial must have source-state length {size}")
+    delta = float(c.get("sign_smooth_delta",np.float32(1.0e-3))) if delta is None else float(delta)
+    A1 = source_matrix(c)
+    harmonics = list(range(nx//2+1))
+    operators=[]
+    for harmonic in harmonics:
+        cm = dict(c)
+        cm["k_physical"] = 2.0*np.pi*harmonic/float(c["lx"])
+        cm["kappa"] = 2.0*np.sin(np.pi*harmonic/nx)*float(c["rdx_fp32"])
+        operators.append(source_matrix(cm))
+    bank_size = len(harmonics)*size
+    operator_bank = np.zeros((bank_size,bank_size),dtype=np.complex128)
+    for j,A in enumerate(operators):
+        sl=slice(j*size,(j+1)*size)
+        operator_bank[sl,sl]=A
+
+    def q1_at(t: float) -> np.ndarray:
+        return expm(t*A1)@q_initial
+
+    def forcing_at(t: float) -> np.ndarray:
+        modes=finite_smooth_upwind_forcing_bank(
+            c,q1_at(t),amplitude,velocity_sign=velocity_sign,delta=delta)
+        return np.concatenate([modes[m] for m in harmonics])
+
+    loose,tight,gap,relative=_integrate_forced_matrix(
+        operator_bank,np.zeros(bank_size,dtype=np.complex128),times,forcing_at)
+    correction={m:tight[:,i*size:(i+1)*size] for i,m in enumerate(harmonics)}
+    tightening={m:tight[:,i*size:(i+1)*size]-loose[:,i*size:(i+1)*size]
+                for i,m in enumerate(harmonics)}
+    source_forcing={m:np.stack([finite_smooth_upwind_forcing_bank(
+        c,q1_at(float(t)),amplitude,velocity_sign=velocity_sign,delta=delta)[m]
+        for t in times]) for m in harmonics}
+    return {"times":times,"source_forcing":source_forcing,
+            "state_correction":correction,"tightening_states":tightening,
+            "tightening_abs":gap,"tightening_relative":relative,
+            "metadata":{"amplitude":float(amplitude),"velocity_sign":float(velocity_sign),
+                        "sign_smooth_delta":delta,"harmonics":harmonics,
+                        "nyquist_kappa":2.0*float(c["rdx_fp32"]),
+                        "correction":"finite smooth-sign vertical U/W advection only"}}
+
+
 def mode_pair(c: dict, rank: int) -> tuple[complex, np.ndarray, np.ndarray]:
     """Reproduce the old C++ sub-Nmax eigenmode and its two standing quadratures."""
     A = source_matrix(c)
@@ -496,6 +587,8 @@ def _apply_native_base(c: dict, path: Path) -> None:
         c["kappa"] = 2.0*np.sin(np.pi*float(c["dx"])/float(c["lx"]))*c["rdx_fp32"]
     if "reradius_grid" in metadata:
         c["reradius"] = float(metadata["reradius_grid"])
+    c["sign_smooth_delta"] = float(metadata.get(
+        "sign_smooth_delta_config",str(np.float32(1.0e-3))))
     if "do_curvature_config" in metadata:
         c["do_curvature"] = metadata["do_curvature_config"] == "1"
 

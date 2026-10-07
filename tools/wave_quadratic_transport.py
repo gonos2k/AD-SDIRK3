@@ -435,6 +435,168 @@ def transport_mean_forcing(c: dict, q: np.ndarray) -> np.ndarray:
     return transport_mean_channels(c, q)["source_state"]
 
 
+def finite_smooth_upwind_channels(c: dict, q: np.ndarray, amplitude: float,
+                                  delta: float = 1.0e-3,
+                                  velocity_sign: float = 1.0) -> dict[str, object]:
+    """Evaluate the finite-amplitude smooth-upwind correction on the wave grid.
+
+    ``q`` is the source-mode vector; only its U, active-W, and MU components
+    are used. The real spatial fields use the native fixture locations (U at
+    ``i*dx``; mass MU and W at ``(i+1/2)*dx``). Current dry mass is
+    ``M + amplitude*mu`` and Omega is rediagnosed from the exact periodic
+    calc_ww_cp mass flux and recurrence. ``velocity_sign`` can be -1 while
+    keeping MU fixed, for the native odd-in-velocity isolation.
+
+    Returns physical U/W *vertical-advection* arrays for the centered
+    reference and smooth-upwind correction separately; it excludes all other
+    RHS terms. The correction is the actual rational ``Omega`` sign function
+    at finite amplitude, not its cubic Taylor truncation. U arrays have shape
+    ``[nz,nx]`` at ``x=i*dx``; W arrays have shape ``[nz+1,nx]`` at
+    ``x=(i+1/2)*dx`` with the fixed bottom face zero.
+    """
+    n = int(c["nz"])
+    nx = int(c["nx"])
+    q = np.asarray(q, dtype=np.complex128)
+    if q.shape != (4 * n + 1,):
+        raise ValueError(f"expected a source state of length {4*n+1}")
+    if n < 4 or nx < 4:
+        raise ValueError("finite smooth-upwind wave channels require N>=4 and nx>=4")
+    if not np.isfinite(amplitude) or amplitude < 0.0:
+        raise ValueError("amplitude must be finite and nonnegative")
+    if velocity_sign not in (-1.0, 1.0):
+        raise ValueError("velocity_sign must be +1 or -1")
+    if not np.isfinite(delta) or delta <= 0.0:
+        raise ValueError("the smooth-sign delta must be finite and positive")
+
+    dx, lx = float(c["dx"]), float(c["lx"])
+    k1 = float(c.get("k_physical", 2.0 * np.pi / lx))
+    rdx = float(c.get("rdx_f32", c.get("rdx", c.get("rdx_fp32", np.float32(1.0 / dx)))))
+    mass = float(np.sum(np.asarray(c["eta_delta"]) * np.asarray(c["layer_mass"])))
+    dnw_signed = 1.0 / np.asarray(c["rdnw"], dtype=np.float64)
+    rdnw_pos = np.abs(np.asarray(c["rdnw"], dtype=np.float64))
+    rdn_pos = np.abs(np.asarray(c["rdn"], dtype=np.float64))
+    if dnw_signed.size < n or rdnw_pos.size < n or rdn_pos.size < n:
+        raise ValueError("rdnw and rdn must cover every mass level")
+
+    # Fixture contract: maps are one, V is zero, and hybrid coefficients are
+    # c1h=c1f=1, c2h=c2f=0. Accept explicit coefficient arrays if supplied.
+    c1h = np.asarray(c.get("c1h", np.ones(n)), dtype=np.float64)
+    c2h = np.asarray(c.get("c2h", np.zeros(n)), dtype=np.float64)
+    c1f = np.asarray(c.get("c1f", np.ones(n + 1)), dtype=np.float64)
+    c2f = np.asarray(c.get("c2f", np.zeros(n + 1)), dtype=np.float64)
+    if min(c1h.size, c2h.size) < n or min(c1f.size, c2f.size) < n + 1:
+        raise ValueError("c1h/c2h and c1f/c2f must cover their vertical grids")
+    c1h, c2h = c1h[:n], c2h[:n]
+    c1f, c2f = c1f[:n + 1], c2f[:n + 1]
+
+    i = np.arange(nx, dtype=np.float64)
+    phase_u = np.exp(1j * k1 * dx * i)
+    phase_mass = np.exp(1j * k1 * dx * (i + 0.5))
+    a = float(amplitude)
+    u = a * velocity_sign * np.real(q[:n, None] * phase_u[None, :])
+    w = np.zeros((n + 1, nx), dtype=np.float64)
+    w[1:] = a * velocity_sign * np.real(q[n:2*n, None] * phase_mass[None, :])
+    mu = a * np.real(q[-1] * phase_mass)
+    mass_total = mass + mu
+    mass_u = 0.5 * (mass_total + np.roll(mass_total, 1))
+    alpha_u = c1h[:, None] * mass_u[None, :] + c2h[:, None]
+    alpha_w = c1f[:, None] * mass_total[None, :] + c2f[:, None]
+    if np.any(alpha_u == 0.0) or np.any(alpha_w == 0.0):
+        raise ValueError("finite smooth-upwind fixture has a zero hybrid mass")
+
+    # Exact calc_ww_cp mass flux and column recurrence on the independent
+    # periodic cells. dnw is the signed eta-layer width; rdnw is its reciprocal.
+    cu = (c1h[:, None] * mass_u[None, :] + c2h[:, None]) * u
+    divv = dnw_signed[:n, None] * rdx * (np.roll(cu, -1, axis=1) - cu)
+    dmdt = np.sum(divv, axis=0)
+    omega = np.zeros((n + 1, nx), dtype=np.float64)
+    for k in range(n - 1):
+        omega[k + 1] = omega[k] - dnw_signed[k] * c1h[k] * dmdt - divv[k]
+    omega[-1] = 0.0  # native calc_ww_cp lid condition
+    omega_u = 0.5 * (omega + np.roll(omega, 1, axis=1))
+
+    # U: native flux4 plus the exact smooth sign correction on faces 2..n-2.
+    u_center_flux = np.zeros((n + 1, nx), dtype=np.float64)
+    u_upwind_flux = np.zeros_like(u_center_flux)
+    dnw_metric = 1.0 / rdnw_pos
+    dnv_metric = 1.0 / rdn_pos
+    for face in range(1, n):
+        if n >= 4 and 1 < face < n - 1:
+            qm2, qm1 = u[face - 2], u[face - 1]
+            qi, qp1 = u[face], u[face + 1]
+            flux4 = (7.0 * (qi + qm1) - (qp1 + qm2)) / 12.0
+            stencil = ((qp1 - qm2) - 3.0 * (qi - qm1)) / 12.0
+            om = omega_u[face]
+            u_center_flux[face] = om * flux4
+            u_upwind_flux[face] = -(om * om / np.sqrt(om * om + delta * delta)) * stencil
+        else:
+            fzm = 0.5 * dnw_metric[face - 1] / dnv_metric[face]
+            fzp = 0.5 * dnw_metric[face] / dnv_metric[face]
+            u_center_flux[face] = omega_u[face] * (fzm * u[face] + fzp * u[face - 1])
+    u_centered = rdnw_pos[:n, None] * (u_center_flux[1:] - u_center_flux[:-1]) / alpha_u
+    u_upwind = rdnw_pos[:n, None] * (u_upwind_flux[1:] - u_upwind_flux[:-1]) / alpha_u
+
+    # W: Omega is averaged to mass levels; only interior flux3 points receive
+    # the sign correction. The native upper-lid flux remains centered.
+    romm = 0.5 * (omega[:-1] + omega[1:])
+    w_center_flux = np.zeros((n, nx), dtype=np.float64)
+    w_upwind_flux = np.zeros_like(w_center_flux)
+    w_center_flux[0] = 0.5 * romm[0] * (w[0] + w[1])
+    for m in range(1, n - 1):
+        if n >= 4:
+            qim1, qi = w[m - 1], w[m]
+            qip1, qip2 = w[m + 1], w[m + 2]
+            flux4 = (7.0 * (qip1 + qi) - (qip2 + qim1)) / 12.0
+            stencil = ((qip2 - qim1) - 3.0 * (qip1 - qi)) / 12.0
+            vel = romm[m]
+            w_center_flux[m] = vel * flux4
+            w_upwind_flux[m] = -(vel * vel / np.sqrt(vel * vel + delta * delta)) * stencil
+        else:
+            w_center_flux[m] = romm[m] * 0.5 * (w[m] + w[m + 1])
+    if n > 1:
+        w_center_flux[-1] = 0.5 * romm[-1] * (w[-2] + w[-1])
+    w_centered = np.zeros((n + 1, nx), dtype=np.float64)
+    w_upwind = np.zeros_like(w_centered)
+    if n > 1:
+        w_centered[1:n] = rdn_pos[1:n, None] * (w_center_flux[1:] - w_center_flux[:-1]) / alpha_w[1:n]
+        w_upwind[1:n] = rdn_pos[1:n, None] * (w_upwind_flux[1:] - w_upwind_flux[:-1]) / alpha_w[1:n]
+        w_centered[n] = -2.0 * rdn_pos[n - 1] * w_center_flux[-1] / alpha_w[n]
+        # vflux[n-1] is the centered boundary flux, so the lid upwind correction is zero.
+
+    chi_u = np.abs(omega_u[2:n - 1]) / delta if n >= 4 else np.zeros((0, nx))
+    chi_w = np.abs(romm[1:n - 1]) / delta if n >= 4 else np.zeros((0, nx))
+    regime = {
+        "delta": float(delta),
+        "omega_units_source": "Pa/s (raw calc_ww_cp mass flux; no dry-mass normalization)",
+        "omega_peak": float(np.max(np.abs(omega))),
+        "omega_u_sign_peak": float(np.max(np.abs(omega_u[2:n - 1]))) if chi_u.size else 0.0,
+        "romm_sign_peak": float(np.max(np.abs(romm[1:n - 1]))) if chi_w.size else 0.0,
+        "chi_u_peak": float(np.max(chi_u)) if chi_u.size else 0.0,
+        "chi_w_peak": float(np.max(chi_w)) if chi_w.size else 0.0,
+        "u_smooth_points_fraction": float(np.mean(chi_u > 1.0)) if chi_u.size else 0.0,
+        "w_smooth_points_fraction": float(np.mean(chi_w > 1.0)) if chi_w.size else 0.0,
+        "amplitude": a,
+        "velocity_sign": float(velocity_sign),
+        "channels": "vertical advection only; centered reference and smooth correction",
+        "upwind_faces_u": list(range(2, n - 1)) if n >= 4 else [],
+        "upwind_mass_points_w": list(range(1, n - 1)) if n >= 4 else [],
+        "lid_upwind_correction": 0.0,
+    }
+    return {
+        "u_upwind": u_upwind,
+        "w_upwind": w_upwind,
+        "u_centered": u_centered,
+        "w_centered": w_centered,
+        "u": u_centered + u_upwind,
+        "w": w_centered + w_upwind,
+        "omega": omega,
+        "omega_u": omega_u,
+        "romm": romm,
+        "mass_tendency_over_map_y": dmdt,
+        "metadata": regime,
+    }
+
+
 def transport_forcing(c: dict, q: np.ndarray) -> np.ndarray:
     """Return transport/curvature ``F''/2`` in source state order.
 

@@ -1,0 +1,299 @@
+{
+  "descriptor_sha256": "ca27ee59e6978600639ea959bc6a4b5cd31d5ba4b2490259f01927eb62afb733",
+  "executable_sha256": "03ef113249d1fa176dae3d05941e96a614d8db4531d041251871ac652ecde15c",
+  "m3_result": {
+    "control_direction": [
+      0.15,
+      -0.12,
+      0.09,
+      0.17
+    ],
+    "fd_epsilon_pair": [
+      0.08,
+      0.04
+    ],
+    "harmonic": 3,
+    "interpretation": "finite-upwind-dominance diagnostic: source FD compares a selected finite upwind channel with full-map m3 VJP; omitted m3 contributions are not bounded and complete cubic closure remains open",
+    "native_ad_vs_native_fd_relative_error": 0.0005320203842160691,
+    "native_fd_directional_derivative_by_epsilon": {
+      "0.04": -5.568880751503913e-10,
+      "0.08": -5.564544593335274e-10
+    },
+    "native_fd_epsilon_scatter_relative": 0.0007786408727584117,
+    "native_fd_m3_objectives_minus_plus": {
+      "0.04": [
+        -1.4086880143274194e-09,
+        -1.4532390603394507e-09
+      ],
+      "0.08": [
+        -1.3867053616500868e-09,
+        -1.4757380751434512e-09
+      ]
+    },
+    "native_fd_roundoff_floor": 1.0485749691777721e-21,
+    "native_vjp_full_map_by_dt_and_amplitude": {
+      "dt0.5_a0.5": {
+        "objective": -3.5831400910582567e-10,
+        "objective_fp64_floor": 5.853888215085027e-16,
+        "payload": "upwind_m3_adjoint_dt0.5_a0.5.csv",
+        "vjp_control_directional_derivative": -1.391156454356307e-10,
+        "vjp_directional_fp64_floor": 1.7595893357121606e-16
+      },
+      "dt0.5_a1": {
+        "objective": -1.4303753624253512e-09,
+        "objective_fp64_floor": 1.1707776190107478e-15,
+        "payload": "upwind_m3_adjoint_dt0.5_a1.csv",
+        "vjp_control_directional_derivative": -5.563839185381003e-10,
+        "vjp_directional_fp64_floor": 3.519178013567093e-16
+      },
+      "dt1_a0.5": {
+        "objective": -3.5845486388158543e-10,
+        "objective_fp64_floor": 5.853888216219235e-16,
+        "payload": "upwind_m3_adjoint_dt1_a0.5.csv",
+        "vjp_control_directional_derivative": -1.3916764951809463e-10,
+        "vjp_directional_fp64_floor": 1.7595681602724386e-16
+      },
+      "dt1_a1": {
+        "objective": -1.4309323673883378e-09,
+        "objective_fp64_floor": 1.1707776192420744e-15,
+        "payload": "upwind_m3_adjoint_dt1_a1.csv",
+        "vjp_control_directional_derivative": -5.565917993426844e-10,
+        "vjp_directional_fp64_floor": 3.5191356628207743e-16
+      }
+    },
+    "seconds": 6.0,
+    "source_finite_smooth_upwind_objective_by_amplitude": {
+      "0.5": {
+        "objective": -3.5828514964728503e-10,
+        "projected_dop_tightening_floor": 5.463612568619921e-18,
+        "tightening_relative": 1.0734655139073206e-07
+      },
+      "1.0": {
+        "objective": -1.4299535513945143e-09,
+        "projected_dop_tightening_floor": 6.268237362664827e-18,
+        "tightening_relative": 2.2718374574769084e-08
+      }
+    },
+    "source_finite_upwind_control_fd_by_amplitude_and_epsilon": {
+      "a0.5_eps0.04": -1.3907902569252111e-10,
+      "a0.5_eps0.08": -1.3907903546895973e-10,
+      "a1_eps0.04": -5.561199897225652e-10,
+      "a1_eps0.08": -5.561199985914018e-10
+    },
+    "source_finite_upwind_control_fd_objectives_minus_plus": {
+      "a0.5_eps0.04": [
+        -3.527435652981883e-10,
+        -3.6386988735359e-10
+      ],
+      "a0.5_eps0.08": [
+        -3.4724513351320195e-10,
+        -3.694977791882355e-10
+      ],
+      "a1_eps0.04": [
+        -1.4077951152702973e-09,
+        -1.4522847144481025e-09
+      ],
+      "a1_eps0.08": [
+        -1.385809405356092e-09,
+        -1.4747886051307164e-09
+      ]
+    },
+    "source_finite_upwind_control_fd_roundoff_floors": {
+      "a0.5_eps0.04": {
+        "directional_derivative_floor": 1.3658626877646586e-16,
+        "minus_plus_objective_floor": [
+          5.4536939489828695e-18,
+          5.473207553134399e-18
+        ]
+      },
+      "a0.5_eps0.08": {
+        "directional_derivative_floor": 6.828698109648461e-17,
+        "minus_plus_objective_floor": [
+          5.443417035762695e-18,
+          5.4824999396748435e-18
+        ]
+      },
+      "a1_eps0.04": {
+        "directional_derivative_floor": 1.5670564972129441e-16,
+        "minus_plus_objective_floor": [
+          6.277095246102811e-18,
+          6.259356731600742e-18
+        ]
+      },
+      "a1_eps0.08": {
+        "directional_derivative_floor": 7.835030497555171e-17,
+        "minus_plus_objective_floor": [
+          6.285804115009118e-18,
+          6.250244681079155e-18
+        ]
+      }
+    },
+    "source_finite_upwind_vs_native_objective_gap_by_amplitude": {
+      "0.5": {
+        "native_fullmap_objective": -3.5845486388158543e-10,
+        "signed_gap": -1.6971423430039563e-13,
+        "source_upwind_objective": -3.5828514964728503e-10
+      },
+      "1.0": {
+        "native_fullmap_objective": -1.4309323673883378e-09,
+        "signed_gap": -9.788159938235144e-13,
+        "source_upwind_objective": -1.4299535513945143e-09
+      }
+    },
+    "source_m3_fullmap_directional_gate": {
+      "absolute_error": 4.718096201192656e-13,
+      "accepted_absolute_budget": 1.1136922179013722e-12,
+      "amplitude": 1.0,
+      "native_fullmap_vjp": -5.565917993426844e-10,
+      "native_vjp_fp64_floor": 3.5191356628207743e-16,
+      "relative_budget": 0.002,
+      "relative_error": 0.0008476761976666857,
+      "source_fd_epsilon_scatter_relative": 1.594770341156401e-08,
+      "source_fd_tightening_floor": 1.5670564972129441e-16,
+      "source_finite_upwind_fd": -5.561199897225652e-10,
+      "source_finite_upwind_fd_absolute_signal": 5.561199897225652e-10
+    },
+    "source_sign_smooth_delta": 0.0010000000474974513,
+    "source_vs_full_map_directional_gap": {
+      "0.5": -8.862382557351351e-14,
+      "1.0": -4.718096201192656e-13
+    },
+    "terminal_w_m3_norm": 0.5000000000000004
+  },
+  "offline_replay_binding": {
+    "graph_receipt": {
+      "edges": 3443,
+      "file_sha256": "088e7a808b9a3adb42a93df88aee158a9c45b79fb21b19de918d4a228ab88d1c",
+      "graph_sha256": "2cefaac391266f472b99e06c303ec963663ad0d99c1e7a7dfb35d3c51148b744",
+      "nodes": 1095,
+      "path": "docs/evidence/20261007/pr280_temporal_upwind_graph_refresh_receipt.json"
+    },
+    "harness_path": "/private/tmp/pr280-m3-final-checker-replay.py",
+    "harness_sha256": "1843466caddd2a330184df0dee5a8a98ac615a7787e3125698c229b23697f5e6",
+    "native_calls_during_replay": 0,
+    "nonadjoint_focused_report": {
+      "path": "/private/tmp/pr280-temporal-upwind-focused-final/wave_quadratic_forcing_report.json",
+      "runner_sha256": "9758c72be78df90c007b6ed6ed3c605ab80a41a77cb187fbe706a730b1b0a0f9",
+      "sha256": "e9e83e839331b675db76ac24d62d0bca546d4d69ef7411f89700e1953e7d4183"
+    },
+    "raw_receipt_sha256": "4012c36751316af0c03d703bd2b7a68d3f08070288070a73ef815282b158f9eb",
+    "source_hashes_current_worktree": {
+      "external/libtorch_wrf/sdirk3/CMakeLists.txt": "b0e687cde669073ca20854564eab0cbc3f5405860427c034e5294d2272a8c75c",
+      "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp": "e11996d86cd7edaf7299dddeb39f1b900169d5e5ef69af0e9843b65be92e7c7b",
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "199874f3666604a57a177937784bb4fa0a13a31836e8224259f57101c166ae18",
+      "tools/test_wave_quadratic_forcing.py": "a52896ad6704d5ea1d959d0b541e3bac4dde6563d150d6cb504bc78b70af0f34",
+      "tools/wave_quadratic_reference.py": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431",
+      "tools/wave_quadratic_transport.py": "526923f41be9a8225b10a6fa022d11b60d0c60ba071d625cbe6d06dc750fc86f"
+    }
+  },
+  "reused_native_payloads": {
+    "upwind_m3_adjoint_dt0.5_a0.5.csv": {
+      "command_args": [
+        "--upwind-trajectory",
+        "/private/tmp/pr280-m3-final-checker-replay/upwind_m3_direction_dt0.5_a0.5.txt",
+        "12",
+        "0.5"
+      ],
+      "csv": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/focused_attempt3_m3_fd_failure/upwind_m3_adjoint_dt0.5_a0.5.csv",
+      "csv_sha256": "3f7d3162a10d0be5a20ff7e23ed72b3487b5025a0d10c9fb995355f98c4d9a87",
+      "direction": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/focused_attempt3_m3_fd_failure/upwind_m3_direction_dt0.5_a0.5.txt",
+      "direction_sha256": "30b426d52e9b762e6d79055b2d3c7fa3c80c1925e1830fc0d6fe4f66e14d7f11",
+      "native_reexecuted": false
+    },
+    "upwind_m3_adjoint_dt0.5_a1.csv": {
+      "command_args": [
+        "--upwind-trajectory",
+        "/private/tmp/pr280-m3-final-checker-replay/upwind_m3_direction_dt0.5_a1.txt",
+        "12",
+        "0.5"
+      ],
+      "csv": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/focused_attempt3_m3_fd_failure/upwind_m3_adjoint_dt0.5_a1.csv",
+      "csv_sha256": "fc0905039fa75e7c91233738f2c42cfabc1076c2b4a07ddaa35e497e1f39c40d",
+      "direction": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/focused_attempt3_m3_fd_failure/upwind_m3_direction_dt0.5_a1.txt",
+      "direction_sha256": "c05e227a2a80a9558d9458791ed405628f5354aab1697135f603d10bdd10eb50",
+      "native_reexecuted": false
+    },
+    "upwind_m3_adjoint_dt1_a0.5.csv": {
+      "command_args": [
+        "--upwind-trajectory",
+        "/private/tmp/pr280-m3-final-checker-replay/upwind_m3_direction_dt1_a0.5.txt",
+        "6",
+        "1.0"
+      ],
+      "csv": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/focused_attempt3_m3_fd_failure/upwind_m3_adjoint_dt1_a0.5.csv",
+      "csv_sha256": "f7086c3644b5c13347798a97d56de1ad11ebef64dae07d6bcfbd07efe872089c",
+      "direction": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/focused_attempt3_m3_fd_failure/upwind_m3_direction_dt1_a0.5.txt",
+      "direction_sha256": "30b426d52e9b762e6d79055b2d3c7fa3c80c1925e1830fc0d6fe4f66e14d7f11",
+      "native_reexecuted": false
+    },
+    "upwind_m3_adjoint_dt1_a1.csv": {
+      "command_args": [
+        "--upwind-trajectory",
+        "/private/tmp/pr280-m3-final-checker-replay/upwind_m3_direction_dt1_a1.txt",
+        "6",
+        "1.0"
+      ],
+      "csv": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/focused_attempt3_m3_fd_failure/upwind_m3_adjoint_dt1_a1.csv",
+      "csv_sha256": "3efeb3b7f5427c42bfe2c288832d07511b7e24e3195870b753b4c7dd283cbda1",
+      "direction": "/Users/yhlee/Documents/AD-SDIRK3-worktree-archive/20261007/temporal_upwind_review/focused_attempt3_m3_fd_failure/upwind_m3_direction_dt1_a1.txt",
+      "direction_sha256": "c05e227a2a80a9558d9458791ed405628f5354aab1697135f603d10bdd10eb50",
+      "native_reexecuted": false
+    },
+    "upwind_m3_fd_eps0.04_+1.csv": {
+      "command_args": [
+        "--upwind-trajectory",
+        "/private/tmp/pr280-m3-final-checker-replay/upwind_m3_fd_eps0.04_+1.txt",
+        "6",
+        "1.0"
+      ],
+      "csv": "/private/tmp/pr280-m3-scan-inputs/upwind_m3_fd_eps0.04_+1.csv",
+      "csv_sha256": "e97e2e346a727855a34285ed9291724ef8ef5390fe64b49c3c6a6168f1413f14",
+      "direction": "/private/tmp/pr280-m3-scan-inputs/upwind_m3_fd_eps0.04_+1.txt",
+      "direction_sha256": "5bac1caeff4a72b4b81c058f46854f5a91dc1d58b985437e1bc77dd507dbb5af",
+      "native_reexecuted": false
+    },
+    "upwind_m3_fd_eps0.04_-1.csv": {
+      "command_args": [
+        "--upwind-trajectory",
+        "/private/tmp/pr280-m3-final-checker-replay/upwind_m3_fd_eps0.04_-1.txt",
+        "6",
+        "1.0"
+      ],
+      "csv": "/private/tmp/pr280-m3-scan-inputs/upwind_m3_fd_eps0.04_-1.csv",
+      "csv_sha256": "8ac1a6d8495a2982d8bc7dbde7392347d8bea6b509b2f726993279c2586a6e29",
+      "direction": "/private/tmp/pr280-m3-scan-inputs/upwind_m3_fd_eps0.04_-1.txt",
+      "direction_sha256": "f4c04281937efbc46bac58bf9b5a722553fbb202e058037cefc8cb999d385b79",
+      "native_reexecuted": false
+    },
+    "upwind_m3_fd_eps0.08_+1.csv": {
+      "command_args": [
+        "--upwind-trajectory",
+        "/private/tmp/pr280-m3-final-checker-replay/upwind_m3_fd_eps0.08_+1.txt",
+        "6",
+        "1.0"
+      ],
+      "csv": "/private/tmp/pr280-m3-scan-inputs/upwind_m3_fd_eps0.08_+1.csv",
+      "csv_sha256": "c6acf03a0afc999d38e10def59039ca0b921a95a4d6db4fe22eeb85ca0077054",
+      "direction": "/private/tmp/pr280-m3-scan-inputs/upwind_m3_fd_eps0.08_+1.txt",
+      "direction_sha256": "8177be7e8784afe5101423ba83e727e7a3e0350ea75ce749c48107dabe8bdc79",
+      "native_reexecuted": false
+    },
+    "upwind_m3_fd_eps0.08_-1.csv": {
+      "command_args": [
+        "--upwind-trajectory",
+        "/private/tmp/pr280-m3-final-checker-replay/upwind_m3_fd_eps0.08_-1.txt",
+        "6",
+        "1.0"
+      ],
+      "csv": "/private/tmp/pr280-m3-scan-inputs/upwind_m3_fd_eps0.08_-1.csv",
+      "csv_sha256": "c4934e9a473b5b2005a2144bfde589df32d344cca282f866573f0587d9e2c3d5",
+      "direction": "/private/tmp/pr280-m3-scan-inputs/upwind_m3_fd_eps0.08_-1.txt",
+      "direction_sha256": "029a76f6c1f4b40eb56af35adec2246e63e4829855d88d66c82db0f193177ff2",
+      "native_reexecuted": false
+    }
+  },
+  "scope": "offline replay of final m3 checker; all native CSVs were generated in focused runs; no native calls here",
+  "status": "m3-fixed-epsilon-checker-replayed-from-bound-native-payloads",
+  "timestamp_local": "2026-10-07T14:16:21+09:00"
+}
