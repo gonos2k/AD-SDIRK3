@@ -1,0 +1,377 @@
+{
+  "extraction_gaps": [
+    "CMake test semantics, pinned inventory, and CI workflow are manually bound configuration sources.",
+    "Fortran WRF integration relationships are outside this scoped C++/Python graph.",
+    "Graph relationships aid navigation and are not numerical evidence."
+  ],
+  "graph_code_source_files": 39,
+  "graph_diff_vs_preserved_baseline": {
+    "new_edges": 147,
+    "new_nodes": 69,
+    "note": "Counts are a structural navigation diff; edge loss is recorded rather than forcing stale relationships back into the refreshed graph.",
+    "removed_edges": 394,
+    "removed_nodes": 124
+  },
+  "graph_edges": 2660,
+  "graph_nodes": 1142,
+  "graph_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/graph.json",
+  "graph_report_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/GRAPH_REPORT.md",
+  "graph_report_sha256": "9dfec54dd267ad1ac55304ed1b562b8babd91796e2405bb49d173b8fb26ddc4e",
+  "graph_sha256": "0085120159c81eb81167b9f422731536c6096cd0d0909e0fa81406fd302d51b4",
+  "graph_update": "Code-only AST refresh; no semantic LLM extraction (0 input/output tokens). The deleted stale mirror copy tests/test_stable_wave_reference_rows.py was pruned.",
+  "graphify_corpus_root": "/private/tmp/sdirk3-fp64-carry-adjoint-graph",
+  "head": "ee8faadbf728f61fe9db8f92adcf9f8d79a3bac7",
+  "inventory_count": 129,
+  "manifest_entries": 40,
+  "manifest_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/manifest.json",
+  "manifest_sha256": "5f5a4e51f5b1174c3698b4ad54c13c28ba988ec94f2f13561532933d335d82f7",
+  "manual_non_ast_bindings": [
+    {
+      "bytes": 64976,
+      "cache_source": "CMakeLists.txt",
+      "reason": "manual configuration binding; Graphify AST does not model CMake test registration, pinned CTest inventory, or workflow policy",
+      "sha256": "7d5cf4ac1c93218818e712a64f98192b5960875fa94926c796305177f881fbf3",
+      "worktree_source": "external/libtorch_wrf/sdirk3/CMakeLists.txt"
+    },
+    {
+      "bytes": 3491,
+      "cache_source": null,
+      "reason": "manual configuration binding; Graphify AST does not model CMake test registration, pinned CTest inventory, or workflow policy",
+      "sha256": "db226903904725a9169c5e4b6e0b1acecc2c102fa541c94f49ec7ad0a5ec07e0",
+      "worktree_source": ".github/ci/expected_ctest_names.txt"
+    },
+    {
+      "bytes": 31699,
+      "cache_source": null,
+      "reason": "manual configuration binding; Graphify AST does not model CMake test registration, pinned CTest inventory, or workflow policy",
+      "sha256": "21fe5fd830d7a911f1ce87603ba413cb2c39cf4a3bf32246a2d11d5f781e413f",
+      "worktree_source": ".github/workflows/sdirk3-ci.yml"
+    }
+  ],
+  "new_ctest_name": "Native_Physical_Wave_Inverse",
+  "preserved_baseline_graph": {
+    "path": "/private/tmp/pr281-fine-wave-full/attempt11/graphify_before/graphify-out__graph.json",
+    "raw_edges": 3443,
+    "raw_nodes": 1197,
+    "sha256": "2cefaac391266f472b99e06c303ec963663ad0d99c1e7a7dfb35d3c51148b744"
+  },
+  "source_bindings": [
+    {
+      "bytes": 10419,
+      "graph_source": "tests/curvature_scalar_oracle.h",
+      "mirror_match": true,
+      "mirror_sha256": "4724bcab16a8288c9ffda59aa829f4339109b92b71c19f6da67b76e8abba868c",
+      "sha256": "4724bcab16a8288c9ffda59aa829f4339109b92b71c19f6da67b76e8abba868c",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/curvature_scalar_oracle.h"
+    },
+    {
+      "bytes": 21031,
+      "graph_source": "tests/stable_wave_reference.h",
+      "mirror_match": true,
+      "mirror_sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+      "sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h"
+    },
+    {
+      "bytes": 18922,
+      "graph_source": "tests/test_base_state_checked_abi.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "94da99dc441c9bcd4f223700ccf41b69ee818cb73d8e1f5cefa20e32f8eafee1",
+      "sha256": "94da99dc441c9bcd4f223700ccf41b69ee818cb73d8e1f5cefa20e32f8eafee1",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp"
+    },
+    {
+      "bytes": 12112,
+      "graph_source": "tests/test_config_numeric_contract.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "6dd55f1520bc3e648a35ea7dd0366400dbbe21135117ca8d842e4ae46e4e6bbb",
+      "sha256": "6dd55f1520bc3e648a35ea7dd0366400dbbe21135117ca8d842e4ae46e4e6bbb",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_config_numeric_contract.cpp"
+    },
+    {
+      "bytes": 15482,
+      "graph_source": "tests/test_fixed_trajectory_derivative.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "8bb11154215f995894a44c54b03e9c4b46870e73651caa0eb100dd4f1bf4fd71",
+      "sha256": "8bb11154215f995894a44c54b03e9c4b46870e73651caa0eb100dd4f1bf4fd71",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_derivative.cpp"
+    },
+    {
+      "bytes": 15338,
+      "graph_source": "tests/test_fixed_trajectory_lifecycle.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "afe214ec0d94139cf6e4ede3c148a4a30da2d3084c75175ac8bf012f9fec2592",
+      "sha256": "afe214ec0d94139cf6e4ede3c148a4a30da2d3084c75175ac8bf012f9fec2592",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp"
+    },
+    {
+      "bytes": 176919,
+      "graph_source": "tests/test_fp64_carry_adjoint.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829",
+      "sha256": "66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp"
+    },
+    {
+      "bytes": 17211,
+      "graph_source": "tests/test_fp64_handoff_probe.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f",
+      "sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp"
+    },
+    {
+      "bytes": 11409,
+      "graph_source": "tests/test_horizontal_pgf_actual_rhs.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "c5ee2f733069f32ed6161eb4cf2aeaf251712c8ffa6965de422d75c7cb35f8f5",
+      "sha256": "c5ee2f733069f32ed6161eb4cf2aeaf251712c8ffa6965de422d75c7cb35f8f5",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_horizontal_pgf_actual_rhs.cpp"
+    },
+    {
+      "bytes": 65638,
+      "graph_source": "tests/test_native_wave_refinement.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "d6e9505a994ce765ce58aa51c8af33ebc49fbf95ebe8b60a48c5ca0e42146787",
+      "sha256": "d6e9505a994ce765ce58aa51c8af33ebc49fbf95ebe8b60a48c5ca0e42146787",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp"
+    },
+    {
+      "bytes": 233568,
+      "graph_source": "tests/test_scalar_diffusion_contract.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "813b8b246e52b4551856a1a1f68992057e907ec8e702c165eb259d93e58dd363",
+      "sha256": "813b8b246e52b4551856a1a1f68992057e907ec8e702c165eb259d93e58dd363",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_scalar_diffusion_contract.cpp"
+    },
+    {
+      "bytes": 13750,
+      "graph_source": "tests/test_wrms_gate_metric.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "9f2fa6102a2bc6f67609ce7e5c5b7614cdbb560ed1dcec3f33446793393c923e",
+      "sha256": "9f2fa6102a2bc6f67609ce7e5c5b7614cdbb560ed1dcec3f33446793393c923e",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp"
+    },
+    {
+      "bytes": 27672,
+      "graph_source": "tests/tile_test_fixture.h",
+      "mirror_match": true,
+      "mirror_sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8",
+      "worktree_source": "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h"
+    },
+    {
+      "bytes": 47619,
+      "graph_source": "tools/test_fine_wave_inverse.py",
+      "mirror_match": true,
+      "mirror_sha256": "7e276c8e4544f41ac127b8ed558214106ed53398c0a255a221f3c1a131337769",
+      "sha256": "7e276c8e4544f41ac127b8ed558214106ed53398c0a255a221f3c1a131337769",
+      "worktree_source": "tools/test_fine_wave_inverse.py"
+    },
+    {
+      "bytes": 38007,
+      "graph_source": "tools/test_native_wave_refinement.py",
+      "mirror_match": true,
+      "mirror_sha256": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022",
+      "sha256": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022",
+      "worktree_source": "tools/test_native_wave_refinement.py"
+    },
+    {
+      "bytes": 25400,
+      "graph_source": "tools/test_stable_wave_reference_rows.py",
+      "mirror_match": true,
+      "mirror_sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+      "sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e",
+      "worktree_source": "tools/test_stable_wave_reference_rows.py"
+    },
+    {
+      "bytes": 17106,
+      "graph_source": "tools/test_wave_energy_budget.py",
+      "mirror_match": true,
+      "mirror_sha256": "0de67788f59a93b91558c3174de973ed179a7cda4e9b96e2974b943ec52b4da7",
+      "sha256": "0de67788f59a93b91558c3174de973ed179a7cda4e9b96e2974b943ec52b4da7",
+      "worktree_source": "tools/test_wave_energy_budget.py"
+    },
+    {
+      "bytes": 149870,
+      "graph_source": "tools/test_wave_quadratic_forcing.py",
+      "mirror_match": true,
+      "mirror_sha256": "86049d3d9650c61eceac5d3534c02392c724e7c56042ea8b2f9a402991762aea",
+      "sha256": "86049d3d9650c61eceac5d3534c02392c724e7c56042ea8b2f9a402991762aea",
+      "worktree_source": "tools/test_wave_quadratic_forcing.py"
+    },
+    {
+      "bytes": 28879,
+      "graph_source": "tools/test_wave_spatial_convergence.py",
+      "mirror_match": true,
+      "mirror_sha256": "29d4d412e43f0daae6efc42242c661511b6e60bddf36c4ce39f076d575e19c76",
+      "sha256": "29d4d412e43f0daae6efc42242c661511b6e60bddf36c4ce39f076d575e19c76",
+      "worktree_source": "tools/test_wave_spatial_convergence.py"
+    },
+    {
+      "bytes": 30223,
+      "graph_source": "tools/wave_energy_spatial_reference.py",
+      "mirror_match": true,
+      "mirror_sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+      "sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+      "worktree_source": "tools/wave_energy_spatial_reference.py"
+    },
+    {
+      "bytes": 32029,
+      "graph_source": "tools/wave_quadratic_reference.py",
+      "mirror_match": true,
+      "mirror_sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431",
+      "sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431",
+      "worktree_source": "tools/wave_quadratic_reference.py"
+    },
+    {
+      "bytes": 31069,
+      "graph_source": "tools/wave_quadratic_transport.py",
+      "mirror_match": true,
+      "mirror_sha256": "526923f41be9a8225b10a6fa022d11b60d0c60ba071d625cbe6d06dc750fc86f",
+      "sha256": "526923f41be9a8225b10a6fa022d11b60d0c60ba071d625cbe6d06dc750fc86f",
+      "worktree_source": "tools/wave_quadratic_transport.py"
+    },
+    {
+      "bytes": 5646,
+      "graph_source": "wrf_hydrostatic_pressure.h",
+      "mirror_match": true,
+      "mirror_sha256": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+      "sha256": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h"
+    },
+    {
+      "bytes": 1728,
+      "graph_source": "wrf_sdirk3_ark324_composition.h",
+      "mirror_match": true,
+      "mirror_sha256": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907",
+      "sha256": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_ark324_composition.h"
+    },
+    {
+      "bytes": 34385,
+      "graph_source": "wrf_sdirk3_base_state_zerocopy.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "6374f05622afa25d92b285b04fdaa09a9b7d404563532acefe5186c3cb787ea7",
+      "sha256": "6374f05622afa25d92b285b04fdaa09a9b7d404563532acefe5186c3cb787ea7",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp"
+    },
+    {
+      "bytes": 294791,
+      "graph_source": "wrf_sdirk3_config.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp"
+    },
+    {
+      "bytes": 223864,
+      "graph_source": "wrf_sdirk3_config.h",
+      "mirror_match": true,
+      "mirror_sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h"
+    },
+    {
+      "bytes": 11591,
+      "graph_source": "wrf_sdirk3_curvature.h",
+      "mirror_match": true,
+      "mirror_sha256": "ee008bd6fb7556fef0ab83119e0faada1b9efc9152a69d25b65ac71ad632eee8",
+      "sha256": "ee008bd6fb7556fef0ab83119e0faada1b9efc9152a69d25b65ac71ad632eee8",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_curvature.h"
+    },
+    {
+      "bytes": 4672,
+      "graph_source": "wrf_sdirk3_horizontal_momentum.h",
+      "mirror_match": true,
+      "mirror_sha256": "e604da0fb49e15c4f20369a9dc946aca345a916668d631a6594543ae281b8216",
+      "sha256": "e604da0fb49e15c4f20369a9dc946aca345a916668d631a6594543ae281b8216",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_horizontal_momentum.h"
+    },
+    {
+      "bytes": 5619,
+      "graph_source": "wrf_sdirk3_hydrostatic_balance.h",
+      "mirror_match": true,
+      "mirror_sha256": "707ff6f84137db8129779931cf4fa5c281bd5a3a6c233bb81881f1858b22e133",
+      "sha256": "707ff6f84137db8129779931cf4fa5c281bd5a3a6c233bb81881f1858b22e133",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_hydrostatic_balance.h"
+    },
+    {
+      "bytes": 65772,
+      "graph_source": "wrf_sdirk3_interface.h",
+      "mirror_match": true,
+      "mirror_sha256": "de92b28e23ba7251a2032b9ad9ec1446757c63253bf28e7b5b1060e085f88e2a",
+      "sha256": "de92b28e23ba7251a2032b9ad9ec1446757c63253bf28e7b5b1060e085f88e2a",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h"
+    },
+    {
+      "bytes": 5458,
+      "graph_source": "wrf_sdirk3_interface_params.h",
+      "mirror_match": true,
+      "mirror_sha256": "539e1df6f2f99de89ef4ffa5fc6e4a0dab90ff97c85d2ecb3b831838f3e8cae6",
+      "sha256": "539e1df6f2f99de89ef4ffa5fc6e4a0dab90ff97c85d2ecb3b831838f3e8cae6",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_params.h"
+    },
+    {
+      "bytes": 134633,
+      "graph_source": "wrf_sdirk3_interface_zerocopy.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "8a7d5f072ab7c5419cb1c95cd495cd55584a0b8cd9bade9a69ffe7eed4e278e3",
+      "sha256": "8a7d5f072ab7c5419cb1c95cd495cd55584a0b8cd9bade9a69ffe7eed4e278e3",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp"
+    },
+    {
+      "bytes": 9674,
+      "graph_source": "wrf_sdirk3_nonhydrostatic_pressure.h",
+      "mirror_match": true,
+      "mirror_sha256": "a16391b08ffaf355af22ecf409696ca9fb3c8e3bab196614baa685414737c616",
+      "sha256": "a16391b08ffaf355af22ecf409696ca9fb3c8e3bab196614baa685414737c616",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_nonhydrostatic_pressure.h"
+    },
+    {
+      "bytes": 8656,
+      "graph_source": "wrf_sdirk3_phi_horizontal.h",
+      "mirror_match": true,
+      "mirror_sha256": "da4f49716e5213cc31bbad7ff9735cec76e73bdcb6bf18ac4e9d9be2f9ca8730",
+      "sha256": "da4f49716e5213cc31bbad7ff9735cec76e73bdcb6bf18ac4e9d9be2f9ca8730",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_phi_horizontal.h"
+    },
+    {
+      "bytes": 154217,
+      "graph_source": "wrf_sdirk3_tile_unified.h",
+      "mirror_match": true,
+      "mirror_sha256": "c5b817595b9b92a4e9b778b98978fb4452a96cb62aa8709a575b1f747db6fcbf",
+      "sha256": "c5b817595b9b92a4e9b778b98978fb4452a96cb62aa8709a575b1f747db6fcbf",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h"
+    },
+    {
+      "bytes": 2467614,
+      "graph_source": "wrf_sdirk3_tile_unified_impl.cpp",
+      "mirror_match": true,
+      "mirror_sha256": "199874f3666604a57a177937784bb4fa0a13a31836e8224259f57101c166ae18",
+      "sha256": "199874f3666604a57a177937784bb4fa0a13a31836e8224259f57101c166ae18",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp"
+    },
+    {
+      "bytes": 12833,
+      "graph_source": "wrf_sdirk3_wrms_norm.h",
+      "mirror_match": true,
+      "mirror_sha256": "c2428d4bd9561b35ab96c4d093b1fda14ff5a851314f49f2e92c50319ee18b85",
+      "sha256": "c2428d4bd9561b35ab96c4d093b1fda14ff5a851314f49f2e92c50319ee18b85",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_wrms_norm.h"
+    },
+    {
+      "bytes": 16104,
+      "graph_source": "wrf_sdirk3_ww_cp.h",
+      "mirror_match": true,
+      "mirror_sha256": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+      "sha256": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+      "worktree_source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h"
+    }
+  ],
+  "source_mismatches": [],
+  "status": "refreshed",
+  "timestamp_local": "2026-10-08T06:34:00+09:00",
+  "tree": "88a1604b06398aeb928f15f26dc26f3a7057fd04",
+  "worktree": "/private/tmp/pr274-ci-20261004"
+}

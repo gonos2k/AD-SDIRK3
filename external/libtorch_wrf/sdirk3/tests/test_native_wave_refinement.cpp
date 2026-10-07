@@ -16,6 +16,7 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -179,6 +180,107 @@ torch::Tensor read_fp64_vector(const std::string& path,int64_t expected,const ch
     auto result=torch::from_blob(values.data(),{count},torch::kFloat64).clone();
     TORCH_CHECK(torch::isfinite(result).all().item<bool>(),name," contains nonfinite values");
     return result;
+}
+struct PhysicalWObservation {
+    double x,y,z,w150,w300;
+};
+std::vector<PhysicalWObservation> read_physical_w_observations(const std::string& path) {
+    std::ifstream input(path);
+    TORCH_CHECK(input,"cannot open physical-W observations: ",path);
+    std::string header;
+    int count=0;
+    input>>header>>count;
+    TORCH_CHECK(input && header=="PHYSICAL_WAVE_OBSERVATIONS_V1" && count==105,
+                "physical-W observations must start with PHYSICAL_WAVE_OBSERVATIONS_V1 and count 105");
+    std::vector<PhysicalWObservation> observations(static_cast<size_t>(count));
+    for(auto& obs:observations) {
+        TORCH_CHECK(static_cast<bool>(input>>obs.x>>obs.y>>obs.z>>obs.w150>>obs.w300),
+                    "malformed physical-W observation row: ",path);
+        TORCH_CHECK(std::isfinite(obs.x) && std::isfinite(obs.y) && std::isfinite(obs.z) &&
+                    std::isfinite(obs.w150) && std::isfinite(obs.w300),
+                    "physical-W observations contain nonfinite values");
+    }
+    input>>std::ws;
+    TORCH_CHECK(input.eof(),"extra data after physical-W observations: ",path);
+    return observations;
+}
+struct PhysicalWInterpolation {
+    torch::Tensor prediction;
+    std::vector<int> brackets;
+    double minimum_face_distance=std::numeric_limits<double>::infinity();
+};
+double physical_grid_gravity(Grid& g) {
+    const auto info=std::static_pointer_cast<WRFGridInfoExtended>(g.solver.getGridInfo());
+    TORCH_CHECK(info && std::isfinite(info->g) && info->g>0.0f,
+                "physical-W interpolation requires finite positive native gravity");
+    return static_cast<double>(info->g);
+}
+PhysicalWInterpolation interpolate_physical_w(Grid& g,const torch::Tensor& state,
+        const std::vector<PhysicalWObservation>& observations,
+        const std::vector<float>* base_phi=nullptr) {
+    const int w_start=g.ny*g.nz*g.nu+g.nv*g.nz*g.nx;
+    const int ph_start=w_start+g.ny*g.nw*g.nx;
+    const auto phi=state.slice(0,ph_start,ph_start+g.ny*g.nw*g.nx).view({g.ny,g.nw,g.nx});
+    const auto w=state.slice(0,w_start,w_start+g.ny*g.nw*g.nx).view({g.ny,g.nw,g.nx});
+    TORCH_CHECK(!base_phi || base_phi->size()==static_cast<size_t>(g.ny*g.nw*g.nx),
+                "physical-W interpolation PHB shape mismatch");
+    const double gravity=physical_grid_gravity(g);
+    const auto periodic_index=[&](int i) {
+        int wrapped=i%g.nx;
+        return wrapped<0?wrapped+g.nx:wrapped;
+    };
+    std::vector<torch::Tensor> predictions;
+    predictions.reserve(observations.size());
+    std::vector<int> brackets;
+    brackets.reserve(observations.size()*4);
+    double minimum_face_distance=std::numeric_limits<double>::infinity();
+    for(const auto& obs:observations) {
+        double x=std::fmod(obs.x,g.lx);
+        if(x<0.0) x+=g.lx;
+        const double qx=x/static_cast<double>(g.dx)-0.5;
+        const int ix0=static_cast<int>(std::floor(qx));
+        const int ix1=ix0+1;
+        const double fx=qx-ix0;
+        const double qy=obs.y/static_cast<double>(g.dy)-0.5;
+        const int iy0=static_cast<int>(std::floor(qy));
+        const int iy1=iy0+1;
+        const double fy=qy-iy0;
+        TORCH_CHECK(iy0>=0 && iy1<g.ny && fx>=0.0 && fx<=1.0 && fy>=0.0 && fy<=1.0,
+                    "physical observation lies outside the horizontal interpolation domain");
+        torch::Tensor value=torch::zeros({},state.options());
+        const int ys[]={iy0,iy1};
+        const int xs[]={periodic_index(ix0),periodic_index(ix1)};
+        const double yw[]={1.0-fy,fy}, xw[]={1.0-fx,fx};
+        for(int jy=0;jy<2;++jy) for(int jx=0;jx<2;++jx) {
+            const int j=ys[jy],i=xs[jx];
+            auto height=[&](int k) {
+                const double phb=base_phi?(*base_phi)[(j*g.nw+k)*g.nx+i]:0.0;
+                return (phi[j][k][i]+phb)/gravity;
+            };
+            int lower=-1;
+            double nearest=std::numeric_limits<double>::infinity();
+            double previous=height(0).detach().item<double>();
+            nearest=std::abs(obs.z-previous);
+            for(int k=0;k<g.nz;++k) {
+                const double next=height(k+1).detach().item<double>();
+                TORCH_CHECK(std::isfinite(previous) && std::isfinite(next) && next>previous,
+                            "physical-W interpolation requires strictly increasing PHB+PH face heights");
+                nearest=std::min(nearest,std::abs(obs.z-next));
+                if(obs.z>=previous && obs.z<=next && lower<0) lower=k;
+                previous=next;
+            }
+            minimum_face_distance=std::min(minimum_face_distance,nearest);
+            TORCH_CHECK(lower>=0,
+                        "physical observation height is outside the current column: z=",obs.z);
+            brackets.push_back(lower);
+            const auto z0=height(lower),z1=height(lower+1);
+            const auto alpha=(obs.z-z0)/(z1-z0);
+            const auto vertical=w[j][lower][i]+alpha*(w[j][lower+1][i]-w[j][lower][i]);
+            value=value+(yw[jy]*xw[jx])*vertical;
+        }
+        predictions.push_back(value);
+    }
+    return {torch::stack(predictions),std::move(brackets),minimum_face_distance};
 }
 torch::Tensor wave_direction(const Grid& g,int block) {
     const int sizes[]={g.ny*g.nz*g.nu,g.nv*g.nz*g.nx,g.ny*g.nw*g.nx,g.ny*g.nw*g.nx,g.ny*g.nz*g.nx,g.ny*g.nx};
@@ -352,9 +454,15 @@ int main(int argc,char** argv) {
     const bool quadratic_forward=argc==9 && std::string(argv[5])=="--quadratic-forward";
     const bool quadratic_trajectory=argc==9 && std::string(argv[5])=="--quadratic-trajectory";
     const bool upwind_trajectory=argc==9 && std::string(argv[5])=="--upwind-trajectory";
+    const bool physical_wave_inverse=argc>=10 &&
+        std::string(argv[5])=="--physical-wave-inverse";
+    bool physical_wave_forward_only=false;
+    float physical_wave_newton_tol=1.0e-12f;
+    float physical_wave_krylov_tol=1.0e-8f;
     const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
-    TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt]");
+    TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode ||
+                physical_wave_inverse,
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; FP64 tape still retained)]]");
     const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     bool implicit_divergence=false;
     float kdamp=0.0f;
@@ -383,8 +491,47 @@ int main(int argc,char** argv) {
                     "quadratic ",quadratic_forward?"forward":"adjoint trajectory",
                     " physical duration must not exceed ",max_duration," seconds");
     }
+    int physical_wave_steps=0;
+    float physical_wave_dt=0.0f;
+    if(physical_wave_inverse) {
+        physical_wave_steps=std::stoi(argv[8]);
+        physical_wave_dt=std::stof(argv[9]);
+        bool newton_tol_seen=false;
+        bool krylov_tol_seen=false;
+        for(int arg=10;arg<argc;) {
+            const std::string flag(argv[arg++]);
+            if(flag=="--forward-only") {
+                TORCH_CHECK(!physical_wave_forward_only,"duplicate --forward-only flag");
+                physical_wave_forward_only=true;
+            } else if(flag=="--newton-tol") {
+                TORCH_CHECK(!newton_tol_seen && arg<argc,"--newton-tol requires one value");
+                const std::string value(argv[arg++]);
+                TORCH_CHECK(value=="1e-12" || value=="1e-13" || value=="1e-14",
+                            "physical-wave Newton tolerance must be 1e-12, 1e-13, or 1e-14");
+                physical_wave_newton_tol=std::stof(value);
+                newton_tol_seen=true;
+            } else if(flag=="--krylov-tol") {
+                TORCH_CHECK(!krylov_tol_seen && arg<argc,"--krylov-tol requires one value");
+                const std::string value(argv[arg++]);
+                TORCH_CHECK(value=="1e-8" || value=="1e-10" || value=="1e-12",
+                            "physical-wave Krylov tolerance must be 1e-8, 1e-10, or 1e-12");
+                physical_wave_krylov_tol=std::stof(value);
+                krylov_tol_seen=true;
+            } else {
+                TORCH_CHECK(false,"unknown physical-wave inverse flag: ",flag);
+            }
+        }
+        const bool accepted_schedule=(physical_wave_steps==30 && physical_wave_dt==10.0f) ||
+                                     (physical_wave_steps==60 && physical_wave_dt==5.0f);
+        TORCH_CHECK(accepted_schedule,
+                    "physical-wave inverse supports only (steps,dt)=(30,10) or (60,5) at T=300 s");
+    }
     configure(implicit_divergence,kdamp); // solver policy is captured by its constructor.
     if(quadratic_trajectory_mode) g_sdirk3_config.newton_tol=1.0e-12f;
+    if(physical_wave_inverse) {
+        g_sdirk3_config.newton_tol=physical_wave_newton_tol;
+        g_sdirk3_config.krylov_tol=physical_wave_krylov_tol;
+    }
     Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]));
     auto base=background_state(g);
     const auto eos_errors=validate_eos_target(g,base);
@@ -452,6 +599,137 @@ int main(int argc,char** argv) {
     put(out,"mubase",torch::from_blob(g.mubase.data(),{static_cast<int64_t>(g.mubase.size())},torch::kFloat32).clone());
     put(out,"base",base); put(out,"direction",d); put(out,"rhs_base",rb);
     if(descriptor_only) { put(out,"initial",base); return 0; }
+    if(physical_wave_inverse) {
+        const auto observations=read_physical_w_observations(argv[7]);
+        const auto initial=read_fp64_vector(argv[6],base.numel(),"physical-wave initial state");
+        constexpr double sigma=3.0e-4;
+        const auto collect_target=[&](bool at_150) {
+            std::vector<double> values; values.reserve(observations.size());
+            for(const auto& obs:observations) values.push_back(at_150?obs.w150:obs.w300);
+            return torch::from_blob(values.data(),{static_cast<int64_t>(values.size())},
+                torch::TensorOptions().dtype(torch::kFloat64)).clone();
+        };
+        const auto observed_150=collect_target(true),observed_300=collect_target(false);
+        torch::Tensor checkpoint_150,checkpoint_300;
+        g.set(initial);
+        g.solver.requestFixedTrajectory(physical_wave_steps,
+            std::vector<float>(static_cast<size_t>(physical_wave_steps),physical_wave_dt),initial);
+        for(int n=0;n<physical_wave_steps;++n) g.step(physical_wave_dt,n);
+        const auto checkpoints=g.solver.getFixedTrajectoryFp64Checkpoints();
+        TORCH_CHECK(checkpoints.size()==static_cast<size_t>(physical_wave_steps),
+                    "physical-wave inverse did not retain every accepted FP64 endpoint");
+        checkpoint_150=checkpoints[static_cast<size_t>(physical_wave_steps/2-1)];
+        checkpoint_300=checkpoints.back();
+        TORCH_CHECK(checkpoint_150.defined() && checkpoint_300.defined() &&
+                    torch::isfinite(checkpoint_150).all().item<bool>() &&
+                    torch::isfinite(checkpoint_300).all().item<bool>(),
+                    "physical-wave inverse checkpoints are missing or nonfinite");
+        const auto evaluate_observations=[&](const torch::Tensor& checkpoint,bool at_150) {
+            auto state_leaf=checkpoint.detach().clone().requires_grad_(true);
+            auto interpolation=interpolate_physical_w(g,state_leaf,observations,&g.phbase);
+            const auto& target=at_150?observed_150:observed_300;
+            const auto residual=(interpolation.prediction-target)/sigma;
+            const auto loss=0.5*residual.square().sum();
+            torch::Tensor cotangent;
+            if(!physical_wave_forward_only)
+                cotangent=torch::autograd::grad({loss},{state_leaf}, {}, true, false)[0];
+            return std::tuple<torch::Tensor,torch::Tensor,torch::Tensor,double,
+                              std::vector<int>>{interpolation.prediction.detach(),loss.detach(),
+                cotangent,interpolation.minimum_face_distance,std::move(interpolation.brackets)};
+        };
+        auto eval_150=evaluate_observations(checkpoint_150,true);
+        auto eval_300=evaluate_observations(checkpoint_300,false);
+        const auto prediction_150=std::get<0>(eval_150);
+        const auto loss_150=std::get<1>(eval_150);
+        const auto cotangent_150=std::get<2>(eval_150);
+        const auto prediction_300=std::get<0>(eval_300);
+        const auto loss_300=std::get<1>(eval_300);
+        const auto cotangent_300=std::get<2>(eval_300);
+        const double objective=loss_150.item<double>()+loss_300.item<double>();
+        TORCH_CHECK(std::isfinite(objective) && torch::isfinite(prediction_150).all().item<bool>() &&
+                    torch::isfinite(prediction_300).all().item<bool>(),
+                    "physical-wave observation loss or prediction is nonfinite");
+        out<<"M,physical_wave_inverse,1\n";
+        out<<"M,forward_only,"<<(physical_wave_forward_only?1:0)<<"\n";
+        out<<"M,checkpoint_precision,retained_fp64_trajectory\nM,retains_tape,1\n";
+        out<<"M,pullback_requested,"<<(physical_wave_forward_only?0:1)<<"\n";
+        out<<"M,physical_wave_newton_tol,"<<std::setprecision(17)<<g_sdirk3_config.newton_tol<<"\n";
+        out<<"M,krylov_tol_config,"<<g_sdirk3_config.krylov_tol<<"\n";
+        out<<"M,physical_wave_krylov_tol,"<<g_sdirk3_config.krylov_tol<<"\n";
+        out<<"M,newton_rtol_config,"<<g_sdirk3_config.newton_rtol<<"\n";
+        out<<"M,ewt_rtol_config,"<<g_sdirk3_config.ewt_rtol<<"\n";
+        out<<"M,nk_adaptive_tol_config,"<<(g_sdirk3_config.nk_adaptive_tol?1:0)<<"\n";
+        out<<"M,internal_fp64,"<<(g_sdirk3_config.internal_fp64?1:0)<<"\n";
+        out<<"M,internal_fp64_state_carry,"<<(g_sdirk3_config.internal_fp64_state_carry?1:0)<<"\n";
+        out<<"M,retain_graph_for_adjoint,"<<(g_sdirk3_config.retain_graph_for_adjoint?1:0)<<"\n";
+        out<<"M,trajectory_steps,"<<physical_wave_steps<<"\n";
+        out<<"M,trajectory_dt_fp32,"<<std::setprecision(17)<<physical_wave_dt<<"\n";
+        out<<"M,trajectory_seconds,300\nM,observation_count_per_time,105\n";
+        out<<"M,observation_time_150_seconds,150\nM,observation_time_300_seconds,300\n";
+        out<<"M,physical_observation_sigma_m_s,"<<sigma<<"\n";
+        out<<"M,observation_xyz_from_input,1\nM,observation_height_uses_current_PH,1\n";
+        out<<"M,observation_xyz_units,m\nM,observation_height_formula,(PHB+PH)/g\n";
+        out<<"M,observation_gravity_m_s2,"<<std::setprecision(17)<<physical_grid_gravity(g)<<"\n";
+        out<<"M,physical_observation_domain_guard,passed\nM,vertical_height_monotonic_guard,passed\n";
+        out<<"M,objective_normalization,0.5_sum_over_times_and_points_of_residual_over_sigma_squared\n";
+        out<<"M,minimum_height_to_any_W_face_150_m,"<<std::get<3>(eval_150)<<"\n";
+        out<<"M,minimum_height_to_any_W_face_300_m,"<<std::get<3>(eval_300)<<"\n";
+        const auto& brackets_150=std::get<4>(eval_150);
+        const auto& brackets_300=std::get<4>(eval_300);
+        int bracket_changes=0;
+        for(size_t i=0;i<brackets_150.size();++i)
+            if(brackets_150[i]!=brackets_300[i]) ++bracket_changes;
+        out<<"M,bracket_corner_changes_150_to_300,"<<bracket_changes<<"\n";
+        out<<"M,bracket_note,locally_piecewise_differentiable_no_cross_trial_rejection\n";
+        put(out,"initial_state",initial);
+        put(out,"checkpoint_150",checkpoint_150);
+        put(out,"checkpoint_300",checkpoint_300);
+        put(out,"predicted_150",prediction_150);
+        put(out,"predicted_300",prediction_300);
+        put(out,"observed_150",observed_150);
+        put(out,"observed_300",observed_300);
+        const auto bracket_options=torch::TensorOptions().dtype(torch::kFloat64);
+        put(out,"bracket_index_150",torch::tensor(brackets_150,bracket_options));
+        put(out,"bracket_index_300",torch::tensor(brackets_300,bracket_options));
+        out<<"S,objective_physical_w,"<<std::setprecision(17)<<objective<<"\n";
+        if(!physical_wave_forward_only) {
+            const int w0=g.ny*g.nz*g.nu+g.nv*g.nz*g.nx;
+            const int w1=w0+g.ny*g.nw*g.nx;
+            const int ph1=w1+g.ny*g.nw*g.nx;
+            const auto w_cotangent=[](const torch::Tensor& cotangent,int begin,int end) {
+                auto result=torch::zeros_like(cotangent);
+                result.slice(0,begin,end).copy_(cotangent.slice(0,begin,end));
+                return result;
+            };
+            const auto cot150_w=w_cotangent(cotangent_150,w0,w1);
+            const auto cot150_ph=w_cotangent(cotangent_150,w1,ph1);
+            const auto cot300_w=w_cotangent(cotangent_300,w0,w1);
+            const auto cot300_ph=w_cotangent(cotangent_300,w1,ph1);
+            put(out,"observation_cotangent_150",(prediction_150-observed_150)/(sigma*sigma));
+            put(out,"observation_cotangent_300",(prediction_300-observed_300)/(sigma*sigma));
+            put(out,"checkpoint_cotangent_150",cotangent_150);
+            put(out,"checkpoint_cotangent_300",cotangent_300);
+            put(out,"checkpoint_cotangent_150_W",cot150_w);
+            put(out,"checkpoint_cotangent_150_PH",cot150_ph);
+            put(out,"checkpoint_cotangent_300_W",cot300_w);
+            put(out,"checkpoint_cotangent_300_PH",cot300_ph);
+            std::vector<torch::Tensor> output_cotangents(static_cast<size_t>(physical_wave_steps));
+            output_cotangents[static_cast<size_t>(physical_wave_steps/2-1)]=cotangent_150;
+            output_cotangents.back()=cotangent_300;
+            const auto initial_pullback=g.solver.pullbackFixedTrajectory(output_cotangents);
+            TORCH_CHECK(initial_pullback.scalar_type()==torch::kFloat64 &&
+                        torch::isfinite(initial_pullback).all().item<bool>(),
+                        "physical-wave inverse pullback is missing, non-FP64, or nonfinite");
+            put(out,"initial_pullback",initial_pullback);
+            out<<"M,cotangent_nonzero_blocks,W;PH\n";
+            out<<"M,cotangent_150_W_l2,"<<cot150_w.norm().item<double>()<<"\n";
+            out<<"M,cotangent_150_PH_l2,"<<cot150_ph.norm().item<double>()<<"\n";
+            out<<"M,cotangent_300_W_l2,"<<cot300_w.norm().item<double>()<<"\n";
+            out<<"M,cotangent_300_PH_l2,"<<cot300_ph.norm().item<double>()<<"\n";
+        }
+        g.solver.closeFixedTrajectory();
+        return 0;
+    }
     if(quadratic_trajectory_mode) {
         const auto initial=base+d;
         g.set(initial);
