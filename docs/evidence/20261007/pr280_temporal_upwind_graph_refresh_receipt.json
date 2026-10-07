@@ -267,8 +267,8 @@
     {
       "worktree_source": "external/libtorch_wrf/sdirk3/CMakeLists.txt",
       "cache_source": "CMakeLists.txt",
-      "sha256": "b0e687cde669073ca20854564eab0cbc3f5405860427c034e5294d2272a8c75c",
-      "bytes": 64389,
+      "sha256": "962d09bdb9a83f2bdf1945b517e1cfbbcc0cd0e97b1001f7afb0950416174391",
+      "bytes": 64390,
       "reason": "manual configuration linkage; CMake syntax is not covered by the Graphify C++ AST; CI YAML remains hash-bound only"
     },
     {

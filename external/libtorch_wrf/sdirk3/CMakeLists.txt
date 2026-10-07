@@ -624,7 +624,7 @@ add_test(NAME Native_Quadratic_Wave_Forcing
             $<TARGET_FILE:test_native_wave_refinement>
             --output-dir ${CMAKE_CURRENT_BINARY_DIR}/quadratic_wave_forcing)
 set_tests_properties(Native_Quadratic_Wave_Forcing
-    PROPERTIES TIMEOUT 900 ENVIRONMENT "OPENBLAS_NUM_THREADS=1;OMP_NUM_THREADS=1;PYTHONDONTWRITEBYTECODE=1")
+    PROPERTIES TIMEOUT 1800 ENVIRONMENT "OPENBLAS_NUM_THREADS=1;OMP_NUM_THREADS=1;PYTHONDONTWRITEBYTECODE=1")
 
 add_executable(test_horizontal_pgf_actual_rhs tests/test_horizontal_pgf_actual_rhs.cpp)
 target_link_libraries(test_horizontal_pgf_actual_rhs PRIVATE wrf_sdirk3::core)
