@@ -43,6 +43,17 @@ struct RelativeResidual {
     bool   valid       = false;
 };
 
+// Relative reduction is independent of RHS amplitude. Only an exact zero RHS
+// needs a separate contract: its residual must also be exactly zero.
+inline double krylov_relative_norm(double residual_norm, double rhs_norm) {
+    if (!std::isfinite(residual_norm) || !std::isfinite(rhs_norm) ||
+        residual_norm < 0.0 || rhs_norm < 0.0)
+        return std::numeric_limits<double>::infinity();
+    if (rhs_norm == 0.0)
+        return residual_norm == 0.0 ? 0.0 : std::numeric_limits<double>::infinity();
+    return residual_norm / rhs_norm;
+}
+
 // ||L r|| / ||L b||. Taking r, b and L together and dividing inside is the whole point:
 // a caller cannot weight one side and not the other. An undefined weight means the
 // identity, so the unweighted ratio needs no ones-vector that could drift from I.
@@ -65,7 +76,7 @@ inline RelativeResidual relative_residual(const torch::Tensor& r,
         out.denominator <= 0.0) {
         return out;
     }
-    out.value = out.numerator / out.denominator;
+    out.value = krylov_relative_norm(out.numerator, out.denominator);
     out.valid = true;
     return out;
 }

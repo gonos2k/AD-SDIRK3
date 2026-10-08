@@ -700,7 +700,7 @@ add_test(NAME Full_Tile_RHS_Debug_Invariance COMMAND test_full_tile_step --rhs-d
 add_executable(test_krylov_metric_coordinate_contract test_krylov_metric_coordinate_contract.cpp)
 target_include_directories(test_krylov_metric_coordinate_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 set_property(TARGET test_krylov_metric_coordinate_contract PROPERTY CXX_STANDARD 17)
-target_link_libraries(test_krylov_metric_coordinate_contract "${TORCH_LIBRARIES}")
+target_link_libraries(test_krylov_metric_coordinate_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Krylov_Metric_Coordinate_Contract COMMAND test_krylov_metric_coordinate_contract)
 
 # R9 §10.1: a stage-budget experiment must vary ONE thing. The resolver is pure, but the

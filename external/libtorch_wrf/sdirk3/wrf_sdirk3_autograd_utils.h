@@ -313,6 +313,12 @@ inline torch::Tensor safe_tensor_norm(const torch::Tensor& t) {
     }
 }
 
+// Residual reductions must not underflow merely because a Float32 RHS is small.
+// Casting before the reduction also preserves the forward-AD-safe norm path.
+inline torch::Tensor safe_tensor_norm_fp64(const torch::Tensor& t) {
+    return safe_tensor_norm(t.to(torch::kFloat64));
+}
+
 } // namespace sdirk3
 } // namespace wrf
 
