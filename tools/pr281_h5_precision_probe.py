@@ -30,6 +30,10 @@ CORRECTION_STATE_SHA256 = {
     "default_N12_K8": "ac6634eb6761eddb4011707f843f6e303ef3790f8f7788741a6bd3bffcbf0e80",
     "krylov_only_N12_K10": "92ed9288aa79df4a73c769831b573c8f13e712305c57e6c980caec70bdc77ddf",
 }
+N13_REFERENCE_RUN_ID = "37799071263"
+N13_REFERENCE_ARTIFACT_SHA256 = "8265c07317ac6437d07715457ddaead3e6cbbbe79ed36907da3df1424d03eb1c"
+N13_REFERENCE_REPORT_SHA256 = "a55aa7140252d2f29e0a5a04560b1e2aaf1e5ffa3f3f460469a5e1d6e9efa66e"
+FIXED_N13_CORRECTED_STATE_SHA256 = CORRECTION_STATE_SHA256["default_N12_K8"]
 PR_HEAD = "38c05f7542136ed035197f7a0a0335e71b6fda83"
 SOURCE_COMMIT = "e5a5fe500dcdcce225700556362ed6a0e9db1835"
 SOURCE_TREE = "90dd29e901968e9f7eacf28144581022a1eb4c2b"
@@ -864,17 +868,316 @@ def run_n13_stability_probe(exe: Path, ci_root: Path, reference_root: Path,
         raise
 
 
+def run_n13_correction_n14_stability_probe(exe: Path, ci_root: Path,
+                                            reference_root: Path, outdir: Path) -> dict:
+    runner = ROOT / "tools/test_fine_wave_inverse.py"
+    cpp = ROOT / "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp"
+    if sha256(runner) != RUNNER_SHA256 or sha256(cpp) != CPP_SHA256:
+        raise RuntimeError("runner or C++ source hash differs from frozen probe binding")
+    pr_head_tree = subprocess.run(
+        ["git", "rev-parse", f"{PR_HEAD}^{{tree}}"], cwd=ROOT,
+        capture_output=True, text=True, check=True).stdout.strip()
+    if pr_head_tree != EXPECTED_TREE:
+        raise RuntimeError(f"unexpected PR source tree: {pr_head_tree}")
+
+    reference_path = find_unique(reference_root, "probe_summary.json")
+    if sha256(reference_path) != N13_REFERENCE_REPORT_SHA256:
+        raise RuntimeError(f"unexpected N13 corrected-state reference report bytes: {reference_path}")
+    reference = json.loads(reference_path.read_text())
+    ref = reference["reference"]
+    method = "default_N12_K8"
+    if (reference.get("status") != "completed_diagnostic_only" or
+            reference.get("source", {}).get("diagnostic_commit") != "28a46c723626de8bd8c26222c77b81c74405f43b" or
+            reference.get("source", {}).get("pr_head") != PR_HEAD or
+            reference.get("source", {}).get("pr_head_tree") != EXPECTED_TREE or
+            ref.get("run_id") != CORRECTION_REFERENCE_RUN_ID or
+            ref.get("report_sha256") != CORRECTION_REFERENCE_REPORT_SHA256 or
+            ref.get("artifact_zip_sha256") != CORRECTION_REFERENCE_ARTIFACT_SHA256 or
+            ref.get("reference_Bf_sha256") != ref.get("fresh_Bf_sha256") or
+            ref.get("Bf_sha256_different_from_reference") is not False):
+        raise RuntimeError("N13/K8 reference is not the pinned Linux diagnostic")
+    reference_dir = reference_path.parent
+    point = next((x for x in ref["corrected_states"] if x["method"] == method), None)
+    source_result = next((x for x in reference["results"]
+                          if x["correction_method"] == method and x["precision"] == "N13_K8"), None)
+    if (point is None or point["sha256"] != FIXED_N13_CORRECTED_STATE_SHA256 or
+            source_result is None or source_result["input_state_sha256"] != FIXED_N13_CORRECTED_STATE_SHA256):
+        raise RuntimeError("exact default corrected state or its N13/K8 result is missing")
+
+    reference_copy = outdir / "reference_inputs" / "n13_correction_reference_summary.json"
+    reference_copy.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(reference_path, reference_copy)
+    if sha256(reference_copy) != N13_REFERENCE_REPORT_SHA256:
+        raise RuntimeError("copied N13 reference summary hash changed")
+    inputs = outdir / "reference_inputs"
+    mod = load_runner_module()
+    input_specs = {
+        "descriptor_8x6x4.csv": EXPECTED_DESCRIPTORS["descriptor_8x6x4.csv"],
+        "descriptor_16x12x8.csv": EXPECTED_DESCRIPTORS["descriptor_16x12x8.csv"],
+        "fixed_physical_observations.txt": OBSERVATION_SHA256,
+    }
+    literal_inputs = {}
+    for filename, expected_hash in input_specs.items():
+        source = reference_dir / "reference_inputs" / filename
+        fixture = find_unique(ci_root, filename)
+        if (not source.is_file() or sha256(source) != expected_hash or
+                sha256(fixture) != expected_hash):
+            raise RuntimeError(f"N13 reference input hash changed: {filename}")
+        target = inputs / filename
+        shutil.copyfile(source, target)
+        if sha256(target) != expected_hash:
+            raise RuntimeError(f"copied N13 reference input hash changed: {filename}")
+        literal_inputs[filename] = {"path": str(target), "sha256": sha256(target)}
+
+    coarse_path = inputs / "descriptor_8x6x4.csv"
+    fine_path = inputs / "descriptor_16x12x8.csv"
+    c0 = mod.reference.build_case(8, 4, native_csv=coarse_path)
+    cf = mod.reference.build_case(16, 8, native_csv=fine_path)
+    fine_meta, fine_arrays, fine_scalars, fine_text = mod.read_payload(fine_path)
+    fine_descriptor = {
+        "meta": fine_meta, "arrays": fine_arrays, "scalars": fine_scalars,
+        "text_meta": fine_text, "column": cf, "base": fine_arrays["base"],
+    }
+    _, basis_f = mod.profile_basis(c0, cf)
+    Bf = np.column_stack([mod.pack_source_mode(q, (16, 12, 8)) for q in basis_f])
+    fresh_bf_sha = hashlib.sha256(Bf.tobytes()).hexdigest()
+    fresh_bf_path = inputs / "fresh_Bf.npy"
+    np.save(fresh_bf_path, Bf, allow_pickle=False)
+    saved_bf = np.load(fresh_bf_path, allow_pickle=False)
+    if saved_bf.shape != Bf.shape or not np.array_equal(saved_bf, Bf):
+        raise RuntimeError("saved fresh Bf does not round-trip exactly")
+    H = np.asarray(ref["H_before_iteration9"], dtype=np.float64)
+    if hashlib.sha256(H.tobytes()).hexdigest() != ref["H_sha256"]:
+        raise RuntimeError("iteration-9 H differs from the pinned correction context")
+
+    state_source = reference_dir / "generated_inputs" / Path(point["path"]).name
+    if not state_source.is_file() or sha256(state_source) != FIXED_N13_CORRECTED_STATE_SHA256:
+        raise RuntimeError("exact default corrected-state bytes changed")
+    state_dir = outdir / "generated_inputs"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    old_state_path = state_dir / state_source.name
+    shutil.copyfile(state_source, old_state_path)
+    if sha256(old_state_path) != FIXED_N13_CORRECTED_STATE_SHA256:
+        raise RuntimeError("copied default corrected-state bytes changed")
+    old_state = read_vector(old_state_path)
+    current_controls = np.asarray(point["corrected_controls"], dtype=np.float64)
+
+    source_call = source_result["native_call"]
+    source_payload_path = reference_dir / "results" / Path(source_call["output_path"]).name
+    if (not source_payload_path.is_file() or
+            sha256(source_payload_path) != source_call["output_sha256"]):
+        raise RuntimeError("pinned N13/K8 source-point payload hash changed")
+    _, source_arrays, source_scalars, _ = mod.read_payload(source_payload_path)
+    if not np.array_equal(old_state, source_arrays["initial_state"]):
+        raise RuntimeError("N13/K8 source point did not use the exact default corrected state")
+    g13_reference = np.asarray(source_result["projected_gradient"], dtype=np.float64)
+    g13 = Bf.T @ source_arrays["initial_pullback"]
+    projection_delta = g13 - g13_reference
+    dot_gamma = (Bf.shape[0] * np.finfo(np.float64).eps) / (
+        1.0 - Bf.shape[0] * np.finfo(np.float64).eps)
+    projection_bound = dot_gamma * (np.abs(Bf).T @ np.abs(source_arrays["initial_pullback"]))
+    if not np.all(np.abs(projection_delta) <= projection_bound):
+        raise RuntimeError("source N13 gradient fails fresh-Bf componentwise dot-roundoff guard")
+
+    delta_controls = -(H @ g13)
+    candidate_controls = current_controls + delta_controls
+    base_ci = np.asarray(mod.read_payload(fine_path)[1]["base"], dtype=np.float64)
+    source_state_from_controls = base_ci + Bf @ current_controls
+    source_state_mapping_delta = source_state_from_controls - old_state
+    candidate_state = base_ci + Bf @ candidate_controls
+    direct_state_plus_delta = old_state + Bf @ delta_controls
+    candidate_path = state_dir / "default_N12_K8_n13_gradient_correction_state.txt"
+    mod.write_vector(candidate_path, candidate_state)
+    candidate_check = read_vector(candidate_path)
+    if not np.array_equal(candidate_check, candidate_state):
+        raise RuntimeError("N13 corrected candidate state write/read round-trip differs")
+    mod.check_initial_admissibility((16, 12, 8), candidate_check, fine_descriptor)
+    state_mapping_delta = candidate_state - direct_state_plus_delta
+
+    source_log_path = reference_dir / "logs" / Path(source_call["stderr_path"]).name
+    if not source_log_path.is_file() or sha256(source_log_path) != source_call["stderr_sha256"]:
+        raise RuntimeError("pinned N13/K8 source residual log hash changed")
+    baseline_brackets = {t: source_arrays[f"bracket_index_{t}"] for t in (150, 300)}
+    current_head, current_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD", "HEAD^{tree}"], cwd=ROOT,
+        capture_output=True, text=True, check=True).stdout.splitlines()
+    report = {
+        "schema": "pr281-fixed-default-n13-correction-n14-stability-v1",
+        "status": "running_diagnostic_only", "diagnostic_only": True,
+        "interpretation": "One fixed-H9 correction from the N13 gradient at the exact default corrected state, evaluated at N13/K10 and N14/K10 on identical candidate bytes. Diagnostic only; no Armijo or acceptance claim.",
+        "promotion_note": "Keep the existing 1e-5 projected-gradient gate and strict bracket/admissibility guards. Neither tolerance result is a promotion decision.",
+        "adjoint_residual_logs_available": False,
+        "adjoint_residual_logs_note": "test_native_wave_refinement configures a direct Grid/Tile solver after resetting SDIRK3Config and exposes no debug flag; its WRF_SDIRK3_DEBUG_LEVEL environment loader is only reached through the zero-copy interface. No transpose-residual instrumentation was enabled.",
+        "source": {
+            "pr_head": PR_HEAD, "pr_head_tree": pr_head_tree,
+            "diagnostic_commit": current_head, "diagnostic_worktree_tree": current_tree,
+            "runner_sha256": sha256(runner), "cpp_sha256": sha256(cpp),
+            "executable": str(exe), "executable_sha256": sha256(exe),
+            "python": platform.python_version(), "numpy": np.__version__,
+        },
+        "reference": {
+            "run_id": N13_REFERENCE_RUN_ID,
+            "artifact_zip_sha256": N13_REFERENCE_ARTIFACT_SHA256,
+            "report_path": str(reference_path), "report_sha256": sha256(reference_path),
+            "copied_report_path": str(reference_copy), "copied_report_sha256": sha256(reference_copy),
+            "source_state_sha256": FIXED_N13_CORRECTED_STATE_SHA256,
+            "source_state_path": str(old_state_path),
+            "source_n13_k8_payload_sha256": source_call["output_sha256"],
+            "source_n13_k8_objective": float(source_scalars["objective_physical_w"]),
+            "source_n13_k8_gradient_reference": g13_reference.tolist(),
+            "source_n13_k8_gradient_reprojected_with_fresh_Bf": g13.tolist(),
+            "source_n13_k8_gradient_norm_fresh_Bf": float(np.linalg.norm(g13)),
+            "source_n13_k8_gradient_projection_delta_fresh_minus_reference": projection_delta.tolist(),
+            "source_n13_k8_gradient_componentwise_dot_roundoff_bound": projection_bound.tolist(),
+            "source_n13_k8_gradient_componentwise_dot_roundoff_guard":
+                (np.abs(projection_delta) <= projection_bound).tolist(),
+            "source_n13_k8_residual_log": residual_log_summary(source_log_path),
+            "source_x_c_mapping_exactly_matches_saved_initial": ref["x_c_mapping_exactly_matches_saved_initial"],
+            "source_x_c_mapping_max_abs_residual": ref["x_c_mapping_max_abs_residual"],
+            "source_corrected_state_mapping_max_abs_with_fresh_Bf": float(
+                np.max(np.abs(source_state_mapping_delta))),
+            "source_corrected_state_mapping_l2_with_fresh_Bf": float(
+                np.linalg.norm(source_state_mapping_delta)),
+            "reference_Bf_sha256": ref["fresh_Bf_sha256"],
+            "fresh_Bf_sha256": fresh_bf_sha,
+            "Bf_sha256_different_from_reference": fresh_bf_sha != ref["fresh_Bf_sha256"],
+            "fresh_Bf_path": str(fresh_bf_path),
+            "fresh_Bf_file_sha256": sha256(fresh_bf_path),
+            "fresh_Bf_shape": list(Bf.shape),
+            "H9_sha256": hashlib.sha256(H.tobytes()).hexdigest(),
+        },
+        "literal_inputs": literal_inputs,
+        "candidate": {
+            "formula": "base_CI + Bf @ (v_current - H9 @ g_N13)",
+            "g_source_precision": "N13_K8 at the exact default corrected state",
+            "g_source": g13.tolist(), "g_source_norm": float(np.linalg.norm(g13)),
+            "H9_sha256": hashlib.sha256(H.tobytes()).hexdigest(),
+            "current_controls": current_controls.tolist(),
+            "delta_controls_minus_H9g13": delta_controls.tolist(),
+            "delta_controls_norm": float(np.linalg.norm(delta_controls)),
+            "candidate_controls": candidate_controls.tolist(),
+            "state_path": str(candidate_path), "state_sha256": sha256(candidate_path),
+            "admissibility_passed": True,
+            "source_state_reconstruction_max_abs": float(np.max(np.abs(source_state_mapping_delta))),
+            "source_state_reconstruction_l2": float(np.linalg.norm(source_state_mapping_delta)),
+            "direct_old_state_plus_Bf_delta_sha256": hashlib.sha256(direct_state_plus_delta.tobytes()).hexdigest(),
+            "candidate_vs_direct_state_plus_delta_max_abs": float(np.max(np.abs(state_mapping_delta))),
+            "candidate_vs_direct_state_plus_delta_l2": float(np.linalg.norm(state_mapping_delta)),
+        },
+        "requested_tolerances": [
+            {"name": "N13_K10", "newton": "1e-13", "krylov": "1e-10"},
+            {"name": "N14_K10", "newton": "1e-14", "krylov": "1e-10"},
+        ],
+        "effective_float32_tolerances": {
+            "N13_K10": {"newton": float(np.float32(1e-13)), "krylov": float(np.float32(1e-10))},
+            "N14_K10": {"newton": float(np.float32(1e-14)), "krylov": float(np.float32(1e-10))},
+        },
+        "descriptor_guard": {}, "native_calls": [], "native_call_count": 0,
+        "results": [], "comparison_n13_k10_vs_n14_k10": {},
+    }
+    write_report(report, outdir)
+    try:
+        descriptor_guard(mod, exe, ci_root, outdir, report)
+        observations = inputs / "fixed_physical_observations.txt"
+        logs = outdir / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        paired_payloads = {}
+        for precision, newton, krylov in (
+            ("N13_K10", "1e-13", "1e-10"),
+            ("N14_K10", "1e-14", "1e-10"),
+        ):
+            output = outdir / "results" / f"default_N12_K8_n13_correction_{precision}.csv"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            call = run_native(
+                exe, 16, 12, 8, output,
+                ["--physical-wave-inverse", str(candidate_path), str(observations), "60", "5",
+                 "--newton-tol", newton, "--krylov-tol", krylov], logs,
+                f"default_N12_K8_n13_correction_{precision}")
+            report["native_calls"].append(call)
+            report["native_call_count"] = len(report["descriptor_guard"]) + len(report["native_calls"])
+            write_report(report, outdir)
+            if call["return_code"] != 0 or not output.is_file():
+                raise RuntimeError(f"{precision} call failed; strict diagnostic failure, no retry")
+            meta, arrays, scalars, payload_text = mod.read_payload(output)
+            if (not all(np.isfinite(array).all() for array in arrays.values()) or
+                    not all(np.isfinite(float(value)) for value in scalars.values())):
+                raise RuntimeError(f"{precision} output contains non-finite values")
+            if not np.array_equal(candidate_check, arrays["initial_state"]):
+                raise RuntimeError(f"{precision} did not use exact candidate-state bytes")
+            effective_newton, effective_krylov = float(np.float32(float(newton))), float(np.float32(float(krylov)))
+            if (meta.get("physical_wave_newton_tol") != effective_newton or
+                    meta.get("physical_wave_krylov_tol") != effective_krylov):
+                raise RuntimeError(f"effective float32 tolerance metadata mismatch at {precision}")
+            bracket_checks = {str(t): bool(np.array_equal(
+                arrays[f"bracket_index_{t}"], baseline_brackets[t])) for t in (150, 300)}
+            minimum_face = min(meta["minimum_height_to_any_W_face_150_m"],
+                               meta["minimum_height_to_any_W_face_300_m"])
+            bracket_guard = (all(bracket_checks.values()) and
+                             int(meta["bracket_corner_changes_150_to_300"]) == 0 and
+                             minimum_face > 0.0)
+            gradient = Bf.T @ arrays["initial_pullback"]
+            result = {
+                "precision": precision, "requested_newton_tolerance": newton,
+                "requested_krylov_tolerance": krylov,
+                "effective_physical_wave_newton_tol": meta["physical_wave_newton_tol"],
+                "effective_physical_wave_krylov_tol": meta["physical_wave_krylov_tol"],
+                "input_state_path": str(candidate_path), "input_state_sha256": sha256(candidate_path),
+                "observations_sha256": sha256(observations),
+                "objective": float(scalars["objective_physical_w"]),
+                "projected_gradient": gradient.tolist(),
+                "projected_gradient_norm": float(np.linalg.norm(gradient)),
+                "below_1e5_gate_is_diagnostic_only": bool(np.linalg.norm(gradient) < 1.0e-5),
+                "bracket_index_match_to_source_n13_k8": bracket_checks,
+                "bracket_guard_passed": bracket_guard,
+                "minimum_face_distance_m": minimum_face,
+                "bracket_changes_150_to_300": int(meta["bracket_corner_changes_150_to_300"]),
+                "checkpoint_precision": payload_text.get("checkpoint_precision"),
+                "native_call": call,
+                "solver_residual_log": residual_log_summary(Path(call["stderr_path"])),
+            }
+            report["results"].append(result)
+            paired_payloads[precision] = {
+                "arrays": arrays, "objective": float(scalars["objective_physical_w"]),
+                "path": str(output), "gradient": gradient,
+            }
+            write_report(report, outdir)
+        comparison = compare_payload(paired_payloads["N13_K10"], paired_payloads["N14_K10"], Bf)
+        comparison["objective_delta_n14_minus_n13"] = (
+            paired_payloads["N14_K10"]["objective"] - paired_payloads["N13_K10"]["objective"])
+        comparison["same_candidate_state_hash"] = all(
+            item["input_state_sha256"] == sha256(candidate_path) for item in report["results"])
+        comparison["both_projected_gradients_below_1e5"] = all(
+            item["projected_gradient_norm"] < 1.0e-5 for item in report["results"])
+        report["comparison_n13_k10_vs_n14_k10"] = comparison
+        all_brackets = all(item["bracket_guard_passed"] for item in report["results"])
+        report["status"] = "completed_diagnostic_only" if all_brackets else "completed_diagnostic_only_bracket_guard_failed"
+        report["all_brackets_unchanged_vs_source_point"] = all_brackets
+        report["native_call_count"] = len(report["descriptor_guard"]) + len(report["native_calls"])
+        write_report(report, outdir)
+        return report
+    except Exception as exc:
+        report["status"] = "incomplete_diagnostic_only"
+        report["error"] = repr(exc)
+        write_report(report, outdir)
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe", required=True, type=Path)
     parser.add_argument("--ci-artifact-root", required=True, type=Path)
     parser.add_argument("--previous-artifact-root", type=Path)
     parser.add_argument("--n13-reference-artifact-root", type=Path)
+    parser.add_argument("--n13-correction-reference-artifact-root", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     try:
-        if args.n13_reference_artifact_root:
+        if args.n13_correction_reference_artifact_root:
+            report = run_n13_correction_n14_stability_probe(
+                args.exe.resolve(), args.ci_artifact_root.resolve(),
+                args.n13_correction_reference_artifact_root.resolve(), args.output_dir.resolve())
+        elif args.n13_reference_artifact_root:
             report = run_n13_stability_probe(
                 args.exe.resolve(), args.ci_artifact_root.resolve(),
                 args.n13_reference_artifact_root.resolve(), args.output_dir.resolve())
@@ -882,7 +1185,7 @@ def main() -> int:
             report = run_probe(args.exe.resolve(), args.ci_artifact_root.resolve(),
                                args.previous_artifact_root.resolve(), args.output_dir.resolve())
         else:
-            parser.error("provide --previous-artifact-root or --n13-reference-artifact-root")
+            parser.error("provide a reference artifact root for one diagnostic mode")
         print(json.dumps({"status": report["status"],
                           "result_count": len(report.get("correction_results", report.get("results", []))),
                           "descriptor_guard_passed": all(
