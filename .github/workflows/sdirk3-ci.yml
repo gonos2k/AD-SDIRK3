@@ -594,6 +594,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
+      actions: read
       contents: read
     env:
       OPENBLAS_NUM_THREADS: '1'
@@ -638,6 +639,14 @@ jobs:
               data.extractall(destination)
           PY
 
+      - name: download prior default and joint-tight probe results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: diagnostic-only-pr281-h5-precision-37757922139
+          run-id: 37757922139
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/pr281-previous-probe
+
       - name: record and bind source revision
         run: |
           set -euo pipefail
@@ -664,7 +673,7 @@ jobs:
       - name: build only the native wave-refinement executable
         run: cmake --build build/sdirk3-core --target test_native_wave_refinement --parallel 2
 
-      - name: run four exact-state precision comparisons
+      - name: run four isolated tolerance-axis comparisons
         run: |
           set -euo pipefail
           exe="$(find build/sdirk3-core -type f -name test_native_wave_refinement -print -quit)"
@@ -672,13 +681,14 @@ jobs:
           python3 -B tools/pr281_h5_precision_probe.py \
             --exe "$exe" \
             --ci-artifact-root "$RUNNER_TEMP/pr281-ci-inputs" \
+            --previous-artifact-root "$RUNNER_TEMP/pr281-previous-probe" \
             --output-dir build/sdirk3-core/pr281_h5_precision_probe
 
       - name: upload diagnostic evidence (not a validation result)
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: diagnostic-only-pr281-h5-precision-${{ github.run_id }}
+          name: diagnostic-only-pr281-h5-precision-axes-${{ github.run_id }}
           if-no-files-found: ignore
           path: |
             configure.log

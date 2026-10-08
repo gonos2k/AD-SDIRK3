@@ -20,6 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RUN_ID = "37726282791"
 ARTIFACT_SHA256 = "ffdb55bdc86050e8f6b5f7bedc9e8761fc951529a749688e9ac2116737a7b0fe"
 FIXTURE_SHA256 = "a7db3585c51457ba29a9b0af0f93f2817ba198d24c88aaeebaf99a4af73c3045"
+PREVIOUS_RUN_ID = "37757922139"
+PREVIOUS_ARTIFACT_SHA256 = "3248f9bcb908bdeaeef4662bb45c736a4c6ff3b18ca580ed60faad840a3318c9"
+PREVIOUS_REPORT_SHA256 = "4f45bf5bf9430054639f49451ca670d1a26e4cd1c3618a99f55f69cbcf9090ad"
 PR_HEAD = "38c05f7542136ed035197f7a0a0335e71b6fda83"
 SOURCE_COMMIT = "e5a5fe500dcdcce225700556362ed6a0e9db1835"
 SOURCE_TREE = "90dd29e901968e9f7eacf28144581022a1eb4c2b"
@@ -47,6 +50,10 @@ CONFIG_EXPECTED = {
     "effective_wrf_omega_ww_cp": 1.0, "advection_order_config": 2.0,
     "non_hydrostatic_config": 1.0, "map_input_max_deviation": 0.0,
 }
+NEW_PRECISIONS = (
+    ("krylov_only_N12_K10", "1e-12", "1e-10"),
+    ("newton_only_N13_K8", "1e-13", "1e-8"),
+)
 
 
 def sha256(path: Path) -> str:
@@ -174,7 +181,29 @@ def write_report(report: dict, outdir: Path) -> None:
         json.dumps(report, indent=2, sort_keys=True) + "\n")
 
 
-def run_probe(exe: Path, ci_root: Path, outdir: Path) -> dict:
+def compare_payload(base: dict, candidate: dict, Bf: np.ndarray) -> dict:
+    base_gradient = Bf.T @ base["arrays"]["initial_pullback"]
+    candidate_gradient = Bf.T @ candidate["arrays"]["initial_pullback"]
+    comparison = {
+        "objective_delta_candidate_minus_default": candidate["objective"] - base["objective"],
+        "default_projected_gradient": base_gradient.tolist(),
+        "candidate_projected_gradient": candidate_gradient.tolist(),
+        "projected_gradient_delta": (candidate_gradient - base_gradient).tolist(),
+        "projected_gradient_delta_norm": float(np.linalg.norm(candidate_gradient - base_gradient)),
+    }
+    for key in ("initial_pullback", "predicted_150", "predicted_300",
+                "checkpoint_150", "checkpoint_300"):
+        delta = candidate["arrays"][key] - base["arrays"][key]
+        comparison[key] = {
+            "default_sha256": hashlib.sha256(base["arrays"][key].tobytes()).hexdigest(),
+            "candidate_sha256": hashlib.sha256(candidate["arrays"][key].tobytes()).hexdigest(),
+            "delta_rms": float(np.sqrt(np.mean(delta * delta))),
+            "delta_max_abs": float(np.max(np.abs(delta))),
+        }
+    return comparison
+
+
+def run_probe(exe: Path, ci_root: Path, previous_root: Path, outdir: Path) -> dict:
     runner = ROOT / "tools/test_fine_wave_inverse.py"
     cpp = ROOT / "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp"
     if sha256(runner) != RUNNER_SHA256 or sha256(cpp) != CPP_SHA256:
@@ -209,6 +238,16 @@ def run_probe(exe: Path, ci_root: Path, outdir: Path) -> dict:
         mismatches["fine_descriptor_sha256"] = descriptor_receipt.get("fine")
     if mismatches:
         raise RuntimeError(f"compact CI fixture provenance mismatch: {mismatches}")
+    previous_report_path = find_unique(previous_root, "probe_summary.json")
+    if sha256(previous_report_path) != PREVIOUS_REPORT_SHA256:
+        raise RuntimeError(f"unexpected previous probe report bytes: {previous_report_path}")
+    previous_report = json.loads(previous_report_path.read_text())
+    if (previous_report.get("status") != "completed_diagnostic_only" or
+            previous_report.get("native_call_count") != 6 or
+            previous_report.get("source", {}).get("pr_head") != PR_HEAD or
+            previous_report.get("source", {}).get("runner_sha256") != RUNNER_SHA256 or
+            previous_report.get("source", {}).get("cpp_sha256") != CPP_SHA256):
+        raise RuntimeError("previous diagnostic report does not match the frozen PR281 context")
     obs = find_unique(ci_root, "fixed_physical_observations.txt")
     if sha256(obs) != OBSERVATION_SHA256:
         raise RuntimeError(f"unexpected fixed CI observation bytes: {obs}")
@@ -236,6 +275,53 @@ def run_probe(exe: Path, ci_root: Path, outdir: Path) -> dict:
         raise RuntimeError("a copied CI input differs from its source bytes")
 
     mod = load_runner_module()
+    historical_results_dir = outdir / "historical_results"
+    historical_results_dir.mkdir(parents=True, exist_ok=True)
+    previous_report_copy = historical_results_dir / "prior_probe_summary.json"
+    shutil.copyfile(previous_report_path, previous_report_copy)
+    historical_payloads = {}
+    historical_records = []
+    historical_precision_names = {"default_N12_K8", "tight_N13_K10"}
+    for old in previous_report["probes"]:
+        point_name = old["point"]
+        precision_name = old["precision"]
+        if point_name not in POINTS or precision_name not in historical_precision_names:
+            raise RuntimeError(f"unexpected probe in prior report: {point_name}/{precision_name}")
+        if old["input_state_sha256"] != POINTS[point_name]["sha256"]:
+            raise RuntimeError(f"prior probe state mismatch: {point_name}/{precision_name}")
+        if old["observations_sha256"] != OBSERVATION_SHA256:
+            raise RuntimeError(f"prior probe observation mismatch: {point_name}/{precision_name}")
+        old_filename = Path(old["native_call"]["output_path"]).name
+        old_source = find_unique(previous_root, old_filename)
+        if sha256(old_source) != old["native_call"]["output_sha256"]:
+            raise RuntimeError(f"prior raw payload hash mismatch: {old_filename}")
+        old_copy = historical_results_dir / old_filename
+        shutil.copyfile(old_source, old_copy)
+        old_meta, old_arrays, old_scalars, _ = mod.read_payload(old_copy)
+        old_newton = float(np.float32(float(old["requested_newton_tolerance"])))
+        old_krylov = float(np.float32(float(old["requested_krylov_tolerance"])))
+        if (old_meta.get("physical_wave_newton_tol") != old_newton or
+                old_meta.get("physical_wave_krylov_tol") != old_krylov):
+            raise RuntimeError(f"prior effective tolerance mismatch: {old_filename}")
+        historical_payloads[(point_name, precision_name)] = {
+            "arrays": old_arrays,
+            "objective": float(old_scalars["objective_physical_w"]),
+            "path": str(old_copy),
+        }
+        historical_records.append({
+            "point": point_name,
+            "precision": precision_name,
+            "input_state_sha256": old["input_state_sha256"],
+            "observations_sha256": old["observations_sha256"],
+            "objective": float(old_scalars["objective_physical_w"]),
+            "projected_gradient": old["projected_gradient"],
+            "projected_gradient_norm": old["projected_gradient_norm"],
+            "raw_payload_path": str(old_copy),
+            "raw_payload_sha256": sha256(old_copy),
+            "source_run_id": PREVIOUS_RUN_ID,
+        })
+    if len(historical_payloads) != 4:
+        raise RuntimeError(f"expected four historical probes, found {len(historical_payloads)}")
     report = {
         "schema": "pr281-h5-same-point-precision-probe-v1",
         "status": "running_diagnostic_only",
@@ -260,6 +346,14 @@ def run_probe(exe: Path, ci_root: Path, outdir: Path) -> dict:
             "fixture_context_path": str(context_path),
             "fixture_context_sha256": sha256(context_path),
         },
+        "previous_diagnostic": {
+            "run_id": PREVIOUS_RUN_ID,
+            "artifact_zip_sha256": PREVIOUS_ARTIFACT_SHA256,
+            "summary_path": str(previous_report_copy),
+            "summary_sha256": sha256(previous_report_copy),
+            "reused_without_rerun": ["default_N12_K8", "tight_N13_K10"],
+            "historical_probes": historical_records,
+        },
         "fixed_observations": {
             "path": str(copied_inputs["observations"]["copied_path"]),
             "sha256": copied_inputs["observations"]["copied_sha256"],
@@ -270,6 +364,7 @@ def run_probe(exe: Path, ci_root: Path, outdir: Path) -> dict:
         "descriptor_guard": {},
         "native_calls": [],
         "probes": [],
+        "comparisons_vs_historical_default": {},
     }
     write_report(report, outdir)
 
@@ -290,12 +385,10 @@ def run_probe(exe: Path, ci_root: Path, outdir: Path) -> dict:
     obs_copy = Path(copied_inputs["observations"]["copied_path"])
     logs = outdir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
-    for point_name, point in POINTS.items():
+    current_payloads = {}
+    for point_name in POINTS:
         initial = Path(copied_inputs[point_name]["copied_path"])
-        for precision_name, newton, krylov in (
-            ("default_N12_K8", "1e-12", "1e-8"),
-            ("tight_N13_K10", "1e-13", "1e-10"),
-        ):
+        for precision_name, newton, krylov in NEW_PRECISIONS:
             label = f"{point_name}_{precision_name}"
             output = outdir / "results" / f"{label}.csv"
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -326,6 +419,11 @@ def run_probe(exe: Path, ci_root: Path, outdir: Path) -> dict:
                 write_report(report, outdir)
                 raise
             gradient = Bf.T @ arrays["initial_pullback"]
+            current_payloads[(point_name, precision_name)] = {
+                "arrays": arrays,
+                "objective": float(scalars["objective_physical_w"]),
+                "path": str(output),
+            }
             result = {
                 "point": point_name,
                 "precision": precision_name,
@@ -360,6 +458,22 @@ def run_probe(exe: Path, ci_root: Path, outdir: Path) -> dict:
             }
             report["probes"].append(result)
             write_report(report, outdir)
+    for point_name in POINTS:
+        default = historical_payloads[(point_name, "default_N12_K8")]
+        joint_tight = historical_payloads[(point_name, "tight_N13_K10")]
+        krylov_only = current_payloads[(point_name, "krylov_only_N12_K10")]
+        newton_only = current_payloads[(point_name, "newton_only_N13_K8")]
+        report["comparisons_vs_historical_default"][point_name] = {
+            "historical_joint_tight_N13_K10_vs_default_N12_K8":
+                compare_payload(default, joint_tight, Bf),
+            "krylov_only_N12_K10_vs_default_N12_K8":
+                compare_payload(default, krylov_only, Bf),
+            "newton_only_N13_K8_vs_default_N12_K8":
+                compare_payload(default, newton_only, Bf),
+            "newton_only_N13_K8_vs_krylov_only_N12_K10":
+                compare_payload(krylov_only, newton_only, Bf),
+        }
+    write_report(report, outdir)
     report["status"] = "completed_diagnostic_only"
     report["native_call_count"] = len(report["descriptor_guard"]) + len(report["native_calls"])
     write_report(report, outdir)
@@ -370,12 +484,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe", required=True, type=Path)
     parser.add_argument("--ci-artifact-root", required=True, type=Path)
+    parser.add_argument("--previous-artifact-root", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     try:
         report = run_probe(args.exe.resolve(), args.ci_artifact_root.resolve(),
-                           args.output_dir.resolve())
+                           args.previous_artifact_root.resolve(), args.output_dir.resolve())
         print(json.dumps({"status": report["status"], "probe_count": len(report["probes"]),
                           "descriptor_guard_passed": all(
                               v["passed"] for v in report["descriptor_guard"].values())},
