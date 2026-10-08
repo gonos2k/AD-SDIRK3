@@ -589,7 +589,7 @@ jobs:
             /tmp/install_expected.txt
 
   diagnostic-h5-precision-probe:
-    name: DIAGNOSTIC ONLY - Linux same-point h=5 precision probe
+    name: DIAGNOSTIC ONLY - Linux N13/K8 correction stability probe
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.h5_precision_diagnostic == true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -639,11 +639,11 @@ jobs:
               data.extractall(destination)
           PY
 
-      - name: download prior default and joint-tight probe results
+      - name: download exact N12 correction states and baselines
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: diagnostic-only-pr281-h5-precision-axes-37784434765
-          run-id: 37784434765
+          name: diagnostic-only-pr281-h5-correction-37790210254
+          run-id: 37790210254
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ runner.temp }}/pr281-previous-probe
 
@@ -673,7 +673,7 @@ jobs:
       - name: build only the native wave-refinement executable
         run: cmake --build build/sdirk3-core --target test_native_wave_refinement --parallel 2
 
-      - name: run four h5 correction diagnostics
+      - name: run two N13/K8 same-state diagnostics
         run: |
           set -euo pipefail
           exe="$(find build/sdirk3-core -type f -name test_native_wave_refinement -print -quit)"
@@ -681,14 +681,14 @@ jobs:
           python3 -B tools/pr281_h5_precision_probe.py \
             --exe "$exe" \
             --ci-artifact-root "$RUNNER_TEMP/pr281-ci-inputs" \
-            --previous-artifact-root "$RUNNER_TEMP/pr281-previous-probe" \
+            --n13-reference-artifact-root "$RUNNER_TEMP/pr281-previous-probe" \
             --output-dir build/sdirk3-core/pr281_h5_precision_probe
 
       - name: upload diagnostic evidence (not a validation result)
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: diagnostic-only-pr281-h5-correction-${{ github.run_id }}
+          name: diagnostic-only-pr281-h5-n13-stability-${{ github.run_id }}
           if-no-files-found: ignore
           path: |
             configure.log
