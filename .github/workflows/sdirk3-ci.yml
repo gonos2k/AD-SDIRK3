@@ -13,6 +13,12 @@ on:
     branches: [main, ad-main]
   merge_group:
   workflow_dispatch:
+    inputs:
+      h5_precision_diagnostic:
+        description: "Run the bounded diagnostic-only PR281 same-point h=5 precision probe"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -28,6 +34,7 @@ concurrency:
 jobs:
   fast-contracts:
     name: fast-contracts
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.h5_precision_diagnostic != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -300,6 +307,7 @@ jobs:
 
   core-linux:
     name: core-linux
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.h5_precision_diagnostic != true }}
     runs-on: ubuntu-24.04
     # The prior 150-minute run passed tests 1–81, including 3,051 s fixed-data
     # refinement, then the job cap canceled the new inverse after 2,572 s,
@@ -580,8 +588,109 @@ jobs:
             /tmp/install_actual.txt
             /tmp/install_expected.txt
 
+  diagnostic-h5-precision-probe:
+    name: DIAGNOSTIC ONLY - Linux same-point h=5 precision probe
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.h5_precision_diagnostic == true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: install pinned CPU torch + fingerprint
+        run: bash .github/ci/setup_torch_env.sh
+
+      - name: install build tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache mpich libmpich-dev
+
+      - name: verify and unpack compact exact CI fixture
+        run: |
+          set -euo pipefail
+          fixture=tools/fixtures/pr281-ci-37726282791-red-fixture.zip
+          echo "a7db3585c51457ba29a9b0af0f93f2817ba198d24c88aaeebaf99a4af73c3045  $fixture" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/pr281-ci-inputs"
+          python3 -B - "$fixture" "$RUNNER_TEMP/pr281-ci-inputs" <<'PY'
+          from pathlib import Path
+          import sys
+          from zipfile import ZipFile
+
+          archive = Path(sys.argv[1])
+          destination = Path(sys.argv[2])
+          with ZipFile(archive) as data:
+              if data.testzip() is not None:
+                  raise SystemExit("compact CI fixture ZIP integrity check failed")
+              for member in data.namelist():
+                  path = Path(member)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"unsafe fixture member path: {member}")
+              data.extractall(destination)
+          PY
+
+      - name: record and bind source revision
+        run: |
+          set -euo pipefail
+          mkdir -p build/numerical-evidence
+          git rev-parse HEAD 'HEAD^{tree}' | tee build/numerical-evidence/source-revisions.txt
+
+      - name: configure Linux core with production CI settings
+        run: |
+          set -euo pipefail
+          cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3-core -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" \
+                -DWRF_SDIRK3_ABI_STRICT=AUTO \
+                -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" \
+                -DSDIRK3_QUIET_TESTS=ON \
+                -DUSE_FAST_POW_0875=OFF \
+                | tee configure.log
+          grep -q "ABI Header Mode: STRICT" configure.log
+          grep -q "Fast pow(x,0.875): DISABLED" configure.log
+          grep -q "SDIRK3 torch ABI: _GLIBCXX_USE_CXX11_ABI=$TORCH_ABI" configure.log
+          grep -q "SDIRK3 MPI halo contract: ENABLED" configure.log
+
+      - name: build only the native wave-refinement executable
+        run: cmake --build build/sdirk3-core --target test_native_wave_refinement --parallel 2
+
+      - name: run four exact-state precision comparisons
+        run: |
+          set -euo pipefail
+          exe="$(find build/sdirk3-core -type f -name test_native_wave_refinement -print -quit)"
+          test -n "$exe"
+          python3 -B tools/pr281_h5_precision_probe.py \
+            --exe "$exe" \
+            --ci-artifact-root "$RUNNER_TEMP/pr281-ci-inputs" \
+            --output-dir build/sdirk3-core/pr281_h5_precision_probe
+
+      - name: upload diagnostic evidence (not a validation result)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: diagnostic-only-pr281-h5-precision-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            configure.log
+            build/sdirk3-core/CMakeCache.txt
+            build/sdirk3-core/CMakeFiles/CMakeOutput.log
+            build/sdirk3-core/pr281_h5_precision_probe/
+            tools/fixtures/pr281-ci-37726282791-red-fixture.zip
+            build/numerical-evidence/source-revisions.txt
+
   build-contract-negatives:
     name: build-contract-negatives
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.h5_precision_diagnostic != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -611,7 +720,7 @@ jobs:
 
   required:
     name: required
-    if: ${{ always() }}
+    if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.h5_precision_diagnostic == true) }}
     needs: [fast-contracts, core-linux, build-contract-negatives]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
