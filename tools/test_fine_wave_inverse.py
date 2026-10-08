@@ -15,6 +15,7 @@ import json
 import platform
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -64,7 +65,10 @@ def read_payload(path: Path) -> tuple[dict,dict,dict,dict]:
 def native_call(exe: Path, nx: int, ny: int, nz: int, out: Path,
                 args: list[str]) -> tuple[dict, dict, dict, dict]:
     command = [str(exe), str(nx), str(ny), str(nz), str(out), *args]
+    started = time.monotonic()
+    print(f"native start {out.name}", flush=True)
     done = subprocess.run(command, capture_output=True, text=True, check=False)
+    print(f"native end {out.name} rc={done.returncode} elapsed_s={time.monotonic()-started:.3f}", flush=True)
     if done.returncode:
         tail = "\n".join((done.stdout+done.stderr).splitlines()[-80:])
         raise RuntimeError(f"native wave inverse failed ({done.returncode}): {command}\n{tail}")

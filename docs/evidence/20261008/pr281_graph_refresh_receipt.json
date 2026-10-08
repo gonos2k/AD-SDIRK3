@@ -16,11 +16,11 @@
   "graph_nodes": 1142,
   "graph_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/graph.json",
   "graph_report_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/GRAPH_REPORT.md",
-  "graph_report_sha256": "9dfec54dd267ad1ac55304ed1b562b8babd91796e2405bb49d173b8fb26ddc4e",
-  "graph_sha256": "0085120159c81eb81167b9f422731536c6096cd0d0909e0fa81406fd302d51b4",
-  "graph_update": "Code-only AST refresh; no semantic LLM extraction (0 input/output tokens). The deleted stale mirror copy tests/test_stable_wave_reference_rows.py was pruned.",
+  "graph_report_sha256": "717c09f3215b231247d5a9938915a1e572fadf64f9b0944b4cfdc59273650faa",
+  "graph_sha256": "c27bcaeb760c0baa103cd3da5e3568e8c4ac0a7029dcdfcf775e768a1686f39a",
+  "graph_update": "Incremental code-only AST refresh after test-runner timing instrumentation; no LLM semantic extraction (0 input/output tokens). The changed runner source is bound byte-for-byte to the worktree; CMake, expected inventory, and CI workflow remain manual configuration bindings.",
   "graphify_corpus_root": "/private/tmp/sdirk3-fp64-carry-adjoint-graph",
-  "head": "ee8faadbf728f61fe9db8f92adcf9f8d79a3bac7",
+  "head": "b2e592965cf6d8fa54b9913c5cd61fb606e2cdd8",
   "inventory_count": 129,
   "manifest_entries": 40,
   "manifest_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/manifest.json",
@@ -41,10 +41,10 @@
       "worktree_source": ".github/ci/expected_ctest_names.txt"
     },
     {
-      "bytes": 31699,
+      "bytes": 31894,
       "cache_source": null,
       "reason": "manual configuration binding; Graphify AST does not model CMake test registration, pinned CTest inventory, or workflow policy",
-      "sha256": "21fe5fd830d7a911f1ce87603ba413cb2c39cf4a3bf32246a2d11d5f781e413f",
+      "sha256": "86bdb28640819372d3d75bd64c643cf437f61eabb513851d4075f1364baa9ee3",
       "worktree_source": ".github/workflows/sdirk3-ci.yml"
     }
   ],
@@ -161,11 +161,11 @@
       "worktree_source": "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h"
     },
     {
-      "bytes": 47619,
+      "bytes": 47822,
       "graph_source": "tools/test_fine_wave_inverse.py",
       "mirror_match": true,
-      "mirror_sha256": "7e276c8e4544f41ac127b8ed558214106ed53398c0a255a221f3c1a131337769",
-      "sha256": "7e276c8e4544f41ac127b8ed558214106ed53398c0a255a221f3c1a131337769",
+      "mirror_sha256": "6f46c7d20b3b38db7f90392c0ffea0686339a510fe6013cd5043d3e2a54a155c",
+      "sha256": "6f46c7d20b3b38db7f90392c0ffea0686339a510fe6013cd5043d3e2a54a155c",
       "worktree_source": "tools/test_fine_wave_inverse.py"
     },
     {
@@ -371,7 +371,21 @@
   ],
   "source_mismatches": [],
   "status": "refreshed",
-  "timestamp_local": "2026-10-08T06:34:00+09:00",
-  "tree": "88a1604b06398aeb928f15f26dc26f3a7057fd04",
-  "worktree": "/private/tmp/pr274-ci-20261004"
+  "timestamp_local": "2026-10-08T09:20:23+09:00",
+  "tree": "e596a8170ba5d135dccb8d90940f4583c4f01657",
+  "worktree": "/private/tmp/pr274-ci-20261004",
+  "worktree_source_overrides": [
+    {
+      "worktree_source": "tools/test_fine_wave_inverse.py",
+      "bytes": 47822,
+      "head_blob_sha256": "7e276c8e4544f41ac127b8ed558214106ed53398c0a255a221f3c1a131337769",
+      "worktree_sha256": "6f46c7d20b3b38db7f90392c0ffea0686339a510fe6013cd5043d3e2a54a155c"
+    },
+    {
+      "worktree_source": ".github/workflows/sdirk3-ci.yml",
+      "bytes": 31894,
+      "head_blob_sha256": "21fe5fd830d7a911f1ce87603ba413cb2c39cf4a3bf32246a2d11d5f781e413f",
+      "worktree_sha256": "86bdb28640819372d3d75bd64c643cf437f61eabb513851d4075f1364baa9ee3"
+    }
+  ]
 }

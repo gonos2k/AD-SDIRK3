@@ -301,10 +301,11 @@ jobs:
   core-linux:
     name: core-linux
     runs-on: ubuntu-24.04
-    # The identical 119-test gate took ~86 min on one hosted runner; a slower
-    # PR runner hit 90 min during fixed-data refinement. Keep every criterion
-    # and allow enough time for the full test/parity/install gate to finish.
-    timeout-minutes: 150
+    # The prior 150-minute run passed tests 1–81, including 3,051 s fixed-data
+    # refinement, then the job cap canceled the new inverse after 2,572 s,
+    # before its unchanged 2,700 s CTest timeout. At 180 min, that test retains
+    # its full timeout and leaves about 28 min for diagnostics and later gates.
+    timeout-minutes: 180
     env:
       # mpich's UCX netmod probes InfiniBand verbs on some hosted VM nodes and
       # MPI_Init aborts (ibv_create_srq: Operation not supported) — observed
@@ -571,6 +572,8 @@ jobs:
             build/sdirk3-core/native_wave_refinement.log
             build/sdirk3-core/quadratic_wave_forcing/wave_quadratic_forcing_report.json
             build/sdirk3-core/quadratic_wave_forcing/wave_quadratic_inputs_receipt.json
+            build/sdirk3-core/fine_wave_inverse.json
+            build/sdirk3-core/fine_wave_inverse_artifacts/
             build/numerical-evidence/
             /tmp/ctest_actual.txt
             /tmp/ctest_expected.txt
