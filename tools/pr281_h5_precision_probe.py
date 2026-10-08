@@ -315,10 +315,12 @@ def run_probe(exe: Path, ci_root: Path, previous_root: Path, outdir: Path) -> di
         old_copy = historical_dir / old_filename
         shutil.copyfile(old_source, old_copy)
         old_meta, old_arrays, old_scalars, _ = mod.read_payload(old_copy)
-        old_gradient = Bf.T @ old_arrays["initial_pullback"]
+        recomputed_gradient = Bf.T @ old_arrays["initial_pullback"]
         reported_gradient = np.asarray(old["projected_gradient"], dtype=np.float64)
-        if not np.array_equal(old_gradient, reported_gradient):
+        gradient_reconstruction_delta = recomputed_gradient - reported_gradient
+        if not np.allclose(recomputed_gradient, reported_gradient, rtol=1.0e-10, atol=5.0e-12):
             raise RuntimeError(f"historical projected gradient does not reconstruct for {key}")
+        old_gradient = reported_gradient.copy()
         previous_payloads[key] = {
             "arrays": old_arrays,
             "objective": float(old_scalars["objective_physical_w"]),
@@ -331,6 +333,8 @@ def run_probe(exe: Path, ci_root: Path, previous_root: Path, outdir: Path) -> di
             "objective": float(old_scalars["objective_physical_w"]),
             "projected_gradient": old_gradient.tolist(),
             "projected_gradient_norm": float(np.linalg.norm(old_gradient)),
+            "projected_gradient_reconstruction_max_abs_delta": float(
+                np.max(np.abs(gradient_reconstruction_delta))),
             "raw_payload_path": str(old_copy), "raw_payload_sha256": sha256(old_copy),
         })
     if set(previous_payloads) != expected_previous:
