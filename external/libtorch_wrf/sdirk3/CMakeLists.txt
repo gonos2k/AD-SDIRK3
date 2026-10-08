@@ -630,10 +630,11 @@ add_test(NAME Native_Physical_Wave_Inverse
             ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/test_fine_wave_inverse.py
             --exe $<TARGET_FILE:test_native_wave_refinement>
             --output ${CMAKE_CURRENT_BINARY_DIR}/fine_wave_inverse.json)
-# The serial sum of measured stages is 1823.85 s for 61 native calls;
-# 2700 s leaves about 48% headroom for hosted runner variation.
+# Keep CPU-heavy graph trajectories isolated from parallel light contracts.
 set_tests_properties(Native_Physical_Wave_Inverse
     PROPERTIES TIMEOUT 2700 ENVIRONMENT "OPENBLAS_NUM_THREADS=1;OMP_NUM_THREADS=1;PYTHONDONTWRITEBYTECODE=1")
+set_tests_properties(FP64_Fixed_Data_Refinement Native_Quadratic_Wave_Forcing
+    Native_Physical_Wave_Inverse PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(test_horizontal_pgf_actual_rhs tests/test_horizontal_pgf_actual_rhs.cpp)
 target_link_libraries(test_horizontal_pgf_actual_rhs PRIVATE wrf_sdirk3::core)

@@ -307,8 +307,16 @@ def evaluate(exe: Path, grid: tuple[int,int,int], outdir: Path,
     result_path=outdir/f"result_{runid}.csv"
     write_vector(state_path,initial)
     argv=["--physical-wave-inverse",str(state_path),str(observations),str(steps),str(dt)]
+    if grid == GRIDS["fine"]:
+        argv.extend(["--newton-tol","1e-13","--krylov-tol","1e-10"])
     if forward_only: argv.append("--forward-only")
     meta,arrays,scalars,text_meta=native_call(exe,nx,ny,nz,result_path,argv)
+    if grid == GRIDS["fine"]:
+        expected={"physical_wave_newton_tol":float(np.float32(1.0e-13)),
+                  "physical_wave_krylov_tol":float(np.float32(1.0e-10))}
+        mismatch={key:(meta.get(key),value) for key,value in expected.items()
+                  if meta.get(key)!=value}
+        if mismatch: raise AssertionError(f"fine-grid effective tolerances mismatch: {mismatch}")
     if meta.get("physical_wave_inverse")!=1.0 or text_meta.get("physical_observation_domain_guard") != "passed":
         raise AssertionError(f"native physical-wave guards did not pass: {result_path}")
     if text_meta.get("checkpoint_precision")!="retained_fp64_trajectory":
@@ -672,6 +680,9 @@ def run(exe: Path, outdir: Path, max_iterations: int=12,
         raise AssertionError("fine h=5 and h=10 comparisons must use the same physical initial state")
     fine_h10_at_fine_h5_gradient=project_gradient(fine_h10_at_fine_h5,Bf)
     report={"schema":"physical-wave-inverse-v2","sigma_m_s":SIGMA,
+        "fine_solver_tolerance_policy":{"requested":{"newton":1.0e-13,"krylov":1.0e-10},
+            "effective_float32":{"newton":float(np.float32(1.0e-13)),
+                                  "krylov":float(np.float32(1.0e-10))}},
         "truth_controls":TRUTH.tolist(),"fixed_observation_xyz_sha256":digest(xyz),
         "fixed_observation_values_sha256":digest(obs),"fixed_observation_file":str(obsfile),
         "grids":{k:{"shape":list(v),"descriptor":str(desc[k]["path"]),

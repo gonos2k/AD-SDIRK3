@@ -471,7 +471,7 @@ jobs:
           diff /tmp/ctest_expected.txt /tmp/ctest_actual.txt \
             || { echo "FAIL: CTest inventory drift (a silently deregistered test is a missing gate)"; exit 1; }
           echo "inventory OK ($(wc -l < /tmp/ctest_actual.txt | tr -d ' ') tests)"
-          ctest --test-dir build/sdirk3-core --output-on-failure --no-tests=error
+          ctest --test-dir build/sdirk3-core --parallel 2 --output-on-failure --no-tests=error
 
       - name: flat periodic scalar diffusion Fortran/C++ parity
         run: |
