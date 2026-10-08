@@ -1,0 +1,47 @@
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=6.743495762e-07, restarts=1, arnoldi=8
+PASS  A: FGMRES with mid-solve PC change converges (true residual)
+PASS  F: both PC phases (real + identity-lock) coexist in one solve
+PASS  A: FGMRES solution matches direct solve
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=6.743495762e-07, restarts=1, arnoldi=8
+[GMRES] NOT CONVERGED: ||x||=14.9941, ||r_true||=105.7470, ||b||=14.2829, rel_error=7.4038, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=1.057470435e+02, restarts=1, arnoldi=8
+PASS  A(neg-1): single-cycle FGMRES under variable PC still reaches tol
+PASS  A(neg-2): single-cycle standard GMRES under variable PC MISSES tol
+PASS  A(neg-3): its true residual is worse than FGMRES's
+      [info] single-cycle true rel residual: fgmres=4.721e-08  gmres(neg-ctrl)=7.404e+00
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=1.923115945e-06, restarts=1, arnoldi=8
+[GMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=2.237358615e-06, restarts=1, arnoldi=8
+PASS  B: FGMRES converges with FIXED PC
+PASS  B: GMRES converges with FIXED PC
+PASS  B: FGMRES == GMRES solution for fixed linear PC (FP32 rel 1e-5)
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=2.026557922e-06, restarts=1, arnoldi=8
+[GMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=2.026557922e-06, restarts=1, arnoldi=8
+PASS  C: M_inv==nullptr -> FGMRES bitwise-identical to GMRES (V used, no Z)
+PASS  C: identical Arnoldi iteration count on unpreconditioned path
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=1.923115945e-06, restarts=1, arnoldi=8
+PASS  D: FGMRES applies M_inv EXACTLY once per Arnoldi vector (none on aggregates)
+[GMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=2.237358615e-06, restarts=1, arnoldi=8
+PASS  D(neg): standard GMRES re-applies M_inv on aggregates (count > Arnoldi)
+      [info] M_inv applies: fgmres=8 (arnoldi=8)  gmres=9 (arnoldi=8)
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=4.935322176e-06, restarts=3, arnoldi=9
+PASS  E: multi-restart (len 3) + warm start + per-call alternating PC converges
+PASS  E: solution matches direct solve
+[FGMRES] NOT CONVERGED: ||x||=1.9192, ||r_true||=8.1126, ||b||=14.2829, rel_error=0.5680, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=8.112606102e+00, restarts=1, arnoldi=2
+PASS  G: initial_rel_error is MEASURED (not the -1 sentinel)
+PASS  G: initial_rel_error equals ||b - A x0|| / ||b|| computed independently
+PASS  G: this warm start really does begin above 1 (the case the old test misread)
+PASS  G: a minimal-residual solve never ends above where it started
+PASS  G: divergence against r0 is FALSE here -- the solve reduced the residual
+[FGMRES] NOT CONVERGED: ||x||=2.0214, ||r_true||=0.5869, ||b||=14.2829, rel_error=0.0411, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=5.869281980e-01, restarts=1, arnoldi=3
+[FGMRES] NOT CONVERGED: ||x||=2.0541, ||r_true||=0.0073, ||b||=14.2829, rel_error=0.0005, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=7.302631219e-03, restarts=1, arnoldi=3
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=1.464334616e-05, restarts=4, arnoldi=12
+PASS  H: changing only the PC reduces true residual on this diagonal-dominant fixture
+PASS  H: changing only the restart budget reaches the true-residual tolerance
+CONTROLLED_FGMRES pc=none cycles=1 iterations=3 true_rel=0.041093193
+CONTROLLED_FGMRES pc=diagonal cycles=1 iterations=3 true_rel=0.000511286489
+CONTROLLED_FGMRES pc=none cycles=8 iterations=12 true_rel=1.02523927e-06
+PASS  I: initial residual is nonzero and below the old absolute V0 floor
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e-08, residual_norm_raw=1.717769554e-24, restarts=1, arnoldi=8
+PASS  I: GMRES resolves a tiny finite residual
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e-08, residual_norm_raw=1.717769554e-24, restarts=1, arnoldi=8
+PASS  I: FGMRES resolves a tiny finite residual
+ALL fgmres_contract assertions PASSED

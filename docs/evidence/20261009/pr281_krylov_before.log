@@ -1,0 +1,29 @@
+[GMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.099e-10 < tol = 1e-08
+[GMRES] Initial residual already converged: error = 5.099e-10 < tol = 1e-08
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.099e-10 < tol = 1e-08
+[GMRES] Initial residual already converged: error = 5.099e-10 < tol = 1e-08
+[GMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=1.0000, tol=0.0000, restarts=1, arnoldi=2
+FAIL: Krylov success agrees with independently measured FP64 ||b-Ax||/||b||
+[FGMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=1.0000, tol=0.0000, restarts=1, arnoldi=2
+FAIL: Krylov success agrees with independently measured FP64 ||b-Ax||/||b||
+[GMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=1.0000, tol=0.0000, restarts=1, arnoldi=2
+FAIL: GMRES near-solution initial stop preserves RHS-scale contract
+[FGMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=1.0000, tol=0.0000, restarts=1, arnoldi=2
+FAIL: FGMRES near-solution initial stop preserves RHS-scale contract
+[GMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=1.0000, tol=0.0000, restarts=1, arnoldi=2
+FAIL: Krylov success agrees with independently measured FP64 ||b-Ax||/||b||
+[FGMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=1.0000, tol=0.0000, restarts=1, arnoldi=2
+FAIL: Krylov success agrees with independently measured FP64 ||b-Ax||/||b||
+[GMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=1.0000, tol=0.0000, restarts=1, arnoldi=2
+FAIL: GMRES near-solution initial stop preserves RHS-scale contract
+[FGMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=1.0000, tol=0.0000, restarts=1, arnoldi=2
+FAIL: FGMRES near-solution initial stop preserves RHS-scale contract
+[GMRES] Initial residual already converged: error = 0 < tol = 1e-08
+FAIL: zero RHS and exact zero initial state return exact zero successfully
+[GMRES] Initial residual already converged: error = 0 < tol = 1e-08
+FAIL: zero RHS and exact zero initial state return exact zero successfully
+FAIL: 85 cases, 10 failures
