@@ -614,6 +614,7 @@ jobs:
         run: bash .github/ci/setup_torch_env.sh
 
       - name: install build tools
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
