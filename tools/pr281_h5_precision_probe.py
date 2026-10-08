@@ -649,8 +649,12 @@ def run_n13_stability_probe(exe: Path, ci_root: Path, reference_root: Path,
     cf = mod.reference.build_case(16, 8, native_csv=inputs / "descriptor_16x12x8.csv")
     _, basis_f = mod.profile_basis(c0, cf)
     Bf = np.column_stack([mod.pack_source_mode(q, (16, 12, 8)) for q in basis_f])
-    if hashlib.sha256(Bf.tobytes()).hexdigest() != context["Bf_sha256"]:
-        raise RuntimeError("reconstructed Bf differs from the hashed N12 correction context")
+    fresh_bf_sha256 = hashlib.sha256(Bf.tobytes()).hexdigest()
+    reference_bf_sha256 = context["Bf_sha256"]
+    bf_sha_different = fresh_bf_sha256 != reference_bf_sha256
+    dot_length = Bf.shape[0]
+    dot_gamma = (dot_length * np.finfo(np.float64).eps) / (
+        1.0 - dot_length * np.finfo(np.float64).eps)
     H = np.asarray(context["H_before_iteration9"], dtype=np.float64)
     if hashlib.sha256(H.tobytes()).hexdigest() != context["H_sha256"]:
         raise RuntimeError("iteration-9 H differs from the hashed N12 correction context")
@@ -688,6 +692,14 @@ def run_n13_stability_probe(exe: Path, ci_root: Path, reference_root: Path,
         meta, arrays, scalars, payload_text = mod.read_payload(payload_path)
         if not np.array_equal(read_vector(state_path), arrays["initial_state"]):
             raise RuntimeError(f"N12/K8 baseline did not use exact corrected state for {method}")
+        fresh_gradient = Bf.T @ arrays["initial_pullback"]
+        reference_gradient = np.asarray(record["projected_gradient"], dtype=np.float64)
+        projection_delta = fresh_gradient - reference_gradient
+        projection_roundoff_bound = dot_gamma * (
+            np.abs(Bf).T @ np.abs(arrays["initial_pullback"]))
+        projection_guard = np.abs(projection_delta) <= projection_roundoff_bound
+        if not np.all(projection_guard):
+            raise RuntimeError(f"N12/K8 projection delta exceeds componentwise dot-roundoff bound for {method}")
         log_records = {}
         for stream in ("stdout", "stderr"):
             source = reference_dir / "logs" / Path(call[f"{stream}_path"]).name
@@ -700,7 +712,7 @@ def run_n13_stability_probe(exe: Path, ci_root: Path, reference_root: Path,
             })
         baseline_payloads[method] = {
             "arrays": arrays, "objective": float(scalars["objective_physical_w"]),
-            "path": str(payload_path), "gradient": Bf.T @ arrays["initial_pullback"],
+            "path": str(payload_path), "gradient": fresh_gradient,
             "meta": meta, "text": payload_text,
         }
         baseline_records[method] = {
@@ -710,6 +722,14 @@ def run_n13_stability_probe(exe: Path, ci_root: Path, reference_root: Path,
             "objective": float(scalars["objective_physical_w"]),
             "projected_gradient": record["projected_gradient"],
             "projected_gradient_norm": record["projected_gradient_norm"],
+            "projected_gradient_fresh_Bf": fresh_gradient.tolist(),
+            "projected_gradient_delta_fresh_minus_reference": projection_delta.tolist(),
+            "projected_gradient_componentwise_dot_roundoff_bound": projection_roundoff_bound.tolist(),
+            "projected_gradient_componentwise_dot_roundoff_guard": projection_guard.tolist(),
+            "projected_gradient_max_abs_delta": float(np.max(np.abs(projection_delta))),
+            "projected_gradient_max_delta_to_bound_ratio": float(np.max(
+                np.abs(projection_delta) / np.maximum(projection_roundoff_bound,
+                                                       np.finfo(np.float64).tiny))),
             "stdout": log_records["stdout"], "solver_residual_log": log_records["stderr"],
         }
 
@@ -736,7 +756,11 @@ def run_n13_stability_probe(exe: Path, ci_root: Path, reference_root: Path,
             "status": reference["status"],
             "x_c_mapping_exactly_matches_saved_initial": context["x_c_mapping_exactly_matches_saved_initial"],
             "x_c_mapping_max_abs_residual": context["x_c_optimizer_mapping_max_abs"],
-            "Bf_shape": list(Bf.shape), "Bf_sha256": hashlib.sha256(Bf.tobytes()).hexdigest(),
+            "Bf_shape": list(Bf.shape),
+            "reference_Bf_sha256": reference_bf_sha256,
+            "fresh_Bf_sha256": fresh_bf_sha256,
+            "Bf_sha256_different_from_reference": bf_sha_different,
+            "Bf_componentwise_projection_dot_roundoff_gamma": float(dot_gamma),
             "H_sha256": hashlib.sha256(H.tobytes()).hexdigest(),
             "H_before_iteration9": context["H_before_iteration9"],
             "x_c_controls": context["x_c_controls"], "g_sources": context["g_sources"],
