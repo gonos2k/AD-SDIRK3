@@ -1,4 +1,22 @@
 {
+  "ci_observation": {
+    "artifact_sha256": "65487ecb3973f98bb44ad2526f3148f87631d6cc7798f3a89eba465128632cd7",
+    "ctest_reported_passed": 128,
+    "expected_mps_skip": 1,
+    "fine_h10_bfgs_completed_evaluations": 23,
+    "fine_h10_bfgs_interrupted_evaluation": 24,
+    "inventory_count": 129,
+    "inventory_matched": true,
+    "native_call_breakdown": "2 descriptor calls and 51 trajectories",
+    "native_calls_rc0": 53,
+    "primary_fine_h5_optimization_reached": false,
+    "result": "TIMEOUT",
+    "run_id": "37707372699",
+    "scientifically_exercised_passes": 127,
+    "test": "Native_Physical_Wave_Inverse",
+    "test_timeout_seconds": 2700,
+    "timed_out_tests": 1
+  },
   "extraction_gaps": [
     "CMake test semantics, pinned inventory, and CI workflow are manually bound configuration sources.",
     "Fortran WRF integration relationships are outside this scoped C++/Python graph.",
@@ -6,21 +24,21 @@
   ],
   "graph_code_source_files": 39,
   "graph_diff_vs_preserved_baseline": {
-    "new_edges": 147,
-    "new_nodes": 69,
-    "note": "Counts are a structural navigation diff; edge loss is recorded rather than forcing stale relationships back into the refreshed graph.",
-    "removed_edges": 394,
-    "removed_nodes": 124
+    "new_edges": 4,
+    "new_nodes": 3,
+    "note": "Structural navigation diff by node id and edge source/target/relation/source location; raw graph counts are 1,142 nodes and 2,661 links versus 1,142 nodes and 2,660 links in the preserved pre-runner baseline. Graph edges are not numerical evidence.",
+    "removed_edges": 3,
+    "removed_nodes": 3
   },
-  "graph_edges": 2660,
+  "graph_edges": 2661,
   "graph_nodes": 1142,
   "graph_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/graph.json",
   "graph_report_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/GRAPH_REPORT.md",
-  "graph_report_sha256": "717c09f3215b231247d5a9938915a1e572fadf64f9b0944b4cfdc59273650faa",
-  "graph_sha256": "c27bcaeb760c0baa103cd3da5e3568e8c4ac0a7029dcdfcf775e768a1686f39a",
-  "graph_update": "Incremental code-only AST refresh after test-runner timing instrumentation; no LLM semantic extraction (0 input/output tokens). The changed runner source is bound byte-for-byte to the worktree; CMake, expected inventory, and CI workflow remain manual configuration bindings.",
+  "graph_report_sha256": "68e21438a34eab94a1d8a1438cf87bf9e9e7c55fa71d3f56dc6d6e2afa5836fc",
+  "graph_sha256": "724023f112d0dadd194df292869a272a88a078460b16abad415b0405c6eb2699",
+  "graph_update": "Code-only Graphify refresh after freezing the bounded runner at SHA-256 d2cf625e\u2026; only the runner mirror changed from the HEAD 7c baseline. CMake, the 129-name expected inventory, and the CI workflow were byte-bound manually; no LLM semantic extraction was used.",
   "graphify_corpus_root": "/private/tmp/sdirk3-fp64-carry-adjoint-graph",
-  "head": "b2e592965cf6d8fa54b9913c5cd61fb606e2cdd8",
+  "head": "7c3ce814a655ebef9518b39284a21aa605429188",
   "inventory_count": 129,
   "manifest_entries": 40,
   "manifest_path": "/private/tmp/sdirk3-fp64-carry-adjoint-graph/graphify-out/manifest.json",
@@ -50,11 +68,22 @@
   ],
   "new_ctest_name": "Native_Physical_Wave_Inverse",
   "preserved_baseline_graph": {
+    "graph_built_at_commit": "b2e592965cf6d8fa54b9913c5cd61fb606e2cdd8",
+    "note": "The graph metadata records b2e5929; its 39 code source files byte-match the committed 7c3ce81 source snapshot, including runner SHA-256 6f46c7d2\u2026, which 7c committed. The intervening source changes are workflow/docs/inventory/runner; workflow and inventory are manually hash-bound in the refreshed receipt.",
+    "path": "/private/tmp/pr281-graph-baseline-7c-6f46c7d2.json",
+    "raw_edges": 2660,
+    "raw_nodes": 1142,
+    "runner_sha256": "6f46c7d20b3b38db7f90392c0ffea0686339a510fe6013cd5043d3e2a54a155c",
+    "sha256": "c27bcaeb760c0baa103cd3da5e3568e8c4ac0a7029dcdfcf775e768a1686f39a",
+    "source_revision": "7c3ce814a655ebef9518b39284a21aa605429188"
+  },
+  "prior_historical_baseline_graph": {
     "path": "/private/tmp/pr281-fine-wave-full/attempt11/graphify_before/graphify-out__graph.json",
     "raw_edges": 3443,
     "raw_nodes": 1197,
     "sha256": "2cefaac391266f472b99e06c303ec963663ad0d99c1e7a7dfb35d3c51148b744"
   },
+  "runner_sha256": "d2cf625ed2024de8633863bc195dba9fae84639727495fb01f08f0136809d8f4",
   "source_bindings": [
     {
       "bytes": 10419,
@@ -161,11 +190,11 @@
       "worktree_source": "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h"
     },
     {
-      "bytes": 47822,
+      "bytes": 47746,
       "graph_source": "tools/test_fine_wave_inverse.py",
       "mirror_match": true,
-      "mirror_sha256": "6f46c7d20b3b38db7f90392c0ffea0686339a510fe6013cd5043d3e2a54a155c",
-      "sha256": "6f46c7d20b3b38db7f90392c0ffea0686339a510fe6013cd5043d3e2a54a155c",
+      "mirror_sha256": "d2cf625ed2024de8633863bc195dba9fae84639727495fb01f08f0136809d8f4",
+      "sha256": "d2cf625ed2024de8633863bc195dba9fae84639727495fb01f08f0136809d8f4",
       "worktree_source": "tools/test_fine_wave_inverse.py"
     },
     {
@@ -371,21 +400,23 @@
   ],
   "source_mismatches": [],
   "status": "refreshed",
-  "timestamp_local": "2026-10-08T09:20:23+09:00",
-  "tree": "e596a8170ba5d135dccb8d90940f4583c4f01657",
+  "timestamp_local": "2026-10-08T12:58:06+09:00",
+  "tree": "c0c362e1c929e8392144c8685db079f14cd31874",
+  "workflow_configuration": {
+    "core_job_timeout_minutes": 180,
+    "head_blob_sha256": "86bdb28640819372d3d75bd64c643cf437f61eabb513851d4075f1364baa9ee3",
+    "inverse_outputs_uploaded": true,
+    "sha256": "86bdb28640819372d3d75bd64c643cf437f61eabb513851d4075f1364baa9ee3",
+    "source": ".github/workflows/sdirk3-ci.yml",
+    "source_unchanged_from_head": true
+  },
   "worktree": "/private/tmp/pr274-ci-20261004",
   "worktree_source_overrides": [
     {
-      "worktree_source": "tools/test_fine_wave_inverse.py",
-      "bytes": 47822,
-      "head_blob_sha256": "7e276c8e4544f41ac127b8ed558214106ed53398c0a255a221f3c1a131337769",
-      "worktree_sha256": "6f46c7d20b3b38db7f90392c0ffea0686339a510fe6013cd5043d3e2a54a155c"
-    },
-    {
-      "worktree_source": ".github/workflows/sdirk3-ci.yml",
-      "bytes": 31894,
-      "head_blob_sha256": "21fe5fd830d7a911f1ce87603ba413cb2c39cf4a3bf32246a2d11d5f781e413f",
-      "worktree_sha256": "86bdb28640819372d3d75bd64c643cf437f61eabb513851d4075f1364baa9ee3"
+      "bytes": 47746,
+      "head_blob_sha256": "6f46c7d20b3b38db7f90392c0ffea0686339a510fe6013cd5043d3e2a54a155c",
+      "worktree_sha256": "d2cf625ed2024de8633863bc195dba9fae84639727495fb01f08f0136809d8f4",
+      "worktree_source": "tools/test_fine_wave_inverse.py"
     }
   ]
 }

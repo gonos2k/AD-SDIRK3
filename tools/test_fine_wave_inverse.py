@@ -343,6 +343,7 @@ def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
         raise ValueError("source preconditioner must be a finite square control matrix")
     evaluations=[]
     current=evaluate(exe,grid,outdir,descriptor_data,base,B,v,observations,steps,dt)
+    initial_evaluation=current
     evaluations.append(current)
     g=project_gradient(current,B)
     history=[{"iteration":0,"controls":v.tolist(),"objective":current["objective"],
@@ -421,22 +422,23 @@ def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
             "gradient_norm":terminal_gradient_norm,"status":status,"converged":converged,
             "terminal_trial":stationary_trial,"last_armijo_controls":v,
             "last_armijo_evaluation":current,"history":history,"trial_history":trial_history,
-            "evaluations":len(evaluations),"final_metric":H,"steps":steps,"dt_s":dt}
+            "initial_evaluation":initial_evaluation,"evaluations":len(evaluations),
+            "final_metric":H,"steps":steps,"dt_s":dt}
 
 
 def directional_checks(exe: Path, grid: tuple[int,int,int], outdir: Path,
                        descriptor_data: dict, base: np.ndarray, B: np.ndarray,
                        observations: Path,
                        controls: np.ndarray, center: dict,
-                       xyz: np.ndarray) -> dict:
+                       xyz: np.ndarray, steps: int=30, dt: int=10) -> dict:
     """Check objective VJP and state-dependent H^T with paired FP64 forwards."""
     d=FD_DIRECTION/np.linalg.norm(FD_DIRECTION)
     grad=project_gradient(center,B)
     epsilons=(1.0e-2,5.0e-3)
     rows=[]
     for eps in epsilons:
-        plus=evaluate(exe,grid,outdir,descriptor_data,base,B,controls+eps*d,observations,30,10,True)
-        minus=evaluate(exe,grid,outdir,descriptor_data,base,B,controls-eps*d,observations,30,10,True)
+        plus=evaluate(exe,grid,outdir,descriptor_data,base,B,controls+eps*d,observations,steps,dt,True)
+        minus=evaluate(exe,grid,outdir,descriptor_data,base,B,controls-eps*d,observations,steps,dt,True)
         pa,ma=plus["arrays"],minus["arrays"]
         fd=(plus["objective"]-minus["objective"])/(2.0*eps)
         ad=float(grad@d)
@@ -535,7 +537,8 @@ def directional_checks(exe: Path, grid: tuple[int,int,int], outdir: Path,
                           "PH_independent_relative_error":float(independent_error),
                           "PH_operand_roundoff_floor":float(roundoff_floor),
                           "PH_bracket_margin_m":float(min(margin_plus,margin_minus))}
-    return {"direction":d.tolist(),"checks":rows,"independent_H_transpose":h_checks}
+    return {"direction":d.tolist(),"steps":steps,"dt_s":dt,
+            "checks":rows,"independent_H_transpose":h_checks}
 
 
 def numpy_physical_w_pullback(grid: tuple[int,int,int], phb: np.ndarray,
@@ -655,15 +658,20 @@ def run(exe: Path, outdir: Path, max_iterations: int=12,
     fixed["fine_h10"]=evaluate(exe,grid_f,outdir,desc["fine"],desc["fine"]["base"],Bf,vstar,obsfile,30,10)
     fine_fwd=evaluate(exe,grid_f,outdir,desc["fine"],desc["fine"]["base"],Bf,vstar,obsfile,30,10,True)
     fixed["fine_h5"]=evaluate(exe,grid_f,outdir,desc["fine"],desc["fine"]["base"],Bf,vstar,obsfile,60,5,True)
-    fineopt=bfgs_optimize(exe,grid_f,outdir,desc["fine"],desc["fine"]["base"],Bf,
-                          obsfile,coarse["final_metric"],max_iterations,
-                          initial_controls=vstar)
     fine_h5_opt=bfgs_optimize(exe,grid_f,outdir,desc["fine"],desc["fine"]["base"],Bf,
-                              obsfile,fineopt["final_metric"],max_iterations,
-                              steps=60,dt=5,initial_controls=fineopt["controls"])
+                              obsfile,H,max_iterations,steps=60,dt=5,
+                              initial_controls=vstar)
     if not fine_h5_opt["converged"]:
         raise AssertionError(f"primary fine h=5 optimization did not reach the required gradient tolerance: {fine_h5_opt['status']} ||g||={fine_h5_opt['gradient_norm']}")
-    report={"schema":"physical-wave-inverse-v1","sigma_m_s":SIGMA,
+    fine_h5_directional_checks=directional_checks(
+        exe,grid_f,outdir,desc["fine"],desc["fine"]["base"],Bf,obsfile,vstar,
+        fine_h5_opt["initial_evaluation"],xyz,steps=60,dt=5)
+    fine_h10_at_fine_h5=evaluate(exe,grid_f,outdir,desc["fine"],desc["fine"]["base"],Bf,
+                                 fine_h5_opt["controls"],obsfile,30,10)
+    if not np.array_equal(fine_h10_at_fine_h5["initial"],fine_h5_opt["evaluation"]["initial"]):
+        raise AssertionError("fine h=5 and h=10 comparisons must use the same physical initial state")
+    fine_h10_at_fine_h5_gradient=project_gradient(fine_h10_at_fine_h5,Bf)
+    report={"schema":"physical-wave-inverse-v2","sigma_m_s":SIGMA,
         "truth_controls":TRUTH.tolist(),"fixed_observation_xyz_sha256":digest(xyz),
         "fixed_observation_values_sha256":digest(obs),"fixed_observation_file":str(obsfile),
         "grids":{k:{"shape":list(v),"descriptor":str(desc[k]["path"]),
@@ -692,38 +700,21 @@ def run(exe: Path, outdir: Path, max_iterations: int=12,
             "directional_checks_at_half_truth":checks["coarse"]},
         "same_control_grid_time_sensitivity":{},"fp64_carry_parity_at_half_truth":parity,
         "fine_directional_checks_at_half_truth":checks["fine"],
-        "fine_optimization_diagnostic":{"status":fineopt["status"],
-            "converged":fineopt["converged"],"diagnostic_only":True,
-            "interpretation":"fine h=10 inverse stationarity is not a required gate",
-            "returned_controls":fineopt["controls"].tolist(),
-            "initial_controls":fineopt["history"][0]["controls"],
-            "initial_inverse_metric":coarse["final_metric"].tolist(),
-            "returned_objective":fineopt["evaluation"]["objective"],
-            "initial_objective":fineopt["history"][0]["objective"],
-            "gradient_norm":fineopt["gradient_norm"],"steps":fineopt["steps"],"dt_s":fineopt["dt_s"],
-            "control_error_norm_to_source_truth_diagnostic":float(np.linalg.norm(fineopt["controls"]-TRUTH)),
-            "gradient":fineopt["gradient"].tolist(),"accepted_armijo_history":fineopt["history"],
-            "line_search_trial_history":fineopt["trial_history"],
-            "terminal_stationary_trial":None if fineopt["terminal_trial"] is None else {
-                "controls":fineopt["terminal_trial"]["controls"].tolist(),
-                "objective":fineopt["terminal_trial"]["evaluation"]["objective"],
-                "gradient_norm":fineopt["terminal_trial"]["gradient_norm"],
-                "objective_delta_vs_last_armijo":fineopt["terminal_trial"]["evaluation"]["objective"]-fineopt["last_armijo_evaluation"]["objective"],
-                "objective_delta_vs_initial":fineopt["terminal_trial"]["evaluation"]["objective"]-fineopt["history"][0]["objective"]},
-            "final_inverse_metric":fineopt["final_metric"].tolist(),
-            "native_evaluations":fineopt["evaluations"]},
-        "fine_h5_optimization":{"controls":fine_h5_opt["controls"].tolist(),
-            "controls_source":fine_h5_opt["status"],
+        "fine_h5_directional_checks_at_coarse_controls":fine_h5_directional_checks,
+        "fine_h5_optimization":{"returned_controls":fine_h5_opt["controls"].tolist(),
+            "initial_controls_source":"coarse_h10_optimized_controls",
             "initial_controls":fine_h5_opt["history"][0]["controls"],
-            "initial_inverse_metric":fineopt["final_metric"].tolist(),
+            "initial_inverse_metric":H.tolist(),
             "objective":fine_h5_opt["evaluation"]["objective"],
+            "initial_state_sha256":digest(fine_h5_opt["evaluation"]["initial"]),
             "initial_objective":fine_h5_opt["history"][0]["objective"],
             "gradient_norm":fine_h5_opt["gradient_norm"],"steps":fine_h5_opt["steps"],"dt_s":fine_h5_opt["dt_s"],
-            "control_change_from_fine_h10_diagnostic":float(np.linalg.norm(fine_h5_opt["controls"]-fineopt["controls"])),
             "status":fine_h5_opt["status"],"converged":fine_h5_opt["converged"],
             "gradient":fine_h5_opt["gradient"].tolist(),
             "accepted_armijo_history":fine_h5_opt["history"],
             "line_search_trial_history":fine_h5_opt["trial_history"],
+            "last_armijo_controls":fine_h5_opt["last_armijo_controls"].tolist(),
+            "last_armijo_objective":fine_h5_opt["last_armijo_evaluation"]["objective"],
             "terminal_stationary_trial":None if fine_h5_opt["terminal_trial"] is None else {
                 "controls":fine_h5_opt["terminal_trial"]["controls"].tolist(),
                 "objective":fine_h5_opt["terminal_trial"]["evaluation"]["objective"],
@@ -731,7 +722,18 @@ def run(exe: Path, outdir: Path, max_iterations: int=12,
                 "objective_delta_vs_last_armijo":fine_h5_opt["terminal_trial"]["evaluation"]["objective"]-fine_h5_opt["last_armijo_evaluation"]["objective"],
                 "objective_delta_vs_initial":fine_h5_opt["terminal_trial"]["evaluation"]["objective"]-fine_h5_opt["history"][0]["objective"]},
             "final_inverse_metric":fine_h5_opt["final_metric"].tolist(),
-            "native_evaluations":fine_h5_opt["evaluations"]}}
+            "native_evaluations":fine_h5_opt["evaluations"]},
+        "fine_h10_at_fine_h5_controls":{"controls":fine_h5_opt["controls"].tolist(),
+            "controls_sha256":digest(fine_h5_opt["controls"]),
+            "initial_state_sha256":digest(fine_h10_at_fine_h5["initial"]),
+            "objective":fine_h10_at_fine_h5["objective"],
+            "gradient":fine_h10_at_fine_h5_gradient.tolist(),
+            "gradient_norm":float(np.linalg.norm(fine_h10_at_fine_h5_gradient)),
+            "steps":30,"dt_s":10,"full_vjp":True,
+            "interpretation":"single fixed-control h=10 J/g evaluation; no h=10 optimization or convergence claim"},
+        "fine_h10_optimizer_follow_up":{"current_run":"not_run",
+            "historical_status":"line_search_failed",
+            "historical_evidence":"prior local h=10 optimizer result remains archived; h=10 optimality remains open"}}
     baseline=fixed["coarse_h10"]["arrays"]
     for name,item in fixed.items():
         arrays=item["arrays"]
@@ -754,15 +756,11 @@ def run(exe: Path, outdir: Path, max_iterations: int=12,
             "objective_delta":fixed["fine_h5"]["objective"]-fixed["fine_h10"]["objective"],
             "rms_150_m_s":float(np.sqrt(np.mean((fine5["predicted_150"]-fine10["predicted_150"])**2))),
             "rms_300_m_s":float(np.sqrt(np.mean((fine5["predicted_300"]-fine10["predicted_300"])**2)))} }
-    report["reoptimized_control_sensitivity"]={
-        "coarse_h10_controls":vstar.tolist(),
-        "fine_h10_diagnostic_status":fineopt["status"],
-        "fine_h10_diagnostic_controls":fineopt["controls"].tolist(),
-        "fine_h5_required_controls":fine_h5_opt["controls"].tolist(),
-        "fine_h5_minus_fine_h10_diagnostic_control_norm":float(np.linalg.norm(fine_h5_opt["controls"]-fineopt["controls"])),
-        "fine_h5_vs_fine_h10_diagnostic_objective_delta":fine_h5_opt["evaluation"]["objective"]-fineopt["evaluation"]["objective"],
-        "fine_h10_exact_optimizer_solution_claimed":False,
-        "fine_h10_optimality_uncertainty":"open; h=10 optimizer is diagnostic only"}
+    report["fine_time_discretization_at_returned_controls"]={
+        "controls_sha256":digest(fine_h5_opt["controls"]),
+        "objective_delta_h10_minus_h5":fine_h10_at_fine_h5["objective"]-fine_h5_opt["evaluation"]["objective"],
+        "gradient_delta_norm_h10_minus_h5":float(np.linalg.norm(fine_h10_at_fine_h5_gradient-fine_h5_opt["gradient"])),
+        "h10_is_optimized":False}
     qstar=sum((vstar[j]*basis_f[j] for j in range(4)),
               np.zeros(4*int(cfine["nz"])+1,dtype=np.complex128))
     _,source_at_vstar=source_observation_data(cfine,qstar,grid_c,ccoarse)
@@ -780,8 +778,8 @@ def run(exe: Path, outdir: Path, max_iterations: int=12,
     report["native_files"]={"coarse":str(coarse["evaluation"]["path"]),
         "fine":str(fixed["fine_h10"]["path"]),"fine_h10_forward_only":str(fine_fwd["path"]),
         "fine_h5":str(fixed["fine_h5"]["path"]),
-        "fine_h10_diagnostic":str(fineopt["evaluation"]["path"])}
-    report["native_files"]["fine_h5_optimized"]=str(fine_h5_opt["evaluation"]["path"])
+        "fine_h5_optimized":str(fine_h5_opt["evaluation"]["path"]),
+        "fine_h10_at_fine_h5_controls":str(fine_h10_at_fine_h5["path"])}
     revision=subprocess.run(["git","rev-parse","HEAD"],cwd=ROOT,capture_output=True,
                             text=True,check=True).stdout.strip()
     report["artifacts"]={"source_revision":revision,
@@ -813,11 +811,14 @@ def main() -> None:
                  "objective_forward_only":report["objective_forward_only"]}
     else:
         summary={"coarse_objective":report["coarse_optimization"]["objective"],
-                 "fine_h10_diagnostic_status":report["fine_optimization_diagnostic"]["status"],
-                 "fine_h10_diagnostic_objective":report["fine_optimization_diagnostic"]["returned_objective"],
+                 "fine_h10_at_fine_h5_controls_objective":report["fine_h10_at_fine_h5_controls"]["objective"],
+                 "fine_h10_at_fine_h5_controls_gradient_norm":report["fine_h10_at_fine_h5_controls"]["gradient_norm"],
+                 "fine_h10_optimizer_historical_status":report["fine_h10_optimizer_follow_up"]["historical_status"],
                  "fine_h5_objective":report["fine_h5_optimization"]["objective"],
+                 "fine_h5_status":report["fine_h5_optimization"]["status"],
+                 "fine_h5_gradient_norm":report["fine_h5_optimization"]["gradient_norm"],
                  "coarse_controls":report["coarse_optimization"]["controls"],
-                 "fine_h5_controls":report["fine_h5_optimization"]["controls"]}
+                 "fine_h5_returned_controls":report["fine_h5_optimization"]["returned_controls"]}
     print(json.dumps(summary,sort_keys=True))
 
 

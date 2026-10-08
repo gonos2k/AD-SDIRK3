@@ -1,5 +1,7 @@
 # PR281 fine-grid physical-wave inverse status
 
+This is the historical warm-start prototype record. The current cold-start implementation and validation are recorded in [the later follow-up](<(202610081258)_pr281_primary_fine_inverse_runtime.md>); its status supersedes this note.
+
 Local timestamp: 2026-10-08T06:39:17+09:00.
 
 This follow-up adds a test-only physical-W inverse fixture on the existing 16×12×8 fine grid, with the same 40 km × 30 km domain, 105 observation locations at 150/300 seconds, σ = 3×10⁻⁴ m/s, and four source-profile controls as the coarse fixture. The native adapter runs retained FP64 trajectories and returns the selected initial-state VJP. The source-only observation model generates the fixed targets from the fine-grid linear wave operator. No production RHS, WRF executable, namelist, or model input changed.
