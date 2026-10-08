@@ -673,7 +673,7 @@ jobs:
       - name: build only the native wave-refinement executable
         run: cmake --build build/sdirk3-core --target test_native_wave_refinement --parallel 2
 
-      - name: run four isolated tolerance-axis comparisons
+      - name: run four h5 correction diagnostics
         run: |
           set -euo pipefail
           exe="$(find build/sdirk3-core -type f -name test_native_wave_refinement -print -quit)"
@@ -688,7 +688,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: diagnostic-only-pr281-h5-precision-axes-${{ github.run_id }}
+          name: diagnostic-only-pr281-h5-correction-${{ github.run_id }}
           if-no-files-found: ignore
           path: |
             configure.log
