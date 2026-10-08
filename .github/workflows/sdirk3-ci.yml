@@ -614,7 +614,12 @@ jobs:
         run: bash .github/ci/setup_torch_env.sh
 
       - name: install build tools
-        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache mpich libmpich-dev
+        run: |
+          set -euo pipefail
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build ccache mpich libmpich-dev
 
       - name: verify and unpack compact exact CI fixture
         run: |
