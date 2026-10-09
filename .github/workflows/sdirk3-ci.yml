@@ -589,7 +589,7 @@ jobs:
             /tmp/install_expected.txt
 
   diagnostic-h5-precision-probe:
-    name: DIAGNOSTIC ONLY - Linux N13 correction and N14 stability probe
+    name: DIAGNOSTIC ONLY - saved-candidate N13/N14 stability probe
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.h5_precision_diagnostic == true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -645,11 +645,11 @@ jobs:
               data.extractall(destination)
           PY
 
-      - name: download exact N13 correction reference
+      - name: download exact saved run-378034 candidate
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: diagnostic-only-pr281-h5-n13-stability-37799071263
-          run-id: 37799071263
+          name: diagnostic-only-pr281-h5-fixed-correction-n13-n14-37803412710
+          run-id: 37803412710
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ runner.temp }}/pr281-n13-correction-reference
 
