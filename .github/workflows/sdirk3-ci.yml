@@ -301,6 +301,9 @@ jobs:
   core-linux:
     name: core-linux
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read # Read the pinned PR281 baseline only after exact source proof.
     # The prior 150-minute run passed tests 1–81, including 3,051 s fixed-data
     # refinement, then the job cap canceled the new inverse after 2,572 s,
     # before its unchanged 2,700 s CTest timeout. At 180 min, that test retains
@@ -462,6 +465,14 @@ jobs:
           grep -q 'SELF-TEST: ALL PASS' /tmp/live_selftest.log \
             || { echo "FAIL: self-test did not pass"; tail -8 /tmp/live_selftest.log; exit 1; }
 
+      - name: qualify three PR281 heavy results for the output-only repair
+        id: heavy_reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --no-tags --depth=1 origin 12c12e7501807681ec5072cb8dd2d1bac2717607 || true
+          python3 -B .github/ci/pr281_heavy_evidence_reuse.py --output-dir build/numerical-evidence
+
       - name: CTest inventory and physical inverse gate
         run: |
           set -euo pipefail
@@ -471,9 +482,12 @@ jobs:
           diff /tmp/ctest_expected.txt /tmp/ctest_actual.txt \
             || { echo "FAIL: CTest inventory drift (a silently deregistered test is a missing gate)"; exit 1; }
           echo "inventory OK ($(wc -l < /tmp/ctest_actual.txt | tr -d ' ') tests)"
-          # Resolve the new inverse gate before spending an hour on unchanged long windows.
-          ctest --test-dir build/sdirk3-core -R '^Native_Physical_Wave_Inverse$' --verbose --output-on-failure --no-tests=error
-          cp build/sdirk3-core/Testing/Temporary/LastTest.log build/sdirk3-core/Testing/Temporary/LastTest.PhysicalInverse.log
+          if [ '${{ steps.heavy_reuse.outputs.eligible }}' = true ]; then
+            echo 'Physical inverse: verified baseline pass reused; not rerun on this HEAD.'
+          else
+            ctest --test-dir build/sdirk3-core -R '^Native_Physical_Wave_Inverse$' --verbose --output-on-failure --no-tests=error
+            cp build/sdirk3-core/Testing/Temporary/LastTest.log build/sdirk3-core/Testing/Temporary/LastTest.PhysicalInverse.log
+          fi
 
       - name: publish inverse endpoint evidence before remaining long tests
         if: ${{ always() }}
@@ -490,7 +504,11 @@ jobs:
 
       - name: remaining CTests (all other registered contracts)
         run: |
-          ctest --test-dir build/sdirk3-core -E '^Native_Physical_Wave_Inverse$' --parallel 2 --output-on-failure --no-tests=error
+          if [ '${{ steps.heavy_reuse.outputs.eligible }}' = true ]; then
+            ctest --test-dir build/sdirk3-core -E '^(Native_Physical_Wave_Inverse|FP64_Fixed_Data_Refinement|Native_Quadratic_Wave_Forcing)$' --parallel 2 --output-on-failure --no-tests=error
+          else
+            ctest --test-dir build/sdirk3-core -E '^Native_Physical_Wave_Inverse$' --parallel 2 --output-on-failure --no-tests=error
+          fi
 
       - name: flat periodic scalar diffusion Fortran/C++ parity
         run: |

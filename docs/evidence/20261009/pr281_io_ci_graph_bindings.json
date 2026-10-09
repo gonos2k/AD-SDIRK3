@@ -1,0 +1,37 @@
+{
+  "timestamp_local": "2026-10-09T14:15:16.719003+09:00",
+  "source_head": "12c12e7 plus output-only/CI changes",
+  "sources": [
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/.github/ci/pr281_heavy_evidence_reuse.py",
+      "mirror": "/private/tmp/pr281-io-ci-graph/pr281_heavy_evidence_reuse.py",
+      "sha256": "62afbfb15ffcf46f9c49c0d59752f08a3bbe1b3886fd6d0c938eb9fedc1aaac7"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/.github/workflows/sdirk3-ci.yml",
+      "mirror": "/private/tmp/pr281-io-ci-graph/sdirk3-ci.yml",
+      "sha256": "4f2a1cf998a7187e1aed2c6443a2f91fd7835ec92d9ad09bf9ebfb139b3e50ca"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/test_trust_model_contract.cpp",
+      "mirror": "/private/tmp/pr281-io-ci-graph/test_trust_model_contract.cpp",
+      "sha256": "929dde02c59993515d4f66c94d451d1e7a17f2b1c7710c88edba06b276717f74"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+      "mirror": "/private/tmp/pr281-io-ci-graph/wrf_sdirk3_newton_solver.cpp",
+      "sha256": "b2a17ef6eec64ff998b13fa1c643e055d49caf63407ac426127c14b3ed9406e2"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_trust_model.h",
+      "mirror": "/private/tmp/pr281-io-ci-graph/wrf_sdirk3_trust_model.h",
+      "sha256": "35c565ba59a8ba5fa322e2c9a05b16e8006f4bc988e003b9426a7445abd07350"
+    }
+  ],
+  "manual_navigation": "workflow -> source_proof -> baseline digest/stamp/inventory/outcomes -> only3heavy reuse; all126other+parity/install fresh",
+  "extraction_gaps": [
+    "YAML job conditions",
+    "git diff and ZIP runtime contents"
+  ],
+  "graph_is_not_numerical_proof": true
+}

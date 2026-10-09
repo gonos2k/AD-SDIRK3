@@ -20,6 +20,7 @@
 #include <type_traits>
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
 
 using wrf::sdirk3::TrustPredictionError;
 using wrf::sdirk3::TrustPrediction;
@@ -39,6 +40,38 @@ static int g_cases = 0;
 static void check(bool ok, const char* what) {
     ++g_cases;
     if (!ok) { std::printf("FAIL: %s\n", what); ++g_fail; }
+}
+
+static bool first_trust_attempt_values(const std::string& log,
+                                      double& actual, double& predicted, double& rho) {
+    const auto start = log.find("[TRUST REGION] attempt ");
+    if (start == std::string::npos) return false;
+    const auto end = log.find('\n', start);
+    const auto line = log.substr(start, end == std::string::npos ? end : end - start);
+    const auto parse = [&](const char* key, double& value) {
+        const auto pos = line.find(key);
+        if (pos == std::string::npos) return false;
+        const char* value_start = line.c_str() + pos + std::char_traits<char>::length(key);
+        char* value_end = nullptr;
+        value = std::strtod(value_start, &value_end);
+        return value_end != value_start && std::isfinite(value);
+    };
+    return parse("actual=", actual) && parse("predicted=", predicted) &&
+           parse("rho=", rho);
+}
+
+static bool has_near_unit_first_trust_ratio(const std::string& log) {
+    double actual = 0.0, predicted = 0.0, rho = 0.0;
+    if (!first_trust_attempt_values(log, actual, predicted, rho) ||
+        !(actual > 0.0) || !(predicted > 0.0)) return false;
+
+    // The trust record uses the default six-significant-digit ostream format.
+    // Each parsed value is therefore rounded by at most 5e-6 relatively; the
+    // ratio comparison allows 4 such quanta for rho plus actual/predicted.
+    constexpr double kRelativePrintQuantum = 5.0e-6;
+    constexpr double kRatioPrintBudget = 4.0 * kRelativePrintQuantum;
+    return std::abs(rho - 1.0) <= kRelativePrintQuantum &&
+           std::abs(rho - actual / predicted) <= kRatioPrintBudget;
 }
 
 // Unwrap a valid prediction to its reduction (NaN if not ok -- the value cases below all
@@ -586,15 +619,20 @@ int main() {
                                                    pred.merit_model(), 0.19);
         check(std::abs(pred.reduction()-0.19) < 1e-14 && std::abs(assessment.rho-1.0) < 1e-14,
               "R=1, A=0.1, final dK=-1 has prediction 0.19 and rho=1");
+        const auto cerr_flags_before_direct = std::cerr.flags();
+        const auto cerr_precision_before_direct = std::cerr.precision();
         const auto direct = run_linear_newton(0.5f, true);
+        check(std::cerr.flags() == cerr_flags_before_direct &&
+              std::cerr.precision() == cerr_precision_before_direct,
+              "GMRES summary preserves caller stderr formatting state");
         std::printf("DIRECT_U_PRODUCTION_LOG\n%s\n", direct.second.c_str());
         check(direct.second.find("[DIRECT U SOLVE]") != std::string::npos &&
-              direct.second.find(", rho=1,") != std::string::npos,
+              has_near_unit_first_trust_ratio(direct.second),
               "production Direct U trial retains rho=1 for a linear operator");
         const auto scaled_direct = run_linear_newton(0.5f, true, true, 1.0, false, 4.0);
         check(scaled_direct.second.find("[DIRECT U SOLVE]") != std::string::npos &&
-              scaled_direct.second.find(", rho=1,") != std::string::npos,
-              "production Direct U residual is scaled exactly once when S=4I");
+              has_near_unit_first_trust_ratio(scaled_direct.second),
+              "production Direct U ratio matches the linear model under S=4I");
         const auto identity = run_linear_newton(0.0f, true);
         std::printf("IDENTITY_PRODUCTION_LOG\n%s\n", identity.second.c_str());
         std::printf("NEWTON_OFF_RESULT converged=%d iterations=%d residual=%a K=",
@@ -783,7 +821,7 @@ int main() {
               "fallback result is invariant under equivalent physical-unit rescaling");
     }
 
-    const int kExpected = 95;
+    const int kExpected = 96;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;

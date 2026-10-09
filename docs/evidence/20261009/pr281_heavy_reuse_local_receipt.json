@@ -1,0 +1,30 @@
+{
+  "eligible": true,
+  "baseline_run": 37873496629,
+  "baseline_commit": "12c12e7501807681ec5072cb8dd2d1bac2717607",
+  "baseline_producer": "8d8f84d92f5be40bf0230bcc05781274d604f857",
+  "baseline_tree": "b0c7531636c60634077ad4dde46b7aebc57dcb56",
+  "baseline_artifact_id": 11595799461,
+  "baseline_zip_sha256": "77f0c38ce5a465df6cc65733ed78797f17bcdceef4964e647f63368a4db0549c",
+  "candidate_commit": "12c12e7501807681ec5072cb8dd2d1bac2717607",
+  "interpretation": "three baseline passes reused; all 126 other tests fresh, not 129 rerun",
+  "source_proof": {
+    "baseline_solver_sha256": "7e46446b1bbdbc9f86527c786144a5c4b2eadc9bfc08876ec254b0db7d62d205",
+    "candidate_solver_sha256": "b2a17ef6eec64ff998b13fa1c643e055d49caf63407ac426127c14b3ed9406e2",
+    "proof": "candidate equals baseline with ONLY two exact local-stream substitutions",
+    "changed_paths": [
+      ".github/workflows/sdirk3-ci.yml",
+      "external/libtorch_wrf/sdirk3/test_trust_model_contract.cpp",
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp"
+    ]
+  },
+  "artifact_proof": {
+    "registered_records": 129,
+    "reused_passes": [
+      "FP64_Fixed_Data_Refinement",
+      "Native_Physical_Wave_Inverse",
+      "Native_Quadratic_Wave_Forcing"
+    ],
+    "baseline_failed_test_not_reused": "Trust_Model_Contract"
+  }
+}

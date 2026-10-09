@@ -2480,20 +2480,21 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             stats_cpu[1].item<double>(), bnorm_val));
         // Always print GMRES completion summary (single line)
         bool gmres_converged = (rel_error_final < tol);
-        std::cerr << "[GMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
-                  << std::fixed << std::setprecision(4)
-                  << ": ||x||=" << x_norm
-                  << ", ||r_true||=" << r_true_final
-                  << ", ||b||=" << bnorm_val
-                  << ", rel_error=" << rel_error_final
-                  << ", tol=" << tol
-                  << std::scientific << std::setprecision(9)
-                  << ", rhs_norm_raw=" << bnorm_val
-                  << ", residual_norm_raw=" << stats_cpu[1].item<double>()
-                  << ", restarts=" << actual_restarts
-                  << ", arnoldi=" << total_arnoldi_iters
-                  << (block_scaled ? " (block-scaled)" : "")
-                  << std::defaultfloat << std::endl;
+        std::ostringstream summary;
+        summary << "[GMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
+                << std::fixed << std::setprecision(4)
+                << ": ||x||=" << x_norm
+                << ", ||r_true||=" << r_true_final
+                << ", ||b||=" << bnorm_val
+                << ", rel_error=" << rel_error_final
+                << ", tol=" << tol
+                << std::scientific << std::setprecision(9)
+                << ", rhs_norm_raw=" << bnorm_val
+                << ", residual_norm_raw=" << stats_cpu[1].item<double>()
+                << ", restarts=" << actual_restarts
+                << ", arnoldi=" << total_arnoldi_iters
+                << (block_scaled ? " (block-scaled)" : "");
+        std::cerr << summary.str() << std::endl;
     }
 
     bool gmres_converged = (rel_error_final < tol);
@@ -4121,20 +4122,21 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             stats_cpu[1].item<double>(), bnorm_val));
         // Always print GMRES completion summary (single line)
         bool gmres_converged = (rel_error_final < tol);
-        std::cerr << "[FGMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
-                  << std::fixed << std::setprecision(4)
-                  << ": ||x||=" << x_norm
-                  << ", ||r_true||=" << r_true_final
-                  << ", ||b||=" << bnorm_val
-                  << ", rel_error=" << rel_error_final
-                  << ", tol=" << tol
-                  << std::scientific << std::setprecision(9)
-                  << ", rhs_norm_raw=" << bnorm_val
-                  << ", residual_norm_raw=" << stats_cpu[1].item<double>()
-                  << ", restarts=" << actual_restarts
-                  << ", arnoldi=" << total_arnoldi_iters
-                  << (block_scaled ? " (block-scaled)" : "")
-                  << std::defaultfloat << std::endl;
+        std::ostringstream summary;
+        summary << "[FGMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
+                << std::fixed << std::setprecision(4)
+                << ": ||x||=" << x_norm
+                << ", ||r_true||=" << r_true_final
+                << ", ||b||=" << bnorm_val
+                << ", rel_error=" << rel_error_final
+                << ", tol=" << tol
+                << std::scientific << std::setprecision(9)
+                << ", rhs_norm_raw=" << bnorm_val
+                << ", residual_norm_raw=" << stats_cpu[1].item<double>()
+                << ", restarts=" << actual_restarts
+                << ", arnoldi=" << total_arnoldi_iters
+                << (block_scaled ? " (block-scaled)" : "");
+        std::cerr << summary.str() << std::endl;
     }
 
     bool gmres_converged = (rel_error_final < tol);

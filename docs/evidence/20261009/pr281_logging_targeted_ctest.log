@@ -1,0 +1,520 @@
+Start testing: Oct 09 14:08 JST
+----------------------------------------------------------
+40/129 Testing: FGMRES_Contract
+40/129 Test: FGMRES_Contract
+Command: "/tmp/pr281-root-contract-build-20261009/test_fgmres_contract"
+Directory: /tmp/pr281-root-contract-build-20261009
+"FGMRES_Contract" start time: Oct 09 14:08 JST
+Output:
+----------------------------------------------------------
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=6.743495762e-07, restarts=1, arnoldi=8
+PASS  A: FGMRES with mid-solve PC change converges (true residual)
+PASS  F: both PC phases (real + identity-lock) coexist in one solve
+PASS  A: FGMRES solution matches direct solve
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=6.743495762e-07, restarts=1, arnoldi=8
+[GMRES] NOT CONVERGED: ||x||=14.9941, ||r_true||=105.7470, ||b||=14.2829, rel_error=7.4038, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=1.057470435e+02, restarts=1, arnoldi=8
+PASS  A(neg-1): single-cycle FGMRES under variable PC still reaches tol
+PASS  A(neg-2): single-cycle standard GMRES under variable PC MISSES tol
+PASS  A(neg-3): its true residual is worse than FGMRES's
+      [info] single-cycle true rel residual: fgmres=4.721e-08  gmres(neg-ctrl)=7.404e+00
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=1.923115945e-06, restarts=1, arnoldi=8
+[GMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=2.237358615e-06, restarts=1, arnoldi=8
+PASS  B: FGMRES converges with FIXED PC
+PASS  B: GMRES converges with FIXED PC
+PASS  B: FGMRES == GMRES solution for fixed linear PC (FP32 rel 1e-5)
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=2.026557922e-06, restarts=1, arnoldi=8
+[GMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=2.026557922e-06, restarts=1, arnoldi=8
+PASS  C: M_inv==nullptr -> FGMRES bitwise-identical to GMRES (V used, no Z)
+PASS  C: identical Arnoldi iteration count on unpreconditioned path
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=1.923115945e-06, restarts=1, arnoldi=8
+PASS  D: FGMRES applies M_inv EXACTLY once per Arnoldi vector (none on aggregates)
+[GMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=2.237358615e-06, restarts=1, arnoldi=8
+PASS  D(neg): standard GMRES re-applies M_inv on aggregates (count > Arnoldi)
+      [info] M_inv applies: fgmres=8 (arnoldi=8)  gmres=9 (arnoldi=8)
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=4.935322176e-06, restarts=3, arnoldi=9
+PASS  E: multi-restart (len 3) + warm start + per-call alternating PC converges
+PASS  E: solution matches direct solve
+[FGMRES] NOT CONVERGED: ||x||=1.9192, ||r_true||=8.1126, ||b||=14.2829, rel_error=0.5680, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=8.112606102e+00, restarts=1, arnoldi=2
+PASS  G: initial_rel_error is MEASURED (not the -1 sentinel)
+PASS  G: initial_rel_error equals ||b - A x0|| / ||b|| computed independently
+PASS  G: this warm start really does begin above 1 (the case the old test misread)
+PASS  G: a minimal-residual solve never ends above where it started
+PASS  G: divergence against r0 is FALSE here -- the solve reduced the residual
+[FGMRES] NOT CONVERGED: ||x||=2.0214, ||r_true||=0.5869, ||b||=14.2829, rel_error=0.0411, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=5.869281980e-01, restarts=1, arnoldi=3
+[FGMRES] NOT CONVERGED: ||x||=2.0541, ||r_true||=0.0073, ||b||=14.2829, rel_error=0.0005, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=7.302631219e-03, restarts=1, arnoldi=3
+[FGMRES] CONVERGED: ||x||=2.0540, ||r_true||=0.0000, ||b||=14.2829, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e+01, residual_norm_raw=1.464334616e-05, restarts=4, arnoldi=12
+PASS  H: changing only the PC reduces true residual on this diagonal-dominant fixture
+PASS  H: changing only the restart budget reaches the true-residual tolerance
+CONTROLLED_FGMRES pc=none cycles=1 iterations=3 true_rel=0.041093193
+CONTROLLED_FGMRES pc=diagonal cycles=1 iterations=3 true_rel=0.000511286489
+CONTROLLED_FGMRES pc=none cycles=8 iterations=12 true_rel=1.02523927e-06
+PASS  I: initial residual is nonzero and below the old absolute V0 floor
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e-08, residual_norm_raw=1.717769554e-24, restarts=1, arnoldi=8
+PASS  I: GMRES resolves a tiny finite residual
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.428285686e-08, residual_norm_raw=1.717769554e-24, restarts=1, arnoldi=8
+PASS  I: FGMRES resolves a tiny finite residual
+ALL fgmres_contract assertions PASSED
+<end of output>
+Test time =   0.21 sec
+----------------------------------------------------------
+Test Passed.
+"FGMRES_Contract" end time: Oct 09 14:08 JST
+"FGMRES_Contract" time elapsed: 00:00:00
+----------------------------------------------------------
+
+41/129 Testing: Trust_Model_Contract
+41/129 Test: Trust_Model_Contract
+Command: "/tmp/pr281-root-contract-build-20261009/test_trust_model_contract"
+Directory: /tmp/pr281-root-contract-build-20261009
+"Trust_Model_Contract" start time: Oct 09 14:08 JST
+Output:
+----------------------------------------------------------
+DIRECT_U_PRODUCTION_LOG
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+
+=== NEWTON SOLVER ENTRY ===
+  Stage: 1
+  dt: 1, gamma: 1
+  dt*gamma: 1 (implicit timestep)
+  U_n dim: 1, size: 10
+  U_n shape: [10]
+  max_newton_iter: 1
+  newton_tol: 1e-06
+  gmres_restart: 10
+=========================
+[PREDICTOR] Stage-1 bootstrap seed K0=F(U_n), ||K0|| = 1.27279
+[PREDICTOR] Stage-1 Picard bootstrap K1=F(U_n+dt*gamma*K0), ||K1|| = 2.41831
+
+--- Newton iteration 0 starting ---
+[NEWTON] State validation at iteration 0:
+[NEWTON] U_eval range: [0, 2.71]
+[NEWTON] U_eval norm: 3.83252
+[NEWTON] Checking U_eval = U_stage + (1 * 1) * K:
+  W-block in U_eval: min/max = 0 / 0
+  W-block norm = 0
+  W-block in U_stage: min/max = 0 / 0
+  Scaling factor dt*gamma = 1
+[NEWTON] Has NaN: NO
+[NEWTON] Has Inf: NO
+[NEWTON] U_n norm: 1.41421
+[NEWTON] U_stage norm: 1.41421
+[NEWTON] K norm: 2.41831
+[NEWTON] dt: 1, gamma: 1
+[Newton] Convergence norm: scaled-RMS ||S⁻¹R||/√N (N=10), atol=1e-06, rtol=1e-05*0.326019=3.26019e-06 => effective_tol=3.26019e-06
+[Newton] iter 0: ||S⁻¹R||_rms=3.260187e-01 [scaled-RMS], ||R||=1.030962e+00 [unscaled-L2], tol=3.260187e-06
+  ru: ||S⁻¹R||_rms=0.729 (N=2)
+  rv: ||S⁻¹R||_rms=0 (N=2)
+  rw: ||S⁻¹R||_rms=0 (N=2)
+  ph: ||S⁻¹R||_rms=0 (N=2)
+  t: ||S⁻¹R||_rms=0 (N=1)
+  mu: ||S⁻¹R||_rms=0 (N=1)
+[BLOCK_RES] iter=0 ru=4.26e-01 rv=0.00e+00 rw=0.00e+00 ph=0.00e+00 t=0.00e+00 mu=0.00e+00 max=4.26e-01 ru_share=1.000
+[RU_PROFILE] N=0 nz=1 |ru[k]|: 1.0e+00 peak=k0 bdy_frac=2.000
+[Newton] JVP method: FINITE DIFFERENCE (central diff)
+[Newton] JVP ready for GMRES (use_autograd=false)
+[GMRES INIT] Residual norm: 1.03096
+[GMRES INIT] Krylov tolerance: 1e-06
+[GMRES INIT] Max iterations: 20
+[GMRES INIT] Restart: 10
+[GMRES INIT] Preconditioner: NO
+[Newton] FD mode: GradMode disabled for GMRES
+[JVP FD] Call #1: central difference
+[JVP DIAG] call #1: ||dK||=1, ||v=dt*γ*dK||=1, ||J*v||=0.9, ||dK-J*v||=0.1, ratio ||J*v||/||dK||=0.9
+[GMRES REORTH] j=0 before=0.1 after1=1.96262e-17 after2=4.35788e-33 ratio=1.96262e-16
+[ARNOLDI] BREAKDOWN at j=0, H[1][0] = 4.35788e-33
+[ARNOLDI] Breakdown at j=0 — extracting best available solution
+[JVP FD] Call #2: central difference
+[JVP DIAG] call #2: ||dK||=10.3096, ||v=dt*γ*dK||=10.3096, ||J*v||=9.27866, ||dK-J*v||=1.03096, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=10.3096, ||r_true||=0.0000, ||b||=1.0310, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.030961687e+00, residual_norm_raw=3.559946662e-07, restarts=1, arnoldi=1
+[DIRECT U SOLVE] ru_share=1 ||R_u||=1.03096 (replaced GMRES U-block with -R_u)
+[JVP FD] Call #3: central difference
+[JVP DIAG] call #3: ||dK||=1.03096, ||v=dt*γ*dK||=1.03096, ||J*v||=0.927866, ||dK-J*v||=0.103096, ratio ||J*v||/||dK||=0.9
+[GMRES BLOCK RESIDUAL] ru=3.560e-07(rel=0.000,share=0.000) rv=0.000e+00(rel=0.000,share=0.000) rw=0.000e+00(rel=0.000,share=0.000) ph=0.000e+00(rel=0.000,share=0.000) t=0.000e+00(rel=0.000,share=0.000) mu=0.000e+00(rel=0.000,share=0.000) 
+[Newton] GMRES: 1 krylov iters, ||dK||=1.03096, rel_error=3.45303e-07 (OK)
+[Newton] JVP calls: 3, total JVP time: 0.133 ms, avg: 0.0443333 ms/call
+[NEWTON DEBUG] After GMRES:
+  ||dK|| = 1.03096
+  ||K||  = 2.41831
+  ||R||  = 1.03096
+  ||dK||/||K|| = 0.426316
+[TRUST REGION] Before scaling:
+  ||dK|| = 1.03096
+  ||K|| = 2.41831
+[TRUST REGION] attempt 0: radius=1, gmres_rel_error=3.45303e-07 (raw=3.45303e-07), ||dK||=1.03096, ||dK||_raw=1.03096, ||dK_scaled||=1, actual=0.196192, predicted=0.196192, rho=1, rho_accept_threshold=0.25, rho_force_accept_min=0.05
+[TRUST REGION] Accepted step summary: ||dK_scaled||=1, ||R_new||=0.930962, rho=1
+
+=== NEWTON SOLVER FAILED TO CONVERGE ===
+  Stage: 1
+  Final residual: 3.260187e-01
+  Newton iterations: 1
+=======================================
+
+IDENTITY_PRODUCTION_LOG
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+
+=== NEWTON SOLVER ENTRY ===
+  Stage: 1
+  dt: 1, gamma: 1
+  dt*gamma: 1 (implicit timestep)
+  U_n dim: 1, size: 10
+  U_n shape: [10]
+  max_newton_iter: 12
+  newton_tol: 1e-06
+  gmres_restart: 10
+=========================
+[PREDICTOR] Stage-1 bootstrap seed K0=F(U_n), ||K0|| = 1.27279
+[PREDICTOR] Stage-1 Picard bootstrap K1=F(U_n+dt*gamma*K0), ||K1|| = 2.41831
+
+--- Newton iteration 0 starting ---
+[NEWTON] State validation at iteration 0:
+[NEWTON] U_eval range: [0, 2.71]
+[NEWTON] U_eval norm: 3.83252
+[NEWTON] Checking U_eval = U_stage + (1 * 1) * K:
+  W-block in U_eval: min/max = 0 / 0
+  W-block norm = 0
+  W-block in U_stage: min/max = 0 / 0
+  Scaling factor dt*gamma = 1
+[NEWTON] Has NaN: NO
+[NEWTON] Has Inf: NO
+[NEWTON] U_n norm: 1.41421
+[NEWTON] U_stage norm: 1.41421
+[NEWTON] K norm: 2.41831
+[NEWTON] dt: 1, gamma: 1
+[Newton] Convergence norm: scaled-RMS ||S⁻¹R||/√N (N=10), atol=1e-06, rtol=1e-05*0.326019=3.26019e-06 => effective_tol=3.26019e-06
+[Newton] iter 0: ||S⁻¹R||_rms=3.260187e-01 [scaled-RMS], ||R||=1.030962e+00 [unscaled-L2], tol=3.260187e-06
+  ru: ||S⁻¹R||_rms=0.729 (N=2)
+  rv: ||S⁻¹R||_rms=0 (N=2)
+  rw: ||S⁻¹R||_rms=0 (N=2)
+  ph: ||S⁻¹R||_rms=0 (N=2)
+  t: ||S⁻¹R||_rms=0 (N=1)
+  mu: ||S⁻¹R||_rms=0 (N=1)
+[BLOCK_RES] iter=0 ru=4.26e-01 rv=0.00e+00 rw=0.00e+00 ph=0.00e+00 t=0.00e+00 mu=0.00e+00 max=4.26e-01 ru_share=1.000
+[RU_PROFILE] N=0 nz=1 |ru[k]|: 1.0e+00 peak=k0 bdy_frac=2.000
+[Newton] JVP method: FINITE DIFFERENCE (central diff)
+[Newton] JVP ready for GMRES (use_autograd=false)
+[GMRES INIT] Residual norm: 1.03096
+[GMRES INIT] Krylov tolerance: 1e-06
+[GMRES INIT] Max iterations: 20
+[GMRES INIT] Restart: 10
+[GMRES INIT] Preconditioner: NO
+[Newton] FD mode: GradMode disabled for GMRES
+[JVP FD] Call #1: central difference
+[JVP DIAG] call #1: ||dK||=1, ||v=dt*γ*dK||=1, ||J*v||=0.9, ||dK-J*v||=0.1, ratio ||J*v||/||dK||=0.9
+[GMRES REORTH] j=0 before=0.1 after1=1.96262e-17 after2=4.35788e-33 ratio=1.96262e-16
+[ARNOLDI] BREAKDOWN at j=0, H[1][0] = 4.35788e-33
+[ARNOLDI] Breakdown at j=0 — extracting best available solution
+[JVP FD] Call #2: central difference
+[JVP DIAG] call #2: ||dK||=10.3096, ||v=dt*γ*dK||=10.3096, ||J*v||=9.27866, ||dK-J*v||=1.03096, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=10.3096, ||r_true||=0.0000, ||b||=1.0310, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.030961687e+00, residual_norm_raw=3.559946662e-07, restarts=1, arnoldi=1
+[GMRES BLOCK RESIDUAL] ru=3.560e-07(rel=0.000,share=0.000) rv=0.000e+00(rel=0.000,share=0.000) rw=0.000e+00(rel=0.000,share=0.000) ph=0.000e+00(rel=0.000,share=0.000) t=0.000e+00(rel=0.000,share=0.000) mu=0.000e+00(rel=0.000,share=0.000) 
+[Newton] GMRES: 1 krylov iters, ||dK||=10.3096, rel_error=3.45303e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.066 ms, avg: 0.033 ms/call
+[NEWTON DEBUG] After GMRES:
+  ||dK|| = 10.3096
+  ||K||  = 2.41831
+  ||R||  = 1.03096
+  ||dK||/||K|| = 4.26316
+[TRUST REGION] Before scaling:
+  ||dK|| = 10.3096
+  ||K|| = 2.41831
+[TRUST REGION] attempt 0: radius=1, gmres_rel_error=3.45303e-07 (raw=3.45303e-07), ||dK||=10.3096, ||dK||_raw=10.3096, ||dK_scaled||=1, actual=0.196192, predicted=0.196192, rho=1, rho_accept_threshold=0.25, rho_force_accept_min=0.05
+[TRUST REGION] Accepted step summary: ||dK_scaled||=1, ||R_new||=0.930962, rho=1
+
+--- Newton iteration 1 starting ---
+[Newton] iter 1: ||S⁻¹R||_rms=2.943959e-01 [scaled-RMS], ||R||=9.309617e-01 [unscaled-L2], tol=3.260187e-06
+[BLOCK_RES] iter=1 ru=2.72e-01 rv=0.00e+00 rw=0.00e+00 ph=0.00e+00 t=0.00e+00 mu=0.00e+00 max=2.72e-01 ru_share=1.000
+[Newton] JVP method: FINITE DIFFERENCE (central diff)
+[Newton] JVP ready for GMRES (use_autograd=false)
+[GMRES INIT] Residual norm: 0.930962
+[GMRES INIT] Krylov tolerance: 1e-06
+[GMRES INIT] Max iterations: 20
+[GMRES INIT] Restart: 10
+[GMRES INIT] Preconditioner: NO
+[JVP FD] Call #1: central difference
+[JVP DIAG] call #1: ||dK||=1, ||v=dt*γ*dK||=1, ||J*v||=0.9, ||dK-J*v||=0.1, ratio ||J*v||/||dK||=0.9
+[GMRES REORTH] j=0 before=0.1 after1=1.96262e-17 after2=4.35788e-33 ratio=1.96262e-16
+[ARNOLDI] BREAKDOWN at j=0, H[1][0] = 4.35788e-33
+[ARNOLDI] Breakdown at j=0 — extracting best available solution
+[JVP FD] Call #2: central difference
+[JVP DIAG] call #2: ||dK||=9.30962, ||v=dt*γ*dK||=9.30962, ||J*v||=8.37865, ||dK-J*v||=0.930961, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=9.3096, ||r_true||=0.0000, ||b||=0.9310, rel_error=0.0000, tol=0.0000, rhs_norm_raw=9.309616870e-01, residual_norm_raw=2.477603074e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=9.30962, rel_error=2.66134e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.066 ms, avg: 0.033 ms/call
+[NEWTON DEBUG] After GMRES:
+  ||dK|| = 9.30962
+  ||K||  = 3.41831
+  ||R||  = 0.930962
+  ||dK||/||K|| = 2.72346
+[TRUST REGION] Before scaling:
+  ||dK|| = 9.30962
+  ||K|| = 3.41831
+[TRUST REGION] attempt 0: radius=2, gmres_rel_error=2.66134e-07 (raw=2.66134e-07), ||dK||=9.30962, ||dK||_raw=9.30962, ||dK_scaled||=1.70915, actual=0.289019, predicted=0.289019, rho=1, rho_accept_threshold=0.25, rho_force_accept_min=0.05
+[TRUST REGION] Accepted step summary: ||dK_scaled||=1.70915, ||R_new||=0.760046, rho=1
+
+--- Newton iteration 2 starting ---
+[Newton] iter 2: ||S⁻¹R||_rms=2.403478e-01 [scaled-RMS], ||R||=7.600464e-01 [unscaled-L2], tol=3.260187e-06
+[BLOCK_RES] iter=2 ru=1.48e-01 rv=0.00e+00 rw=0.00e+00 ph=0.00e+00 t=0.00e+00 mu=0.00e+00 max=1.48e-01 ru_share=1.000
+[Newton] JVP method: FINITE DIFFERENCE (central diff)
+[Newton] JVP ready for GMRES (use_autograd=false)
+[GMRES INIT] Residual norm: 0.760046
+[GMRES INIT] Krylov tolerance: 1e-06
+[GMRES INIT] Max iterations: 20
+[GMRES INIT] Restart: 10
+[GMRES INIT] Preconditioner: NO
+[JVP FD] Call #1: central difference
+[JVP DIAG] call #1: ||dK||=1, ||v=dt*γ*dK||=1, ||J*v||=0.9, ||dK-J*v||=0.1, ratio ||J*v||/||dK||=0.9
+[GMRES REORTH] j=0 before=0.1 after1=0 after2=0 ratio=0
+[ARNOLDI] BREAKDOWN at j=0, H[1][0] = 0
+[ARNOLDI] Breakdown at j=0 — extracting best available solution
+[JVP FD] Call #2: central difference
+[JVP DIAG] call #2: ||dK||=7.60047, ||v=dt*γ*dK||=7.60047, ||J*v||=6.84042, ||dK-J*v||=0.760047, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=7.6005, ||r_true||=0.0000, ||b||=0.7600, rel_error=0.0000, tol=0.0000, rhs_norm_raw=7.600464274e-01, residual_norm_raw=3.843348665e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=7.60047, rel_error=5.05673e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.066 ms, avg: 0.033 ms/call
+[NEWTON DEBUG] After GMRES:
+  ||dK|| = 7.60047
+  ||K||  = 5.12746
+  ||R||  = 0.760046
+  ||dK||/||K|| = 1.48231
+[TRUST REGION] Before scaling:
+  ||dK|| = 7.60047
+  ||K|| = 5.12746
+[TRUST REGION] attempt 0: radius=4, gmres_rel_error=5.05673e-07 (raw=5.05673e-07), ||dK||=7.60047, ||dK||_raw=7.60047, ||dK_scaled||=2.56373, actual=0.323984, predicted=0.323984, rho=1, rho_accept_threshold=0.25, rho_force_accept_min=0.05
+[TRUST REGION] Accepted step summary: ||dK_scaled||=2.56373, ||R_new||=0.503674, rho=1
+
+--- Newton iteration 3 starting ---
+[Newton] iter 3: ||S⁻¹R||_rms=1.592756e-01 [scaled-RMS], ||R||=5.036736e-01 [unscaled-L2], tol=3.260187e-06
+[BLOCK_RES] iter=3 ru=6.55e-02 rv=0.00e+00 rw=0.00e+00 ph=0.00e+00 t=0.00e+00 mu=0.00e+00 max=6.55e-02 ru_share=1.000
+[RU_PROFILE] N=3 nz=1 |ru[k]|: 5.0e-01 peak=k0 bdy_frac=2.000
+[Newton] JVP method: FINITE DIFFERENCE (central diff)
+[Newton] JVP ready for GMRES (use_autograd=false)
+[GMRES INIT] Residual norm: 0.503674
+[GMRES INIT] Krylov tolerance: 1e-06
+[GMRES INIT] Max iterations: 20
+[GMRES INIT] Restart: 10
+[GMRES INIT] Preconditioner: NO
+[JVP FD] Call #1: central difference
+[JVP DIAG] call #1: ||dK||=1, ||v=dt*γ*dK||=1, ||J*v||=0.9, ||dK-J*v||=0.1, ratio ||J*v||/||dK||=0.9
+[GMRES REORTH] j=0 before=0.1 after1=1.96262e-17 after2=4.35788e-33 ratio=1.96262e-16
+[ARNOLDI] BREAKDOWN at j=0, H[1][0] = 4.35788e-33
+[ARNOLDI] Breakdown at j=0 — extracting best available solution
+[JVP FD] Call #2: central difference
+[JVP DIAG] call #2: ||dK||=5.03674, ||v=dt*γ*dK||=5.03674, ||J*v||=4.53306, ||dK-J*v||=0.503674, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=5.0367, ||r_true||=0.0000, ||b||=0.5037, rel_error=0.0000, tol=0.0000, rhs_norm_raw=5.036735380e-01, residual_norm_raw=1.639531029e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=5.03674, rel_error=3.25515e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.066 ms, avg: 0.033 ms/call
+[NEWTON DEBUG] After GMRES:
+  ||dK|| = 5.03674
+  ||K||  = 7.69119
+  ||R||  = 0.503674
+  ||dK||/||K|| = 0.654871
+[TRUST REGION] Before scaling:
+  ||dK|| = 5.03674
+  ||K|| = 7.69119
+[TRUST REGION] attempt 0: radius=4, gmres_rel_error=3.25515e-07 (raw=3.25515e-07), ||dK||=5.03674, ||dK||_raw=5.03674, ||dK_scaled||=3.84559, actual=0.239499, predicted=0.239499, rho=1, rho_accept_threshold=0.25, rho_force_accept_min=0.05
+[TRUST REGION] Accepted step summary: ||dK_scaled||=3.84559, ||R_new||=0.119114, rho=1
+
+--- Newton iteration 4 starting ---
+[Newton] iter 4: ||S⁻¹R||_rms=3.766722e-02 [scaled-RMS], ||R||=1.191142e-01 [unscaled-L2], tol=3.260187e-06
+[BLOCK_RES] iter=4 ru=1.03e-02 rv=0.00e+00 rw=0.00e+00 ph=0.00e+00 t=0.00e+00 mu=0.00e+00 max=1.03e-02 ru_share=1.000
+[RU_PROFILE] N=4 nz=1 |ru[k]|: 1.2e-01 peak=k0 bdy_frac=2.000
+[Newton] JVP method: FINITE DIFFERENCE (central diff)
+[Newton] JVP ready for GMRES (use_autograd=false)
+[GMRES INIT] Residual norm: 0.119114
+[GMRES INIT] Krylov tolerance: 1e-06
+[GMRES INIT] Max iterations: 20
+[GMRES INIT] Restart: 10
+[GMRES INIT] Preconditioner: NO
+[JVP FD] Call #1: central difference
+[JVP DIAG] call #1: ||dK||=1, ||v=dt*γ*dK||=1, ||J*v||=0.9, ||dK-J*v||=0.1, ratio ||J*v||/||dK||=0.9
+[GMRES REORTH] j=0 before=0.1 after1=1.96262e-17 after2=4.35788e-33 ratio=1.96262e-16
+[ARNOLDI] BREAKDOWN at j=0, H[1][0] = 4.35788e-33
+[ARNOLDI] Breakdown at j=0 — extracting best available solution
+[JVP FD] Call #2: central difference
+[JVP DIAG] call #2: ||dK||=1.19114, ||v=dt*γ*dK||=1.19114, ||J*v||=1.07203, ||dK-J*v||=0.119114, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=1.1911, ||r_true||=0.0000, ||b||=0.1191, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.191142040e-01, residual_norm_raw=1.498713826e-08, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=1.19114, rel_error=1.25822e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.066 ms, avg: 0.033 ms/call
+[NEWTON DEBUG] After GMRES:
+  ||dK|| = 1.19114
+  ||K||  = 11.5368
+  ||R||  = 0.119114
+  ||dK||/||K|| = 0.103247
+[TRUST REGION] Before scaling:
+  ||dK|| = 1.19114
+  ||K|| = 11.5368
+[TRUST REGION] attempt 0: radius=8, gmres_rel_error=1.25822e-07 (raw=1.25822e-07), ||dK||=1.19114, ||dK||_raw=1.19114, ||dK_scaled||=1.19114, actual=0.0141882, predicted=0.0141882, rho=1, rho_accept_threshold=0.25, rho_force_accept_min=0.05
+[TRUST REGION] Accepted step summary: ||dK_scaled||=1.19114, ||R_new||=6.65635e-09, rho=1
+
+--- Newton iteration 5 starting ---
+[Newton] iter 5: ||S⁻¹R||_rms=2.104921e-09 [scaled-RMS], ||R||=6.656345e-09 [unscaled-L2], tol=3.260187e-06
+  ru: ||S⁻¹R||_rms=4.70675e-09 (N=2)
+  rv: ||S⁻¹R||_rms=0 (N=2)
+  rw: ||S⁻¹R||_rms=0 (N=2)
+  ph: ||S⁻¹R||_rms=0 (N=2)
+  t: ||S⁻¹R||_rms=0 (N=1)
+  mu: ||S⁻¹R||_rms=0 (N=1)
+[BLOCK_RES] iter=5 ru=5.23e-10 rv=0.00e+00 rw=0.00e+00 ph=0.00e+00 t=0.00e+00 mu=0.00e+00 max=5.23e-10 ru_share=1.000
+[RU_PROFILE] N=5 nz=1 |ru[k]|: 6.7e-09 peak=k0 bdy_frac=2.000
+[Newton] CONVERGED stage=1 iters=6 ||S⁻¹R||_rms=2.104921e-09 [scaled-RMS] (||R||=6.656345e-09 [unscaled-L2])
+
+NEWTON_OFF_RESULT converged=1 iterations=6 residual=0x1.214c54p-29 K=0x1.1fffffe6bb18ep+3,0x1.1fffffe6bb18ep+3,0x0p+0,0x0p+0,0x0p+0,0x0p+0,0x0p+0,0x0p+0,0x0p+0,0x0p+0,
+
+=== ENTERED solve_stage_impl ===
+  U_n shape: [10]
+  dt=1, gamma=1, stage=1
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=2e+01, ||v=dt*γ*dK||=2e+01, ||J*v||=2e+01, ||dK-J*v||=2, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=11.5266, ||r_true||=0.0000, ||b||=1.1527, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.152650163e+00, residual_norm_raw=1.884864366e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=2e+01, rel_error=2e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.07 ms, avg: 0.04 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 2e+01
+  ||K|| = 5
+[TRUST REGION] Accepted step summary: ||dK_scaled||=2, ||R_new||=2, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=2e+01, ||v=dt*γ*dK||=2e+01, ||J*v||=2e+01, ||dK-J*v||=2, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=10.5265, ||r_true||=0.0000, ||b||=1.0527, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.052650004e+00, residual_norm_raw=7.539457465e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=2e+01, rel_error=7e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.07 ms, avg: 0.04 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 2e+01
+  ||K|| = 7
+[TRUST REGION] Accepted step summary: ||dK_scaled||=4, ||R_new||=2, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=2e+01, ||v=dt*γ*dK||=2e+01, ||J*v||=2e+01, ||dK-J*v||=2, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=8.6754, ||r_true||=0.0000, ||b||=0.8675, rel_error=0.0000, tol=0.0000, rhs_norm_raw=8.674628338e-01, residual_norm_raw=0.000000000e+00, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=2e+01, rel_error=0 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.07 ms, avg: 0.04 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 2e+01
+  ||K|| = 1e+01
+[TRUST REGION] Accepted step summary: ||dK_scaled||=6, ||R_new||=1, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=1e+01, ||v=dt*γ*dK||=1e+01, ||J*v||=1e+01, ||dK-J*v||=1, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=5.8971, ||r_true||=0.0000, ||b||=0.5897, rel_error=0.0000, tol=0.0000, rhs_norm_raw=5.896813248e-01, residual_norm_raw=3.769728732e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=1e+01, rel_error=6e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.07 ms, avg: 0.04 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 1e+01
+  ||K|| = 2e+01
+[TRUST REGION] Accepted step summary: ||dK_scaled||=8, ||R_new||=0.4, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=4, ||v=dt*γ*dK||=4, ||J*v||=3, ||dK-J*v||=0.4, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=1.8967, ||r_true||=0.0000, ||b||=0.1897, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.896814406e-01, residual_norm_raw=1.884864366e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=4, rel_error=1e-06 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.07 ms, avg: 0.04 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 4
+  ||K|| = 2e+01
+[TRUST REGION] Accepted step summary: ||dK_scaled||=4, ||R_new||=3e-05, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=0.0003, ||v=dt*γ*dK||=0.0003, ||J*v||=0.0003, ||dK-J*v||=3e-05, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=0.0002, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.658680642e-05, residual_norm_raw=1.150429911e-11, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=0.0003, rel_error=7e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.07 ms, avg: 0.04 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 0.0003
+  ||K|| = 3e+01
+[TRUST REGION] Accepted step summary: ||dK_scaled||=0.0003, ||R_new||=0, rho=1
+[Newton] CONVERGED stage=1 iters=7 ||S⁻¹R||_rms=0.0e+00 [scaled-RMS] (||R||=0.0e+00 [unscaled-L2])
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=2e+01, ||v=dt*γ*dK||=2e+01, ||J*v||=2e+01, ||dK-J*v||=2, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=11.5265, ||r_true||=0.0000, ||b||=1.1527, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.152650207e+00, residual_norm_raw=9.608415333e-08, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=2e+01, rel_error=8e-08 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.07 ms, avg: 0.04 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 2e+01
+  ||K|| = 5
+[TRUST REGION] Accepted step summary: ||dK_scaled||=2, ||R_new||=2, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=2e+01, ||v=dt*γ*dK||=2e+01, ||J*v||=2e+01, ||dK-J*v||=2, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=10.5265, ||r_true||=0.0000, ||b||=1.0527, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.052650207e+00, residual_norm_raw=1.509976347e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=2e+01, rel_error=1e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.07 ms, avg: 0.03 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 2e+01
+  ||K|| = 7
+[TRUST REGION] Accepted step summary: ||dK_scaled||=4, ||R_new||=2, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=2e+01, ||v=dt*γ*dK||=2e+01, ||J*v||=2e+01, ||dK-J*v||=2, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=8.6746, ||r_true||=0.0000, ||b||=0.8675, rel_error=0.0000, tol=0.0000, rhs_norm_raw=8.674628372e-01, residual_norm_raw=6.714382010e-08, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=2e+01, rel_error=8e-08 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.06 ms, avg: 0.03 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 2e+01
+  ||K|| = 1e+01
+[TRUST REGION] Accepted step summary: ||dK_scaled||=6, ||R_new||=1, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=1e+01, ||v=dt*γ*dK||=1e+01, ||J*v||=1e+01, ||dK-J*v||=1, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=5.8968, ||r_true||=0.0000, ||b||=0.5897, rel_error=0.0000, tol=0.0000, rhs_norm_raw=5.896817822e-01, residual_norm_raw=1.612638229e-07, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=1e+01, rel_error=3e-07 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.06 ms, avg: 0.03 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 1e+01
+  ||K|| = 2e+01
+[TRUST REGION] Accepted step summary: ||dK_scaled||=8, ||R_new||=0.4, rho=1
+[JVP DIAG] call #1: ||dK||=2, ||v=dt*γ*dK||=2, ||J*v||=2, ||dK-J*v||=0.2, ratio ||J*v||/||dK||=0.9
+[JVP DIAG] call #2: ||dK||=4, ||v=dt*γ*dK||=4, ||J*v||=3, ||dK-J*v||=0.4, ratio ||J*v||/||dK||=0.9
+[GMRES] CONVERGED: ||x||=1.8968, ||r_true||=0.0000, ||b||=0.1897, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.896817822e-01, residual_norm_raw=9.966374647e-09, restarts=1, arnoldi=1
+[Newton] GMRES: 1 krylov iters, ||dK||=4, rel_error=5e-08 (OK)
+[Newton] JVP calls: 2, total JVP time: 0.06 ms, avg: 0.03 ms/call
+[TRUST REGION] Before scaling:
+  ||dK|| = 4
+  ||K|| = 2e+01
+[TRUST REGION] Accepted step summary: ||dK_scaled||=4, ||R_new||=7e-08, rho=1
+[Newton] CONVERGED stage=1 iters=6 ||S⁻¹R||_rms=1.1e-08 [scaled-RMS] (||R||=6.9e-08 [unscaled-L2])
+Trust model contract: ALL PASS (96/96)
+<end of output>
+Test time =   0.66 sec
+----------------------------------------------------------
+Test Passed.
+"Trust_Model_Contract" end time: Oct 09 14:08 JST
+"Trust_Model_Contract" time elapsed: 00:00:00
+----------------------------------------------------------
+
+100/129 Testing: Krylov_Metric_Coordinate_Contract
+100/129 Test: Krylov_Metric_Coordinate_Contract
+Command: "/tmp/pr281-root-contract-build-20261009/test_krylov_metric_coordinate_contract"
+Directory: /tmp/pr281-root-contract-build-20261009
+"Krylov_Metric_Coordinate_Contract" start time: Oct 09 14:08 JST
+Output:
+----------------------------------------------------------
+[GMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e+00, residual_norm_raw=1.113301906e-16, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e+00, residual_norm_raw=1.113301906e-16, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.09902e-10 < tol = 1e-08
+[GMRES] Initial residual already converged: error = 5.09902e-10 < tol = 1e-08
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-10, residual_norm_raw=1.292859242e-26, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-10, residual_norm_raw=1.292859242e-26, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.09902e-10 < tol = 1e-08
+[GMRES] Initial residual already converged: error = 5.09902e-10 < tol = 1e-08
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-14, residual_norm_raw=7.906613188e-32, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-14, residual_norm_raw=7.906613188e-32, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.09902e-10 < tol = 1e-08
+[GMRES] Initial residual already converged: error = 5.09902e-10 < tol = 1e-08
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-16, residual_norm_raw=4.734965844e-33, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-16, residual_norm_raw=4.734965844e-33, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.09902e-10 < tol = 1e-08
+[GMRES] Initial residual already converged: error = 5.09902e-10 < tol = 1e-08
+[GMRES] Initial residual already converged: error = 0 < tol = 1e-08
+[GMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=inf, tol=0.0000, rhs_norm_raw=0.000000000e+00, residual_norm_raw=7.771561172e-16, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 0 < tol = 1e-08
+[FGMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=inf, tol=0.0000, rhs_norm_raw=0.000000000e+00, residual_norm_raw=7.771561172e-16, restarts=1, arnoldi=2
+[GMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e+00, residual_norm_raw=6.659535745e-08, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e+00, residual_norm_raw=6.659535745e-08, restarts=1, arnoldi=2
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000017e-16, residual_norm_raw=7.394061593e-24, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000017e-16, residual_norm_raw=7.394061593e-24, restarts=1, arnoldi=2
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000020e-24, residual_norm_raw=1.102019783e-31, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000020e-24, residual_norm_raw=1.102019783e-31, restarts=1, arnoldi=2
+PASS: 117 cases, 0 failures
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"Krylov_Metric_Coordinate_Contract" end time: Oct 09 14:08 JST
+"Krylov_Metric_Coordinate_Contract" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 09 14:08 JST
