@@ -14,7 +14,7 @@ import scipy
 import test_fine_wave_inverse as inverse
 
 FIXTURE_SHA = "e170be5d1e2b0d87efcdc9ebe0f4dd1d381aceb9e0777dcd074e0dcfe1329d8c"
-CPP_SHA = "e47e3144574ca756489db8564aad0a7886a92cad621807359b17014c592caafd"
+CPP_SHA = "a058e570e1527b5167c0f999188ecc3f520c48a6421cf18c8f2c7098320b9967"
 H125_CSV_SHA = "d1554e15ccfff09a3625f03a564b5ca8bd9ad6f469a1b4dac965e1ae5e28feec"
 CONTEXT_ARRAYS = ("base", "phb", "pbase", "thbase_perturb", "mubase")
 GRID = (16, 12, 8)

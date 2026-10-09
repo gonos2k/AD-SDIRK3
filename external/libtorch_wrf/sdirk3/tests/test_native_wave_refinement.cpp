@@ -803,7 +803,8 @@ int main(int argc,char** argv) {
             out<<"M,cotangent_300_W_l2,"<<cot300_w.norm().item<double>()<<"\n";
             out<<"M,cotangent_300_PH_l2,"<<cot300_ph.norm().item<double>()<<"\n";
         }
-        g.solver.closeFixedTrajectory();
+        if(!physical_wave_bounded_tape_forward_only)
+            g.solver.closeFixedTrajectory();
         return 0;
     }
     if(quadratic_trajectory_mode) {
