@@ -1,0 +1,13 @@
+# Fixed literal origin and pinned incremental directions
+
+Local timestamp: 2026-10-09T17:33:39.838169+09:00.
+
+Run37903388504 stopped before240-stepintegration at freshbase+B@controls bit-equality. Its sole descriptorCSV exactly matched08b8e406... andinitial/control/descriptors/data/sourcePythonversions wereunchanged. Fresh B wasnotarchivedbeforetheassert,so Linuxdriftisspeculative,notmeasured. FailureZIP bdc46d82e9a11591345f3645ad8b56e1357abc9b7bb8a1ceec700b34294989e6 andzero240-callfact arepreserved. Macreconstructionexhibits1.776e-15maxmapdifferenceandnonidenticaleigensolverbasisbits; finalmatvecgammaalonecannotboundeigenbasisvariation.
+
+The fixed-state primal needsnoeigenreconstruction. DefineincrementalmapZ0(delta)=literal_saved_state+Bcan@delta,center0. Bcanisnowanimmutableinput:rawfloat64hash416e928d16e34ac75b964b4e785ef174b69305e38ef3ccc4295c4d7596115ab7,shape8480×4,sourcegeneratormethod17f00.../referencef16ab...,pinneddescriptors,MacPython3.10.11/NumPy2.2.6/SciPy1.15.3andBLASmetadata recorded. ThisdoesnotclaimbitwisepreservationoforiginalLinux3b0ebasisoroldabsolute-control/truthdistancecoordinates. State/data/RareEXACTandnotremapped.
+
+AllpastK12(h5,h2.5)andnewh1.25pullbacksareprojectedontoSAMEBcan. Previousreprojectionchecksusegamma16960sum|Bλ|;newprojectionreportsgamma8480sum|Bλ|. Theseboundonlydotarithmetic,notNewton/RHS/time/modelerror. Oldh5coordinatecomparison1.48e-12isconsistencyonly. Raw1e-5criterionand0.1sigmadiagnosticareunchanged.
+
+Fixturev3ZIPbe9224d59be722bc12b46ffb95f74cc6d350822fa1c144bb22be3aba73e0a1e6pinsbasisbytes/memberhashes/provenance. Sign-flip,orthogonalrotationandprofile-elementmutationchangebasisfingerprintandare rejectedbeforephysicaltrajectory;actualunchangedfixture/reprojection arithmeticchecks pass with0newnativecalls. State/hash/context/obs remain fail-closed. Red approved this coordinate definition for fixed-state/time work, with no exact-oldbasis claim. No optimization.
+
+Next is ONE explicit240×1.25N14/K12fullVJPatunchangedliteralstate. Descriptorisfirstcheapcontextgate. CPPschedule/hashdb525...unchangedfromfailedcall;noNeedto rerunh2.5/h5. FullEg andterminationstillOPEN. Graphify7sourcebindingsupdated342nodes877edges,gapsmanualruntimecontext. No newWRF/RK3run,productionmathunchanged. No merge.

@@ -446,6 +446,35 @@ std::array<double,3> validate_eos_target(Grid& g,const torch::Tensor& state) {
                 "native EOS/background hydrostatic descriptor failed before solver step");
     return {pressure_error,alpha_error,geometry_error};
 }
+void validate_physical_handoff_state(Grid& g,const torch::Tensor& state) {
+    TORCH_CHECK(state.device().is_cpu() && state.scalar_type()==torch::kFloat64 &&
+                state.numel()==g.ny*g.nz*g.nu+g.nv*g.nz*g.nx+
+                    2*g.ny*g.nw*g.nx+g.ny*g.nz*g.nx+g.ny*g.nx,
+                "manual handoff state has unexpected dtype, device, or packed size");
+    TORCH_CHECK(torch::isfinite(state).all().item<bool>(),
+                "manual handoff state contains nonfinite values");
+    const int su=g.ny*g.nz*g.nu, sv=g.nv*g.nz*g.nx, sw=g.ny*g.nw*g.nx;
+    const int ph0=su+sv+sw, theta0=su+sv+2*sw, mu0=theta0+g.ny*g.nz*g.nx;
+    const auto opts=torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU);
+    const auto ph=state.slice(0,ph0,ph0+sw).view({g.ny,g.nw,g.nx});
+    const auto theta=state.slice(0,theta0,theta0+g.ny*g.nz*g.nx)
+        .view({g.ny,g.nz,g.nx});
+    const auto mu=state.slice(0,mu0,state.numel()).view({g.ny,g.nx});
+    const auto phi_base=torch::from_blob(g.phbase.data(),{g.ny,g.nw,g.nx},
+        torch::kFloat32).clone().to(opts);
+    const auto mu_base=torch::from_blob(g.mubase.data(),{g.ny,g.nx},
+        torch::kFloat32).clone().to(opts);
+    const auto theta_total=theta+300.0;
+    const auto mu_total=mu_base+mu;
+    const auto phi_total=phi_base+ph;
+    TORCH_CHECK((theta_total>0.0).all().item<bool>(),
+                "manual handoff state has nonpositive total potential temperature");
+    TORCH_CHECK((mu_total>0.0).all().item<bool>(),
+                "manual handoff state has nonpositive total column mass");
+    TORCH_CHECK((phi_total.slice(1,1,g.nw)-phi_total.slice(1,0,g.nz)>0.0)
+                    .all().item<bool>(),
+                "manual handoff state has non-increasing total geopotential in an owned column");
+}
 }
 
 int main(int argc,char** argv) {
@@ -457,12 +486,14 @@ int main(int argc,char** argv) {
     const bool physical_wave_inverse=argc>=10 &&
         std::string(argv[5])=="--physical-wave-inverse";
     bool physical_wave_forward_only=false;
+    bool physical_wave_bounded_tape_forward_only=false;
+    bool physical_wave_split_observation_pullbacks=false;
     float physical_wave_newton_tol=1.0e-12f;
     float physical_wave_krylov_tol=1.0e-8f;
     const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
     TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode ||
                 physical_wave_inverse,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; FP64 tape still retained)]]");
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; tape retained) | --bounded-tape-forward-only (one-step FP64 tape handoff) | --split-observation-pullbacks (h5 only)]]");
     const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     bool implicit_divergence=false;
     float kdamp=0.0f;
@@ -503,6 +534,14 @@ int main(int argc,char** argv) {
             if(flag=="--forward-only") {
                 TORCH_CHECK(!physical_wave_forward_only,"duplicate --forward-only flag");
                 physical_wave_forward_only=true;
+            } else if(flag=="--bounded-tape-forward-only") {
+                TORCH_CHECK(!physical_wave_bounded_tape_forward_only,
+                            "duplicate --bounded-tape-forward-only flag");
+                physical_wave_bounded_tape_forward_only=true;
+            } else if(flag=="--split-observation-pullbacks") {
+                TORCH_CHECK(!physical_wave_split_observation_pullbacks,
+                            "duplicate --split-observation-pullbacks flag");
+                physical_wave_split_observation_pullbacks=true;
             } else if(flag=="--newton-tol") {
                 TORCH_CHECK(!newton_tol_seen && arg<argc,"--newton-tol requires one value");
                 const std::string value(argv[arg++]);
@@ -521,10 +560,24 @@ int main(int argc,char** argv) {
                 TORCH_CHECK(false,"unknown physical-wave inverse flag: ",flag);
             }
         }
-        const bool accepted_schedule=(physical_wave_steps==30 && physical_wave_dt==10.0f) ||
-                                     (physical_wave_steps==60 && physical_wave_dt==5.0f);
-        TORCH_CHECK(accepted_schedule,
-                    "physical-wave inverse supports only (steps,dt)=(30,10) or (60,5) at T=300 s");
+        TORCH_CHECK(!(physical_wave_forward_only && physical_wave_bounded_tape_forward_only),
+                    "--forward-only and --bounded-tape-forward-only are mutually exclusive");
+        TORCH_CHECK(!physical_wave_split_observation_pullbacks ||
+                    (!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only),
+                    "--split-observation-pullbacks requires the retained trajectory/VJP path");
+        const bool accepted_taped_schedule=(physical_wave_steps==30 && physical_wave_dt==10.0f) ||
+                                           (physical_wave_steps==60 && physical_wave_dt==5.0f) ||
+                                           (physical_wave_steps==120 && physical_wave_dt==2.5f) ||
+                                           (physical_wave_steps==240 && physical_wave_dt==1.25f);
+        const bool accepted_long_handoff_schedule=physical_wave_bounded_tape_forward_only &&
+            ((physical_wave_steps==480 && physical_wave_dt==0.625f) ||
+             (physical_wave_steps==960 && physical_wave_dt==0.3125f));
+        TORCH_CHECK(accepted_taped_schedule || accepted_long_handoff_schedule,
+                    "physical-wave inverse supports (30,10), (60,5), (120,2.5), or (240,1.25) at T=300 s; ",
+                    "(480,0.625) and (960,0.3125) require --bounded-tape-forward-only");
+        TORCH_CHECK(!physical_wave_split_observation_pullbacks ||
+                    (physical_wave_steps==60 && physical_wave_dt==5.0f),
+                    "--split-observation-pullbacks is supported only for the h5 (60,5) center");
     }
     configure(implicit_divergence,kdamp); // solver policy is captured by its constructor.
     if(quadratic_trajectory_mode) g_sdirk3_config.newton_tol=1.0e-12f;
@@ -611,27 +664,54 @@ int main(int argc,char** argv) {
         };
         const auto observed_150=collect_target(true),observed_300=collect_target(false);
         torch::Tensor checkpoint_150,checkpoint_300;
-        g.set(initial);
-        g.solver.requestFixedTrajectory(physical_wave_steps,
-            std::vector<float>(static_cast<size_t>(physical_wave_steps),physical_wave_dt),initial);
-        for(int n=0;n<physical_wave_steps;++n) g.step(physical_wave_dt,n);
-        const auto checkpoints=g.solver.getFixedTrajectoryFp64Checkpoints();
-        TORCH_CHECK(checkpoints.size()==static_cast<size_t>(physical_wave_steps),
-                    "physical-wave inverse did not retain every accepted FP64 endpoint");
-        checkpoint_150=checkpoints[static_cast<size_t>(physical_wave_steps/2-1)];
-        checkpoint_300=checkpoints.back();
+        if(physical_wave_bounded_tape_forward_only) {
+            g.solver.resetInternalFp64Carry();
+            auto handoff_state=initial.detach().clone();
+            validate_physical_handoff_state(g,handoff_state);
+            for(int n=0;n<physical_wave_steps;++n) {
+                g.set(handoff_state);
+                g.solver.requestFixedTrajectory(1,{physical_wave_dt},handoff_state);
+                g.step(physical_wave_dt,n);
+                TORCH_CHECK(g.solver.getLastStepOutcomeCode()==0,
+                            "physical-wave one-step tape handoff was not accepted at index ",n);
+                const auto checkpoints=g.solver.getFixedTrajectoryFp64Checkpoints();
+                TORCH_CHECK(checkpoints.size()==1 && checkpoints[0].defined() &&
+                            checkpoints[0].scalar_type()==torch::kFloat64 &&
+                            torch::isfinite(checkpoints[0]).all().item<bool>() &&
+                            torch::equal(g.state(),checkpoints[0].to(torch::kFloat32)),
+                            "physical-wave one-step tape handoff checkpoint/publication guard failed at index ",n);
+                handoff_state=checkpoints[0].detach().clone();
+                validate_physical_handoff_state(g,handoff_state);
+                g.solver.closeFixedTrajectory();
+                if(n==physical_wave_steps/2-1) checkpoint_150=handoff_state.detach().clone();
+                if(n==physical_wave_steps-1) checkpoint_300=handoff_state.detach().clone();
+            }
+            g.solver.resetInternalFp64Carry();
+        } else {
+            g.set(initial);
+            g.solver.requestFixedTrajectory(physical_wave_steps,
+                std::vector<float>(static_cast<size_t>(physical_wave_steps),physical_wave_dt),initial);
+            for(int n=0;n<physical_wave_steps;++n) g.step(physical_wave_dt,n);
+            const auto checkpoints=g.solver.getFixedTrajectoryFp64Checkpoints();
+            TORCH_CHECK(checkpoints.size()==static_cast<size_t>(physical_wave_steps),
+                        "physical-wave inverse did not retain every accepted FP64 endpoint");
+            checkpoint_150=checkpoints[static_cast<size_t>(physical_wave_steps/2-1)];
+            checkpoint_300=checkpoints.back();
+        }
         TORCH_CHECK(checkpoint_150.defined() && checkpoint_300.defined() &&
                     torch::isfinite(checkpoint_150).all().item<bool>() &&
                     torch::isfinite(checkpoint_300).all().item<bool>(),
                     "physical-wave inverse checkpoints are missing or nonfinite");
         const auto evaluate_observations=[&](const torch::Tensor& checkpoint,bool at_150) {
-            auto state_leaf=checkpoint.detach().clone().requires_grad_(true);
+            auto state_leaf=checkpoint.detach().clone();
+            if(!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only)
+                state_leaf.requires_grad_(true);
             auto interpolation=interpolate_physical_w(g,state_leaf,observations,&g.phbase);
             const auto& target=at_150?observed_150:observed_300;
             const auto residual=(interpolation.prediction-target)/sigma;
             const auto loss=0.5*residual.square().sum();
             torch::Tensor cotangent;
-            if(!physical_wave_forward_only)
+            if(!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only)
                 cotangent=torch::autograd::grad({loss},{state_leaf}, {}, true, false)[0];
             return std::tuple<torch::Tensor,torch::Tensor,torch::Tensor,double,
                               std::vector<int>>{interpolation.prediction.detach(),loss.detach(),
@@ -650,9 +730,16 @@ int main(int argc,char** argv) {
                     torch::isfinite(prediction_300).all().item<bool>(),
                     "physical-wave observation loss or prediction is nonfinite");
         out<<"M,physical_wave_inverse,1\n";
-        out<<"M,forward_only,"<<(physical_wave_forward_only?1:0)<<"\n";
-        out<<"M,checkpoint_precision,retained_fp64_trajectory\nM,retains_tape,1\n";
-        out<<"M,pullback_requested,"<<(physical_wave_forward_only?0:1)<<"\n";
+        out<<"M,forward_only,"<<((physical_wave_forward_only || physical_wave_bounded_tape_forward_only)?1:0)<<"\n";
+        if(physical_wave_bounded_tape_forward_only) {
+            out<<"M,execution_mode,single_step_tape_handoff\nM,tape_window_steps,1\n";
+            out<<"M,checkpoint_precision,single_step_retained_fp64_handoff\n";
+            out<<"M,admissibility_checked_every_step,1\n";
+            out<<"M,retains_tape,1\nM,pullback_requested,0\n";
+        } else {
+            out<<"M,checkpoint_precision,retained_fp64_trajectory\nM,retains_tape,1\n";
+            out<<"M,pullback_requested,"<<(physical_wave_forward_only?0:1)<<"\n";
+        }
         out<<"M,physical_wave_newton_tol,"<<std::setprecision(17)<<g_sdirk3_config.newton_tol<<"\n";
         out<<"M,krylov_tol_config,"<<g_sdirk3_config.krylov_tol<<"\n";
         out<<"M,physical_wave_krylov_tol,"<<g_sdirk3_config.krylov_tol<<"\n";
@@ -692,7 +779,7 @@ int main(int argc,char** argv) {
         put(out,"bracket_index_150",torch::tensor(brackets_150,bracket_options));
         put(out,"bracket_index_300",torch::tensor(brackets_300,bracket_options));
         out<<"S,objective_physical_w,"<<std::setprecision(17)<<objective<<"\n";
-        if(!physical_wave_forward_only) {
+        if(!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only) {
             const int w0=g.ny*g.nz*g.nu+g.nv*g.nz*g.nx;
             const int w1=w0+g.ny*g.nw*g.nx;
             const int ph1=w1+g.ny*g.nw*g.nx;
@@ -721,13 +808,41 @@ int main(int argc,char** argv) {
                         torch::isfinite(initial_pullback).all().item<bool>(),
                         "physical-wave inverse pullback is missing, non-FP64, or nonfinite");
             put(out,"initial_pullback",initial_pullback);
+            if(physical_wave_split_observation_pullbacks) {
+                std::vector<torch::Tensor> output_cotangents_150(
+                    static_cast<size_t>(physical_wave_steps));
+                std::vector<torch::Tensor> output_cotangents_300(
+                    static_cast<size_t>(physical_wave_steps));
+                output_cotangents_150[static_cast<size_t>(physical_wave_steps/2-1)]=cotangent_150;
+                output_cotangents_300.back()=cotangent_300;
+                const auto initial_pullback_150=
+                    g.solver.pullbackFixedTrajectory(output_cotangents_150);
+                const auto initial_pullback_300=
+                    g.solver.pullbackFixedTrajectory(output_cotangents_300);
+                TORCH_CHECK(initial_pullback_150.scalar_type()==torch::kFloat64 &&
+                            initial_pullback_300.scalar_type()==torch::kFloat64 &&
+                            torch::isfinite(initial_pullback_150).all().item<bool>() &&
+                            torch::isfinite(initial_pullback_300).all().item<bool>(),
+                            "split observation-time pullbacks are missing, non-FP64, or nonfinite");
+                put(out,"initial_pullback_150",initial_pullback_150);
+                put(out,"initial_pullback_300",initial_pullback_300);
+                const auto split_sum=initial_pullback_150+initial_pullback_300;
+                const double sum_error=(split_sum-initial_pullback).norm().item<double>();
+                const double combined_norm=initial_pullback.norm().item<double>();
+                out<<"M,split_observation_pullbacks,1\n";
+                out<<"M,split_pullback_consistency,diagnostic_only\n";
+                out<<"S,split_pullback_sum_error_l2,"<<std::setprecision(17)<<sum_error<<"\n";
+                out<<"S,split_pullback_sum_error_relative,"<<
+                    (combined_norm>0.0?sum_error/combined_norm:sum_error)<<"\n";
+            }
             out<<"M,cotangent_nonzero_blocks,W;PH\n";
             out<<"M,cotangent_150_W_l2,"<<cot150_w.norm().item<double>()<<"\n";
             out<<"M,cotangent_150_PH_l2,"<<cot150_ph.norm().item<double>()<<"\n";
             out<<"M,cotangent_300_W_l2,"<<cot300_w.norm().item<double>()<<"\n";
             out<<"M,cotangent_300_PH_l2,"<<cot300_ph.norm().item<double>()<<"\n";
         }
-        g.solver.closeFixedTrajectory();
+        if(!physical_wave_bounded_tape_forward_only)
+            g.solver.closeFixedTrajectory();
         return 0;
     }
     if(quadratic_trajectory_mode) {
