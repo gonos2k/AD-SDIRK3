@@ -124,12 +124,15 @@ def prepare(fixture: Path, fixture_zip: Path) -> tuple[object, dict, dict]:
     coarse = mod.reference.build_case(8, 4, native_csv=files["coarse_descriptor"])
     fine = mod.reference.build_case(16, 8, native_csv=files["fine_descriptor"])
     _, basis = mod.profile_basis(coarse, fine)
-    Bf = np.column_stack([mod.pack_source_mode(q, (16, 12, 8)) for q in basis])
+    fresh_Bf = np.column_stack([mod.pack_source_mode(q, (16, 12, 8)) for q in basis])
     saved_Bf = np.load(files["Bf"], allow_pickle=False)
-    if (Bf.shape != (8480, 4) or saved_Bf.shape != Bf.shape or
-            not np.array_equal(Bf, saved_Bf) or
-            hashlib.sha256(Bf.tobytes()).hexdigest() != manifest["Bf"]["array_sha256"]):
-        raise RuntimeError("saved Bf differs from reconstruction from exact CI descriptors")
+    if (fresh_Bf.shape != (8480, 4) or saved_Bf.shape != fresh_Bf.shape or
+            not np.isfinite(fresh_Bf).all() or not np.isfinite(saved_Bf).all() or
+            hashlib.sha256(saved_Bf.tobytes()).hexdigest() != manifest["Bf"]["array_sha256"]):
+        raise RuntimeError("pinned saved Bf shape/hash mismatch")
+    Bf = saved_Bf
+    basis_delta = fresh_Bf-Bf
+    basis_column_delta = {"l2": np.linalg.norm(basis_delta, axis=0).tolist(), "max_abs": np.max(np.abs(basis_delta), axis=0).tolist()}
 
     meta, arrays, scalars, text_meta = mod.read_payload(files["baseline"])
     fine_meta, fine_arrays, fine_scalars, fine_text = mod.read_payload(files["fine_descriptor"])
@@ -166,12 +169,11 @@ def prepare(fixture: Path, fixture_zip: Path) -> tuple[object, dict, dict]:
     reported = np.asarray(manifest["baseline"]["projected_gradient"], dtype=np.float64)
     if not np.all(np.abs(projected - reported) <= bound):
         raise RuntimeError("baseline projected gradient fails gamma_n projection guard")
+    fresh_projected = fresh_Bf.T @ arrays["initial_pullback"]
 
     fine_descriptor = {"meta": fine_meta, "arrays": fine_arrays, "scalars": fine_scalars,
                        "text_meta": fine_text, "column": fine, "base": fine_arrays["base"]}
     mod.check_initial_admissibility((16, 12, 8), state, fine_descriptor)
-    control_fit, _, _, _ = np.linalg.lstsq(Bf, state - fine_arrays["base"], rcond=None)
-    state_reconstructed = fine_arrays["base"] + Bf @ control_fit
     report = {
         "schema": "pr281-saved-state-n14-k12-precision-diagnostic-v1",
         "status": "preflight_passed_zero_native",
@@ -189,7 +191,11 @@ def prepare(fixture: Path, fixture_zip: Path) -> tuple[object, dict, dict]:
                     "state_array_sha256": mod.digest(state),
                     "observation_sha256": sha256(files["observations"]),
                     "Bf_file_sha256": sha256(files["Bf"]),
-                    "Bf_array_sha256": hashlib.sha256(Bf.tobytes()).hexdigest()},
+                    "Bf_array_sha256": hashlib.sha256(Bf.tobytes()).hexdigest(),
+                    "fresh_Bf_array_sha256": hashlib.sha256(fresh_Bf.tobytes()).hexdigest()},
+        "basis_reconstruction_comparison": {"per_column_delta": basis_column_delta,
+                    "baseline_projected_gradient_fresh_minus_saved": (fresh_projected-projected).tolist(),
+                    "interpretation": "Cross-platform eigenbasis reconstruction difference; gamma_n bounds matrix-product rounding for a fixed basis, not eigensolver basis changes."},
         "baseline": {"objective": float(scalars["objective_physical_w"]),
                      "projected_gradient": projected.tolist(),
                      "projected_gradient_norm": float(np.linalg.norm(projected)),
@@ -199,10 +205,6 @@ def prepare(fixture: Path, fixture_zip: Path) -> tuple[object, dict, dict]:
                      "projection_gamma_n": gamma_n,
                      "projection_componentwise_bound": bound.tolist(),
                      "projection_guard_passed": True},
-        "saved_state_control_coordinate_fit": {"controls": control_fit.tolist(),
-                     "state_mapping_residual_l2": float(np.linalg.norm(state - state_reconstructed)),
-                     "state_mapping_residual_max_abs": float(np.max(np.abs(state - state_reconstructed))),
-                     "interpretation": "least-squares coordinates of a saved trial state; not an optimizer-return claim"},
         "planned_native_calls": [
             {"label": "descriptor_8x6x4", "type": "descriptor-only"},
             {"label": "descriptor_16x12x8", "type": "descriptor-only"},
@@ -215,7 +217,7 @@ def prepare(fixture: Path, fixture_zip: Path) -> tuple[object, dict, dict]:
     return mod, {"files": files, "manifest": manifest, "Bf": Bf, "state": state,
                  "baseline_meta": meta, "baseline_arrays": arrays,
                  "baseline_scalars": scalars, "baseline_text": text_meta,
-                 "baseline_projected_gradient": projected,
+                 "baseline_projected_gradient": projected, "fresh_Bf": fresh_Bf,
                  "fine_descriptor": fine_descriptor}, report
 
 
@@ -304,6 +306,8 @@ def run(fixture: Path, fixture_zip: Path, exe: Path, outdir: Path, dry: bool) ->
     } for key in FORWARD_KEYS}
     same_forward = all(x["exact_equal"] for x in forward_hashes.values())
     k12_gradient = context["Bf"].T @ arrays["initial_pullback"]
+    fresh_k10_gradient = context["fresh_Bf"].T @ context["baseline_arrays"]["initial_pullback"]
+    fresh_k12_gradient = context["fresh_Bf"].T @ arrays["initial_pullback"]
     report.update({
         "status": "completed_diagnostic_only",
         "K12_full_vjp_contract": {
@@ -325,6 +329,9 @@ def run(fixture: Path, fixture_zip: Path, exe: Path, outdir: Path, dry: bool) ->
             "N14_K10_projected_gradient": context["baseline_projected_gradient"].tolist(),
             "N14_K12_projected_gradient": k12_gradient.tolist(),
             "projected_gradient_delta": (k12_gradient-context["baseline_projected_gradient"]).tolist(),
+            "fresh_Bf_projection_deltas_vs_saved_Bf": {
+                "K10": (fresh_k10_gradient-context["baseline_projected_gradient"]).tolist(),
+                "K12": (fresh_k12_gradient-k12_gradient).tolist()},
             "N14_K10_projected_gradient_norm": float(np.linalg.norm(context["baseline_projected_gradient"])),
             "N14_K12_projected_gradient_norm": float(np.linalg.norm(k12_gradient)),
         },
