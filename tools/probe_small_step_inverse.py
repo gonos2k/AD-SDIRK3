@@ -319,6 +319,7 @@ def main():
         if not args.exe.is_file() or not args.exe.is_absolute():
             raise ValueError("--exe must name an existing absolute executable")
         source_files = [
+            Path(__file__).resolve(),
             ROOT / "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h",
             ROOT / "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
             ROOT / "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",

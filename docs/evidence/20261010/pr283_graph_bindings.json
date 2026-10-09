@@ -1,6 +1,6 @@
 {
-  "timestamp_local": "2026-10-10T06:10:52+09:00",
-  "head": "4615c2e06551e743b27ab3ccd7925a82e6f23c30",
+  "timestamp_local": "2026-10-10T07:25:25+09:00",
+  "head": "8aeee9e5524a2ad33d71828ef266a9bfbcceef2c",
   "sources": [
     {
       "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
@@ -80,7 +80,7 @@
     {
       "source": "/private/tmp/pr283-small-step-20261010/tools/probe_small_step_inverse.py",
       "mirror": "/private/tmp/pr283-small-step-graph/probe_small_step_inverse.py",
-      "sha256": "65d4c77266ccc7801ea8ae14189317befb5607c78c99b213adbcdea31638d45e"
+      "sha256": "8b3f73103da16b63c768462c8f2d52cfc00c91a9651c0ec504455901fa66d553"
     },
     {
       "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
@@ -95,7 +95,7 @@
     "context fingerprint numeric contents"
   ],
   "not_numerical_proof": true,
-  "source_state": "Final PR283 worktree source, workflow, and driver mirrors verified against exact root source pins",
+  "source_state": "Final PR283 worktree mirrors include root-added driver self-hash line; native test remains pinned",
   "target_worktree": "/private/tmp/pr283-small-step-20261010",
   "graph_updated_after_probe_edit": true,
   "newton_cache_reset_binding": {
