@@ -472,7 +472,7 @@ jobs:
             || { echo "FAIL: CTest inventory drift (a silently deregistered test is a missing gate)"; exit 1; }
           echo "inventory OK ($(wc -l < /tmp/ctest_actual.txt | tr -d ' ') tests)"
           # Resolve the new inverse gate before spending an hour on unchanged long windows.
-          ctest --test-dir build/sdirk3-core -R '^Native_Physical_Wave_Inverse$' --output-on-failure --no-tests=error
+          ctest --test-dir build/sdirk3-core -R '^Native_Physical_Wave_Inverse$' --verbose --output-on-failure --no-tests=error
           cp build/sdirk3-core/Testing/Temporary/LastTest.log build/sdirk3-core/Testing/Temporary/LastTest.PhysicalInverse.log
 
       - name: publish inverse endpoint evidence before remaining long tests

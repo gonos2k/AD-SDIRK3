@@ -359,6 +359,60 @@ def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
     trial_history=[]
     status="iteration_limit"
     stationary_trial=None
+    stationarity_solution=None
+    stationarity_report=None
+    merit_metric=0.5*(np.asarray(preconditioner,dtype=np.float64)+np.asarray(preconditioner,dtype=np.float64).T)
+    try: np.linalg.cholesky(merit_metric); merit_spd=True
+    except np.linalg.LinAlgError: merit_spd=False
+    def merit(gradient: np.ndarray) -> float:
+        return 0.5*float(gradient@merit_metric@gradient)
+    def refine_stationarity(start_v: np.ndarray, start_eval: dict, start_g: np.ndarray,
+                            iteration: int, line_trial: int) -> dict:
+        nonlocal stationarity_solution
+        vref=start_v.copy(); eref=start_eval; gref=start_g.copy(); phiref=merit(gref)
+        records=[{"kind":"armijo_rejected_origin","iteration":iteration,
+            "line_search_trial":line_trial,"controls":vref.tolist(),
+            "objective":eref["objective"],"gradient_norm":float(np.linalg.norm(gref)),
+            "merit":phiref,"armijo_accepted":False,"optimizer_accepted":False,
+            "origin_eligible_for_refinement":True,"origin_native_call_reused":True}]
+        calls=0; phase_status="stationarity_refinement_stalled"
+        try: np.linalg.cholesky(H); inverse_metric_spd=True
+        except np.linalg.LinAlgError: inverse_metric_spd=False
+        print(f"stationarity origin J={eref['objective']:.17g} ||g||={np.linalg.norm(gref):.9g} phi={phiref:.9g}",flush=True)
+        while merit_spd and inverse_metric_spd and calls<4 and np.linalg.norm(gref)>=1.0e-5:
+            direction=-(H@gref)
+            if not np.isfinite(direction).all() or float(gref@direction)>=0.0: break
+            alpha=1.0; invalid=0; accepted=False
+            while calls<4 and invalid<20:
+                candidate=vref+alpha*direction
+                if np.array_equal(candidate,vref): break
+                try: check_initial_admissibility(grid,base+B@candidate,descriptor_data)
+                except ValueError:
+                    records.append({"kind":"admissibility_reject","alpha":alpha})
+                    alpha*=0.5; invalid+=1; continue
+                proposal=evaluate(exe,grid,outdir,descriptor_data,base,B,candidate,observations,steps,dt)
+                evaluations.append(proposal); calls+=1
+                gnew=project_gradient(proposal,B); phinew=merit(gnew)
+                finite=np.isfinite(proposal["objective"]) and np.isfinite(gnew).all() and np.isfinite(phinew)
+                take=finite and proposal["objective"]<history[0]["objective"] and phinew<=(1.0-1.0e-4*alpha)*phiref
+                records.append({"kind":"merit_trial","alpha":alpha,"controls":candidate.tolist(),
+                    "objective":proposal["objective"],"gradient_norm":float(np.linalg.norm(gnew)),
+                    "merit":phinew,"objective_below_initial":bool(proposal["objective"]<history[0]["objective"]),
+                    "armijo_accepted":False,"merit_accepted":bool(take)})
+                print(f"stationarity call={calls}/4 alpha={alpha:.6g} J={proposal['objective']:.17g} ||g||={np.linalg.norm(gnew):.9g} phi={phinew:.9g} accepted={take}",flush=True)
+                if take:
+                    vref,eref,gref,phiref=candidate,proposal,gnew,phinew; accepted=True
+                    if np.linalg.norm(gref)<1.0e-5: phase_status="converged_stationarity_refinement"
+                    break
+                alpha*=0.5
+            if phase_status=="converged_stationarity_refinement": break
+            if not accepted: break
+        stationarity_solution={"controls":vref,"evaluation":eref,"gradient":gref,
+                               "gradient_norm":float(np.linalg.norm(gref)),"status":phase_status}
+        return {"status":phase_status,"merit_definition":"0.5*g.T@H0@g",
+                "objective_guard":"trial objective remains below original fine-H5 initial objective",
+                "origin":records[0],"history":records,"native_evaluations_in_phase":calls,
+                "native_evaluation_cap_after_reused_origin":4}
     for iteration in range(1,max_iterations+1):
         if np.linalg.norm(g)<1.0e-5:
             status="converged_at_armijo_state"
@@ -385,6 +439,7 @@ def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
             trial_history.append({"iteration":iteration,"line_search_trial":trial+1,
                 "controls":candidate.tolist(),"objective":proposal["objective"],
                 "gradient_norm":proposal_gradient_norm,"step":step,"armijo_accepted":bool(armijo)})
+            print(f"BFGS iteration={iteration} trial={trial+1} J={proposal['objective']:.17g} ||g||={proposal_gradient_norm:.9g} Armijo={armijo}",flush=True)
             if armijo:
                 accepted=proposal
                 break
@@ -394,8 +449,17 @@ def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
                                   "iteration":iteration,"line_search_trial":trial+1}
                 status="converged_stationary_trial"
                 break
+            phi_current,phi_proposal=merit(g),merit(proposal_gradient)
+            if (grid==GRIDS["fine"] and merit_spd and
+                    proposal["objective"]<history[0]["objective"] and
+                    np.isfinite(phi_proposal) and phi_proposal<phi_current):
+                stationarity_report=refine_stationarity(candidate,proposal,proposal_gradient,iteration,trial+1)
+                status=stationarity_report["status"]
+                break
             step*=0.5
         if stationary_trial is not None:
+            break
+        if stationarity_report is not None:
             break
         if accepted is None:
             status="line_search_failed"
@@ -413,7 +477,12 @@ def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
         if np.linalg.norm(g)<1.0e-5:
             status="converged_at_armijo_state"
             break
-    if stationary_trial is not None:
+    if stationarity_solution is not None:
+        controls=stationarity_solution["controls"]
+        terminal_evaluation=stationarity_solution["evaluation"]
+        terminal_gradient=stationarity_solution["gradient"]
+        terminal_gradient_norm=stationarity_solution["gradient_norm"]
+    elif stationary_trial is not None:
         controls=stationary_trial["controls"]
         terminal_evaluation=stationary_trial["evaluation"]
         terminal_gradient=stationary_trial["gradient"]
@@ -425,10 +494,11 @@ def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
         terminal_gradient_norm=float(np.linalg.norm(g))
         if terminal_gradient_norm<1.0e-5 and status=="iteration_limit":
             status="converged_at_armijo_state"
-    converged=status in ("converged_at_armijo_state","converged_stationary_trial")
+    converged=status in ("converged_at_armijo_state","converged_stationary_trial","converged_stationarity_refinement")
     return {"controls":controls,"evaluation":terminal_evaluation,"gradient":terminal_gradient,
             "gradient_norm":terminal_gradient_norm,"status":status,"converged":converged,
             "terminal_trial":stationary_trial,"last_armijo_controls":v,
+            "stationarity_refinement":stationarity_report,
             "last_armijo_evaluation":current,"history":history,"trial_history":trial_history,
             "initial_evaluation":initial_evaluation,"evaluations":len(evaluations),
             "final_metric":H,"steps":steps,"dt_s":dt}
@@ -732,6 +802,7 @@ def run(exe: Path, outdir: Path, max_iterations: int=12,
                 "gradient_norm":fine_h5_opt["terminal_trial"]["gradient_norm"],
                 "objective_delta_vs_last_armijo":fine_h5_opt["terminal_trial"]["evaluation"]["objective"]-fine_h5_opt["last_armijo_evaluation"]["objective"],
                 "objective_delta_vs_initial":fine_h5_opt["terminal_trial"]["evaluation"]["objective"]-fine_h5_opt["history"][0]["objective"]},
+            "stationarity_refinement":fine_h5_opt["stationarity_refinement"],
             "final_inverse_metric":fine_h5_opt["final_metric"].tolist(),
             "native_evaluations":fine_h5_opt["evaluations"]},
         "fine_h10_at_fine_h5_controls":{"controls":fine_h5_opt["controls"].tolist(),

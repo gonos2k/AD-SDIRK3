@@ -1,0 +1,8 @@
+{
+  "timestamp_local": "2026-10-09T11:12:47.877237+09:00",
+  "runner_sha256": "17f00e0edd6ea936523846189d78fd91ffe123b72671d17e6343adda196bfa18",
+  "graph_sha256": "ff60773cb1b2e5982af3e7f67c2cd30194507ea715735ada441ec8f1f0aee47e",
+  "nodes": 1142,
+  "edges": 2661,
+  "scope": "fine-only separately labeled stationarity refinement; no RHS or solver/default change; no retroactive J-Armijo acceptance; four extra calls; graph not numerical proof"
+}
