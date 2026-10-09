@@ -342,10 +342,11 @@ public:
     // solve that never independently happened.
     //
     // Snapshot and restore rather than a fresh solver, deliberately and with the limit stated:
-    // this covers the solver's own carried state, NOT the preconditioner's internals or any
-    // cached linearization it holds. Arms isolated this way are more independent than shared
-    // ones and less independent than separate processes. A digest is provided so a caller can
-    // FAIL CLOSED when something outside the list moved, rather than assume it did not.
+    // this covers the listed carried flags, warm-start slots, and persistent stage predictors.
+    // It does NOT capture the whole solver, preconditioner caches, or general replay state. Arms
+    // isolated this way are more independent than shared ones and less independent than separate
+    // processes. A digest lets a caller FAIL CLOSED when something outside the list moved,
+    // rather than assume it did not.
     struct CarriedState {
         bool  stage3_warmstart_disabled = false;
         bool  stage2_hopeless_budget_mode = false;
@@ -356,6 +357,8 @@ public:
         float trust_radius = 0.0f;
         std::vector<torch::Tensor> warmstart_stage;
         std::vector<float>         warmstart_relerr;
+        torch::Tensor stage2_predictor;
+        torch::Tensor stage3_predictor;
     };
     CarriedState capture_carried_state() const;
     void restore_carried_state(const CarriedState& s);

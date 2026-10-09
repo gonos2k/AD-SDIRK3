@@ -4061,7 +4061,7 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         // R13.1: this flag is named for what it MEASURES. It is true when the selected
         // carried state came back to its entry value -- not when the arms were independent.
         // Outside the snapshot and therefore outside this claim: preconditioner internals,
-        // jacobian_cache_, k2_prev_/k3_prev_, the bootstrap flags and the stage-3 no-improve
+        // jacobian_cache_, the bootstrap flags and the stage-3 no-improve
         // streak. The record carries fresh_solver_per_arm=0 beside it so nothing downstream
         // has to infer the difference.
         bool arms_isolated = true;
