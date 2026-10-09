@@ -15,14 +15,14 @@ on:
   workflow_dispatch:
     inputs:
       fine_accuracy_diagnostic:
-        description: 'One exact returned-state 120x2.5 timestep/VJP probe (diagnostic only)'
+        description: 'Fixed returned-state time or gradient diagnostic only'
         required: false
         type: boolean
         default: false
       fine_accuracy_schedule:
-        description: 'Explicit fixed-state schedule; observations remain150/300s'
+        description: 'Explicit fixed-state diagnostic; observations remain 150/300s'
         type: choice
-        options: [h2.5, h1.25, carry-h.625]
+        options: [h2.5, h1.25, carry-h.625, h5-component-fd]
         default: h2.5
 
 permissions:
@@ -702,13 +702,20 @@ jobs:
             -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" -DWRF_SDIRK3_ABI_STRICT=AUTO \
             -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" -DSDIRK3_QUIET_TESTS=ON -DUSE_FAST_POW_0875=OFF
           cmake --build build/fine-accuracy --target test_native_wave_refinement --parallel 2
-      - name: selected fixed-state VJP or parity-gated bounded-tape forward probe
+      - name: selected fixed-state time or component-gradient diagnostic
         run: |
-          python3 -B tools/probe_fine_returned_accuracy.py \
-            --exe build/fine-accuracy/test_native_wave_refinement \
-            --fixture tools/fixtures/pr282-exact-returned-state.zip \
-            --out build/fine-accuracy/measurement \
-            --schedule '${{ inputs.fine_accuracy_schedule }}'
+          if [[ '${{ inputs.fine_accuracy_schedule }}' == 'h5-component-fd' ]]; then
+            python3 -B tools/probe_fine_gradient_components.py \
+              --exe build/fine-accuracy/test_native_wave_refinement \
+              --fixture tools/fixtures/pr282-exact-returned-state.zip \
+              --out build/fine-accuracy/measurement
+          else
+            python3 -B tools/probe_fine_returned_accuracy.py \
+              --exe build/fine-accuracy/test_native_wave_refinement \
+              --fixture tools/fixtures/pr282-exact-returned-state.zip \
+              --out build/fine-accuracy/measurement \
+              --schedule '${{ inputs.fine_accuracy_schedule }}'
+          fi
       - name: preserve measurement even on failure
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
