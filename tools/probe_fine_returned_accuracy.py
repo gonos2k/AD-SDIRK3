@@ -13,7 +13,7 @@ import numpy as np
 import scipy
 import test_fine_wave_inverse as inverse
 
-FIXTURE_SHA = "4c2881bf1140ee42f2bc83642cb2669fc96bd853926b6a238a7d19f93491cbdd"
+FIXTURE_SHA = "be9224d59be722bc12b46ffb95f74cc6d350822fa1c144bb22be3aba73e0a1e6"
 CPP_SHA = "db525e726ce28843282b1d479f6b8d94daf716b23fdc29378b9b542da5737424"
 CONTEXT_ARRAYS = ("base", "phb", "pbase", "thbase_perturb", "mubase")
 GRID = (16, 12, 8)
@@ -44,7 +44,7 @@ def run(exe, fixture_zip, outdir, schedule):
     with zipfile.ZipFile(fixture_zip) as z:
         assert z.testzip() is None
         manifest = json.loads(z.read("manifest.json"))
-        assert manifest["schema"] == "pr282-exact-fine-returned-time-ladder-v2"
+        assert manifest["schema"] == "pr282-fixed-literal-incremental-controls-v3"
         for name, record in manifest["files"].items():
             data = z.read(name)
             assert hashlib.sha256(data).hexdigest() == record["sha256"]
@@ -92,14 +92,31 @@ def run(exe, fixture_zip, outdir, schedule):
     fresh = invoke("descriptor", ["--descriptor-only"])
     for key in CONTEXT_ARRAYS:
         assert np.array_equal(fresh[1][key], desc_saved[1][key]), f"context changed: {key}"
-    coarse_case = inverse.reference.build_case(8, 4, native_csv=inputs / "descriptor_coarse.csv")
-    fine_case = inverse.reference.build_case(16, 8, native_csv=inputs / "descriptor_fine.csv")
-    _, basis = inverse.profile_basis(coarse_case, fine_case)
-    B = np.column_stack([inverse.pack_source_mode(q, GRID) for q in basis])
-    mapped = fresh[1]["base"] + B @ np.asarray(manifest["controls"])
-    assert np.array_equal(mapped, state), "fresh basis must reproduce the exact returned state"
+    # The physical center is the literal saved state. Directions are immutable
+    # inputs: Z0(delta)=state+B@delta, delta=0. No eigensolver or state remap.
+    B = np.load(inputs / "canonical_basis.npy", allow_pickle=False)
+    assert B.shape == (8480, 4) and B.dtype == np.float64 and np.isfinite(B).all()
+    assert inverse.digest(B) == manifest["canonical_basis"]["array_sha256"]
     g_previous = B.T @ baseline[1]["initial_pullback"]
-    assert np.allclose(g_previous, manifest["gradients_by_previous_dt"][str(previous_dt)], rtol=0, atol=1e-12)
+    g_saved = np.asarray(manifest["canonical_gradients_by_dt"][str(previous_dt)])
+    eps = np.finfo(float).eps
+    gamma = (2*8480*eps)/(1-2*8480*eps)
+    projection_bound = gamma*np.sum(np.abs(B*baseline[1]["initial_pullback"][:, None]), axis=0)
+    assert np.all(np.abs(g_previous-g_saved) <= projection_bound)
+    older_gradient = None
+    if dt == 1.25:
+        older_gradient = B.T @ coarse_time[1]["initial_pullback"]
+        older_saved = np.asarray(manifest["canonical_gradients_by_dt"]["5.0"])
+        older_bound = gamma*np.sum(np.abs(B*coarse_time[1]["initial_pullback"][:, None]), axis=0)
+        assert np.all(np.abs(older_gradient-older_saved) <= older_bound)
+        report["older_gradient_projection_arithmetic_bound"] = older_bound.tolist()
+        report["older_gradient_canonical"] = older_gradient.tolist()
+    report.update(canonical_basis_sha256=inverse.digest(B),
+        control_map="Z0(delta)=literal_saved_state+Bcan@delta; center delta=0",
+        original_absolute_coordinate_equivalence_claimed=False,
+        previous_gradient_projection_error=(g_previous-g_saved).tolist(),
+        previous_gradient_projection_arithmetic_bound=projection_bound.tolist())
+    target.write_text(json.dumps(report, indent=2)+"\n")
     current = invoke(f"h{dt:g}_N14_K12", ["--physical-wave-inverse", str(inputs/"initial_state.txt"),
                      str(inputs/"observations.txt"), str(steps), str(dt), "--newton-tol", "1e-14",
                      "--krylov-tol", "1e-12"])
@@ -118,6 +135,8 @@ def run(exe, fixture_zip, outdir, schedule):
     assert all(np.isfinite(a).all() for a in arrays.values())
     assert all(np.isfinite(value) for value in scalars.values())
     g_probe = B.T @ arrays["initial_pullback"]
+    single_gamma = (8480*eps)/(1-8480*eps)
+    new_projection_bound = single_gamma*np.sum(np.abs(B*arrays["initial_pullback"][:, None]), axis=0)
     times = {}
     for t in (150, 300):
         key = f"predicted_{t}"
@@ -138,6 +157,8 @@ def run(exe, fixture_zip, outdir, schedule):
         objective_previous=baseline[2]["objective_physical_w"], objective_probe=scalars["objective_physical_w"],
         gradient_previous=g_previous.tolist(), gradient_probe=g_probe.tolist(), gradient_probe_norm=float(np.linalg.norm(g_probe)),
         gradient_delta_norm=float(np.linalg.norm(g_probe-g_previous)), remaining_gradient_margin=float(margin),
+        gradient_probe_projection_arithmetic_bound=new_projection_bound.tolist(),
+        projection_bound_scope="dot reduction only; not Newton/RHS/time/model-gradient error",
         raw_gate_test_applicable=bool(margin>0),
         timestep_gate_robust=bool(margin>0 and np.linalg.norm(g_probe-g_previous)<margin and np.linalg.norm(g_probe)<GRAD_TARGET),
         prediction_target_met=all(row["rms_probe_minus_previous_sigma"]<0.1 for row in times.values()),

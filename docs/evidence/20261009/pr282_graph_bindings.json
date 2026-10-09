@@ -30,7 +30,7 @@
     {
       "source": "/private/tmp/pr282-accuracy-20261009/tools/probe_fine_returned_accuracy.py",
       "mirror": "/private/tmp/pr282-accuracy-graph/probe_fine_returned_accuracy.py",
-      "sha256": "329a4a5bb9dcaa54fe752374ded90b43555bcf4742be0592112f21130c39720d"
+      "sha256": "5b095f93e106f2240de163f26618e44b83619c6ef696b1685cac3093ee32e201"
     },
     {
       "source": "/private/tmp/pr282-accuracy-20261009/.github/workflows/sdirk3-ci.yml",
@@ -44,5 +44,5 @@
     "context fingerprint numeric contents"
   ],
   "not_numerical_proof": true,
-  "source_state": "5298dff + explicit240x1.25 and matchedK12time-ladder fixture"
+  "source_state": "2b68f4b + pinned canonical incremental basis, all compared pullbacks samecoordinate"
 }
