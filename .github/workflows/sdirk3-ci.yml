@@ -22,7 +22,7 @@ on:
       fine_accuracy_schedule:
         description: 'Explicit fixed-state diagnostic; observations remain 150/300s'
         type: choice
-        options: [h2.5, h1.25, carry-h.625, h5-component-fd]
+        options: [h2.5, h1.25, carry-h.625, h5-component-fd, memory-smoke]
         default: h2.5
 
 permissions:
@@ -686,6 +686,9 @@ jobs:
         run: bash .github/ci/setup_torch_env.sh
       - name: native build tools
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache mpich libmpich-dev
+      - name: memory diagnostic tool
+        if: ${{ inputs.fine_accuracy_schedule == 'memory-smoke' }}
+        run: sudo apt-get install -y -q valgrind
       - name: restore compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -699,12 +702,18 @@ jobs:
           set -euo pipefail
           cmake -S external/libtorch_wrf/sdirk3 -B build/fine-accuracy -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" -DWRF_SDIRK3_ABI_STRICT=AUTO \
             -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" -DSDIRK3_QUIET_TESTS=ON -DUSE_FAST_POW_0875=OFF
           cmake --build build/fine-accuracy --target test_native_wave_refinement --parallel 2
       - name: selected fixed-state time or component-gradient diagnostic
         run: |
-          if [[ '${{ inputs.fine_accuracy_schedule }}' == 'h5-component-fd' ]]; then
+          if [[ '${{ inputs.fine_accuracy_schedule }}' == 'memory-smoke' ]]; then
+            python3 -B tools/probe_retained_memory_smoke.py \
+              --build-dir build/fine-accuracy \
+              --fixture tools/fixtures/pr282-exact-returned-state.zip \
+              --out build/fine-accuracy/measurement
+          elif [[ '${{ inputs.fine_accuracy_schedule }}' == 'h5-component-fd' ]]; then
             python3 -B tools/probe_fine_gradient_components.py \
               --exe build/fine-accuracy/test_native_wave_refinement \
               --fixture tools/fixtures/pr282-exact-returned-state.zip \
