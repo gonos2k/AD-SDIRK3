@@ -127,6 +127,7 @@ def stop(report, report_path, status, reason, **fields):
 def main(build_dir, fixture_zip, outdir, valgrind, ninja):
     build_dir = build_dir.resolve()
     fixture_zip = fixture_zip.resolve()
+    outdir = outdir.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
     report_path = outdir / "report.json"
     if any(outdir.iterdir()):
