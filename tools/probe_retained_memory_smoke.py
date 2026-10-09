@@ -13,7 +13,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp"
 FIXTURE_SHA = "e170be5d1e2b0d87efcdc9ebe0f4dd1d381aceb9e0777dcd074e0dcfe1329d8c"
-SOURCE_SHA = "a058e570e1527b5167c0f999188ecc3f520c48a6421cf18c8f2c7098320b9967"
+SOURCE_SHA = "e1cb768ac81f10872817af3c05ed34da5ce6b5ca818b0eba462e12dcf05e2e3a"
 TARGET = "test_native_wave_refinement"
 COMPILE_DATABASE = "compile_commands.json"
 MARKER = "MEMORY_ONLY completed_steps=3"

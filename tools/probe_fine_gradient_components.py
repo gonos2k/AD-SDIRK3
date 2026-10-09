@@ -19,7 +19,7 @@ import test_fine_wave_inverse as inverse  # noqa: E402
 import probe_fine_returned_accuracy as accuracy  # noqa: E402
 
 FIXTURE_SHA = "e170be5d1e2b0d87efcdc9ebe0f4dd1d381aceb9e0777dcd074e0dcfe1329d8c"
-CPP_SHA = "a058e570e1527b5167c0f999188ecc3f520c48a6421cf18c8f2c7098320b9967"
+CPP_SHA = "e1cb768ac81f10872817af3c05ed34da5ce6b5ca818b0eba462e12dcf05e2e3a"
 H5_CSV_SHA = "c21feea5512d8c4974c3031a6b4f98e57d3a03f1280c0095d844272a6f0415d7"
 GRID = (16, 12, 8)
 SIGMA = 3e-4

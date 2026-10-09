@@ -487,12 +487,13 @@ int main(int argc,char** argv) {
         std::string(argv[5])=="--physical-wave-inverse";
     bool physical_wave_forward_only=false;
     bool physical_wave_bounded_tape_forward_only=false;
+    bool physical_wave_split_observation_pullbacks=false;
     float physical_wave_newton_tol=1.0e-12f;
     float physical_wave_krylov_tol=1.0e-8f;
     const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
     TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode ||
                 physical_wave_inverse,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; tape retained) | --bounded-tape-forward-only (one-step FP64 tape handoff)]]");
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; tape retained) | --bounded-tape-forward-only (one-step FP64 tape handoff) | --split-observation-pullbacks (h5 only)]]");
     const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     bool implicit_divergence=false;
     float kdamp=0.0f;
@@ -537,6 +538,10 @@ int main(int argc,char** argv) {
                 TORCH_CHECK(!physical_wave_bounded_tape_forward_only,
                             "duplicate --bounded-tape-forward-only flag");
                 physical_wave_bounded_tape_forward_only=true;
+            } else if(flag=="--split-observation-pullbacks") {
+                TORCH_CHECK(!physical_wave_split_observation_pullbacks,
+                            "duplicate --split-observation-pullbacks flag");
+                physical_wave_split_observation_pullbacks=true;
             } else if(flag=="--newton-tol") {
                 TORCH_CHECK(!newton_tol_seen && arg<argc,"--newton-tol requires one value");
                 const std::string value(argv[arg++]);
@@ -557,6 +562,9 @@ int main(int argc,char** argv) {
         }
         TORCH_CHECK(!(physical_wave_forward_only && physical_wave_bounded_tape_forward_only),
                     "--forward-only and --bounded-tape-forward-only are mutually exclusive");
+        TORCH_CHECK(!physical_wave_split_observation_pullbacks ||
+                    (!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only),
+                    "--split-observation-pullbacks requires the retained trajectory/VJP path");
         const bool accepted_taped_schedule=(physical_wave_steps==30 && physical_wave_dt==10.0f) ||
                                            (physical_wave_steps==60 && physical_wave_dt==5.0f) ||
                                            (physical_wave_steps==120 && physical_wave_dt==2.5f) ||
@@ -567,6 +575,9 @@ int main(int argc,char** argv) {
         TORCH_CHECK(accepted_taped_schedule || accepted_long_handoff_schedule,
                     "physical-wave inverse supports (30,10), (60,5), (120,2.5), or (240,1.25) at T=300 s; ",
                     "(480,0.625) and (960,0.3125) require --bounded-tape-forward-only");
+        TORCH_CHECK(!physical_wave_split_observation_pullbacks ||
+                    (physical_wave_steps==60 && physical_wave_dt==5.0f),
+                    "--split-observation-pullbacks is supported only for the h5 (60,5) center");
     }
     configure(implicit_divergence,kdamp); // solver policy is captured by its constructor.
     if(quadratic_trajectory_mode) g_sdirk3_config.newton_tol=1.0e-12f;
@@ -797,6 +808,33 @@ int main(int argc,char** argv) {
                         torch::isfinite(initial_pullback).all().item<bool>(),
                         "physical-wave inverse pullback is missing, non-FP64, or nonfinite");
             put(out,"initial_pullback",initial_pullback);
+            if(physical_wave_split_observation_pullbacks) {
+                std::vector<torch::Tensor> output_cotangents_150(
+                    static_cast<size_t>(physical_wave_steps));
+                std::vector<torch::Tensor> output_cotangents_300(
+                    static_cast<size_t>(physical_wave_steps));
+                output_cotangents_150[static_cast<size_t>(physical_wave_steps/2-1)]=cotangent_150;
+                output_cotangents_300.back()=cotangent_300;
+                const auto initial_pullback_150=
+                    g.solver.pullbackFixedTrajectory(output_cotangents_150);
+                const auto initial_pullback_300=
+                    g.solver.pullbackFixedTrajectory(output_cotangents_300);
+                TORCH_CHECK(initial_pullback_150.scalar_type()==torch::kFloat64 &&
+                            initial_pullback_300.scalar_type()==torch::kFloat64 &&
+                            torch::isfinite(initial_pullback_150).all().item<bool>() &&
+                            torch::isfinite(initial_pullback_300).all().item<bool>(),
+                            "split observation-time pullbacks are missing, non-FP64, or nonfinite");
+                put(out,"initial_pullback_150",initial_pullback_150);
+                put(out,"initial_pullback_300",initial_pullback_300);
+                const auto split_sum=initial_pullback_150+initial_pullback_300;
+                const double sum_error=(split_sum-initial_pullback).norm().item<double>();
+                const double combined_norm=initial_pullback.norm().item<double>();
+                out<<"M,split_observation_pullbacks,1\n";
+                out<<"M,split_pullback_consistency,diagnostic_only\n";
+                out<<"S,split_pullback_sum_error_l2,"<<std::setprecision(17)<<sum_error<<"\n";
+                out<<"S,split_pullback_sum_error_relative,"<<
+                    (combined_norm>0.0?sum_error/combined_norm:sum_error)<<"\n";
+            }
             out<<"M,cotangent_nonzero_blocks,W;PH\n";
             out<<"M,cotangent_150_W_l2,"<<cot150_w.norm().item<double>()<<"\n";
             out<<"M,cotangent_150_PH_l2,"<<cot150_ph.norm().item<double>()<<"\n";
