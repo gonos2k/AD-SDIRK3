@@ -1,0 +1,111 @@
+{
+  "timestamp_local": "2026-10-10T07:25:25+09:00",
+  "head": "8aeee9e5524a2ad33d71828ef266a9bfbcceef2c",
+  "sources": [
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/test_native_wave_refinement.cpp",
+      "sha256": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/tools/test_fine_wave_inverse.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/test_fine_wave_inverse.py",
+      "sha256": "aa6d2afa755c8ad1af8158e287c7b6b39f6fa920d2f92e9a8d6fafa06272a5a9"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_tile_unified.h",
+      "sha256": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_implicit_autograd.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_implicit_autograd.h",
+      "sha256": "fa9d052b93de4952cd5e032569116889a8a18e4e25af87eb3127b120b9e9c15e"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/tools/probe_fine_returned_accuracy.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_fine_returned_accuracy.py",
+      "sha256": "839ba54c58c8e70291e2525ab96e75bd4e6403d8c2b09538c06de8c8c8692535"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/.github/workflows/sdirk3-ci.yml",
+      "mirror": "/private/tmp/pr283-small-step-graph/sdirk3-ci.yml",
+      "sha256": "debd47dc018f81434568b7c8b6405b8ea00c7673159837562913af17374db6d0"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/test_fp64_handoff_probe.cpp",
+      "sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/tile_test_fixture.h",
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/tools/probe_fine_gradient_components.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_fine_gradient_components.py",
+      "sha256": "64d6e80b3086a69b644cf8f8f1493152bd77e58dc961f7bc78a463808ad9ca3e"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_newton_solver.cpp",
+      "sha256": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/tools/probe_retained_memory_smoke.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_retained_memory_smoke.py",
+      "sha256": "fef37dd2079102a193f7263aceda89037a0a4215280f7736ddf1358771137f12"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/tools/probe_fine_split_pullbacks.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_fine_split_pullbacks.py",
+      "sha256": "210a2cd4d33c395ffdc9daeff0a89aa973790edba6a6d9ba000c499393674ce9"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_newton_solver.h",
+      "sha256": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_probe_noninterference.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/test_probe_noninterference.cpp",
+      "sha256": "5c026b8ec8c70338817e05289868f7e9cac6fa316865686a2c35c0d7ef3869d9"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/tools/probe_small_step_inverse.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_small_step_inverse.py",
+      "sha256": "8b3f73103da16b63c768462c8f2d52cfc00c91a9651c0ec504455901fa66d553"
+    },
+    {
+      "source": "/private/tmp/pr283-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_config.h",
+      "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+    }
+  ],
+  "manual_callpath": "CLI -> requestFixedTrajectory(1,dt,FP64state) -> unifiedStep -> retained FP64 endpoint -> closeFixedTrajectory -> next step; no ArkBudgetTrace",
+  "gaps": [
+    "runtime CLI/YAML dispatch",
+    "generated scratch source/heap ownership",
+    "context fingerprint numeric contents"
+  ],
+  "not_numerical_proof": true,
+  "source_state": "Final PR283 worktree mirrors include root-added driver self-hash line; native test remains pinned",
+  "target_worktree": "/private/tmp/pr283-small-step-20261010",
+  "graph_updated_after_probe_edit": true,
+  "newton_cache_reset_binding": {
+    "source": "/private/tmp/pr282-accuracy-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+    "line": 11496,
+    "sha256": "b2a17ef6eec64ff998b13fa1c643e055d49caf63407ac426127c14b3ed9406e2",
+    "purpose": "scratch-only cache-release A/B baseline binding; true worktree source, before scratch patch"
+  },
+  "t_w_work_deletion": {
+    "reason": "scratch clear-only A/B removed the observed live-growth while preserving all output bytes; source confirmed only unused interpolation block and member references",
+    "memory_probe_csv_sha256": "e6058ced476248eb9cd77b789d40799a6d80d49c0df1d7b38ddc64a5debd335b"
+  }
+}

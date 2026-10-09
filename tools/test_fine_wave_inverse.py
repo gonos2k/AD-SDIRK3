@@ -295,6 +295,53 @@ def check_initial_admissibility(grid: tuple[int,int,int], state: np.ndarray,
         raise ValueError("initial controls violate positive theta/mass or monotone PH height")
 
 
+def check_fine_solver_tolerances(meta: dict, *, newton: float, krylov: float,
+                                 where: str) -> None:
+    """Require the canonical effective-config metadata emitted by the native CLI."""
+    expected={"newton_tol_config":float(np.float32(newton)),
+              "krylov_tol_config":float(np.float32(krylov))}
+    mismatch={key:(meta.get(key),value) for key,value in expected.items()
+              if meta.get(key)!=value}
+    if mismatch:
+        raise AssertionError(f"{where} effective tolerances mismatch: {mismatch}")
+
+
+def check_metadata_file(path: Path, *, newton: float, krylov: float) -> dict:
+    """Check one existing native CSV and prove incorrect/legacy metadata is rejected."""
+    meta,arrays,scalars,text_meta=read_payload(path)
+    check_fine_solver_tolerances(meta,newton=newton,krylov=krylov,
+                                 where=f"native CSV {path}")
+    wrong_values={}
+    for key,value in (("newton_tol_config",1.0e-13 if newton!=1.0e-13 else 1.0e-12),
+                      ("krylov_tol_config",1.0e-10 if krylov!=1.0e-10 else 1.0e-12)):
+        wrong=dict(meta); wrong[key]=float(np.float32(value))
+        try:
+            check_fine_solver_tolerances(wrong,newton=newton,krylov=krylov,
+                                         where="wrong-tolerance self-check")
+        except AssertionError:
+            wrong_values[key]=True
+        else:
+            raise AssertionError(f"metadata check accepted incorrect {key}")
+    old_aliases={"physical_wave_newton_tol":float(np.float32(newton)),
+                 "physical_wave_krylov_tol":float(np.float32(krylov))}
+    try:
+        check_fine_solver_tolerances(old_aliases,newton=newton,krylov=krylov,
+                                     where="legacy-only self-check")
+    except AssertionError:
+        legacy_only_rejected=True
+    else:
+        raise AssertionError("metadata check accepted old aliases without canonical fields")
+    return {"status":"passed","native_csv":str(path),"native_csv_sha256":file_digest(path),
+            "effective_tolerances":{"newton_tol_config":meta["newton_tol_config"],
+                                    "krylov_tol_config":meta["krylov_tol_config"]},
+            "wrong_tolerance_values_rejected":wrong_values,
+            "legacy_alias_only_rejected":legacy_only_rejected,
+            "native_array_count":len(arrays),"native_scalar_count":len(scalars),
+            "native_text_metadata_count":len(text_meta),
+            "native_schedule":{"steps":int(meta["trajectory_steps"]),
+                              "dt":float(meta["trajectory_dt_fp32"])} if "trajectory_steps" in meta else None}
+
+
 def evaluate(exe: Path, grid: tuple[int,int,int], outdir: Path,
              descriptor_data: dict, base: np.ndarray, B: np.ndarray,
              controls: np.ndarray, observations: Path,
@@ -312,11 +359,8 @@ def evaluate(exe: Path, grid: tuple[int,int,int], outdir: Path,
     if forward_only: argv.append("--forward-only")
     meta,arrays,scalars,text_meta=native_call(exe,nx,ny,nz,result_path,argv)
     if grid == GRIDS["fine"]:
-        expected={"physical_wave_newton_tol":float(np.float32(1.0e-14)),
-                  "physical_wave_krylov_tol":float(np.float32(1.0e-10))}
-        mismatch={key:(meta.get(key),value) for key,value in expected.items()
-                  if meta.get(key)!=value}
-        if mismatch: raise AssertionError(f"fine-grid effective tolerances mismatch: {mismatch}")
+        check_fine_solver_tolerances(meta,newton=1.0e-14,krylov=1.0e-10,
+                                     where="fine-grid")
     if meta.get("physical_wave_inverse")!=1.0 or text_meta.get("physical_observation_domain_guard") != "passed":
         raise AssertionError(f"native physical-wave guards did not pass: {result_path}")
     if text_meta.get("checkpoint_precision")!="retained_fp64_trajectory":
@@ -876,12 +920,30 @@ def run(exe: Path, outdir: Path, max_iterations: int=12,
 
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--exe",type=Path,required=True,help="built test_native_wave_refinement executable")
-    parser.add_argument("--output",type=Path,required=True,help="JSON result path (also stores native CSV/text inputs)")
+    parser.add_argument("--exe",type=Path,help="built test_native_wave_refinement executable")
+    parser.add_argument("--output",type=Path,help="JSON result path (also stores native CSV/text inputs)")
+    parser.add_argument("--check-metadata",type=Path,
+                        help="check canonical native tolerance fields in an existing CSV; performs no native call")
+    parser.add_argument("--newton-tol",type=float,
+                        help="expected effective Newton tolerance for --check-metadata")
+    parser.add_argument("--krylov-tol",type=float,
+                        help="expected effective Krylov tolerance for --check-metadata")
     parser.add_argument("--max-iterations",type=int,default=12)
     parser.add_argument("--parity-only",action="store_true",
                         help="run only the fine-grid h=10 retained/pullback-skipped FP64 parity pair")
     args=parser.parse_args()
+    if args.check_metadata is not None:
+        if args.newton_tol is None or args.krylov_tol is None:
+            parser.error("--check-metadata requires --newton-tol and --krylov-tol")
+        report=check_metadata_file(args.check_metadata,newton=args.newton_tol,
+                                   krylov=args.krylov_tol)
+        if args.output is not None:
+            args.output.parent.mkdir(parents=True,exist_ok=True)
+            args.output.write_text(json.dumps(report,indent=2,sort_keys=True)+"\n")
+        print(json.dumps(report,sort_keys=True))
+        return
+    if args.exe is None or args.output is None:
+        parser.error("normal inverse mode requires --exe and --output")
     report=run(args.exe,args.output.parent/(args.output.stem+"_artifacts"),
                args.max_iterations,args.parity_only)
     args.output.parent.mkdir(parents=True,exist_ok=True)

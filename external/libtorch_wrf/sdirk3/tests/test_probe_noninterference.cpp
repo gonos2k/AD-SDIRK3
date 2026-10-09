@@ -88,6 +88,31 @@ int main() {
         auto s = base; s.trust_radius = s.trust_radius * 0.5f + 0.125f;
         check(digest_after(solver, s) != d0, "the digest sees trust_radius");
     }
+    {
+        auto s = base;
+        s.stage2_predictor = torch::tensor({1.0f, 2.0f, 3.0f, 4.0f});
+        check(digest_after(solver, s) != d0,
+              "the digest sees the persistent stage-2 predictor");
+    }
+    {
+        auto s = base;
+        s.stage3_predictor = torch::tensor({1.0f, 2.0f, 3.0f, 4.0f});
+        check(digest_after(solver, s) != d0,
+              "the digest sees the persistent stage-3 predictor");
+    }
+    {   // Exact predictor hashing must see direction and ordering as well as magnitude.
+        auto a = base;
+        a.stage2_predictor = torch::tensor({1.0f, 2.0f, 3.0f, 4.0f});
+        const auto da = digest_after(solver, a);
+        auto negated = a;
+        negated.stage2_predictor = torch::tensor({-1.0f, -2.0f, -3.0f, -4.0f});
+        check(digest_after(solver, negated) != da,
+              "the predictor digest distinguishes a sign flip");
+        auto permuted = a;
+        permuted.stage2_predictor = torch::tensor({4.0f, 3.0f, 2.0f, 1.0f});
+        check(digest_after(solver, permuted) != da,
+              "the predictor digest distinguishes a permutation");
+    }
     {   // The R12 R4 mechanism: a warm start left behind by a diagnostic solve.
         auto s = base;
         s.warmstart_stage.assign(4, torch::Tensor{});
@@ -128,6 +153,46 @@ int main() {
         check(independent,
               "capture CLONES the warm-start slots: a snapshot that aliased them would be "
               "overwritten by the very solve it exists to undo");
+    }
+
+    // Stage predictors obey the same two-sided ownership contract as warm-start slots.
+    {
+        auto source2 = torch::ones({4}, torch::kFloat32);
+        auto source3 = torch::full({4}, 2.0f, torch::kFloat32);
+        auto s = base;
+        s.stage2_predictor = source2;
+        s.stage3_predictor = source3;
+        solver.restore_carried_state(s);
+        auto captured = solver.capture_carried_state();
+        const auto before = solver.carried_state_digest();
+        captured.stage2_predictor.mul_(3.0);
+        captured.stage3_predictor.mul_(3.0);
+        const bool independent = solver.carried_state_digest() == before;
+        check(independent,
+              "capture clones stage predictors so editing a snapshot cannot change live state");
+    }
+    {
+        auto s = base;
+        s.stage2_predictor = torch::ones({4}, torch::kFloat32);
+        s.stage3_predictor = torch::full({4}, 2.0f, torch::kFloat32);
+        solver.restore_carried_state(s);
+        s.stage2_predictor.mul_(7.0);
+        s.stage3_predictor.mul_(7.0);
+        const auto live = solver.capture_carried_state();
+        const bool independent = live.stage2_predictor.sum().item<float>() == 4.0f &&
+            live.stage3_predictor.sum().item<float>() == 8.0f;
+        check(independent,
+              "restore clones predictors so editing the snapshot cannot change live state");
+    }
+    {
+        auto populated = base;
+        populated.stage2_predictor = torch::ones({4}, torch::kFloat32);
+        populated.stage3_predictor = torch::ones({4}, torch::kFloat32);
+        solver.restore_carried_state(populated);
+        solver.restore_carried_state(base);
+        const auto cleared = solver.capture_carried_state();
+        check(!cleared.stage2_predictor.defined() && !cleared.stage3_predictor.defined(),
+              "restoring undefined predictors clears previously populated live predictors");
     }
 
     // R13.1: RESTORE must clone too. R13 tested that capture clones and stopped there --
@@ -184,7 +249,7 @@ int main() {
               "assumed");
     }
 
-    constexpr int expected_checks = 15;
+    constexpr int expected_checks = 22;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

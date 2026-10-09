@@ -11730,6 +11730,10 @@ sdirk3::WRFNewtonKrylovSolver::capture_carried_state() const {
     s.precond_fallback_count      = pImpl->precond_fallback_count_;
     s.trust_radius                = pImpl->trust_radius_;
     s.warmstart_relerr            = pImpl->gmres_warmstart_relerr_stage_;
+    s.stage2_predictor             = pImpl->k2_prev_.defined()
+        ? pImpl->k2_prev_.detach().clone() : torch::Tensor{};
+    s.stage3_predictor             = pImpl->k3_prev_.defined()
+        ? pImpl->k3_prev_.detach().clone() : torch::Tensor{};
     // Cloned, not aliased: a warm-start slot restored as a VIEW of a tensor the next solve
     // overwrites is not a restore, and this codebase has already shipped one latch that
     // depended on a value it did not own.
@@ -11749,6 +11753,10 @@ void sdirk3::WRFNewtonKrylovSolver::restore_carried_state(const CarriedState& s)
     pImpl->precond_fallback_count_       = s.precond_fallback_count;
     pImpl->trust_radius_                 = s.trust_radius;
     pImpl->gmres_warmstart_relerr_stage_ = s.warmstart_relerr;
+    pImpl->k2_prev_ = s.stage2_predictor.defined()
+        ? s.stage2_predictor.detach().clone() : torch::Tensor{};
+    pImpl->k3_prev_ = s.stage3_predictor.defined()
+        ? s.stage3_predictor.detach().clone() : torch::Tensor{};
     // R13.1: CLONE on the way back too. Assigning the vector shares tensor storage with the
     // snapshot, so the next solve writing a warm-start slot in place reaches back into the
     // snapshot and the arm after it starts somewhere else entirely -- a restore that the
@@ -11788,6 +11796,29 @@ std::uint64_t sdirk3::WRFNewtonKrylovSolver::carried_state_digest() const {
         std::memcpy(&bits, &d, sizeof(bits));
         mix(bits);
     };
+    auto mix_predictor = [&mix](const torch::Tensor& value, std::uint64_t domain) {
+        // Predictor values change subsequent stage solves, so fingerprint their exact stored
+        // representation rather than the cheap warm-start projections above. Keep this exact
+        // byte walk scoped to these two persistent tensors.
+        mix(domain);
+        if (!value.defined()) {
+            mix(0u);
+            return;
+        }
+        mix(1u);
+        mix(static_cast<std::uint64_t>(value.scalar_type()));
+        mix(static_cast<std::uint64_t>(value.dim()));
+        for (const auto size : value.sizes()) {
+            mix(static_cast<std::uint64_t>(size));
+        }
+        const auto cpu = value.detach().to(torch::kCPU).contiguous();
+        const auto* bytes = static_cast<const unsigned char*>(cpu.data_ptr());
+        const auto byte_count = static_cast<std::size_t>(cpu.numel()) * cpu.element_size();
+        mix(static_cast<std::uint64_t>(byte_count));
+        for (std::size_t i = 0; i < byte_count; ++i) {
+            mix(bytes[i]);
+        }
+    };
     mix(pImpl->stage3_warmstart_disabled_ ? 1u : 0u);
     mix(pImpl->stage2_hopeless_budget_mode_ ? 1u : 0u);
     mix(static_cast<std::uint64_t>(pImpl->stage2_hopeless_streak_));
@@ -11818,6 +11849,8 @@ std::uint64_t sdirk3::WRFNewtonKrylovSolver::carried_state_digest() const {
         mix_double((t64 * idx).sum().item<double>());
         mix(static_cast<std::uint64_t>(t.numel()));
     }
+    mix_predictor(pImpl->k2_prev_, 0x5354414745325052ULL);  // STAGE2PR
+    mix_predictor(pImpl->k3_prev_, 0x5354414745335052ULL);  // STAGE3PR
     return h;
 }
 

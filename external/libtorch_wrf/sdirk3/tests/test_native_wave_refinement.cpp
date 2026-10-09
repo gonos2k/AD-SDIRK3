@@ -28,11 +28,17 @@ struct RhsTag { using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(const to
 struct PhiTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*; friend type access(PhiTag); };
 struct DtTag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(DtTag); };
 struct RefTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*; friend type access(RefTag); };
+struct NewtonSolverTag {
+    using type = std::unique_ptr<wrf::sdirk3::WRFNewtonKrylovSolver>
+        TileSDIRK3UnifiedSolver::*;
+    friend type access(NewtonSolverTag);
+};
 template<class Tag, typename Tag::type Member> struct Accessor { friend typename Tag::type access(Tag) { return Member; } };
 template struct Accessor<RhsTag, &TileSDIRK3UnifiedSolver::computeUnifiedRHS>;
 template struct Accessor<PhiTag, &TileSDIRK3UnifiedSolver::ph_base_>;
 template struct Accessor<DtTag, &TileSDIRK3UnifiedSolver::dt_stage_>;
 template struct Accessor<RefTag, &TileSDIRK3UnifiedSolver::U_ref_stage_>;
+template struct Accessor<NewtonSolverTag, &TileSDIRK3UnifiedSolver::newton_solver_>;
 
 constexpr double pi = 3.1415926535897932384626433832795;
 void configure(bool implicit_divergence=false,float kdamp=0.0f) {
@@ -158,6 +164,169 @@ struct Grid {
             1,dt,nx,ny,nz,nu,nv,nw);
     }
 };
+
+wrf::sdirk3::WRFNewtonKrylovSolver& newton_solver(Grid& g) {
+    auto& solver = g.solver.*access(NewtonSolverTag{});
+    TORCH_CHECK(solver,"replay-smoke grid has no Newton solver");
+    return *solver;
+}
+
+void validate_replay_carried_state(
+        const wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState& state,int step) {
+    TORCH_CHECK(!state.stage3_warmstart_disabled &&
+                !state.stage2_hopeless_budget_mode && state.stage2_hopeless_streak==0 &&
+                !state.stage3_hopeless_budget_mode && state.stage3_hopeless_streak==0 &&
+                state.precond_fallback_count==0 &&
+                state.stage2_predictor.defined() && state.stage3_predictor.defined(),
+                "replay carried state lacks expected predictors or left the fixed inactive profile at step ",step);
+}
+
+torch::Tensor background_state(Grid& g);
+
+torch::Tensor initialize_physical_wave_equilibrium(Grid& g,const torch::Tensor& base) {
+    g.set(base);
+    g.solver.requestFixedTrajectory(1,{0.25f},base);
+    g.step(0.25f,0);
+    TORCH_CHECK(g.solver.getLastStepOutcomeCode()==0,
+                "physical-wave equilibrium initialization step was not accepted");
+    g.solver.closeFixedTrajectory();
+    g.set(base);
+    return g.rhs(base);
+}
+
+void validate_same_physical_wave_context(Grid& reference,Grid& candidate,
+                                         const torch::Tensor& base,
+                                         const torch::Tensor& reference_rhs,
+                                         const torch::Tensor& reference_phi) {
+    const auto candidate_base=background_state(candidate);
+    TORCH_CHECK(torch::equal(candidate_base,base),
+                "replay grid background state differs from baseline");
+    const auto candidate_rhs=initialize_physical_wave_equilibrium(candidate,candidate_base);
+    const auto candidate_phi=(candidate.solver.*access(PhiTag{})).detach().clone()
+        .to(torch::kFloat64);
+    TORCH_CHECK(torch::equal(candidate_rhs,reference_rhs) &&
+                torch::equal(candidate_phi,reference_phi) &&
+                reference.pbase==candidate.pbase && reference.thbase==candidate.thbase &&
+                reference.phbase==candidate.phbase && reference.mubase==candidate.mubase &&
+                reference.metric==candidate.metric && reference.maps==candidate.maps &&
+                reference.f==candidate.f && reference.e==candidate.e,
+                "replay grid static context differs from baseline");
+}
+
+torch::Tensor replay_carried_state_block(
+        Grid& reference,Grid& replay_grid,const torch::Tensor& base,
+        const torch::Tensor& reference_rhs,const torch::Tensor& reference_phi,
+        const std::vector<torch::Tensor>& expected_endpoints,
+        const wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState& snapshot,
+        std::uint64_t snapshot_digest,int begin,int count,float dt,int block_id,
+        const torch::Tensor& start,const std::vector<torch::Tensor>& endpoint_cotangents,
+        int& steps_checked,double& block_max_abs,std::ofstream& out) {
+    TORCH_CHECK(begin>=0 && count>0 &&
+                expected_endpoints.size()>=static_cast<size_t>(begin+count+1) &&
+                endpoint_cotangents.size()==static_cast<size_t>(count),
+                "replay block inputs have inconsistent lengths");
+    validate_same_physical_wave_context(reference,replay_grid,base,reference_rhs,reference_phi);
+    replay_grid.solver.resetInternalFp64Carry();
+    auto& replay_newton=newton_solver(replay_grid);
+    const auto before_digest=replay_newton.carried_state_digest();
+    replay_newton.restore_carried_state(snapshot);
+    const auto after_digest=replay_newton.carried_state_digest();
+    const auto restored=replay_newton.capture_carried_state();
+    const bool stage2_predictor_match=
+        snapshot.stage2_predictor.defined()==restored.stage2_predictor.defined() &&
+        (!snapshot.stage2_predictor.defined() ||
+         torch::equal(snapshot.stage2_predictor,restored.stage2_predictor));
+    const bool stage3_predictor_match=
+        snapshot.stage3_predictor.defined()==restored.stage3_predictor.defined() &&
+        (!snapshot.stage3_predictor.defined() ||
+         torch::equal(snapshot.stage3_predictor,restored.stage3_predictor));
+    const bool digest_match=after_digest==snapshot_digest;
+    out<<"M,replay_block_"<<block_id<<"_state_digest_before_restore,"<<before_digest<<"\n";
+    out<<"M,replay_block_"<<block_id<<"_state_digest_after_restore,"<<after_digest<<"\n";
+    out<<"M,replay_block_"<<block_id<<"_state_digest_matches_snapshot,"
+       <<(digest_match?1:0)<<"\n";
+    out<<"M,replay_block_"<<block_id<<"_stage2_predictor_restore_match,"
+       <<(stage2_predictor_match?1:0)<<"\n";
+    out<<"M,replay_block_"<<block_id<<"_stage3_predictor_restore_match,"
+       <<(stage3_predictor_match?1:0)<<"\n";
+    TORCH_CHECK(digest_match && stage2_predictor_match && stage3_predictor_match,
+                "replay carried-state restore did not roundtrip for block ",block_id);
+
+    TORCH_CHECK(torch::equal(start,expected_endpoints[static_cast<size_t>(begin)]),
+                "replay block start does not match retained boundary ",begin);
+    replay_grid.set(start);
+    replay_grid.solver.requestFixedTrajectory(count,
+        std::vector<float>(static_cast<size_t>(count),dt),start);
+    block_max_abs=0.0;
+    for(int local=0;local<count;++local) {
+        const int absolute=begin+local+1;
+        replay_grid.step(dt,absolute-1);
+        if(replay_grid.solver.getLastStepOutcomeCode()!=0) {
+            out<<"M,replay_status,step_not_accepted\n";
+            out<<"M,replay_steps_checked,"<<steps_checked<<"\n";
+            out<<"M,replay_first_mismatch_index,"<<absolute<<"\n";
+            out<<"M,replay_first_mismatch_block,"<<block_id<<"\n";
+            out<<"M,replay_failure,unaccepted_step\n";
+            out<<"S,replay_block_"<<block_id<<"_max_abs_endpoint_delta,"
+               <<std::setprecision(17)<<block_max_abs<<"\n";
+            out.flush();
+            replay_grid.solver.closeFixedTrajectory();
+            return {};
+        }
+        const auto current=replay_grid.solver.getFixedTrajectoryFp64Checkpoints();
+        if(current.size()!=static_cast<size_t>(local+1)) {
+            out<<"M,replay_status,endpoint_count_mismatch\n";
+            out<<"M,replay_steps_checked,"<<steps_checked<<"\n";
+            out<<"M,replay_first_mismatch_index,"<<absolute<<"\n";
+            out<<"M,replay_first_mismatch_block,"<<block_id<<"\n";
+            out<<"M,replay_failure,endpoint_count_mismatch\n";
+            out<<"S,replay_block_"<<block_id<<"_max_abs_endpoint_delta,"
+               <<std::setprecision(17)<<block_max_abs<<"\n";
+            out.flush();
+            replay_grid.solver.closeFixedTrajectory();
+            return {};
+        }
+        const auto& actual=current.back();
+        const auto& expected=expected_endpoints[static_cast<size_t>(absolute)];
+        const double max_abs=(actual-expected).abs().max().item<double>();
+        block_max_abs=std::max(block_max_abs,max_abs);
+        ++steps_checked;
+        if(!torch::equal(replay_grid.state(),actual.to(torch::kFloat32))) {
+            out<<"M,replay_status,publication_mismatch\n";
+            out<<"M,replay_steps_checked,"<<steps_checked<<"\n";
+            out<<"M,replay_first_mismatch_index,"<<absolute<<"\n";
+            out<<"M,replay_first_mismatch_block,"<<block_id<<"\n";
+            out<<"M,replay_failure,publication_mismatch\n";
+            out<<"S,replay_block_"<<block_id<<"_max_abs_endpoint_delta,"
+               <<std::setprecision(17)<<block_max_abs<<"\n";
+            out.flush();
+            replay_grid.solver.closeFixedTrajectory();
+            return {};
+        }
+        if(!torch::equal(actual,expected)) {
+            out<<"M,replay_status,endpoint_mismatch\n";
+            out<<"M,replay_steps_checked,"<<steps_checked<<"\n";
+            out<<"M,replay_first_mismatch_index,"<<absolute<<"\n";
+            out<<"M,replay_first_mismatch_block,"<<block_id<<"\n";
+            out<<"S,replay_first_mismatch_max_abs_endpoint_delta,"
+               <<std::setprecision(17)<<max_abs<<"\n";
+            out<<"S,replay_block_"<<block_id<<"_max_abs_endpoint_delta,"
+               <<std::setprecision(17)<<block_max_abs<<"\n";
+            out.flush();
+            replay_grid.solver.closeFixedTrajectory();
+            return {};
+        }
+    }
+    const auto pullback=replay_grid.solver.pullbackFixedTrajectory(endpoint_cotangents);
+    TORCH_CHECK(pullback.scalar_type()==torch::kFloat64 &&
+                torch::isfinite(pullback).all().item<bool>(),
+                "replay block pullback is invalid for block ",block_id);
+    out<<"S,replay_block_"<<block_id<<"_max_abs_endpoint_delta,"
+       <<std::setprecision(17)<<block_max_abs<<"\n";
+    replay_grid.solver.closeFixedTrajectory();
+    replay_grid.solver.resetInternalFp64Carry();
+    return pullback;
+}
 
 void put(std::ofstream& o,const std::string& name,const torch::Tensor& t) {
     auto x=t.to(torch::kFloat64).contiguous().view({-1});
@@ -487,13 +656,15 @@ int main(int argc,char** argv) {
         std::string(argv[5])=="--physical-wave-inverse";
     bool physical_wave_forward_only=false;
     bool physical_wave_bounded_tape_forward_only=false;
+    bool physical_wave_bounded_replay_pullback=false;
     bool physical_wave_split_observation_pullbacks=false;
+    bool physical_wave_replay_smoke=false;
     float physical_wave_newton_tol=1.0e-12f;
     float physical_wave_krylov_tol=1.0e-8f;
     const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
     TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode ||
                 physical_wave_inverse,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; tape retained) | --bounded-tape-forward-only (one-step FP64 tape handoff) | --split-observation-pullbacks (h5 only)]]");
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; tape retained) | --bounded-tape-forward-only (one-step FP64 tape handoff) | --bounded-replay-pullback (960-step, 8-step VJP windows) | --split-observation-pullbacks (h5 only)]]");
     const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     bool implicit_divergence=false;
     float kdamp=0.0f;
@@ -538,10 +709,17 @@ int main(int argc,char** argv) {
                 TORCH_CHECK(!physical_wave_bounded_tape_forward_only,
                             "duplicate --bounded-tape-forward-only flag");
                 physical_wave_bounded_tape_forward_only=true;
+            } else if(flag=="--bounded-replay-pullback") {
+                TORCH_CHECK(!physical_wave_bounded_replay_pullback,
+                            "duplicate --bounded-replay-pullback flag");
+                physical_wave_bounded_replay_pullback=true;
             } else if(flag=="--split-observation-pullbacks") {
                 TORCH_CHECK(!physical_wave_split_observation_pullbacks,
                             "duplicate --split-observation-pullbacks flag");
                 physical_wave_split_observation_pullbacks=true;
+            } else if(flag=="--replay-smoke") {
+                TORCH_CHECK(!physical_wave_replay_smoke,"duplicate --replay-smoke flag");
+                physical_wave_replay_smoke=true;
             } else if(flag=="--newton-tol") {
                 TORCH_CHECK(!newton_tol_seen && arg<argc,"--newton-tol requires one value");
                 const std::string value(argv[arg++]);
@@ -560,11 +738,19 @@ int main(int argc,char** argv) {
                 TORCH_CHECK(false,"unknown physical-wave inverse flag: ",flag);
             }
         }
-        TORCH_CHECK(!(physical_wave_forward_only && physical_wave_bounded_tape_forward_only),
-                    "--forward-only and --bounded-tape-forward-only are mutually exclusive");
+        TORCH_CHECK(!(physical_wave_forward_only && physical_wave_bounded_tape_forward_only) &&
+                    !(physical_wave_forward_only && physical_wave_bounded_replay_pullback) &&
+                    !(physical_wave_bounded_tape_forward_only && physical_wave_bounded_replay_pullback),
+                    "physical-wave forward-only and bounded modes are mutually exclusive");
         TORCH_CHECK(!physical_wave_split_observation_pullbacks ||
-                    (!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only),
+                    (!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only &&
+                     !physical_wave_bounded_replay_pullback),
                     "--split-observation-pullbacks requires the retained trajectory/VJP path");
+        TORCH_CHECK(!physical_wave_replay_smoke ||
+                    (!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only &&
+                     !physical_wave_bounded_replay_pullback &&
+                     !physical_wave_split_observation_pullbacks),
+                    "--replay-smoke is a separate retained-trajectory check mode");
         const bool accepted_taped_schedule=(physical_wave_steps==30 && physical_wave_dt==10.0f) ||
                                            (physical_wave_steps==60 && physical_wave_dt==5.0f) ||
                                            (physical_wave_steps==120 && physical_wave_dt==2.5f) ||
@@ -572,9 +758,19 @@ int main(int argc,char** argv) {
         const bool accepted_long_handoff_schedule=physical_wave_bounded_tape_forward_only &&
             ((physical_wave_steps==480 && physical_wave_dt==0.625f) ||
              (physical_wave_steps==960 && physical_wave_dt==0.3125f));
-        TORCH_CHECK(accepted_taped_schedule || accepted_long_handoff_schedule,
+        const bool accepted_bounded_replay_schedule=physical_wave_bounded_replay_pullback &&
+            physical_wave_steps==960 && physical_wave_dt==0.3125f;
+        const bool accepted_replay_smoke_schedule=physical_wave_replay_smoke &&
+            physical_wave_steps==16 && physical_wave_dt==0.3125f;
+        TORCH_CHECK(!physical_wave_bounded_replay_pullback ||
+                    (physical_wave_steps==960 && physical_wave_dt==0.3125f),
+                    "--bounded-replay-pullback is supported only for (960,0.3125)");
+        TORCH_CHECK(accepted_taped_schedule || accepted_long_handoff_schedule ||
+                    accepted_bounded_replay_schedule ||
+                    accepted_replay_smoke_schedule,
                     "physical-wave inverse supports (30,10), (60,5), (120,2.5), or (240,1.25) at T=300 s; ",
-                    "(480,0.625) and (960,0.3125) require --bounded-tape-forward-only");
+                    "(480,0.625) and (960,0.3125) require --bounded-tape-forward-only; ",
+                    "(16,0.3125) is the two-block --replay-smoke preflight only");
         TORCH_CHECK(!physical_wave_split_observation_pullbacks ||
                     (physical_wave_steps==60 && physical_wave_dt==5.0f),
                     "--split-observation-pullbacks is supported only for the h5 (60,5) center");
@@ -584,6 +780,18 @@ int main(int argc,char** argv) {
     if(physical_wave_inverse) {
         g_sdirk3_config.newton_tol=physical_wave_newton_tol;
         g_sdirk3_config.krylov_tol=physical_wave_krylov_tol;
+    }
+    if(physical_wave_replay_smoke || physical_wave_bounded_replay_pullback) {
+        TORCH_CHECK(g_sdirk3_config.newton_tol==1.0e-14f &&
+                    g_sdirk3_config.krylov_tol==1.0e-12f &&
+                    g_sdirk3_config.precond_type==0 && !g_sdirk3_config.gmres_warmstart &&
+                    !g_sdirk3_config.inn_warmstart_enable && !g_sdirk3_config.stage3_warmstart &&
+                    g_sdirk3_config.nk_adaptive_tol && !g_sdirk3_config.adaptive_timestep &&
+                    g_sdirk3_config.adaptive_retune_mode==0 &&
+                    g_sdirk3_config.ewt_rtol==1.0e-6f &&
+                    g_sdirk3_config.stage2_max_krylov_restarts==0 &&
+                    g_sdirk3_config.stage3_max_krylov_restarts==0,
+                    "replay-smoke requires the fixed inactive GMRES/INN/Stage-3/adaptive profile");
     }
     Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]));
     auto base=background_state(g);
@@ -596,12 +804,7 @@ int main(int argc,char** argv) {
     }
     if(quadratic_probe || quadratic_trajectory_mode)
         d=read_fp64_vector(argv[6],base.numel(),"perturbation direction");
-    g.set(base);
-    g.solver.requestFixedTrajectory(1,{0.25f},base);
-    g.step(0.25f,0);
-    g.solver.closeFixedTrajectory();
-    g.set(base);
-    auto rb=g.rhs(base);
+    auto rb=initialize_physical_wave_equilibrium(g,base);
     const auto phb=(g.solver.*access(PhiTag{})).detach().clone().to(torch::kFloat64);
     std::ofstream out(argv[4]); TORCH_CHECK(out,"cannot open output file");
     out<<"M,nx,"<<g.nx<<"\nM,ny,"<<g.ny<<"\nM,nz,"<<g.nz<<"\n";
@@ -621,6 +824,9 @@ int main(int argc,char** argv) {
     out<<"M,sign_smooth_delta_config,"<<g_sdirk3_config.sign_smooth_delta<<"\n";
     out<<"M,omega_w_blend_config,"<<g_sdirk3_config.omega_w_blend<<"\n";
     out<<"M,newton_tol_config,"<<g_sdirk3_config.newton_tol<<"\n";
+    out<<"M,krylov_tol_config,"<<g_sdirk3_config.krylov_tol<<"\n";
+    out<<"M,nk_adaptive_tol_config,"<<(g_sdirk3_config.nk_adaptive_tol?1:0)<<"\n";
+    out<<"M,ewt_rtol_config,"<<g_sdirk3_config.ewt_rtol<<"\n";
     out<<"M,do_curvature_config,"<<(g_sdirk3_config.do_curvature?1:0)<<"\n";
     out<<"M,effective_wrf_omega_ww_cp,"<<(g_sdirk3_config.effective_wrf_omega_ww_cp()?1:0)<<"\n";
     out<<"M,advection_order_config,"<<g_sdirk3_config.advection_order<<"\n";
@@ -664,10 +870,210 @@ int main(int argc,char** argv) {
         };
         const auto observed_150=collect_target(true),observed_300=collect_target(false);
         torch::Tensor checkpoint_150,checkpoint_300;
-        if(physical_wave_bounded_tape_forward_only) {
+        std::vector<torch::Tensor> bounded_replay_states;
+        std::vector<wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState>
+            bounded_replay_snapshots;
+        std::vector<std::uint64_t> bounded_replay_snapshot_digests;
+        if(physical_wave_replay_smoke) {
+            constexpr int replay_block_steps=8;
+            const int su=g.ny*g.nz*g.nu, sv=g.nv*g.nz*g.nx;
+            const int sw=g.ny*g.nw*g.nx, w0=su+sv, ph0=w0+sw;
+            const auto options=torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU);
+            const auto coordinate=torch::arange(sw,options);
+            const auto make_cotangent=[&](double phase) {
+                auto cotangent=torch::zeros_like(initial);
+                cotangent.slice(0,w0,w0+sw).copy_(
+                    torch::sin((coordinate+1.0)*0.173+phase)/std::sqrt(static_cast<double>(sw)));
+                cotangent.slice(0,ph0,ph0+sw).copy_(
+                    torch::cos((coordinate+0.5)*0.119-phase)/std::sqrt(static_cast<double>(sw)));
+                return cotangent;
+            };
+            const auto cotangent_8=make_cotangent(0.23);
+            const auto cotangent_16=make_cotangent(-0.41);
+            validate_physical_handoff_state(g,initial);
+            g.solver.resetInternalFp64Carry();
+            g.set(initial);
+            auto& baseline_newton=newton_solver(g);
+            const std::uint64_t snapshot_0_digest=baseline_newton.carried_state_digest();
+            const auto snapshot_0=baseline_newton.capture_carried_state();
+            TORCH_CHECK(baseline_newton.carried_state_digest()==snapshot_0_digest,
+                        "replay-smoke boundary-0 snapshot changed solver state");
+            g.solver.requestFixedTrajectory(physical_wave_steps,
+                std::vector<float>(static_cast<size_t>(physical_wave_steps),physical_wave_dt),initial);
+            wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState snapshot_8;
+            std::uint64_t snapshot_8_digest=0;
+            bool captured_snapshot_8=false;
+            for(int n=0;n<physical_wave_steps;++n) {
+                g.step(physical_wave_dt,n);
+                TORCH_CHECK(g.solver.getLastStepOutcomeCode()==0,
+                            "replay-smoke retained baseline step was not accepted at index ",n);
+                if(n+1==replay_block_steps) {
+                    snapshot_8=baseline_newton.capture_carried_state();
+                    snapshot_8_digest=baseline_newton.carried_state_digest();
+                    captured_snapshot_8=true;
+                }
+            }
+            TORCH_CHECK(captured_snapshot_8,
+                        "replay-smoke did not capture the step-8 carried state");
+            const auto record_snapshot_profile=[&](
+                    const wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState& state,int step) {
+                validate_replay_carried_state(state,step);
+                out<<"M,replay_snapshot_"<<step<<"_stage2_predictor_defined,"
+                   <<(state.stage2_predictor.defined()?1:0)<<"\n";
+                out<<"M,replay_snapshot_"<<step<<"_stage3_predictor_defined,"
+                   <<(state.stage3_predictor.defined()?1:0)<<"\n";
+                out<<"M,replay_snapshot_"<<step<<"_gmres_warmstart_slots,"
+                   <<state.warmstart_stage.size()<<"\n";
+                out<<"M,replay_snapshot_"<<step<<"_gmres_warmstart_relerr_slots,"
+                   <<state.warmstart_relerr.size()<<"\n";
+            };
+            record_snapshot_profile(snapshot_0,0);
+            record_snapshot_profile(snapshot_8,8);
+            const auto retained_states=g.solver.getFixedTrajectoryFp64Checkpoints();
+            TORCH_CHECK(retained_states.size()==static_cast<size_t>(physical_wave_steps),
+                        "replay-smoke baseline did not retain all 16 FP64 endpoints");
+            for(int n=0;n<physical_wave_steps;++n)
+                validate_physical_handoff_state(g,retained_states[static_cast<size_t>(n)]);
+            TORCH_CHECK(torch::equal(g.state(),retained_states.back().to(torch::kFloat32)),
+                        "replay-smoke baseline endpoint/publication mismatch");
+            std::vector<torch::Tensor> retained_cotangents(
+                static_cast<size_t>(physical_wave_steps));
+            retained_cotangents[replay_block_steps-1]=cotangent_8;
+            retained_cotangents.back()=cotangent_16;
+            const auto retained_gradient=g.solver.pullbackFixedTrajectory(retained_cotangents);
+            TORCH_CHECK(retained_gradient.scalar_type()==torch::kFloat64 &&
+                        torch::isfinite(retained_gradient).all().item<bool>(),
+                        "replay-smoke retained baseline pullback is invalid");
+            put(out,"initial_state",initial);
+            put(out,"replay_retained_initial_pullback",retained_gradient);
+            g.solver.closeFixedTrajectory();
+            g.solver.resetInternalFp64Carry();
+
+            out<<"M,physical_wave_replay_smoke,1\n";
+            out<<"M,replay_block_steps,"<<replay_block_steps<<"\n";
+            out<<"M,replay_baseline_status,completed\n";
+            out<<"M,replay_status,running_diagnostic_only\n";
+            out<<"M,replay_endpoint_comparison,bitwise_exact_required\n";
+            out<<"M,physical_state_admissibility_checks,"
+               <<(physical_wave_steps+1)<<"\n";
+            out<<"M,replay_snapshot_profile_checks,2\n";
+            out<<"M,replay_cotangent_steps,8;16\n";
+            out<<"M,replay_steps,"<<physical_wave_steps<<"\n";
+            out<<"M,replay_dt_fp32,"<<std::setprecision(17)<<physical_wave_dt<<"\n";
+            out<<"M,replay_solver_state_snapshot,NewtonCarriedState\n";
+            out<<"M,replay_snapshot_steps,0;8\n";
+            out<<"M,replay_snapshot_0_digest,"<<snapshot_0_digest<<"\n";
+            out<<"M,replay_snapshot_8_digest,"<<snapshot_8_digest<<"\n";
+            out<<"M,replay_precond_type,"<<g_sdirk3_config.precond_type<<"\n";
+            out<<"M,replay_gmres_warmstart,0\nM,replay_inn_warmstart,0\n";
+            out<<"M,replay_stage3_warmstart,0\nM,replay_nk_adaptive_tol,1\n";
+            out<<"M,replay_adaptive_timestep,0\nM,replay_adaptive_retune_mode,0\n";
+            out<<"M,replay_stage2_max_krylov_restarts,0\n";
+            out<<"M,replay_stage3_max_krylov_restarts,0\n";
+            out<<"M,replay_claim,short_state_only_block_replay_preflight_not_optimizer_gradient\n";
+            out<<"M,replay_steps_checked,0\n";
+            out<<"S,replay_block_1_max_abs_endpoint_delta,0\n";
+            out<<"S,replay_block_2_max_abs_endpoint_delta,0\n";
+            out.flush();
+
+            std::vector<torch::Tensor> replay_endpoints;
+            replay_endpoints.reserve(retained_states.size()+1);
+            replay_endpoints.push_back(initial.detach().clone());
+            for(const auto& state:retained_states) replay_endpoints.push_back(state);
+            int replay_steps_checked=0;
+            Grid replay_block_2_grid(g.nx,g.ny,g.nz);
+            double block_2_max_abs=0.0;
+            std::vector<torch::Tensor> block_2_cotangents(replay_block_steps);
+            block_2_cotangents.back()=cotangent_16;
+            const auto block_2_initial_cotangent=replay_carried_state_block(
+                g,replay_block_2_grid,base,rb,phb,replay_endpoints,snapshot_8,
+                snapshot_8_digest,replay_block_steps,replay_block_steps,physical_wave_dt,
+                2,replay_endpoints[replay_block_steps],block_2_cotangents,
+                replay_steps_checked,block_2_max_abs,out);
+            if(!block_2_initial_cotangent.defined()) return 2;
+
+            Grid replay_block_1_grid(g.nx,g.ny,g.nz);
+            double block_1_max_abs=0.0;
+            std::vector<torch::Tensor> block_1_cotangents(replay_block_steps);
+            block_1_cotangents.back()=cotangent_8+block_2_initial_cotangent;
+            const auto replay_gradient=replay_carried_state_block(
+                g,replay_block_1_grid,base,rb,phb,replay_endpoints,snapshot_0,
+                snapshot_0_digest,0,replay_block_steps,physical_wave_dt,1,
+                replay_endpoints[0],block_1_cotangents,replay_steps_checked,
+                block_1_max_abs,out);
+            if(!replay_gradient.defined()) return 2;
+            const double gradient_delta=(replay_gradient-retained_gradient).norm().item<double>();
+            const double retained_norm=retained_gradient.norm().item<double>();
+            const double gradient_relative=gradient_delta/
+                std::max(retained_norm,std::numeric_limits<double>::min());
+            put(out,"replay_initial_pullback",replay_gradient);
+            constexpr double replay_gradient_tolerance=1.0e-8;
+            const std::array<const char*,6> gradient_blocks={"u","v","w","ph","theta","mu"};
+            int gradient_offset=0;
+            bool gradient_gate_passed=std::isfinite(gradient_relative) &&
+                gradient_relative<=replay_gradient_tolerance;
+            for(size_t block=0;block<gradient_blocks.size();++block) {
+                const int end=gradient_offset+sizes[block];
+                const auto retained_block=retained_gradient.slice(0,gradient_offset,end);
+                const auto replay_block_gradient=replay_gradient.slice(0,gradient_offset,end);
+                const double block_delta=(replay_block_gradient-retained_block).norm().item<double>();
+                const double block_norm=retained_block.norm().item<double>();
+                const double block_relative=block_norm==0.0 ?
+                    (block_delta==0.0 ? 0.0 : std::numeric_limits<double>::infinity()) :
+                    block_delta/block_norm;
+                gradient_gate_passed=gradient_gate_passed && std::isfinite(block_relative) &&
+                    block_relative<=replay_gradient_tolerance;
+                out<<"S,replay_gradient_delta_l2_"<<gradient_blocks[block]<<','
+                   <<std::setprecision(17)<<block_delta<<"\n";
+                out<<"S,replay_retained_gradient_norm_"<<gradient_blocks[block]<<','
+                   <<block_norm<<"\n";
+                out<<"S,replay_gradient_relative_error_"<<gradient_blocks[block]<<','
+                   <<block_relative<<"\n";
+                gradient_offset=end;
+            }
+            out<<"M,replay_gradient_gate_tolerance,"<<std::setprecision(17)
+               <<replay_gradient_tolerance<<"\n";
+            out<<"M,replay_gradient_block_gate,"<<(gradient_gate_passed?"passed":"failed")<<"\n";
+            out<<"M,replay_status,"<<(gradient_gate_passed?
+                "completed_diagnostic_only":"gradient_mismatch")<<"\n";
+            out<<"M,replay_steps_checked,"<<replay_steps_checked<<"\n";
+            out<<"M,replay_endpoint_parity,all_16_bitwise_equal\n";
+            out<<"M,replay_endpoints_admissible_via_exact_parity,1\n";
+            out<<"M,replay_gradient_comparison,diagnostic_only\n";
+            out<<"S,replay_block_1_max_abs_endpoint_delta,"<<std::setprecision(17)
+               <<block_1_max_abs<<"\n";
+            out<<"S,replay_block_2_max_abs_endpoint_delta,"<<block_2_max_abs<<"\n";
+            out<<"S,replay_gradient_delta_l2,"<<gradient_delta<<"\n";
+            out<<"S,replay_gradient_relative_error,"<<gradient_relative<<"\n";
+            out<<"S,replay_retained_gradient_norm,"<<retained_norm<<"\n";
+            out<<"M,replay_optimizer_run,0\nM,replay_claim,no_optimizer_or_960_step_gradient_claim\n";
+            out.flush();
+            TORCH_CHECK(gradient_gate_passed,
+                        "replay-smoke composed full/component pullback mismatch exceeds ",
+                        replay_gradient_tolerance);
+            std::cout<<"REPLAY_SMOKE status=completed_diagnostic_only steps_checked="
+                     <<replay_steps_checked<<" gradient_relative_error="<<gradient_relative<<"\n";
+            return 0;
+        }
+        if(physical_wave_bounded_tape_forward_only || physical_wave_bounded_replay_pullback) {
             g.solver.resetInternalFp64Carry();
             auto handoff_state=initial.detach().clone();
             validate_physical_handoff_state(g,handoff_state);
+            if(physical_wave_bounded_replay_pullback) {
+                g.set(handoff_state);
+                auto& baseline_newton=newton_solver(g);
+                bounded_replay_states.reserve(static_cast<size_t>(physical_wave_steps+1));
+                bounded_replay_states.push_back(handoff_state.detach().clone());
+                bounded_replay_snapshots.reserve(
+                    static_cast<size_t>(physical_wave_steps/8+1));
+                bounded_replay_snapshot_digests.reserve(
+                    static_cast<size_t>(physical_wave_steps/8+1));
+                const auto snapshot=baseline_newton.capture_carried_state();
+                validate_replay_carried_state(snapshot,0);
+                bounded_replay_snapshot_digests.push_back(
+                    baseline_newton.carried_state_digest());
+                bounded_replay_snapshots.push_back(snapshot);
+            }
             for(int n=0;n<physical_wave_steps;++n) {
                 g.set(handoff_state);
                 g.solver.requestFixedTrajectory(1,{physical_wave_dt},handoff_state);
@@ -683,9 +1089,26 @@ int main(int argc,char** argv) {
                 handoff_state=checkpoints[0].detach().clone();
                 validate_physical_handoff_state(g,handoff_state);
                 g.solver.closeFixedTrajectory();
+                if(physical_wave_bounded_replay_pullback) {
+                    bounded_replay_states.push_back(handoff_state.detach().clone());
+                    if((n+1)%8==0) {
+                        const auto snapshot=newton_solver(g).capture_carried_state();
+                        validate_replay_carried_state(snapshot,n+1);
+                        bounded_replay_snapshot_digests.push_back(
+                            newton_solver(g).carried_state_digest());
+                        bounded_replay_snapshots.push_back(snapshot);
+                    }
+                }
                 if(n==physical_wave_steps/2-1) checkpoint_150=handoff_state.detach().clone();
                 if(n==physical_wave_steps-1) checkpoint_300=handoff_state.detach().clone();
             }
+            if(physical_wave_bounded_replay_pullback)
+                TORCH_CHECK(bounded_replay_states.size()==
+                                static_cast<size_t>(physical_wave_steps+1) &&
+                            bounded_replay_snapshots.size()==
+                                static_cast<size_t>(physical_wave_steps/8+1) &&
+                            bounded_replay_snapshot_digests.size()==bounded_replay_snapshots.size(),
+                            "bounded replay did not retain all endpoints and 8-step boundary snapshots");
             g.solver.resetInternalFp64Carry();
         } else {
             g.set(initial);
@@ -731,7 +1154,18 @@ int main(int argc,char** argv) {
                     "physical-wave observation loss or prediction is nonfinite");
         out<<"M,physical_wave_inverse,1\n";
         out<<"M,forward_only,"<<((physical_wave_forward_only || physical_wave_bounded_tape_forward_only)?1:0)<<"\n";
-        if(physical_wave_bounded_tape_forward_only) {
+        if(physical_wave_bounded_replay_pullback) {
+            out<<"M,bounded_replay_pullback,1\nM,execution_mode,bounded_replay_pullback\n";
+            out<<"M,tape_window_steps,8\nM,checkpoint_precision,detached_fp64_endpoint_history\n";
+            out<<"M,admissibility_checked_every_step,1\nM,retains_tape,1\n";
+            out<<"M,pullback_requested,1\nM,replay_exact,running\n";
+            out<<"M,replay_steps_checked,0\n";
+            out<<"M,replay_snapshot_boundary_stride,8\nM,replay_snapshot_count,121\n";
+            out<<"M,retained_fp64_endpoint_count,961\nM,replay_optimizer_run,0\n";
+            out<<"M,physical_state_admissibility_checks,961\n";
+            out<<"M,replay_snapshot_profile_checks,121\n";
+            out<<"M,replay_claim,bounded_960_step_initial_pullback_not_optimizer_update\n";
+        } else if(physical_wave_bounded_tape_forward_only) {
             out<<"M,execution_mode,single_step_tape_handoff\nM,tape_window_steps,1\n";
             out<<"M,checkpoint_precision,single_step_retained_fp64_handoff\n";
             out<<"M,admissibility_checked_every_step,1\n";
@@ -740,12 +1174,6 @@ int main(int argc,char** argv) {
             out<<"M,checkpoint_precision,retained_fp64_trajectory\nM,retains_tape,1\n";
             out<<"M,pullback_requested,"<<(physical_wave_forward_only?0:1)<<"\n";
         }
-        out<<"M,physical_wave_newton_tol,"<<std::setprecision(17)<<g_sdirk3_config.newton_tol<<"\n";
-        out<<"M,krylov_tol_config,"<<g_sdirk3_config.krylov_tol<<"\n";
-        out<<"M,physical_wave_krylov_tol,"<<g_sdirk3_config.krylov_tol<<"\n";
-        out<<"M,newton_rtol_config,"<<g_sdirk3_config.newton_rtol<<"\n";
-        out<<"M,ewt_rtol_config,"<<g_sdirk3_config.ewt_rtol<<"\n";
-        out<<"M,nk_adaptive_tol_config,"<<(g_sdirk3_config.nk_adaptive_tol?1:0)<<"\n";
         out<<"M,internal_fp64,"<<(g_sdirk3_config.internal_fp64?1:0)<<"\n";
         out<<"M,internal_fp64_state_carry,"<<(g_sdirk3_config.internal_fp64_state_carry?1:0)<<"\n";
         out<<"M,retain_graph_for_adjoint,"<<(g_sdirk3_config.retain_graph_for_adjoint?1:0)<<"\n";
@@ -800,10 +1228,59 @@ int main(int argc,char** argv) {
             put(out,"checkpoint_cotangent_150_PH",cot150_ph);
             put(out,"checkpoint_cotangent_300_W",cot300_w);
             put(out,"checkpoint_cotangent_300_PH",cot300_ph);
-            std::vector<torch::Tensor> output_cotangents(static_cast<size_t>(physical_wave_steps));
-            output_cotangents[static_cast<size_t>(physical_wave_steps/2-1)]=cotangent_150;
-            output_cotangents.back()=cotangent_300;
-            const auto initial_pullback=g.solver.pullbackFixedTrajectory(output_cotangents);
+            torch::Tensor initial_pullback;
+            if(physical_wave_bounded_replay_pullback) {
+                constexpr int replay_window_steps=8;
+                TORCH_CHECK(bounded_replay_states.size()==
+                                static_cast<size_t>(physical_wave_steps+1) &&
+                            bounded_replay_snapshots.size()==
+                                static_cast<size_t>(physical_wave_steps/replay_window_steps+1),
+                            "bounded replay endpoint/snapshot history is incomplete before pullback");
+                auto incoming_cotangent=torch::Tensor{};
+                int replay_steps_checked=0;
+                for(int end=physical_wave_steps;end>0;end-=replay_window_steps) {
+                    const int begin=end-replay_window_steps;
+                    std::vector<torch::Tensor> block_cotangents(
+                        replay_window_steps,torch::zeros_like(initial));
+                    for(int local=0;local<replay_window_steps;++local) {
+                        const int absolute=begin+local+1;
+                        if(absolute==physical_wave_steps/2)
+                            block_cotangents[static_cast<size_t>(local)]=
+                                block_cotangents[static_cast<size_t>(local)]+cotangent_150;
+                        if(absolute==physical_wave_steps)
+                            block_cotangents[static_cast<size_t>(local)]=
+                                block_cotangents[static_cast<size_t>(local)]+cotangent_300;
+                    }
+                    if(incoming_cotangent.defined())
+                        block_cotangents.back()=block_cotangents.back()+incoming_cotangent;
+                    Grid replay_grid(g.nx,g.ny,g.nz);
+                    double block_max_abs=0.0;
+                    incoming_cotangent=replay_carried_state_block(
+                        g,replay_grid,base,rb,phb,bounded_replay_states,
+                        bounded_replay_snapshots[static_cast<size_t>(begin/replay_window_steps)],
+                        bounded_replay_snapshot_digests[static_cast<size_t>(begin/replay_window_steps)],
+                        begin,replay_window_steps,physical_wave_dt,begin/replay_window_steps+1,
+                        bounded_replay_states[static_cast<size_t>(begin)],block_cotangents,
+                        replay_steps_checked,block_max_abs,out);
+                    if(!incoming_cotangent.defined()) return 2;
+                    out<<"M,replay_steps_checked,"<<replay_steps_checked<<"\n";
+                }
+                TORCH_CHECK(replay_steps_checked==physical_wave_steps &&
+                            incoming_cotangent.defined(),
+                            "bounded replay pullback did not cover the full trajectory");
+                initial_pullback=incoming_cotangent;
+                out<<"M,replay_exact,1\nM,replay_status,completed\n";
+                out<<"M,replay_endpoint_parity,all_960_bitwise_equal\n";
+                out<<"M,replay_endpoints_admissible_via_exact_parity,1\n";
+                out<<"M,replay_steps_checked,"<<replay_steps_checked<<"\n";
+                out<<"M,replay_block_count,"<<physical_wave_steps/replay_window_steps<<"\n";
+            } else {
+                std::vector<torch::Tensor> output_cotangents(
+                    static_cast<size_t>(physical_wave_steps));
+                output_cotangents[static_cast<size_t>(physical_wave_steps/2-1)]=cotangent_150;
+                output_cotangents.back()=cotangent_300;
+                initial_pullback=g.solver.pullbackFixedTrajectory(output_cotangents);
+            }
             TORCH_CHECK(initial_pullback.scalar_type()==torch::kFloat64 &&
                         torch::isfinite(initial_pullback).all().item<bool>(),
                         "physical-wave inverse pullback is missing, non-FP64, or nonfinite");
@@ -841,7 +1318,8 @@ int main(int argc,char** argv) {
             out<<"M,cotangent_300_W_l2,"<<cot300_w.norm().item<double>()<<"\n";
             out<<"M,cotangent_300_PH_l2,"<<cot300_ph.norm().item<double>()<<"\n";
         }
-        if(!physical_wave_bounded_tape_forward_only)
+        if(!physical_wave_bounded_tape_forward_only &&
+           !physical_wave_bounded_replay_pullback)
             g.solver.closeFixedTrajectory();
         return 0;
     }
