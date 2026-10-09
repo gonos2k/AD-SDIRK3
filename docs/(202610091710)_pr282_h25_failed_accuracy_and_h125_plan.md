@@ -1,0 +1,15 @@
+# Fixed-point accuracy: h2.5 fails target; next matched h1.25 comparison
+
+Local timestamp: 2026-10-09T17:10:00.381097+09:00.
+
+Run37900843624 at5298dff: one descriptor and one fine16×12×8 120×2.5N14/K12 fullVJP completed. ZIP SHAfb37cd7dc21c7797e9bc32dcf86116c1afc9faafbb611e87b61b8d6778218aa3. Contextdescriptorhash08b8e406...exact,freshbasisreproducesliteral8480state,observationsunchanged. Forward+VJP196s.
+
+Atfixedh5return:J2.5=19.42246326 vsJ5=7.12584821;g2.5norm869.277. RMSchanges150/300s=.45980/.41901sigma. Bothbracketsunchanged. Cross+quadraticcostdelta12.29661505 exactlymatchesreportedJdifference. These do NOTmeet0.1sigmaorraw-gradient-margin targets. No reoptimization or truth regeneration occurred. No newproductiondefect is proven.
+
+Greencheckedfloatdt,schedule/checkpointindices,contextrefreshandARKmode3composition;120×2.5recordmatcheslabels. Explicitstage1 plus360implicitstageconvergences(thelogalsohas3sanity-steprecords). Mode3is4-stageARK324L2SAadditiveslow/fastsplit,so fullLexpaloneisnotapureARKamplificationcomparison. Existingmanufacturedcompositiontestdoesnotprovethisphysicalcase'stimeaccuracy.
+
+Redzero-nativeinitialmodalinvestigation suggestsinterpolatingcoarsemodesonto8verticallevelsintroducesfastcomponents; measuredamplitudeattenuationlessenswithhalveddt. ThisisnotyetapureARKcausalproof,norenergypartition;reproduciblemodalcode/resultarchivingispending. Do notreoptimizebeforeforwarderrorseparation.
+
+NextONEfixed240×1.25N14/K12VJP. Existingh5/K12replay37879571339 isbit-identicalinforwardfields to h5/K10; itisreused ratherthannewh5call. CompositefixtureSHA4c2881bf1140ee42f2bc83642cb2669fc96bd853926b6a238a7d19f93491cbdd containsmatchedK12h5/h2.5pastresults;sourceCPPdb525e726ce28843282b1d479f6b8d94daf716b23fdc29378b9b542da5737424 hasonlyexplicit240×1.25addedpair. Testsreject240×1beforegrid. Helperlabelsprobe/previous/older,recordsrawgradientsandpredictionchanges;whenpreviousg>targetitmarksrawgatetestinapplicable. No order,continuum,Eg orpureARKclaim.
+
+Actionlint/sourcepolicy/diffcheckpass. Graphify7verifiedsource/mirrorbindingsrefreshed342nodes877edges(forceafterverifiedcorpusrevision);YAML/runtimecontextaremanualextractiongaps. No productionequation/ABI change and no newWRF/RK3run; priorqualifiedregressionkeptdistinct. Finalgradientaccuracy andoptimizationterminationremainOPEN. No merge.

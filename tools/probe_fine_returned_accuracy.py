@@ -13,8 +13,8 @@ import numpy as np
 import scipy
 import test_fine_wave_inverse as inverse
 
-FIXTURE_SHA = "0868d63512a6be28ad1ba8616e848cab3c683bd76297ecf23c17bcf93f9f791f"
-CPP_SHA = "5474b4c1974408b201cd77465128ee7825d696d058750850018e0dc204e3aada"
+FIXTURE_SHA = "4c2881bf1140ee42f2bc83642cb2669fc96bd853926b6a238a7d19f93491cbdd"
+CPP_SHA = "db525e726ce28843282b1d479f6b8d94daf716b23fdc29378b9b542da5737424"
 CONTEXT_ARRAYS = ("base", "phb", "pbase", "thbase_perturb", "mubase")
 GRID = (16, 12, 8)
 SIGMA = 3e-4
@@ -32,7 +32,11 @@ def load_vector(path):
     return value
 
 
-def run(exe, fixture_zip, outdir):
+def run(exe, fixture_zip, outdir, schedule):
+    steps, dt = {"h2.5": (120, 2.5), "h1.25": (240, 1.25)}[schedule]
+    previous_dt = 5.0 if dt == 2.5 else 2.5
+    previous_file = "baseline_h5.csv" if dt == 2.5 else "baseline_h2_5.csv"
+    older_file = "baseline_h10.csv" if dt == 2.5 else "baseline_h5.csv"
     assert sha(fixture_zip) == FIXTURE_SHA
     outdir.mkdir(parents=True, exist_ok=True)
     inputs = outdir / "inputs"
@@ -40,13 +44,13 @@ def run(exe, fixture_zip, outdir):
     with zipfile.ZipFile(fixture_zip) as z:
         assert z.testzip() is None
         manifest = json.loads(z.read("manifest.json"))
-        assert manifest["schema"] == "pr282-exact-fine-returned-state-v1"
+        assert manifest["schema"] == "pr282-exact-fine-returned-time-ladder-v2"
         for name, record in manifest["files"].items():
             data = z.read(name)
             assert hashlib.sha256(data).hexdigest() == record["sha256"]
             (inputs / name).write_bytes(data)
-    baseline = inverse.read_payload(inputs / "baseline_h5.csv")
-    coarse_time = inverse.read_payload(inputs / "baseline_h10.csv")
+    baseline = inverse.read_payload(inputs / previous_file)
+    coarse_time = inverse.read_payload(inputs / older_file)
     desc_saved = inverse.read_payload(inputs / "descriptor_fine.csv")
     state = load_vector(inputs / "initial_state.txt")
     assert np.array_equal(state, baseline[1]["initial_state"])
@@ -55,7 +59,8 @@ def run(exe, fixture_zip, outdir):
     assert baseline[0]["physical_observation_sigma_m_s"] == SIGMA
     for key in CONTEXT_ARRAYS:
         assert np.array_equal(baseline[1][key], desc_saved[1][key]), key
-    report = {"schema": "fine-returned-fixed-time-v1", "status": "preflight",
+    report = {"schema": "fine-returned-fixed-time-v2", "status": "preflight",
+              "probe_dt": dt, "previous_dt": previous_dt,
               "source_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=inverse.ROOT, text=True).strip(),
               "source_cpp_sha256": CPP_SHA, "executable_sha256": sha(exe),
               "fixture_sha256": FIXTURE_SHA, "baseline_provenance": manifest,
@@ -93,13 +98,13 @@ def run(exe, fixture_zip, outdir):
     B = np.column_stack([inverse.pack_source_mode(q, GRID) for q in basis])
     mapped = fresh[1]["base"] + B @ np.asarray(manifest["controls"])
     assert np.array_equal(mapped, state), "fresh basis must reproduce the exact returned state"
-    g5 = B.T @ baseline[1]["initial_pullback"]
-    assert np.allclose(g5, manifest["baseline_gradient"], rtol=0, atol=1e-12)
-    current = invoke("h2_5_N14_K12", ["--physical-wave-inverse", str(inputs/"initial_state.txt"),
-                     str(inputs/"observations.txt"), "120", "2.5", "--newton-tol", "1e-14",
+    g_previous = B.T @ baseline[1]["initial_pullback"]
+    assert np.allclose(g_previous, manifest["gradients_by_previous_dt"][str(previous_dt)], rtol=0, atol=1e-12)
+    current = invoke(f"h{dt:g}_N14_K12", ["--physical-wave-inverse", str(inputs/"initial_state.txt"),
+                     str(inputs/"observations.txt"), str(steps), str(dt), "--newton-tol", "1e-14",
                      "--krylov-tol", "1e-12"])
     meta, arrays, scalars, text = current
-    assert meta["trajectory_steps"] == 120 and meta["trajectory_dt_fp32"] == 2.5
+    assert meta["trajectory_steps"] == steps and meta["trajectory_dt_fp32"] == dt
     assert meta["trajectory_seconds"] == 300 and meta["observation_count_per_time"] == 105
     assert meta["observation_time_150_seconds"] == 150 and meta["observation_time_300_seconds"] == 300
     assert meta["physical_observation_sigma_m_s"] == SIGMA
@@ -112,7 +117,7 @@ def run(exe, fixture_zip, outdir):
     assert np.array_equal(arrays["initial_state"], state)
     assert all(np.isfinite(a).all() for a in arrays.values())
     assert all(np.isfinite(value) for value in scalars.values())
-    g2 = B.T @ arrays["initial_pullback"]
+    g_probe = B.T @ arrays["initial_pullback"]
     times = {}
     for t in (150, 300):
         key = f"predicted_{t}"
@@ -122,22 +127,23 @@ def run(exe, fixture_zip, outdir):
         residual = baseline[1][key] - arrays[f"observed_{t}"]
         cross = float(np.dot(residual, delta)/SIGMA**2)
         quadratic = float(0.5*np.dot(delta, delta)/SIGMA**2)
-        times[str(t)] = {"rms_h2_5_minus_h5_m_s": float(np.sqrt(np.mean(delta**2))),
-            "rms_h2_5_minus_h5_sigma": float(np.sqrt(np.mean(delta**2))/SIGMA),
-            "rms_h5_minus_h10_sigma": float(np.sqrt(np.mean(older_delta**2))/SIGMA),
+        times[str(t)] = {"rms_probe_minus_previous_m_s": float(np.sqrt(np.mean(delta**2))),
+            "rms_probe_minus_previous_sigma": float(np.sqrt(np.mean(delta**2))/SIGMA),
+            "rms_previous_minus_older_sigma": float(np.sqrt(np.mean(older_delta**2))/SIGMA),
             "cost_delta_cross": cross, "cost_delta_quadratic": quadratic,
             "stable_cost_delta": cross+quadratic,
-            "brackets_match_h5": bool(np.array_equal(arrays[f"bracket_index_{t}"], baseline[1][f"bracket_index_{t}"]))}
-    margin = GRAD_TARGET - np.linalg.norm(g5)
+            "brackets_match_previous": bool(np.array_equal(arrays[f"bracket_index_{t}"], baseline[1][f"bracket_index_{t}"]))}
+    margin = GRAD_TARGET - np.linalg.norm(g_previous)
     report.update(status="completed_fixed_state_evaluation", times=times,
-        objective_h5=manifest["baseline_objective"], objective_h2_5=scalars["objective_physical_w"],
-        gradient_h5=g5.tolist(), gradient_h2_5=g2.tolist(), gradient_h2_5_norm=float(np.linalg.norm(g2)),
-        gradient_delta_norm=float(np.linalg.norm(g2-g5)), remaining_gradient_margin=float(margin),
-        timestep_gate_robust=bool(np.linalg.norm(g2-g5)<margin and np.linalg.norm(g2)<GRAD_TARGET),
-        prediction_target_met=all(row["rms_h2_5_minus_h5_sigma"]<0.1 for row in times.values()),
+        objective_previous=baseline[2]["objective_physical_w"], objective_probe=scalars["objective_physical_w"],
+        gradient_previous=g_previous.tolist(), gradient_probe=g_probe.tolist(), gradient_probe_norm=float(np.linalg.norm(g_probe)),
+        gradient_delta_norm=float(np.linalg.norm(g_probe-g_previous)), remaining_gradient_margin=float(margin),
+        raw_gate_test_applicable=bool(margin>0),
+        timestep_gate_robust=bool(margin>0 and np.linalg.norm(g_probe-g_previous)<margin and np.linalg.norm(g_probe)<GRAD_TARGET),
+        prediction_target_met=all(row["rms_probe_minus_previous_sigma"]<0.1 for row in times.values()),
         basis_sha256=inverse.digest(B), optimization_run=False, observations_changed=False)
     report["stable_cost_delta_sum"] = sum(row["stable_cost_delta"] for row in times.values())
-    report["recorded_cost_delta"] = scalars["objective_physical_w"]-manifest["baseline_objective"]
+    report["recorded_cost_delta"] = scalars["objective_physical_w"]-baseline[2]["objective_physical_w"]
     target.write_text(json.dumps(report, indent=2)+"\n")
     return report
 
@@ -147,5 +153,6 @@ if __name__ == "__main__":
     p.add_argument("--exe", type=Path, required=True)
     p.add_argument("--fixture", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--schedule", choices=("h2.5", "h1.25"), default="h2.5")
     args = p.parse_args()
-    run(args.exe.resolve(), args.fixture.resolve(), args.out.resolve())
+    run(args.exe.resolve(), args.fixture.resolve(), args.out.resolve(), args.schedule)

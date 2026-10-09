@@ -19,6 +19,11 @@ on:
         required: false
         type: boolean
         default: false
+      fine_accuracy_schedule:
+        description: 'Explicit fixed-state schedule; observations remain150/300s'
+        type: choice
+        options: [h2.5, h1.25]
+        default: h2.5
 
 permissions:
   contents: read
@@ -697,12 +702,13 @@ jobs:
             -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" -DWRF_SDIRK3_ABI_STRICT=AUTO \
             -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" -DSDIRK3_QUIET_TESTS=ON -DUSE_FAST_POW_0875=OFF
           cmake --build build/fine-accuracy --target test_native_wave_refinement --parallel 2
-      - name: one fixed returned-state 120x2.5 full VJP
+      - name: one fixed returned-state full VJP at the selected explicit schedule
         run: |
           python3 -B tools/probe_fine_returned_accuracy.py \
             --exe build/fine-accuracy/test_native_wave_refinement \
             --fixture tools/fixtures/pr282-exact-returned-state.zip \
-            --out build/fine-accuracy/measurement
+            --out build/fine-accuracy/measurement \
+            --schedule '${{ inputs.fine_accuracy_schedule }}'
       - name: preserve measurement even on failure
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

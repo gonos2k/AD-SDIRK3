@@ -523,9 +523,10 @@ int main(int argc,char** argv) {
         }
         const bool accepted_schedule=(physical_wave_steps==30 && physical_wave_dt==10.0f) ||
                                      (physical_wave_steps==60 && physical_wave_dt==5.0f) ||
-                                     (physical_wave_steps==120 && physical_wave_dt==2.5f);
+                                     (physical_wave_steps==120 && physical_wave_dt==2.5f) ||
+                                     (physical_wave_steps==240 && physical_wave_dt==1.25f);
         TORCH_CHECK(accepted_schedule,
-                    "physical-wave inverse supports only (steps,dt)=(30,10), (60,5), or (120,2.5) at T=300 s");
+                    "physical-wave inverse supports only (steps,dt)=(30,10), (60,5), (120,2.5), or (240,1.25) at T=300 s");
     }
     configure(implicit_divergence,kdamp); // solver policy is captured by its constructor.
     if(quadratic_trajectory_mode) g_sdirk3_config.newton_tol=1.0e-12f;
