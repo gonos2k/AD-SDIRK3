@@ -1,0 +1,8 @@
+{
+  "positive_exact_source_and_artifact": true,
+  "numeric_source_change_rejected": true,
+  "unrelated_source_change_rejected": true,
+  "corrupt_artifact_rejected": true,
+  "inventory_drift_rejected": true,
+  "actual_native_calls": 0
+}

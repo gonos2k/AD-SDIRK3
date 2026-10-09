@@ -465,6 +465,32 @@ def objective_m3_value(meta: dict[str, float], scalars: dict[str, float],
     raise AssertionError("native m=3 trajectory payload has no terminal W projection")
 
 
+def objective_dot_fp64_terms(final_state: np.ndarray, terminal: np.ndarray) -> dict:
+    """Objective cancellation diagnostics from actual dot operands, not a full solver bound."""
+    products = np.asarray(final_state, dtype=np.float64)*np.asarray(terminal, dtype=np.float64)
+    objective = float(np.sum(products, dtype=np.float64))
+    absolute_product_sum = float(np.sum(np.abs(products), dtype=np.float64))
+    floor = 128.0*np.finfo(np.float64).eps*absolute_product_sum
+    return {"objective_from_operands": objective,
+            "sum_abs_final_times_terminal": absolute_product_sum,
+            "fp64_dot_product_floor": floor,
+            "not_a_full_solver_error_bound": True,
+            "cancellation_ratio": absolute_product_sum/max(abs(objective), np.finfo(float).tiny)}
+
+
+def objective_floor_cancellation_falsifier() -> dict:
+    """Show that |J| alone can understate a dot-product roundoff bound."""
+    eps = np.finfo(np.float64).eps
+    final = np.array([1.0, 1.0], dtype=np.float64)
+    terminal = np.array([1.0, -(1.0-32.0*eps)], dtype=np.float64)
+    measured = objective_dot_fp64_terms(final, terminal)
+    old_floor = 128.0*eps*abs(measured["objective_from_operands"])
+    if measured["fp64_dot_product_floor"] <= old_floor*1.0e8:
+        raise AssertionError("cancellation falsifier did not distinguish operand and objective floors")
+    return {**measured, "old_abs_objective_floor": old_floor,
+            "old_floor_underestimates": True}
+
+
 def write_direction(path: Path, direction: np.ndarray) -> None:
     with path.open("w") as stream:
         stream.write(f"{direction.size}\n")
@@ -2043,14 +2069,18 @@ def run_finite_upwind_m3_check(exe: Path, outdir: Path, d: dict,
                     raise AssertionError("native m=3 terminal is not a W-only m=3 projection")
             elif not np.array_equal(terminal, current_terminal):
                 raise AssertionError("native m=3 terminal changed across dt/amplitude")
+            objective = objective_m3_value(meta, scalars, arrays)
+            objective_terms = objective_dot_fp64_terms(arrays["final"], current_terminal)
+            if abs(objective-objective_terms["objective_from_operands"]) > objective_terms["fp64_dot_product_floor"]:
+                raise AssertionError("native m3 scalar disagrees with its final-state/terminal dot operands")
             native_vjp[(dt, amp)] = {
                 "vjp_control_directional_derivative": float(np.dot(
                     arrays["initial_pullback"], amp*packed_r)),
                 "vjp_directional_fp64_floor": (128.0*np.finfo(float).eps*float(np.sum(
                     np.abs(arrays["initial_pullback"]*(amp*packed_r)), dtype=np.float64))),
-                "objective": objective_m3_value(meta, scalars, arrays),
-                "objective_fp64_floor": 128.0*np.finfo(float).eps*float(np.sum(
-                    np.abs(arrays["final"]*arrays["terminal_cotangent"]), dtype=np.float64)),
+                "objective": objective,
+                "objective_fp64_floor": objective_terms["fp64_dot_product_floor"],
+                "objective_operand_receipt": objective_terms,
                 "payload": path.name,
             }
             if abs(native_vjp[(dt, amp)]["objective"]) <= native_vjp[(dt, amp)]["objective_fp64_floor"]:
@@ -2071,8 +2101,12 @@ def run_finite_upwind_m3_check(exe: Path, outdir: Path, d: dict,
 
     native_fd = {}
     native_fd_outputs = {}
+    native_fd_endpoint_receipts = {}
+    native_fd_roundoff_by_epsilon = {}
     for epsilon in epsilons:
         outputs = []
+        endpoint_receipts = []
+        endpoint_floors = []
         for sign in (-1.0, 1.0):
             q_control = mode_pair_controls(
                 d["column"], controls+sign*epsilon*CONTROL_DIRECTION)
@@ -2081,19 +2115,33 @@ def run_finite_upwind_m3_check(exe: Path, outdir: Path, d: dict,
             write_direction(direction_path, pack_mode(q_control, nx, ny, nz, offsets))
             meta, arrays, scalars, _ = run_native(exe, nx, ny, nz, path,
                 ("--upwind-trajectory", str(direction_path), "6", "1.0"))
-            outputs.append(objective_m3_value(meta, scalars, arrays))
+            objective = objective_m3_value(meta, scalars, arrays)
+            terms = objective_dot_fp64_terms(arrays["final"], arrays["terminal_cotangent"])
+            if abs(objective-terms["objective_from_operands"]) > terms["fp64_dot_product_floor"]:
+                raise AssertionError("m3 FD scalar disagrees with its endpoint operands")
+            outputs.append(objective)
+            endpoint_floors.append(terms["fp64_dot_product_floor"])
+            endpoint_receipts.append({
+                "sign": int(sign), "objective_m3": objective, **terms,
+                "final_state": arrays["final"].tolist(),
+                "terminal_cotangent": arrays["terminal_cotangent"].tolist(),
+            })
         native_fd_outputs[str(epsilon)] = outputs
+        native_fd_endpoint_receipts[str(epsilon)] = endpoint_receipts
         native_fd[epsilon] = (outputs[1]-outputs[0])/(2.0*epsilon)
+        native_fd_roundoff_by_epsilon[epsilon] = (
+            endpoint_floors[0]+endpoint_floors[1])/(2.0*epsilon)
     native_ad = native_vjp[(1.0, 1.0)]["vjp_control_directional_derivative"]
     fd_epsilon = epsilons[-1]
     fd_signal = abs(native_fd[fd_epsilon])
-    fd_floor = 128.0*np.finfo(float).eps*max(
-        max(abs(value) for values in native_fd_outputs.values() for value in values),
-        abs(native_vjp[(1.0, 1.0)]["objective"]), np.finfo(float).tiny)/fd_epsilon
+    fd_floor = native_fd_roundoff_by_epsilon[fd_epsilon]
     if fd_signal <= fd_floor:
         raise AssertionError("m=3 native finite-difference directional signal is at its FP64 floor")
-    fd_ad_relative = abs(native_ad-native_fd[fd_epsilon])/max(abs(native_ad), fd_signal, fd_floor)
-    fd_epsilon_relative = abs(native_fd[epsilons[0]]-native_fd[epsilons[1]])/max(fd_signal, fd_floor)
+    native_ad_floor = native_vjp[(1.0, 1.0)]["vjp_directional_fp64_floor"]
+    if abs(native_ad) <= native_ad_floor:
+        raise AssertionError("m=3 native AD directional signal is at its FP64 floor")
+    fd_ad_relative = abs(native_ad-native_fd[fd_epsilon])/max(abs(native_ad), fd_signal)
+    fd_epsilon_relative = abs(native_fd[epsilons[0]]-native_fd[epsilons[1]])/fd_signal
     if fd_ad_relative > ADJOINT_RELATIVE_BUDGET or fd_epsilon_relative > ADJOINT_RELATIVE_BUDGET:
         raise AssertionError(f"m=3 VJP/native-FD consistency failed: AD {fd_ad_relative:.6g}, "
                              f"epsilon scatter {fd_epsilon_relative:.6g}")
@@ -2104,7 +2152,8 @@ def run_finite_upwind_m3_check(exe: Path, outdir: Path, d: dict,
     for amp in (1.0, 0.5):
         for epsilon in epsilons:
             outputs = []
-            floors = []
+            dop_floors = []
+            dot_operand_floors = []
             for sign in (-1.0, 1.0):
                 q_control = mode_pair_controls(
                     d["column"], controls+sign*epsilon*CONTROL_DIRECTION)
@@ -2115,13 +2164,23 @@ def run_finite_upwind_m3_check(exe: Path, outdir: Path, d: dict,
                     source["state_correction"][3][0], 3, nx, ny, nz, offsets)
                 tightening_state = reconstruct_source_mode(
                     source["tightening_states"][3][0], 3, nx, ny, nz, offsets)
-                outputs.append(float(np.dot(terminal, source_state)))
-                floors.append(abs(float(np.dot(terminal, tightening_state))))
+                dot_terms = objective_dot_fp64_terms(source_state, terminal)
+                outputs.append(dot_terms["objective_from_operands"])
+                dop_floors.append(abs(float(np.dot(terminal, tightening_state))))
+                dot_operand_floors.append(dot_terms["fp64_dot_product_floor"])
             source_fd_outputs[f"a{amp:g}_eps{epsilon:g}"] = outputs
             source_fd[(amp, epsilon)] = (outputs[1]-outputs[0])/(2.0*epsilon)
+            total_endpoint_floors = [dop+dot for dop, dot in
+                                     zip(dop_floors, dot_operand_floors)]
             source_fd_roundoff[f"a{amp:g}_eps{epsilon:g}"] = {
-                "minus_plus_objective_floor": floors,
-                "directional_derivative_floor": (floors[0]+floors[1])/(2.0*epsilon),
+                "minus_plus_dop_tightening_floors": dop_floors,
+                "minus_plus_dot_operand_floors": dot_operand_floors,
+                "minus_plus_total_objective_floors": total_endpoint_floors,
+                "directional_derivative_dop_floor": (dop_floors[0]+dop_floors[1])/(2.0*epsilon),
+                "directional_derivative_dot_operand_floor": (
+                    dot_operand_floors[0]+dot_operand_floors[1])/(2.0*epsilon),
+                "directional_derivative_floor": sum(total_endpoint_floors)/(2.0*epsilon),
+                "floor_scope": "source m3 objective dot operands plus DOP853 tightening; not native solver error",
             }
     source_fd_directional = source_fd[(1.0, fd_epsilon)]
     source_fd_signal = abs(source_fd_directional)
@@ -2133,12 +2192,13 @@ def run_finite_upwind_m3_check(exe: Path, outdir: Path, d: dict,
         + source_fd_floor+native_m3_floor)
     source_comparison_error = abs(native_m3_directional-source_fd_directional)
     source_comparison_relative = source_comparison_error/max(
-        abs(native_m3_directional), source_fd_signal, source_fd_floor, native_m3_floor)
-    if source_fd_signal <= source_fd_floor or source_comparison_error > source_comparison_budget:
+        abs(native_m3_directional), source_fd_signal)
+    if (source_fd_signal <= source_fd_floor or abs(native_m3_directional) <= native_m3_floor or
+            source_comparison_error > source_comparison_budget):
         raise AssertionError(f"m3 full-map VJP/source upwind-FD mismatch {source_comparison_error:.6g} "
                              f"> source/FP64 budget {source_comparison_budget:.6g}")
     source_epsilon_scatter = abs(source_fd[(1.0, epsilons[0])]-source_fd[(1.0, epsilons[1])])
-    source_epsilon_relative = source_epsilon_scatter/max(source_fd_signal, source_fd_floor)
+    source_epsilon_relative = source_epsilon_scatter/source_fd_signal
     if source_epsilon_relative > ADJOINT_RELATIVE_BUDGET:
         raise AssertionError(f"m3 source FD epsilon scatter {source_epsilon_relative:.6g} > "
                              f"{ADJOINT_RELATIVE_BUDGET}")
@@ -2155,8 +2215,11 @@ def run_finite_upwind_m3_check(exe: Path, outdir: Path, d: dict,
                            "tightening_relative": float(sources[amp]["tightening_relative"])}
                 for amp in (1.0, 0.5)},
             "native_fd_m3_objectives_minus_plus": native_fd_outputs,
+            "native_fd_endpoint_operands_for_recalculation": native_fd_endpoint_receipts,
             "native_fd_directional_derivative_by_epsilon": {
                 str(eps): value for eps, value in native_fd.items()},
+            "native_fd_objective_floor_by_epsilon": {
+                str(eps): value for eps, value in native_fd_roundoff_by_epsilon.items()},
             "source_finite_upwind_control_fd_objectives_minus_plus": source_fd_outputs,
             "source_finite_upwind_control_fd_roundoff_floors": source_fd_roundoff,
             "source_finite_upwind_control_fd_by_amplitude_and_epsilon": {
@@ -2164,7 +2227,11 @@ def run_finite_upwind_m3_check(exe: Path, outdir: Path, d: dict,
                 for (amp, eps), value in source_fd.items()},
             "native_ad_vs_native_fd_relative_error": fd_ad_relative,
             "native_fd_epsilon_scatter_relative": fd_epsilon_relative,
+            "native_fd_directional_signal": fd_signal,
             "native_fd_roundoff_floor": fd_floor,
+            "native_fd_signal_to_floor_ratio": fd_signal/max(fd_floor, np.finfo(float).tiny),
+            "native_fd_signal_cancellation_ratio": fd_floor/max(fd_signal, np.finfo(float).tiny),
+            "objective_floor_cancellation_falsifier": objective_floor_cancellation_falsifier(),
             "source_m3_fullmap_directional_gate": {
                 "amplitude": 1.0, "native_fullmap_vjp": native_m3_directional,
                 "source_finite_upwind_fd": source_fd_directional,

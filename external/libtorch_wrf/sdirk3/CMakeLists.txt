@@ -625,6 +625,16 @@ add_test(NAME Native_Quadratic_Wave_Forcing
             --output-dir ${CMAKE_CURRENT_BINARY_DIR}/quadratic_wave_forcing)
 set_tests_properties(Native_Quadratic_Wave_Forcing
     PROPERTIES TIMEOUT 1800 ENVIRONMENT "OPENBLAS_NUM_THREADS=1;OMP_NUM_THREADS=1;PYTHONDONTWRITEBYTECODE=1")
+add_test(NAME Native_Physical_Wave_Inverse
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/test_fine_wave_inverse.py
+            --exe $<TARGET_FILE:test_native_wave_refinement>
+            --output ${CMAKE_CURRENT_BINARY_DIR}/fine_wave_inverse.json)
+# Keep CPU-heavy graph trajectories isolated from parallel light contracts.
+set_tests_properties(Native_Physical_Wave_Inverse
+    PROPERTIES TIMEOUT 2700 ENVIRONMENT "OPENBLAS_NUM_THREADS=1;OMP_NUM_THREADS=1;PYTHONDONTWRITEBYTECODE=1")
+set_tests_properties(FP64_Fixed_Data_Refinement Native_Quadratic_Wave_Forcing
+    Native_Physical_Wave_Inverse PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(test_horizontal_pgf_actual_rhs tests/test_horizontal_pgf_actual_rhs.cpp)
 target_link_libraries(test_horizontal_pgf_actual_rhs PRIVATE wrf_sdirk3::core)
@@ -691,7 +701,7 @@ add_test(NAME Full_Tile_RHS_Debug_Invariance COMMAND test_full_tile_step --rhs-d
 add_executable(test_krylov_metric_coordinate_contract test_krylov_metric_coordinate_contract.cpp)
 target_include_directories(test_krylov_metric_coordinate_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 set_property(TARGET test_krylov_metric_coordinate_contract PROPERTY CXX_STANDARD 17)
-target_link_libraries(test_krylov_metric_coordinate_contract "${TORCH_LIBRARIES}")
+target_link_libraries(test_krylov_metric_coordinate_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Krylov_Metric_Coordinate_Contract COMMAND test_krylov_metric_coordinate_contract)
 
 # R9 §10.1: a stage-budget experiment must vary ONE thing. The resolver is pure, but the

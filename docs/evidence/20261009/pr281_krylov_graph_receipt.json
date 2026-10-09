@@ -1,0 +1,71 @@
+{
+  "timestamp_local": "2026-10-09T08:55:14.698717+09:00",
+  "baseline_head": "38c05f7542136ed035197f7a0a0335e71b6fda83",
+  "working_diff_sha256": "ef6b5bf385e37926c04ee16493326e03d44084a16b05f467381a33da260dd013",
+  "source_bindings": [
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/wrf_sdirk3_newton_solver.cpp",
+      "sha256": "7e46446b1bbdbc9f86527c786144a5c4b2eadc9bfc08876ec254b0db7d62d205"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/wrf_sdirk3_newton_solver.h",
+      "sha256": "2e89d381708c99c48e58e33d738bfc7c029790a2b36e40163966545839844db8"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_krylov_metrics.h",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/wrf_sdirk3_krylov_metrics.h",
+      "sha256": "948a872743205df05adeea2a52d3eae7666dd0ecad3437b752316191668d199e"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_stage_krylov_policy.h",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/wrf_sdirk3_stage_krylov_policy.h",
+      "sha256": "ac9ad39bbb223e4be4adec14a50a0b03e603a64b47d40b1d882bc6bd0e057b77"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_autograd_utils.h",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/wrf_sdirk3_autograd_utils.h",
+      "sha256": "7015fbb99dc425d121936caafca9d444b1ee3ab16f3d981fe345a908aef7a3ef"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_implicit_autograd.h",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/wrf_sdirk3_implicit_autograd.h",
+      "sha256": "fa9d052b93de4952cd5e032569116889a8a18e4e25af87eb3127b120b9e9c15e"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/wrf_sdirk3_operator_contract.h",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/wrf_sdirk3_operator_contract.h",
+      "sha256": "4bed4bfc34ed4f5b7e2ddf14f460a765bbe6d4bf309a5e9c5a2abd7744d38d85"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/test_krylov_metric_coordinate_contract.cpp",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/test_krylov_metric_coordinate_contract.cpp",
+      "sha256": "29c4860cc6a643c8327cad530b4547a0b3c032a5e721fab0301f4c857e990715"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/test_stage_krylov_policy_contract.cpp",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/test_stage_krylov_policy_contract.cpp",
+      "sha256": "90b0980c524a944669081744e8ec43daff498902b69b311cb976548bc0b73e98"
+    },
+    {
+      "source": "/private/tmp/pr281-recovery-20261009/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+      "mirror": "/private/tmp/pr281-krylov-root-contract-graph/tests/test_native_wave_refinement.cpp",
+      "sha256": "d6e9505a994ce765ce58aa51c8af33ebc49fbf95ebe8b60a48c5ca0e42146787"
+    }
+  ],
+  "graph_sha256": "4c7cf96a2826d20a3ede6f54ee800e67a2fdee68994d15fb0b5ab4c56a101692",
+  "graph_nodes": 355,
+  "graph_edges_after_simple_graph_clustering": 633,
+  "raw_extraction_edges": 1434,
+  "semantic_llm_tokens": 0,
+  "manual_configuration_binding": {
+    "source": "external/libtorch_wrf/sdirk3/CMakeLists.txt",
+    "sha256": "22c8c065067ab65b3eb6c14f245b5f87847f2a76e2e4a3938646e8298af308a4"
+  },
+  "gaps": [
+    "Graph edges are navigation aids, not numerical proof.",
+    "Fortran ABI, CMake linkage and workflow semantics are checked manually.",
+    "AST extraction does not prove tensor coordinates or the runtime callback operator."
+  ]
+}

@@ -74,6 +74,7 @@ FP64_Stable_Wave_Inverse
 FP64_Stable_Wave_Two_Mode_Inverse
 Native_Stable_Wave_Refinement
 Native_Quadratic_Wave_Forcing
+Native_Physical_Wave_Inverse
 Wave_Physical_Energy_Budget
 Wave_Source_Spatial_Convergence
 Horizontal_PGF_Actual_RHS

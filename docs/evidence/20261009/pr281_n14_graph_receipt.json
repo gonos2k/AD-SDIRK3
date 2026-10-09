@@ -1,0 +1,9 @@
+{
+  "timestamp_local": "2026-10-09T09:15:22.820212+09:00",
+  "runner_sha256": "81009bde9076e26f067b65547db9d2a41b7729101bf4709e8ec564237a15fd7c",
+  "graph_sha256": "0491c48ad592027ae77001ea8a0e43ff42b99c96b08f4fad8773322ba457ee1b",
+  "nodes": 1142,
+  "edges": 2661,
+  "manual_workflow_sha256": "b47acb5aa9315500546b40a9b44d94464af81d492968c686c68f5d2715d31fc5",
+  "scope": "N14/K10 fine policy; exact inventory split into one inverse plus all128others; no new numerical gate; graph not proof"
+}

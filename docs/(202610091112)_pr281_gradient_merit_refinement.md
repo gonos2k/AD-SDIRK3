@@ -1,0 +1,11 @@
+# PR281 gradient-merit stationarity refinement
+
+Local timestamp: 2026-10-09T11:12:47+09:00.
+
+Required CI37863920808 timed out at2700.03s before producing an inverse report. Forty-five native calls completed rc0; the closest completed rejected trial had raw gradient norm1.2940e-5. Other128tests were unrun. Separate diagnostic37871794990 (ZIP4b97c0a0f88daeb6f2f4d89307d6dcb705e22e9e9895bbdbb332d9d2df2dd602) replayed the literal state atN14/K12: all forward hashes and J are identical toN14/K10, gradient components changed at most1.9021e-10; raw norm stays1.294012893e-5. The transpose tolerance does not explain nonconvergence. No trial is a returned optimizer state.
+
+Local objective differences about1e-8 obscure predicted near-stationary BFGS reductions about1e-11. The test-only optimizer now has a separate stationarity phase, using fixed SPD merit phi=0.5*g.T@H0@g. It begins only after a fine-grid J-Armijo rejection with J<J_initial and strict merit decrease. That origin remains optimizer-rejected and is reused without a new call. Directions use the existing SPD inverse metric; every actual phase proposal must be finite/admissible, keep J below the original initial objective and satisfy phi_new <= (1-1e-4*alpha)*phi_old. This is sufficient merit decrease, not a claim of exact merit-gradient Armijo. Four additional native calls maximum; failures remain failures. H is fixed in this small phase. Raw norm<1e-5 is unchanged. Status/history are distinct; old J-Armijo decisions are never rewritten and no global-minimum claim is made.
+
+AST/diff/actionlint checks pass. Independent affine SPD merit oracles checked convergence, zero-gradient no-op and non-descent failure; Green/Red reviewed the draft. Actual cold native validation and full129requiredCI remain open. All fine calls remainN14/K10; observations/R/times/initialization unchanged. Inverse-first CTest now prints verbose per-call/iteration progress. No timeout is raised.
+
+Production C++ is unchanged frombe4077b; prior117kernel checks, full-tile checks and same-input WRF48stage/three-file byte parity remain applicable. No new WRF run or RK3 comparison is performed for this Python-only update; no performance claim. No merge.

@@ -17,6 +17,7 @@
 //
 // These three contracts make each defect a failing test rather than a review finding.
 #include "wrf_sdirk3_krylov_metrics.h"
+#include "wrf_sdirk3_newton_solver.h"
 
 #include <torch/torch.h>
 #include <cmath>
@@ -249,12 +250,140 @@ static void contract_block_partition_validity() {
           "dtype mismatch is rejected");
 }
 
+// A relative Krylov solve must be homogeneous in the RHS scale. In particular, a
+// nonzero RHS below the solver's absolute norm floor must not change success into
+// failure when the independently measured FP64 relative residual is unchanged.
+static void contract_small_rhs_krylov_homogeneity() {
+    using wrf::sdirk3::krylov_methods::solve_fgmres;
+    using wrf::sdirk3::krylov_methods::solve_gmres;
+
+    const auto A = torch::tensor({{3.0, 1.0}, {-1.0, 2.0}}, torch::kFloat64);
+    const auto rhs_unit = torch::tensor({1.0, 1e-10}, torch::kFloat64);
+    const auto x_unit = torch::linalg_solve(A, rhs_unit.unsqueeze(1)).squeeze(1);
+    const auto apply = [&A](const torch::Tensor& x) { return A.matmul(x); };
+    const float tol = 1e-8f;
+
+    auto check_solver = [&](bool flexible, double scale, const torch::Tensor& x0,
+                            const char* label, bool require_success = false,
+                            bool require_initial_stop = false) {
+        const auto rhs = rhs_unit * scale;
+        const auto expected_x = x_unit * scale;
+        const auto result = flexible
+            ? solve_fgmres(apply, rhs, x0, 0, 0.0f, 2, tol, 1,
+                           nullptr, nullptr, nullptr, false, false)
+            : solve_gmres(apply, rhs, x0, 0, 0.0f, 2, tol, 1,
+                          nullptr, nullptr, nullptr, false, false);
+        const double rel_x = (result.x - expected_x).norm().item<double>() /
+                             expected_x.norm().item<double>();
+        const double rel_r = (rhs - apply(result.x)).norm().item<double>() /
+                             rhs.norm().item<double>();
+        const bool measured_converged = rel_r < static_cast<double>(tol);
+
+        check(std::isfinite(rel_x) && rel_x < 1e-8,
+              label);
+        check(result.success == measured_converged,
+              "Krylov success agrees with independently measured FP64 ||b-Ax||/||b||");
+        if (require_success) {
+            check(result.success,
+                  "zero-initial-guess Krylov solve converges at every nonzero RHS scale");
+        }
+        if (require_initial_stop) {
+            check(result.success && result.iterations == 0,
+                  "near-exact initial guess succeeds without Arnoldi iterations");
+        }
+    };
+
+    for (const double scale : {1.0, 1e-10, 1e-14, 1e-16}) {
+        const auto rhs = rhs_unit * scale;
+        const auto x0 = torch::zeros_like(rhs);
+        check_solver(false, scale, x0,
+                     "GMRES solution scales with RHS for zero initial guess", true);
+        check_solver(true, scale, x0,
+                     "FGMRES solution scales with RHS for zero initial guess", true);
+
+        // A nearby exact solution gives an initial residual below tolerance, so
+        // this separately exercises the solver's initial-convergence return path.
+        const auto near = x_unit * scale +
+            scale * torch::tensor({1e-10, -2e-10}, torch::kFloat64);
+        check_solver(false, scale, near,
+                     "GMRES near-solution initial stop preserves RHS-scale contract",
+                     false, true);
+        check_solver(true, scale, near,
+                     "FGMRES near-solution initial stop preserves RHS-scale contract",
+                     false, true);
+    }
+
+    const auto zero_rhs = torch::zeros_like(rhs_unit);
+    const auto zero_x = torch::zeros_like(rhs_unit);
+    for (bool flexible : {false, true}) {
+        const auto result = flexible
+            ? solve_fgmres(apply, zero_rhs, zero_x, 0, 0.0f, 2, tol, 1,
+                           nullptr, nullptr, nullptr, false, false)
+            : solve_gmres(apply, zero_rhs, zero_x, 0, 0.0f, 2, tol, 1,
+                          nullptr, nullptr, nullptr, false, false);
+        check(result.success && result.x.norm().item<double>() == 0.0,
+              "zero RHS and exact zero initial state return exact zero successfully");
+
+        const auto nonzero_x = torch::ones_like(zero_rhs);
+        check((zero_rhs - apply(nonzero_x)).norm().item<double>() > 0.0,
+              "zero RHS negative case has a genuinely nonzero initial residual");
+        const auto nonzero_residual = flexible
+            ? solve_fgmres(apply, zero_rhs, nonzero_x, 0, 0.0f, 2, tol, 1,
+                           nullptr, nullptr, nullptr, false, false)
+            : solve_gmres(apply, zero_rhs, nonzero_x, 0, 0.0f, 2, tol, 1,
+                          nullptr, nullptr, nullptr, false, false);
+        check(!(nonzero_residual.success && nonzero_residual.iterations == 0),
+              "zero RHS with nonzero residual is never an initial-stop success");
+    }
+}
+
+static void contract_small_float32_rhs_homogeneity() {
+    using wrf::sdirk3::krylov_methods::solve_fgmres;
+    using wrf::sdirk3::krylov_methods::solve_gmres;
+
+    const auto A64 = torch::tensor({{3.0, 1.0}, {-1.0, 2.0}}, torch::kFloat64);
+    const auto rhs_unit64 = torch::tensor({1.0, 1e-10}, torch::kFloat64);
+    const auto x_unit64 = torch::linalg_solve(A64, rhs_unit64.unsqueeze(1)).squeeze(1);
+    const auto A32 = A64.to(torch::kFloat32);
+    const auto apply32 = [&A32](const torch::Tensor& x) { return A32.matmul(x); };
+    const float tol = 1e-5f;
+
+    for (const double scale : {1.0, 1e-16, 1e-24}) {
+        const auto rhs64 = rhs_unit64 * scale;
+        const auto rhs32 = rhs64.to(torch::kFloat32);
+        const auto x0 = torch::zeros_like(rhs32);
+        const auto expected_x64 = x_unit64 * scale;
+
+        for (bool flexible : {false, true}) {
+            const auto result = flexible
+                ? solve_fgmres(apply32, rhs32, x0, 0, 0.0f, 2, tol, 1,
+                               nullptr, nullptr, nullptr, false, false)
+                : solve_gmres(apply32, rhs32, x0, 0, 0.0f, 2, tol, 1,
+                              nullptr, nullptr, nullptr, false, false);
+
+            // Cast before norms: native FP32 squaring can underflow for the two
+            // small-RHS cases and would make this independent oracle meaningless.
+            const auto x64 = result.x.to(torch::kFloat64);
+            const double rel_x = (x64 - expected_x64).norm().item<double>() /
+                                 expected_x64.norm().item<double>();
+            const double rel_r = (rhs64 - A64.matmul(x64)).norm().item<double>() /
+                                 rhs64.norm().item<double>();
+            check(std::isfinite(rel_x) && rel_x < static_cast<double>(tol),
+                  "FP32 Krylov solution scales with RHS under an FP64 oracle");
+            check(result.success && rel_r < static_cast<double>(tol),
+                  "FP32 Krylov success matches independently measured FP64 relative residual");
+        }
+    }
+}
+
 int main() {
     torch::NoGradGuard ng;
     contract_metric_coordinate();
     contract_relative_residual_denominator();
     contract_objective_share_coordinates();
     contract_block_partition_validity();
+    contract_small_rhs_krylov_homogeneity();
+    contract_small_float32_rhs_homogeneity();
     std::printf("%s: %d cases, %d failures\n",
                 g_fail == 0 ? "PASS" : "FAIL", g_cases, g_fail);
     return g_fail == 0 ? 0 : 1;

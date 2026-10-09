@@ -1,0 +1,27 @@
+[GMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e+00, residual_norm_raw=1.113301906e-16, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e+00, residual_norm_raw=1.113301906e-16, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.0990201e-10 < tol = 9.99999994e-09
+[GMRES] Initial residual already converged: error = 5.0990201e-10 < tol = 9.99999994e-09
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-10, residual_norm_raw=1.292859242e-26, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-10, residual_norm_raw=1.292859242e-26, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.0990201e-10 < tol = 9.99999994e-09
+[GMRES] Initial residual already converged: error = 5.0990201e-10 < tol = 9.99999994e-09
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-14, residual_norm_raw=7.906613188e-32, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-14, residual_norm_raw=7.906613188e-32, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.0990201e-10 < tol = 9.99999994e-09
+[GMRES] Initial residual already converged: error = 5.0990201e-10 < tol = 9.99999994e-09
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-16, residual_norm_raw=4.734965844e-33, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e-16, residual_norm_raw=4.734965844e-33, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 5.0990201e-10 < tol = 9.99999994e-09
+[GMRES] Initial residual already converged: error = 5.0990201e-10 < tol = 9.99999994e-09
+[GMRES] Initial residual already converged: error = 0 < tol = 9.99999994e-09
+[GMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=inf, tol=0.0000, rhs_norm_raw=0.000000000e+00, residual_norm_raw=7.771561172e-16, restarts=1, arnoldi=2
+[GMRES] Initial residual already converged: error = 0 < tol = 9.99999994e-09
+[FGMRES] NOT CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=inf, tol=0.0000, rhs_norm_raw=0.000000000e+00, residual_norm_raw=7.771561172e-16, restarts=1, arnoldi=2
+[GMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e+00, residual_norm_raw=6.659535745e-08, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.3194, ||r_true||=0.0000, ||b||=1.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000000e+00, residual_norm_raw=6.659535745e-08, restarts=1, arnoldi=2
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000017e-16, residual_norm_raw=7.394061593e-24, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000017e-16, residual_norm_raw=7.394061593e-24, restarts=1, arnoldi=2
+[GMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000020e-24, residual_norm_raw=1.102019783e-31, restarts=1, arnoldi=2
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0000, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.000000020e-24, residual_norm_raw=1.102019783e-31, restarts=1, arnoldi=2
+PASS: 117 cases, 0 failures

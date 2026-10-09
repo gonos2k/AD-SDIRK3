@@ -221,9 +221,6 @@ namespace {
     }
 }
 
-// FIX 2026-01-28: Minimum threshold for ||b|| to avoid spurious relative error
-constexpr float BNORM_MIN_THRESHOLD = 1e-12f;
-
 } // anonymous namespace
 
 /**
@@ -1147,13 +1144,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // FIX (2025-12-05): Gate NoGradGuard on !use_autograd to preserve graph in AD mode
     torch::Tensor r_true;  // Unpreconditioned residual for convergence check
     {
-        // Use guarded_item for the norm check to support autograd mode
-        float x_norm = guarded_item<float>(x.norm());
-        if (x_norm < 1e-14f) {
+        // Only an exact zero initial guess can skip A(x0).
+        if (guarded_item<bool>((x == 0).all())) {
             // x0 is zero, so r = b - J*0 = b
             r_true = b.clone();
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 && !wrf::sdirk3::g_sdirk3_config.use_autograd) {
-                std::cerr << "[GMRES DEBUG] x0 is zero (norm=" << x_norm << "), skipping A(x0) computation" << std::endl;
+                std::cerr << "[GMRES DEBUG] x0 is zero (norm=0), skipping A(x0) computation" << std::endl;
                 std::cerr << "  Initial residual r = b (no JVP call)" << std::endl;
             }
         } else {
@@ -1161,7 +1157,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             // In autograd mode, A(x) preserves graph; in FD mode, it doesn't matter
             r_true = b - A(x);
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 && !wrf::sdirk3::g_sdirk3_config.use_autograd) {
-                std::cerr << "[GMRES DEBUG] x0 is non-zero (norm=" << x_norm << "), computed r = b - A(x0)" << std::endl;
+                std::cerr << "[GMRES DEBUG] x0 is non-zero (norm=" << guarded_item<double>(x.norm()) << "), computed r = b - A(x0)" << std::endl;
             }
         }
     }
@@ -1205,10 +1201,10 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     float initial_rho_D_gmres = -1.0f;
     {
         torch::NoGradGuard ng_init;
-        const float bn0 = guarded_item<float>(b_inner.norm());
-        const float rn0 = guarded_item<float>(r_true_inner.norm());
-        if (bn0 > 0.0f && std::isfinite(bn0) && std::isfinite(rn0)) {
-            initial_rel_error_gmres = rn0 / bn0;
+        const double bn0 = guarded_item<double>(safe_tensor_norm_fp64(b_inner));
+        const double rn0 = guarded_item<double>(safe_tensor_norm_fp64(r_true_inner));
+        if (bn0 >= 0.0 && std::isfinite(bn0) && std::isfinite(rn0)) {
+            initial_rel_error_gmres = static_cast<float>(wrf::sdirk3::krylov_relative_norm(rn0, bn0));
         }
     }
 
@@ -1262,21 +1258,24 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // v20.14 r50: Save unscaled bnorm for final return to Newton (trust-region needs it).
     // bnorm_safe uses D⁻¹-scaled b when block_scaled=true (for GMRES internal convergence).
     // bnorm_unscaled always uses the original b (for final rel_error report).
-    auto bnorm_unscaled_tensor = safe_tensor_norm(b_inner);  // before scaling!
+    auto bnorm_unscaled_tensor = safe_tensor_norm_fp64(b_inner);  // before scaling!
     if (block_scaled) {
         // b_inner was already scaled above — recompute unscaled from original b
         auto b_orig = b.clone();
         zero_halo_regions(b_orig, halo_width, periodic_x, periodic_y);
-        bnorm_unscaled_tensor = safe_tensor_norm(b_orig);
+        bnorm_unscaled_tensor = safe_tensor_norm_fp64(b_orig);
     }
-    auto bnorm_unscaled = torch::clamp(bnorm_unscaled_tensor, BNORM_MIN_THRESHOLD);
+    auto bnorm_unscaled = bnorm_unscaled_tensor;
 
-    auto bnorm_tensor = safe_tensor_norm(b_inner);
-    auto bnorm_safe = torch::clamp(bnorm_tensor, BNORM_MIN_THRESHOLD);
+    auto bnorm_tensor = safe_tensor_norm_fp64(b_inner);
+    // A unit denominator is used only for the exactly-zero RHS; the
+    // initial/final zero-RHS contract below checks its actual residual.
+    auto bnorm_safe = torch::where(bnorm_tensor > 0, bnorm_tensor,
+                                   torch::ones_like(bnorm_tensor));
 
     auto error_tensor = block_scaled
-        ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
-        : safe_tensor_norm(r_true_inner) / bnorm_safe;
+        ? safe_tensor_norm_fp64(D_inv * r_true_inner) / bnorm_safe
+        : safe_tensor_norm_fp64(r_true_inner) / bnorm_safe;
     // R13.18 (deep review P1-4): the initial value of the objective the loop will stop on.
     { torch::NoGradGuard ng_rd0; initial_rho_D_gmres = guarded_item<float>(error_tensor); }
 
@@ -1292,7 +1291,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // GRADIENT FIX: Use guarded_item for control flow check
     if (guarded_item<bool>(converged.all())) {
         float error_val = guarded_item<float>(error_tensor);
-        float r_true_norm = guarded_item<float>(safe_tensor_norm(r_true_inner));
+        float r_true_norm = guarded_item<float>(safe_tensor_norm_fp64(r_true_inner));
         std::cerr << "[GMRES] Initial residual already converged: error = " << error_val << " < tol = " << tol << std::endl;
         // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
@@ -1310,9 +1309,9 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         //
         // `success` is the S-coordinate question, the same one the normal exit answers, and
         // `rel_error` always carries rho_S. The stop metric keeps its own field.
-        const float bnorm_unscaled_val = guarded_item<float>(bnorm_unscaled);
-        const float rho_S_here = (bnorm_unscaled_val > BNORM_MIN_THRESHOLD)
-            ? (r_true_norm / bnorm_unscaled_val) : 1.0f;
+        const double bnorm_unscaled_val = guarded_item<double>(bnorm_unscaled);
+        const float rho_S_here = static_cast<float>(wrf::sdirk3::krylov_relative_norm(
+            guarded_item<double>(safe_tensor_norm_fp64(r_true_inner)), bnorm_unscaled_val));
         const bool S_reached_here = (rho_S_here < tol);
         WRFNewtonKrylovSolver::GMRESResult res{
                 x, S_reached_here, 0, r_true_norm, rho_S_here,
@@ -1413,7 +1412,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         }
 
         // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
-        auto r_norm_tensor = safe_tensor_norm(r_precond);
+        auto r_norm_tensor = safe_tensor_norm_fp64(r_precond);
 
         // A finite positive norm is normalizable even below an absolute 1e-12.
         TORCH_CHECK(guarded_item<bool>(torch::isfinite(r_norm_tensor) & (r_norm_tensor > 0)),
@@ -1453,7 +1452,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         torch::Tensor H = torch::zeros({restart + 1, restart}, cpu_opts);
         torch::Tensor s = torch::zeros({restart + 1}, cpu_opts);
         // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
-        s[0] = safe_tensor_norm(r_precond).cpu();
+        s[0] = safe_tensor_norm_fp64(r_precond).cpu();
         
         // PERFORMANCE: Store Givens rotation coefficients as tensors to avoid .item() syncs
         // Previously extracted as float causing 2 CPU-GPU syncs per Arnoldi vector
@@ -1549,7 +1548,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                     // mismatched pair and the review correctly called that fabricated.
                     auto r_true_nan = b.detach().clone();
                     zero_halo_regions(r_true_nan, halo_width, periodic_x, periodic_y);
-                    float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
+                    float r_norm = guarded_item<float>(safe_tensor_norm_fp64(r_true_nan));
                     // v20.14r37: Include current restart's j (same fix as early-breakdown path).
                     // r_true returned RAW (caller applies halo zeroing for per-block analysis).
                     WRFNewtonKrylovSolver::GMRESResult res{
@@ -2186,8 +2185,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
         // v20.14 r50: Use scaled norm for internal convergence check
         error_tensor = block_scaled
-            ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
-            : safe_tensor_norm(r_true_inner) / bnorm_safe;
+            ? safe_tensor_norm_fp64(D_inv * r_true_inner) / bnorm_safe
+            : safe_tensor_norm_fp64(r_true_inner) / bnorm_safe;
 
 
         if (ritz_capture_on() && !ritz_H.empty()) {   // M = I numerical range
@@ -2469,28 +2468,33 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // v20.14 r50: Use bnorm_unscaled for final rel_error (trust-region compatibility).
         // GMRES internal convergence used bnorm_safe (D⁻¹-scaled when block_scaled).
         auto stats_cpu = torch::stack({
-            x.norm(), r_true_inner_final.norm(), r_precond.norm(), bnorm_unscaled
+            x.norm(), safe_tensor_norm_fp64(r_true_inner_final), safe_tensor_norm_fp64(r_precond), bnorm_unscaled
         }).to(torch::kCPU);
         x_norm = stats_cpu[0].item<float>();
         r_true_final = stats_cpu[1].item<float>();  // Halo-zeroed, UNSCALED residual
         r_precond_final = stats_cpu[2].item<float>();
-        float bnorm_val = stats_cpu[3].item<float>();  // UNSCALED ||b||
+        double bnorm_val = stats_cpu[3].item<double>();  // actual UNSCALED ||b||
         // CRITICAL (2025-11-28): Compute relative error for trust region predicted formula
         // v20.14 r50: Always report UNSCALED rel_error to Newton/trust-region.
-        rel_error_final = (bnorm_val > BNORM_MIN_THRESHOLD) ? (r_true_final / bnorm_val) : 1.0f;
+        rel_error_final = static_cast<float>(wrf::sdirk3::krylov_relative_norm(
+            stats_cpu[1].item<double>(), bnorm_val));
         // Always print GMRES completion summary (single line)
         bool gmres_converged = (rel_error_final < tol);
-        std::cerr << "[GMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
-                  << std::fixed << std::setprecision(4)
-                  << ": ||x||=" << x_norm
-                  << ", ||r_true||=" << r_true_final
-                  << ", ||b||=" << bnorm_val
-                  << ", rel_error=" << rel_error_final
-                  << ", tol=" << tol
-                  << ", restarts=" << actual_restarts
-                  << ", arnoldi=" << total_arnoldi_iters
-                  << (block_scaled ? " (block-scaled)" : "")
-                  << std::defaultfloat << std::endl;
+        std::ostringstream summary;
+        summary << "[GMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
+                << std::fixed << std::setprecision(4)
+                << ": ||x||=" << x_norm
+                << ", ||r_true||=" << r_true_final
+                << ", ||b||=" << bnorm_val
+                << ", rel_error=" << rel_error_final
+                << ", tol=" << tol
+                << std::scientific << std::setprecision(9)
+                << ", rhs_norm_raw=" << bnorm_val
+                << ", residual_norm_raw=" << stats_cpu[1].item<double>()
+                << ", restarts=" << actual_restarts
+                << ", arnoldi=" << total_arnoldi_iters
+                << (block_scaled ? " (block-scaled)" : "");
+        std::cerr << summary.str() << std::endl;
     }
 
     bool gmres_converged = (rel_error_final < tol);
@@ -2591,13 +2595,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // FIX (2025-12-05): Gate NoGradGuard on !use_autograd to preserve graph in AD mode
     torch::Tensor r_true;  // Unpreconditioned residual for convergence check
     {
-        // Use guarded_item for the norm check to support autograd mode
-        float x_norm = guarded_item<float>(x.norm());
-        if (x_norm < 1e-14f) {
+        // Only an exact zero initial guess can skip A(x0).
+        if (guarded_item<bool>((x == 0).all())) {
             // x0 is zero, so r = b - J*0 = b
             r_true = b.clone();
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 && !wrf::sdirk3::g_sdirk3_config.use_autograd) {
-                std::cerr << "[GMRES DEBUG] x0 is zero (norm=" << x_norm << "), skipping A(x0) computation" << std::endl;
+                std::cerr << "[GMRES DEBUG] x0 is zero (norm=0), skipping A(x0) computation" << std::endl;
                 std::cerr << "  Initial residual r = b (no JVP call)" << std::endl;
             }
         } else {
@@ -2605,7 +2608,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // In autograd mode, A(x) preserves graph; in FD mode, it doesn't matter
             r_true = b - A(x);
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 && !wrf::sdirk3::g_sdirk3_config.use_autograd) {
-                std::cerr << "[GMRES DEBUG] x0 is non-zero (norm=" << x_norm << "), computed r = b - A(x0)" << std::endl;
+                std::cerr << "[GMRES DEBUG] x0 is non-zero (norm=" << guarded_item<double>(x.norm()) << "), computed r = b - A(x0)" << std::endl;
             }
         }
     }
@@ -2654,10 +2657,10 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     float initial_rho_D_fgmres = -1.0f;
     {
         torch::NoGradGuard ng_init;
-        const float bn0 = guarded_item<float>(b_inner.norm());
-        const float rn0 = guarded_item<float>(r_true_inner.norm());
-        if (bn0 > 0.0f && std::isfinite(bn0) && std::isfinite(rn0)) {
-            initial_rel_error_fgmres = rn0 / bn0;
+        const double bn0 = guarded_item<double>(safe_tensor_norm_fp64(b_inner));
+        const double rn0 = guarded_item<double>(safe_tensor_norm_fp64(r_true_inner));
+        if (bn0 >= 0.0 && std::isfinite(bn0) && std::isfinite(rn0)) {
+            initial_rel_error_fgmres = static_cast<float>(wrf::sdirk3::krylov_relative_norm(rn0, bn0));
         }
     }
 
@@ -2800,21 +2803,24 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // v20.14 r50: Save unscaled bnorm for final return to Newton (trust-region needs it).
     // bnorm_safe uses D⁻¹-scaled b when block_scaled=true (for GMRES internal convergence).
     // bnorm_unscaled always uses the original b (for final rel_error report).
-    auto bnorm_unscaled_tensor = safe_tensor_norm(b_inner);  // before scaling!
+    auto bnorm_unscaled_tensor = safe_tensor_norm_fp64(b_inner);  // before scaling!
     if (block_scaled) {
         // b_inner was already scaled above — recompute unscaled from original b
         auto b_orig = b.clone();
         zero_halo_regions(b_orig, halo_width, periodic_x, periodic_y);
-        bnorm_unscaled_tensor = safe_tensor_norm(b_orig);
+        bnorm_unscaled_tensor = safe_tensor_norm_fp64(b_orig);
     }
-    auto bnorm_unscaled = torch::clamp(bnorm_unscaled_tensor, BNORM_MIN_THRESHOLD);
+    auto bnorm_unscaled = bnorm_unscaled_tensor;
 
-    auto bnorm_tensor = safe_tensor_norm(b_inner);
-    auto bnorm_safe = torch::clamp(bnorm_tensor, BNORM_MIN_THRESHOLD);
+    auto bnorm_tensor = safe_tensor_norm_fp64(b_inner);
+    // A unit denominator is used only for the exactly-zero RHS; the
+    // initial/final zero-RHS contract below checks its actual residual.
+    auto bnorm_safe = torch::where(bnorm_tensor > 0, bnorm_tensor,
+                                   torch::ones_like(bnorm_tensor));
 
     auto error_tensor = block_scaled
-        ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
-        : safe_tensor_norm(r_true_inner) / bnorm_safe;
+        ? safe_tensor_norm_fp64(D_inv * r_true_inner) / bnorm_safe
+        : safe_tensor_norm_fp64(r_true_inner) / bnorm_safe;
     // R13.18 (deep review P1-4): the initial value of the objective the loop will stop on.
     { torch::NoGradGuard ng_rd0; initial_rho_D_fgmres = guarded_item<float>(error_tensor); }
 
@@ -2830,7 +2836,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // GRADIENT FIX: Use guarded_item for control flow check
     if (guarded_item<bool>(converged.all())) {
         float error_val = guarded_item<float>(error_tensor);
-        float r_true_norm = guarded_item<float>(safe_tensor_norm(r_true_inner));
+        float r_true_norm = guarded_item<float>(safe_tensor_norm_fp64(r_true_inner));
         std::cerr << "[GMRES] Initial residual already converged: error = " << error_val << " < tol = " << tol << std::endl;
         // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
@@ -2848,9 +2854,9 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         //
         // `success` is the S-coordinate question, the same one the normal exit answers, and
         // `rel_error` always carries rho_S. The stop metric keeps its own field.
-        const float bnorm_unscaled_val = guarded_item<float>(bnorm_unscaled);
-        const float rho_S_here = (bnorm_unscaled_val > BNORM_MIN_THRESHOLD)
-            ? (r_true_norm / bnorm_unscaled_val) : 1.0f;
+        const double bnorm_unscaled_val = guarded_item<double>(bnorm_unscaled);
+        const float rho_S_here = static_cast<float>(wrf::sdirk3::krylov_relative_norm(
+            guarded_item<double>(safe_tensor_norm_fp64(r_true_inner)), bnorm_unscaled_val));
         const bool S_reached_here = (rho_S_here < tol);
         WRFNewtonKrylovSolver::GMRESResult res{
                 x, S_reached_here, 0, r_true_norm, rho_S_here,
@@ -2967,7 +2973,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         }
 
         // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
-        auto r_norm_tensor = safe_tensor_norm(r_precond);
+        auto r_norm_tensor = safe_tensor_norm_fp64(r_precond);
 
         // A finite positive norm is normalizable even below an absolute 1e-12.
         TORCH_CHECK(guarded_item<bool>(torch::isfinite(r_norm_tensor) & (r_norm_tensor > 0)),
@@ -3008,7 +3014,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         torch::Tensor H = torch::zeros({restart + 1, restart}, cpu_opts);
         torch::Tensor s = torch::zeros({restart + 1}, cpu_opts);
         // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
-        s[0] = safe_tensor_norm(r_precond).cpu();
+        s[0] = safe_tensor_norm_fp64(r_precond).cpu();
         
         // PERFORMANCE: Store Givens rotation coefficients as tensors to avoid .item() syncs
         // Previously extracted as float causing 2 CPU-GPU syncs per Arnoldi vector
@@ -3299,7 +3305,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     // mismatched pair and the review correctly called that fabricated.
                     auto r_true_nan = b.detach().clone();
                     zero_halo_regions(r_true_nan, halo_width, periodic_x, periodic_y);
-                    float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
+                    float r_norm = guarded_item<float>(safe_tensor_norm_fp64(r_true_nan));
                     // v20.14r37: Include current restart's j (same fix as early-breakdown path).
                     // r_true returned RAW (caller applies halo zeroing for per-block analysis).
                     WRFNewtonKrylovSolver::GMRESResult res{
@@ -3944,8 +3950,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
         // v20.14 r50: Use scaled norm for internal convergence check
         error_tensor = block_scaled
-            ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
-            : safe_tensor_norm(r_true_inner) / bnorm_safe;
+            ? safe_tensor_norm_fp64(D_inv * r_true_inner) / bnorm_safe
+            : safe_tensor_norm_fp64(r_true_inner) / bnorm_safe;
 
         // G1 ANALYSIS: the numerical range of the operator GMRES actually iterates.
         //
@@ -4104,28 +4110,33 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // v20.14 r50: Use bnorm_unscaled for final rel_error (trust-region compatibility).
         // GMRES internal convergence used bnorm_safe (D⁻¹-scaled when block_scaled).
         auto stats_cpu = torch::stack({
-            x.norm(), r_true_inner_final.norm(), r_precond.norm(), bnorm_unscaled
+            x.norm(), safe_tensor_norm_fp64(r_true_inner_final), safe_tensor_norm_fp64(r_precond), bnorm_unscaled
         }).to(torch::kCPU);
         x_norm = stats_cpu[0].item<float>();
         r_true_final = stats_cpu[1].item<float>();  // Halo-zeroed, UNSCALED residual
         r_precond_final = stats_cpu[2].item<float>();
-        float bnorm_val = stats_cpu[3].item<float>();  // UNSCALED ||b||
+        double bnorm_val = stats_cpu[3].item<double>();  // actual UNSCALED ||b||
         // CRITICAL (2025-11-28): Compute relative error for trust region predicted formula
         // v20.14 r50: Always report UNSCALED rel_error to Newton/trust-region.
-        rel_error_final = (bnorm_val > BNORM_MIN_THRESHOLD) ? (r_true_final / bnorm_val) : 1.0f;
+        rel_error_final = static_cast<float>(wrf::sdirk3::krylov_relative_norm(
+            stats_cpu[1].item<double>(), bnorm_val));
         // Always print GMRES completion summary (single line)
         bool gmres_converged = (rel_error_final < tol);
-        std::cerr << "[FGMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
-                  << std::fixed << std::setprecision(4)
-                  << ": ||x||=" << x_norm
-                  << ", ||r_true||=" << r_true_final
-                  << ", ||b||=" << bnorm_val
-                  << ", rel_error=" << rel_error_final
-                  << ", tol=" << tol
-                  << ", restarts=" << actual_restarts
-                  << ", arnoldi=" << total_arnoldi_iters
-                  << (block_scaled ? " (block-scaled)" : "")
-                  << std::defaultfloat << std::endl;
+        std::ostringstream summary;
+        summary << "[FGMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
+                << std::fixed << std::setprecision(4)
+                << ": ||x||=" << x_norm
+                << ", ||r_true||=" << r_true_final
+                << ", ||b||=" << bnorm_val
+                << ", rel_error=" << rel_error_final
+                << ", tol=" << tol
+                << std::scientific << std::setprecision(9)
+                << ", rhs_norm_raw=" << bnorm_val
+                << ", residual_norm_raw=" << stats_cpu[1].item<double>()
+                << ", restarts=" << actual_restarts
+                << ", arnoldi=" << total_arnoldi_iters
+                << (block_scaled ? " (block-scaled)" : "");
+        std::cerr << summary.str() << std::endl;
     }
 
     bool gmres_converged = (rel_error_final < tol);

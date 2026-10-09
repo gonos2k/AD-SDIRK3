@@ -1,0 +1,14 @@
+{
+  "timestamp_local": "2026-10-09T08:59:51.747427+09:00",
+  "baseline_head": "be4077b23a79b18ba5fec03b943590144c84592b",
+  "runner_sha256": "e13d395165a3840b64716663afd938e4ff369fbc5685ef11de9df87986b2314e",
+  "graph_sha256": "b695edf26142f836922bfd6cda8d8ba46e8a21f806c6997625c0c1d035ffb8c8",
+  "graph_nodes": 1142,
+  "graph_edges": 2661,
+  "manual_bindings": {
+    ".github/workflows/sdirk3-ci.yml": "3a581d291cc23dd123a241a665724af42c6fe9afe3e133eec660ca6c7476e1c7",
+    "external/libtorch_wrf/sdirk3/CMakeLists.txt": "ee29302fc8ee7981c742a72ce3e88e9e0318825476c60fa79ffbd5d0246929a6",
+    ".github/ci/expected_ctest_names.txt": "db226903904725a9169c5e4b6e0b1acecc2c102fa541c94f49ec7ad0a5ec07e0"
+  },
+  "scope": "fine-only tolerance policy; graph navigation is not numerical evidence; Fortran/CMake/workflow semantics manually checked"
+}
