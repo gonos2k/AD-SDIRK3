@@ -19,6 +19,11 @@ on:
         required: true
         default: false
         type: boolean
+      saved_state_k12_diagnostic:
+        description: "Run one saved-state N14/K12 VJP precision diagnostic (not an optimizer result)"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -34,7 +39,7 @@ concurrency:
 jobs:
   fast-contracts:
     name: fast-contracts
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.h5_precision_diagnostic != true }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -307,7 +312,7 @@ jobs:
 
   core-linux:
     name: core-linux
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.h5_precision_diagnostic != true }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true) }}
     runs-on: ubuntu-24.04
     # The prior 150-minute run passed tests 1–81, including 3,051 s fixed-data
     # refinement, then the job cap canceled the new inverse after 2,572 s,
@@ -589,8 +594,8 @@ jobs:
             /tmp/install_expected.txt
 
   diagnostic-h5-precision-probe:
-    name: DIAGNOSTIC ONLY - saved-candidate N13/N14 stability probe
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.h5_precision_diagnostic == true }}
+    name: DIAGNOSTIC ONLY - PR281 saved-state precision probes
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.h5_precision_diagnostic == true || inputs.saved_state_k12_diagnostic == true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -605,6 +610,12 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      - name: require one diagnostic mode
+        if: ${{ inputs.h5_precision_diagnostic == true && inputs.saved_state_k12_diagnostic == true }}
+        run: |
+          echo "Select exactly one diagnostic mode."
+          exit 2
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -623,6 +634,7 @@ jobs:
           sudo apt-get install -y -q ninja-build ccache mpich libmpich-dev
 
       - name: verify and unpack compact exact CI fixture
+        if: ${{ inputs.h5_precision_diagnostic == true }}
         run: |
           set -euo pipefail
           fixture=tools/fixtures/pr281-ci-37726282791-red-fixture.zip
@@ -645,7 +657,32 @@ jobs:
               data.extractall(destination)
           PY
 
+      - name: verify and unpack exact saved v40a9c2 state fixture
+        if: ${{ inputs.saved_state_k12_diagnostic == true }}
+        run: |
+          set -euo pipefail
+          fixture=tools/fixtures/pr281-saved-v40a9c2-k12-37863920808.zip
+          echo "642654120277175bc3f32902c3a5982cf348664d9591c40b5178ad0303710121  $fixture" | sha256sum --check -
+          mkdir -p "$RUNNER_TEMP/pr281-saved-v40a9c2-inputs"
+          python3 -B - "$fixture" "$RUNNER_TEMP/pr281-saved-v40a9c2-inputs" <<'PY'
+          from pathlib import Path
+          import sys
+          from zipfile import ZipFile
+
+          archive = Path(sys.argv[1])
+          destination = Path(sys.argv[2])
+          with ZipFile(archive) as data:
+              if data.testzip() is not None:
+                  raise SystemExit("saved-state fixture ZIP integrity check failed")
+              for member in data.namelist():
+                  path = Path(member)
+                  if path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"unsafe fixture member path: {member}")
+              data.extractall(destination)
+          PY
+
       - name: download exact saved run-378034 candidate
+        if: ${{ inputs.h5_precision_diagnostic == true }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: diagnostic-only-pr281-h5-fixed-correction-n13-n14-37803412710
@@ -680,6 +717,7 @@ jobs:
         run: cmake --build build/sdirk3-core --target test_native_wave_refinement --parallel 2
 
       - name: run fixed-H N13 correction with N13/K10 and N14/K10 checks
+        if: ${{ inputs.h5_precision_diagnostic == true }}
         run: |
           set -euo pipefail
           exe="$(find build/sdirk3-core -type f -name test_native_wave_refinement -print -quit)"
@@ -690,23 +728,42 @@ jobs:
             --n13-correction-reference-artifact-root "$RUNNER_TEMP/pr281-n13-correction-reference" \
             --output-dir build/sdirk3-core/pr281_h5_precision_probe
 
+      - name: run one exact saved-state N14/K12 full VJP
+        if: ${{ inputs.saved_state_k12_diagnostic == true }}
+        run: |
+          set -euo pipefail
+          exe="$(find build/sdirk3-core -type f -name test_native_wave_refinement -print -quit)"
+          test -n "$exe"
+          python3 -B tools/pr281_saved_state_k12_probe.py \
+            --fixture-root "$RUNNER_TEMP/pr281-saved-v40a9c2-inputs" \
+            --fixture-zip tools/fixtures/pr281-saved-v40a9c2-k12-37863920808.zip \
+            --output-dir build/sdirk3-core/pr281_saved_state_k12_preflight \
+            --dry-preflight
+          python3 -B tools/pr281_saved_state_k12_probe.py \
+            --fixture-root "$RUNNER_TEMP/pr281-saved-v40a9c2-inputs" \
+            --fixture-zip tools/fixtures/pr281-saved-v40a9c2-k12-37863920808.zip \
+            --exe "$exe" \
+            --output-dir build/sdirk3-core/pr281_saved_state_k12
+
       - name: upload diagnostic evidence (not a validation result)
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: diagnostic-only-pr281-h5-fixed-correction-n13-n14-${{ github.run_id }}
+          name: diagnostic-only-pr281-${{ inputs.saved_state_k12_diagnostic == true && 'saved-v40a9c2-k12' || 'h5-fixed-correction-n13-n14' }}-${{ github.run_id }}
           if-no-files-found: ignore
           path: |
             configure.log
             build/sdirk3-core/CMakeCache.txt
             build/sdirk3-core/CMakeFiles/CMakeOutput.log
             build/sdirk3-core/pr281_h5_precision_probe/
+            build/sdirk3-core/pr281_saved_state_k12/
             tools/fixtures/pr281-ci-37726282791-red-fixture.zip
+            tools/fixtures/pr281-saved-v40a9c2-k12-37863920808.zip
             build/numerical-evidence/source-revisions.txt
 
   build-contract-negatives:
     name: build-contract-negatives
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.h5_precision_diagnostic != true }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -736,7 +793,7 @@ jobs:
 
   required:
     name: required
-    if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.h5_precision_diagnostic == true) }}
+    if: ${{ always() && !(github.event_name == 'workflow_dispatch' && (inputs.h5_precision_diagnostic == true || inputs.saved_state_k12_diagnostic == true)) }}
     needs: [fast-contracts, core-linux, build-contract-negatives]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
