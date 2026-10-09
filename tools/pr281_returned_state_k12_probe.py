@@ -602,7 +602,7 @@ def main() -> int:
             partial["error"]=repr(exc); summary.write_text(json.dumps(partial,indent=2,sort_keys=True)+"\n")
         raise
     print(json.dumps({"status":report["status"],"actual_native_calls":report.get("actual_native_calls",0)},sort_keys=True))
-    return 0 if report["status"] == "preflight_passed_zero_native" else 2
+    return 0 if report["status"] in ("preflight_passed_zero_native", "completed_diagnostic_only") else 2
 
 
 if __name__=="__main__":
