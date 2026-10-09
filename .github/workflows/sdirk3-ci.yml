@@ -22,7 +22,7 @@ on:
       fine_accuracy_schedule:
         description: 'Explicit fixed-state schedule; observations remain150/300s'
         type: choice
-        options: [h2.5, h1.25]
+        options: [h2.5, h1.25, carry-h.625]
         default: h2.5
 
 permissions:
@@ -702,7 +702,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" -DWRF_SDIRK3_ABI_STRICT=AUTO \
             -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" -DSDIRK3_QUIET_TESTS=ON -DUSE_FAST_POW_0875=OFF
           cmake --build build/fine-accuracy --target test_native_wave_refinement --parallel 2
-      - name: one fixed returned-state full VJP at the selected explicit schedule
+      - name: selected fixed-state VJP or parity-gated manual-handoff forward probe
         run: |
           python3 -B tools/probe_fine_returned_accuracy.py \
             --exe build/fine-accuracy/test_native_wave_refinement \
