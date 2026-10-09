@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""One fixed-state fine-grid timestep/VJP evaluation; no optimization."""
+"""Fixed-state fine-grid accuracy diagnostics; no optimization."""
 import argparse
+import gzip
 import hashlib
 import json
 import platform
@@ -15,7 +16,12 @@ import test_fine_wave_inverse as inverse
 
 FIXTURE_SHA = "e170be5d1e2b0d87efcdc9ebe0f4dd1d381aceb9e0777dcd074e0dcfe1329d8c"
 CPP_SHA = "a058e570e1527b5167c0f999188ecc3f520c48a6421cf18c8f2c7098320b9967"
+HEADER_SHA = "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f"
+IMPL_SHA = "c0fc5c3fd7aa0e46c0f9f044e8405fc0f203209156f1a15a4629622a5cfac99c"
 H125_CSV_SHA = "d1554e15ccfff09a3625f03a564b5ca8bd9ad6f469a1b4dac965e1ae5e28feec"
+H0625_CSV_SHA = "f21fa165aa8534bc4370164ed464c7bb31ab1203394e071243524acd6f3dd391"
+H0625_GZIP_SHA = "12e16ed872b2adc5e3430181d348cf94625a9d692400f9f408f01b2950ba3b26"
+H0625_REPORT_SHA = "13f483e304d5fe6040172dad9079ffc97b66d9af3fea02fda632e670d745de10"
 CONTEXT_ARRAYS = ("base", "phb", "pbase", "thbase_perturb", "mubase")
 GRID = (16, 12, 8)
 SIGMA = 3e-4
@@ -51,8 +57,16 @@ def assert_time_metrics(call):
     assert isinstance(call["process_elapsed_wall"], str) and call["process_elapsed_wall"], "missing elapsed time from /usr/bin/time"
 
 
-def run_carry_h0625(exe, fixture_zip, outdir):
-    """Gate bounded-tape h2.5 parity before one h.625 forward-only call."""
+def run_bounded_carry_schedule(exe, fixture_zip, outdir, schedule):
+    """Gate bounded-tape h2.5 parity before one explicit fine-step call."""
+    schedules = {
+        "carry-h.625": {"steps": 480, "dt": 0.625, "reference_dt": 1.25,
+                        "reference_label": "h1.25", "reference_member": "baseline_h1_25.csv",
+                        "run_label": "handoff_h0_625_N14_K12"},
+        "carry-h.3125": {"steps": 960, "dt": 0.3125, "reference_dt": 0.625,
+                         "reference_label": "h0.625", "run_label": "handoff_h0_3125_N14_K12"},
+    }
+    config = schedules[schedule]
     assert sha(fixture_zip) == FIXTURE_SHA
     outdir.mkdir(parents=True, exist_ok=True)
     inputs = outdir / "inputs"
@@ -66,27 +80,75 @@ def run_carry_h0625(exe, fixture_zip, outdir):
             assert hashlib.sha256(data).hexdigest() == record["sha256"]
             (inputs / name).write_bytes(data)
     baseline_h25 = inverse.read_payload(inputs / "baseline_h2_5.csv")
-    baseline_h125_path = inputs / "baseline_h1_25.csv"
-    assert sha(baseline_h125_path) == H125_CSV_SHA
-    baseline_h125 = inverse.read_payload(baseline_h125_path)
     desc_saved = inverse.read_payload(inputs / "descriptor_fine.csv")
     state = load_vector(inputs / "initial_state.txt")
     assert np.array_equal(state, baseline_h25[1]["initial_state"])
-    assert np.array_equal(state, baseline_h125[1]["initial_state"])
     assert inverse.digest(state) == manifest["initial_array_sha256"]
     assert sha(inverse.ROOT / "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp") == CPP_SHA
+    assert sha(inverse.ROOT / "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h") == HEADER_SHA
+    assert sha(inverse.ROOT / "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp") == IMPL_SHA
     assert baseline_h25[0]["physical_observation_sigma_m_s"] == SIGMA
-    assert baseline_h125[0]["physical_observation_sigma_m_s"] == SIGMA
     for key in CONTEXT_ARRAYS:
         assert np.array_equal(baseline_h25[1][key], desc_saved[1][key]), key
-        assert np.array_equal(baseline_h125[1][key], desc_saved[1][key]), key
+
+    if schedule == "carry-h.625":
+        reference_path = inputs / config["reference_member"]
+        assert sha(reference_path) == H125_CSV_SHA
+        reference_gzip_sha = None
+        reference_csv_sha = H125_CSV_SHA
+    else:
+        reference_gzip_path = inverse.ROOT / "tools/fixtures/pr282-h0625.csv.gz"
+        reference_gzip_sha = H0625_GZIP_SHA
+        assert sha(reference_gzip_path) == reference_gzip_sha
+        reference_bytes = gzip.decompress(reference_gzip_path.read_bytes())
+        reference_csv_sha = hashlib.sha256(reference_bytes).hexdigest()
+        assert reference_csv_sha == H0625_CSV_SHA
+        reference_path = inputs / "baseline_h0_625.csv"
+        reference_path.write_bytes(reference_bytes)
+    baseline_reference = inverse.read_payload(reference_path)
+    meta_reference, arrays_reference, scalars_reference, text_reference = baseline_reference
+    assert np.array_equal(state, arrays_reference["initial_state"])
+    assert meta_reference["trajectory_steps"] == (240 if schedule == "carry-h.625" else 480)
+    assert meta_reference["trajectory_dt_fp32"] == config["reference_dt"]
+    assert meta_reference["physical_observation_sigma_m_s"] == SIGMA
+    assert meta_reference["observation_count_per_time"] == 105
+    assert meta_reference["observation_time_150_seconds"] == 150
+    assert meta_reference["observation_time_300_seconds"] == 300
+    assert text_reference["physical_observation_domain_guard"] == "passed"
+    assert text_reference["vertical_height_monotonic_guard"] == "passed"
+    assert all(np.isfinite(array).all() for array in arrays_reference.values())
+    assert all(np.isfinite(value) for value in scalars_reference.values())
+    if schedule == "carry-h.3125":
+        assert meta_reference["forward_only"] == 1
+        assert meta_reference["pullback_requested"] == 0
+        assert meta_reference["tape_window_steps"] == 1
+        assert meta_reference["internal_fp64_state_carry"] == 1
+        assert meta_reference["retain_graph_for_adjoint"] == 1
+        assert meta_reference["admissibility_checked_every_step"] == 1
+        assert text_reference["execution_mode"] == "single_step_tape_handoff"
+        assert text_reference["checkpoint_precision"] == "single_step_retained_fp64_handoff"
+    for key in CONTEXT_ARRAYS:
+        assert np.array_equal(arrays_reference[key], desc_saved[1][key]), key
+    for t in (150, 300):
+        assert np.array_equal(arrays_reference[f"observed_{t}"], baseline_h25[1][f"observed_{t}"])
 
     report = {"schema": "fine-returned-bounded-tape-forward-time-v1", "status": "preflight",
-              "probe_schedule": {"steps": 480, "dt": 0.625},
+              "probe_schedule": {"steps": config["steps"], "dt": config["dt"]},
               "parity_gate_schedule": {"steps": 120, "dt": 2.5},
               "source_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=inverse.ROOT, text=True).strip(),
-              "source_cpp_sha256": CPP_SHA, "executable_sha256": sha(exe),
-              "fixture_sha256": FIXTURE_SHA, "h125_csv_sha256": H125_CSV_SHA,
+              "source_cpp_sha256": CPP_SHA, "source_header_sha256": HEADER_SHA,
+              "source_impl_sha256": IMPL_SHA, "executable_sha256": sha(exe),
+              "fixture_sha256": FIXTURE_SHA,
+              "comparison_reference": {"label": config["reference_label"],
+                  "dt": config["reference_dt"], "csv_sha256": reference_csv_sha,
+                  "gzip_sha256": reference_gzip_sha,
+                  "source_run": 37905770290 if schedule == "carry-h.625" else 37911606374,
+                  "source_csv_path": manifest["files"]["baseline_h1_25.csv"]["source_member"] if schedule == "carry-h.625" else "/private/tmp/pr282-h0625-37911606374/measurement/handoff_h0_625_N14_K12.csv",
+                  "source_report_path": "/private/tmp/pr282-h125-37905770290/measurement/report.json" if schedule == "carry-h.625" else "/private/tmp/pr282-h0625-37911606374/measurement/report.json",
+                  "source_report_sha256": "e86d065c732b0c941a133427ca28422dd1089b168b1e78c052c4c3e2ab1d0e8b" if schedule == "carry-h.625" else H0625_REPORT_SHA,
+                  "source_revision": "d84315cb861138452757cf0fb5180677d592ecef" if schedule == "carry-h.625" else "b1a1a5e39e7df4197d7353671c7b17eef6326ac2",
+                  "source_cpp_sha256": CPP_SHA,
+                  "source_executable_sha256": "3e0f041a04ffb915e79d5e4cefcdad27b321ba58a28d631274805f61ba06c46c" if schedule == "carry-h.625" else "a33a1a9bbb2d5e474c363c6c53e2adbd6ffe9f4b8bfc8a587c3ea5a5452ad4a7"},
               "baseline_provenance": manifest, "platform": platform.platform(),
               "python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__,
               "calls": [], "claim": "forward time sensitivity only; no gradient, VJP, or stationarity claim",
@@ -143,7 +205,7 @@ def run_carry_h0625(exe, fixture_zip, outdir):
         assert text["physical_observation_domain_guard"] == "passed"
         assert text["objective_normalization"] == "0.5_sum_over_times_and_points_of_residual_over_sigma_squared"
 
-    # This short call is the hard gate. No 480-step call occurs unless the
+    # This short call is the hard gate. No selected long call occurs unless the
     # bounded single-step tape handoff reproduces the pinned retained h2.5 result.
     h25 = invoke("handoff_h2_5_N14_K12", 120, 2.5)
     try:
@@ -168,7 +230,7 @@ def run_carry_h0625(exe, fixture_zip, outdir):
     target.write_text(json.dumps(report, indent=2)+"\n")
 
     # Recheck the solver's freshly constructed model context only after the
-    # required 120-step parity gate, and still before the 480-step call.
+    # required 120-step parity gate, and still before the selected long call.
     descriptor_path = outdir / "descriptor_fine.csv"
     descriptor_command = [str(exe), *map(str, GRID), str(descriptor_path), "--descriptor-only"]
     descriptor_usage = outdir / "descriptor_fine.time.txt"
@@ -193,33 +255,37 @@ def run_carry_h0625(exe, fixture_zip, outdir):
     report["context_exact_to_pinned_descriptor"] = True
     target.write_text(json.dumps(report, indent=2)+"\n")
 
-    fine = invoke("handoff_h0_625_N14_K12", 480, 0.625)
-    assert_bounded_tape_metadata(fine, 480, 0.625)
+    fine = invoke(config["run_label"], config["steps"], config["dt"])
+    assert_bounded_tape_metadata(fine, config["steps"], config["dt"])
     meta, arrays, scalars, _ = fine
-    _, arrays_h125, scalars_h125, _ = baseline_h125
+    _, arrays_reference, scalars_reference, _ = baseline_reference
     assert np.array_equal(arrays["initial_state"], state)
     assert all(np.isfinite(a).all() for a in arrays.values())
     assert all(np.isfinite(value) for value in scalars.values())
     times = {}
     for t in (150, 300):
         key = f"predicted_{t}"
-        assert np.array_equal(arrays[f"observed_{t}"], arrays_h125[f"observed_{t}"])
-        delta = arrays[key] - arrays_h125[key]
-        residual = arrays_h125[key] - arrays_h125[f"observed_{t}"]
+        assert np.array_equal(arrays[f"observed_{t}"], arrays_reference[f"observed_{t}"])
+        delta = arrays[key] - arrays_reference[key]
+        residual = arrays_reference[key] - arrays_reference[f"observed_{t}"]
         rms = float(np.sqrt(np.mean(delta**2)))
         cross = float(np.dot(residual, delta)/SIGMA**2)
         quadratic = float(0.5*np.dot(delta, delta)/SIGMA**2)
-        times[str(t)] = {"rms_probe_minus_h1_25_m_s": rms,
-            "rms_probe_minus_h1_25_sigma": rms/SIGMA,
+        times[str(t)] = {"rms_probe_minus_reference_m_s": rms,
+            "rms_probe_minus_reference_sigma": rms/SIGMA,
             "cost_delta_cross": cross, "cost_delta_quadratic": quadratic,
             "stable_cost_delta": cross+quadratic,
-            "brackets_match_h1_25": bool(np.array_equal(arrays[f"bracket_index_{t}"], arrays_h125[f"bracket_index_{t}"]))}
+            "brackets_match_reference": bool(np.array_equal(arrays[f"bracket_index_{t}"], arrays_reference[f"bracket_index_{t}"]))}
     report.update(status="completed_forward_time_evaluation", times=times,
-        objective_h1_25=scalars_h125["objective_physical_w"],
-        objective_h0_625=scalars["objective_physical_w"],
-        recorded_cost_delta=scalars["objective_physical_w"]-scalars_h125["objective_physical_w"],
+        comparison_reference_label=config["reference_label"],
+        comparison_reference_dt=config["reference_dt"],
+        objective_reference=scalars_reference["objective_physical_w"],
+        objective_probe=scalars["objective_physical_w"],
+        recorded_cost_delta=scalars["objective_physical_w"]-scalars_reference["objective_physical_w"],
         stable_cost_delta_sum=sum(row["stable_cost_delta"] for row in times.values()),
         prediction_target_kind="diagnostic per-time physical RMS; not an error bound",
+        predeclared_prediction_target_sigma=0.1,
+        prediction_target_met=all(row["rms_probe_minus_reference_sigma"] < 0.1 for row in times.values()),
         forward_only=True, vjp_performed=False, gradient_claimed=False,
         basis_sha256=manifest["canonical_basis"]["array_sha256"])
     target.write_text(json.dumps(report, indent=2)+"\n")
@@ -227,8 +293,8 @@ def run_carry_h0625(exe, fixture_zip, outdir):
 
 
 def run(exe, fixture_zip, outdir, schedule):
-    if schedule == "carry-h.625":
-        return run_carry_h0625(exe, fixture_zip, outdir)
+    if schedule in ("carry-h.625", "carry-h.3125"):
+        return run_bounded_carry_schedule(exe, fixture_zip, outdir, schedule)
     steps, dt = {"h2.5": (120, 2.5), "h1.25": (240, 1.25)}[schedule]
     previous_dt = 5.0 if dt == 2.5 else 2.5
     previous_file = "baseline_h5.csv" if dt == 2.5 else "baseline_h2_5.csv"
@@ -378,6 +444,6 @@ if __name__ == "__main__":
     p.add_argument("--exe", type=Path, required=True)
     p.add_argument("--fixture", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--schedule", choices=("h2.5", "h1.25", "carry-h.625"), default="h2.5")
+    p.add_argument("--schedule", choices=("h2.5", "h1.25", "carry-h.625", "carry-h.3125"), default="h2.5")
     args = p.parse_args()
     run(args.exe.resolve(), args.fixture.resolve(), args.out.resolve(), args.schedule)

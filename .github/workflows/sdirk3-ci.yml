@@ -22,7 +22,7 @@ on:
       fine_accuracy_schedule:
         description: 'Explicit fixed-state diagnostic; observations remain 150/300s'
         type: choice
-        options: [h2.5, h1.25, carry-h.625, h5-component-fd, memory-smoke]
+        options: [h2.5, h1.25, carry-h.625, carry-h.3125, h5-component-fd, memory-smoke]
         default: h2.5
 
 permissions:

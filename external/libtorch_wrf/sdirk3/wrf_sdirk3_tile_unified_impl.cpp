@@ -20626,32 +20626,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // p_base_ alone, because W-PGF and buoyancy nearly cancel and feeding them
             // different thermodynamic states makes the residual an energy source.
 
-            // Interpolate potential temperature (t) to w-points for temperature buoyancy
-            torch::Tensor t_w;
-            if (!t_w_work_.defined() || (t_w_work_.size(0) != ny_) || (t_w_work_.size(1) != nz_w_) || (t_w_work_.size(2) != nx_)) {
-                t_w_work_ = torch::zeros({ny_, nz_w_, nx_}, w.options());
-            } else {
-                t_w_work_.zero_();  // Zero existing tensor in-place
-            }
-            t_w = t_w_work_;
-            
-            // FIX 2026-01-31: Vectorized T mass→w interpolation.
-            // Write directly into t_w_work_ (already allocated/zeroed above).
-            // Interior: 0.5*(t[:,k-1,:] + t[:,k,:]) for k=1..nz_w_-2
-            // Boundaries: copy first/last mass level
-            {
-                // Bottom boundary
-                t_w.select(1, 0).copy_(t_full.select(1, 0));
-                // Interior: average adjacent mass levels
-                if (nz_w_ > 2) {
-                    int nz_int = static_cast<int>(nz_w_) - 2;
-                    t_w.slice(1, 1, nz_w_ - 1).copy_(
-                        0.5f * (t_full.slice(1, 0, nz_int) + t_full.slice(1, 1, nz_int + 1)));
-                }
-                // Top boundary
-                t_w.select(1, nz_w_ - 1).copy_(t_full.select(1, nz_ - 1));
-            }
-            
             // Vertical pressure gradient + buoyancy
             // WRF-CONSISTENT loop and array indexing:
             // - Fortran: DO k=2,kde-1 uses rdn(k) (1-indexed array)
