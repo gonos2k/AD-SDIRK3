@@ -28,13 +28,11 @@ struct RhsTag { using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(const to
 struct PhiTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*; friend type access(PhiTag); };
 struct DtTag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(DtTag); };
 struct RefTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*; friend type access(RefTag); };
-struct NextFp64StateTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*; friend type access(NextFp64StateTag); };
 template<class Tag, typename Tag::type Member> struct Accessor { friend typename Tag::type access(Tag) { return Member; } };
 template struct Accessor<RhsTag, &TileSDIRK3UnifiedSolver::computeUnifiedRHS>;
 template struct Accessor<PhiTag, &TileSDIRK3UnifiedSolver::ph_base_>;
 template struct Accessor<DtTag, &TileSDIRK3UnifiedSolver::dt_stage_>;
 template struct Accessor<RefTag, &TileSDIRK3UnifiedSolver::U_ref_stage_>;
-template struct Accessor<NextFp64StateTag, &TileSDIRK3UnifiedSolver::next_fp64_state_for_test_>;
 
 constexpr double pi = 3.1415926535897932384626433832795;
 void configure(bool implicit_divergence=false,float kdamp=0.0f) {
@@ -488,13 +486,13 @@ int main(int argc,char** argv) {
     const bool physical_wave_inverse=argc>=10 &&
         std::string(argv[5])=="--physical-wave-inverse";
     bool physical_wave_forward_only=false;
-    bool physical_wave_handoff_forward_only=false;
+    bool physical_wave_bounded_tape_forward_only=false;
     float physical_wave_newton_tol=1.0e-12f;
     float physical_wave_krylov_tol=1.0e-8f;
     const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
     TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode ||
                 physical_wave_inverse,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; tape retained) | --fp64-handoff-forward-only (manual FP64 handoff; no tape)]]");
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; tape retained) | --bounded-tape-forward-only (one-step FP64 tape handoff)]]");
     const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     bool implicit_divergence=false;
     float kdamp=0.0f;
@@ -535,10 +533,10 @@ int main(int argc,char** argv) {
             if(flag=="--forward-only") {
                 TORCH_CHECK(!physical_wave_forward_only,"duplicate --forward-only flag");
                 physical_wave_forward_only=true;
-            } else if(flag=="--fp64-handoff-forward-only") {
-                TORCH_CHECK(!physical_wave_handoff_forward_only,
-                            "duplicate --fp64-handoff-forward-only flag");
-                physical_wave_handoff_forward_only=true;
+            } else if(flag=="--bounded-tape-forward-only") {
+                TORCH_CHECK(!physical_wave_bounded_tape_forward_only,
+                            "duplicate --bounded-tape-forward-only flag");
+                physical_wave_bounded_tape_forward_only=true;
             } else if(flag=="--newton-tol") {
                 TORCH_CHECK(!newton_tol_seen && arg<argc,"--newton-tol requires one value");
                 const std::string value(argv[arg++]);
@@ -557,28 +555,24 @@ int main(int argc,char** argv) {
                 TORCH_CHECK(false,"unknown physical-wave inverse flag: ",flag);
             }
         }
-        TORCH_CHECK(!(physical_wave_forward_only && physical_wave_handoff_forward_only),
-                    "--forward-only and --fp64-handoff-forward-only are mutually exclusive");
+        TORCH_CHECK(!(physical_wave_forward_only && physical_wave_bounded_tape_forward_only),
+                    "--forward-only and --bounded-tape-forward-only are mutually exclusive");
         const bool accepted_taped_schedule=(physical_wave_steps==30 && physical_wave_dt==10.0f) ||
                                            (physical_wave_steps==60 && physical_wave_dt==5.0f) ||
                                            (physical_wave_steps==120 && physical_wave_dt==2.5f) ||
                                            (physical_wave_steps==240 && physical_wave_dt==1.25f);
-        const bool accepted_long_handoff_schedule=physical_wave_handoff_forward_only &&
+        const bool accepted_long_handoff_schedule=physical_wave_bounded_tape_forward_only &&
             ((physical_wave_steps==480 && physical_wave_dt==0.625f) ||
              (physical_wave_steps==960 && physical_wave_dt==0.3125f));
         TORCH_CHECK(accepted_taped_schedule || accepted_long_handoff_schedule,
                     "physical-wave inverse supports (30,10), (60,5), (120,2.5), or (240,1.25) at T=300 s; ",
-                    "(480,0.625) and (960,0.3125) require --fp64-handoff-forward-only");
+                    "(480,0.625) and (960,0.3125) require --bounded-tape-forward-only");
     }
     configure(implicit_divergence,kdamp); // solver policy is captured by its constructor.
     if(quadratic_trajectory_mode) g_sdirk3_config.newton_tol=1.0e-12f;
     if(physical_wave_inverse) {
         g_sdirk3_config.newton_tol=physical_wave_newton_tol;
         g_sdirk3_config.krylov_tol=physical_wave_krylov_tol;
-    }
-    if(physical_wave_handoff_forward_only) {
-        g_sdirk3_config.retain_graph_for_adjoint=false;
-        g_sdirk3_config.internal_fp64_state_carry=false;
     }
     Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]));
     auto base=background_state(g);
@@ -592,24 +586,9 @@ int main(int argc,char** argv) {
     if(quadratic_probe || quadratic_trajectory_mode)
         d=read_fp64_vector(argv[6],base.numel(),"perturbation direction");
     g.set(base);
-    if(physical_wave_handoff_forward_only) {
-        g.solver.captureArkBudgetTraceForTest(true);
-        (g.solver.*access(NextFp64StateTag{}))=base.to(torch::kFloat64).detach().clone();
-        g.step(0.25f,0);
-        TORCH_CHECK(g.solver.getLastStepOutcomeCode()==0,
-                    "physical-wave handoff setup step was not accepted");
-        const auto setup_final=g.solver.getLastArkBudgetTrace().projected_final;
-        TORCH_CHECK(setup_final.defined() && setup_final.scalar_type()==torch::kFloat64 &&
-                    torch::isfinite(setup_final).all().item<bool>() &&
-                    torch::equal(g.state(),setup_final.to(torch::kFloat32)),
-                    "physical-wave handoff setup failed exact FP64 publication guard");
-        g.solver.captureArkBudgetTraceForTest(false);
-        g.solver.resetInternalFp64Carry();
-    } else {
-        g.solver.requestFixedTrajectory(1,{0.25f},base);
-        g.step(0.25f,0);
-        g.solver.closeFixedTrajectory();
-    }
+    g.solver.requestFixedTrajectory(1,{0.25f},base);
+    g.step(0.25f,0);
+    g.solver.closeFixedTrajectory();
     g.set(base);
     auto rb=g.rhs(base);
     const auto phb=(g.solver.*access(PhiTag{})).detach().clone().to(torch::kFloat64);
@@ -674,29 +653,28 @@ int main(int argc,char** argv) {
         };
         const auto observed_150=collect_target(true),observed_300=collect_target(false);
         torch::Tensor checkpoint_150,checkpoint_300;
-        if(physical_wave_handoff_forward_only) {
+        if(physical_wave_bounded_tape_forward_only) {
             g.solver.resetInternalFp64Carry();
-            g.set(initial);
-            g.solver.captureArkBudgetTraceForTest(true);
             auto handoff_state=initial.detach().clone();
             validate_physical_handoff_state(g,handoff_state);
             for(int n=0;n<physical_wave_steps;++n) {
-                (g.solver.*access(NextFp64StateTag{}))=handoff_state.detach().clone();
+                g.set(handoff_state);
+                g.solver.requestFixedTrajectory(1,{physical_wave_dt},handoff_state);
                 g.step(physical_wave_dt,n);
                 TORCH_CHECK(g.solver.getLastStepOutcomeCode()==0,
-                            "physical-wave manual handoff step was not accepted at index ",n);
-                const auto projected_final=g.solver.getLastArkBudgetTrace().projected_final;
-                TORCH_CHECK(projected_final.defined() &&
-                            projected_final.scalar_type()==torch::kFloat64 &&
-                            torch::isfinite(projected_final).all().item<bool>() &&
-                            torch::equal(g.state(),projected_final.to(torch::kFloat32)),
-                            "physical-wave manual handoff failed exact FP64 publication guard at index ",n);
-                validate_physical_handoff_state(g,projected_final);
-                handoff_state=projected_final.detach().clone();
+                            "physical-wave one-step tape handoff was not accepted at index ",n);
+                const auto checkpoints=g.solver.getFixedTrajectoryFp64Checkpoints();
+                TORCH_CHECK(checkpoints.size()==1 && checkpoints[0].defined() &&
+                            checkpoints[0].scalar_type()==torch::kFloat64 &&
+                            torch::isfinite(checkpoints[0]).all().item<bool>() &&
+                            torch::equal(g.state(),checkpoints[0].to(torch::kFloat32)),
+                            "physical-wave one-step tape handoff checkpoint/publication guard failed at index ",n);
+                handoff_state=checkpoints[0].detach().clone();
+                validate_physical_handoff_state(g,handoff_state);
+                g.solver.closeFixedTrajectory();
                 if(n==physical_wave_steps/2-1) checkpoint_150=handoff_state.detach().clone();
                 if(n==physical_wave_steps-1) checkpoint_300=handoff_state.detach().clone();
             }
-            g.solver.captureArkBudgetTraceForTest(false);
             g.solver.resetInternalFp64Carry();
         } else {
             g.set(initial);
@@ -715,14 +693,14 @@ int main(int argc,char** argv) {
                     "physical-wave inverse checkpoints are missing or nonfinite");
         const auto evaluate_observations=[&](const torch::Tensor& checkpoint,bool at_150) {
             auto state_leaf=checkpoint.detach().clone();
-            if(!physical_wave_forward_only && !physical_wave_handoff_forward_only)
+            if(!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only)
                 state_leaf.requires_grad_(true);
             auto interpolation=interpolate_physical_w(g,state_leaf,observations,&g.phbase);
             const auto& target=at_150?observed_150:observed_300;
             const auto residual=(interpolation.prediction-target)/sigma;
             const auto loss=0.5*residual.square().sum();
             torch::Tensor cotangent;
-            if(!physical_wave_forward_only && !physical_wave_handoff_forward_only)
+            if(!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only)
                 cotangent=torch::autograd::grad({loss},{state_leaf}, {}, true, false)[0];
             return std::tuple<torch::Tensor,torch::Tensor,torch::Tensor,double,
                               std::vector<int>>{interpolation.prediction.detach(),loss.detach(),
@@ -741,12 +719,12 @@ int main(int argc,char** argv) {
                     torch::isfinite(prediction_300).all().item<bool>(),
                     "physical-wave observation loss or prediction is nonfinite");
         out<<"M,physical_wave_inverse,1\n";
-        out<<"M,forward_only,"<<((physical_wave_forward_only || physical_wave_handoff_forward_only)?1:0)<<"\n";
-        if(physical_wave_handoff_forward_only) {
-            out<<"M,execution_mode,manual_handoff\nM,manual_fp64_handoff,1\n";
-            out<<"M,checkpoint_precision,manual_fp64_state_handoff\n";
+        out<<"M,forward_only,"<<((physical_wave_forward_only || physical_wave_bounded_tape_forward_only)?1:0)<<"\n";
+        if(physical_wave_bounded_tape_forward_only) {
+            out<<"M,execution_mode,single_step_tape_handoff\nM,tape_window_steps,1\n";
+            out<<"M,checkpoint_precision,single_step_retained_fp64_handoff\n";
             out<<"M,admissibility_checked_every_step,1\n";
-            out<<"M,retains_tape,0\nM,pullback_requested,0\n";
+            out<<"M,retains_tape,1\nM,pullback_requested,0\n";
         } else {
             out<<"M,checkpoint_precision,retained_fp64_trajectory\nM,retains_tape,1\n";
             out<<"M,pullback_requested,"<<(physical_wave_forward_only?0:1)<<"\n";
@@ -790,7 +768,7 @@ int main(int argc,char** argv) {
         put(out,"bracket_index_150",torch::tensor(brackets_150,bracket_options));
         put(out,"bracket_index_300",torch::tensor(brackets_300,bracket_options));
         out<<"S,objective_physical_w,"<<std::setprecision(17)<<objective<<"\n";
-        if(!physical_wave_forward_only && !physical_wave_handoff_forward_only) {
+        if(!physical_wave_forward_only && !physical_wave_bounded_tape_forward_only) {
             const int w0=g.ny*g.nz*g.nu+g.nv*g.nz*g.nx;
             const int w1=w0+g.ny*g.nw*g.nx;
             const int ph1=w1+g.ny*g.nw*g.nx;

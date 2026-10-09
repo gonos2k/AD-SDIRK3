@@ -702,7 +702,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" -DWRF_SDIRK3_ABI_STRICT=AUTO \
             -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" -DSDIRK3_QUIET_TESTS=ON -DUSE_FAST_POW_0875=OFF
           cmake --build build/fine-accuracy --target test_native_wave_refinement --parallel 2
-      - name: selected fixed-state VJP or parity-gated manual-handoff forward probe
+      - name: selected fixed-state VJP or parity-gated bounded-tape forward probe
         run: |
           python3 -B tools/probe_fine_returned_accuracy.py \
             --exe build/fine-accuracy/test_native_wave_refinement \

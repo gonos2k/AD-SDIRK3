@@ -14,7 +14,7 @@ import scipy
 import test_fine_wave_inverse as inverse
 
 FIXTURE_SHA = "e170be5d1e2b0d87efcdc9ebe0f4dd1d381aceb9e0777dcd074e0dcfe1329d8c"
-CPP_SHA = "4fbeb1d2d128cfa101eaedcdb77567ca60a029b57423a4fdae3987973371f5d6"
+CPP_SHA = "e47e3144574ca756489db8564aad0a7886a92cad621807359b17014c592caafd"
 H125_CSV_SHA = "d1554e15ccfff09a3625f03a564b5ca8bd9ad6f469a1b4dac965e1ae5e28feec"
 CONTEXT_ARRAYS = ("base", "phb", "pbase", "thbase_perturb", "mubase")
 GRID = (16, 12, 8)
@@ -52,7 +52,7 @@ def assert_time_metrics(call):
 
 
 def run_carry_h0625(exe, fixture_zip, outdir):
-    """Gate manual-handoff h2.5 parity before one h.625 forward-only call."""
+    """Gate bounded-tape h2.5 parity before one h.625 forward-only call."""
     assert sha(fixture_zip) == FIXTURE_SHA
     outdir.mkdir(parents=True, exist_ok=True)
     inputs = outdir / "inputs"
@@ -81,7 +81,7 @@ def run_carry_h0625(exe, fixture_zip, outdir):
         assert np.array_equal(baseline_h25[1][key], desc_saved[1][key]), key
         assert np.array_equal(baseline_h125[1][key], desc_saved[1][key]), key
 
-    report = {"schema": "fine-returned-carry-forward-time-v1", "status": "preflight",
+    report = {"schema": "fine-returned-bounded-tape-forward-time-v1", "status": "preflight",
               "probe_schedule": {"steps": 480, "dt": 0.625},
               "parity_gate_schedule": {"steps": 120, "dt": 2.5},
               "source_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=inverse.ROOT, text=True).strip(),
@@ -99,7 +99,7 @@ def run_carry_h0625(exe, fixture_zip, outdir):
                    "--physical-wave-inverse", str(inputs / "initial_state.txt"),
                    str(inputs / "observations.txt"), str(steps), str(dt),
                    "--newton-tol", "1e-14", "--krylov-tol", "1e-12",
-                   "--fp64-handoff-forward-only"]
+                   "--bounded-tape-forward-only"]
         usage = outdir / f"{label}.time.txt"
         timed_command = ["/usr/bin/time", "-v", "-o", str(usage), *command]
         started = time.monotonic()
@@ -124,7 +124,7 @@ def run_carry_h0625(exe, fixture_zip, outdir):
         assert_time_metrics(call)
         return inverse.read_payload(output)
 
-    def assert_handoff_metadata(payload, steps, dt):
+    def assert_bounded_tape_metadata(payload, steps, dt):
         meta, _, _, text = payload
         expected = {"trajectory_steps": steps, "trajectory_dt_fp32": dt,
                     "trajectory_seconds": 300, "observation_count_per_time": 105,
@@ -132,22 +132,22 @@ def run_carry_h0625(exe, fixture_zip, outdir):
                     "physical_observation_sigma_m_s": SIGMA,
                     "physical_wave_newton_tol": float(np.float32(1e-14)),
                     "physical_wave_krylov_tol": float(np.float32(1e-12)),
-                    "forward_only": 1, "manual_fp64_handoff": 1, "retains_tape": 0,
+                    "forward_only": 1, "retains_tape": 1, "tape_window_steps": 1,
                     "pullback_requested": 0, "internal_fp64": 1,
-                    "internal_fp64_state_carry": 0, "retain_graph_for_adjoint": 0,
+                    "internal_fp64_state_carry": 1, "retain_graph_for_adjoint": 1,
                     "admissibility_checked_every_step": 1}
         for key, value in expected.items():
             assert meta.get(key) == value, f"{key}: got {meta.get(key)}, expected {value}"
-        assert text["checkpoint_precision"] == "manual_fp64_state_handoff"
-        assert text["execution_mode"] == "manual_handoff"
+        assert text["checkpoint_precision"] == "single_step_retained_fp64_handoff"
+        assert text["execution_mode"] == "single_step_tape_handoff"
         assert text["physical_observation_domain_guard"] == "passed"
         assert text["objective_normalization"] == "0.5_sum_over_times_and_points_of_residual_over_sigma_squared"
 
     # This short call is the hard gate. No 480-step call occurs unless the
-    # non-retained manual handoff reproduces the pinned retained h2.5 result.
+    # bounded single-step tape handoff reproduces the pinned retained h2.5 result.
     h25 = invoke("handoff_h2_5_N14_K12", 120, 2.5)
     try:
-        assert_handoff_metadata(h25, 120, 2.5)
+        assert_bounded_tape_metadata(h25, 120, 2.5)
         _, arrays25, scalars25, _ = h25
         _, arrays_ref, scalars_ref, _ = baseline_h25
         assert np.array_equal(arrays25["initial_state"], state)
@@ -194,7 +194,7 @@ def run_carry_h0625(exe, fixture_zip, outdir):
     target.write_text(json.dumps(report, indent=2)+"\n")
 
     fine = invoke("handoff_h0_625_N14_K12", 480, 0.625)
-    assert_handoff_metadata(fine, 480, 0.625)
+    assert_bounded_tape_metadata(fine, 480, 0.625)
     meta, arrays, scalars, _ = fine
     _, arrays_h125, scalars_h125, _ = baseline_h125
     assert np.array_equal(arrays["initial_state"], state)
