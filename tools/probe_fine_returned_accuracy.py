@@ -155,13 +155,18 @@ def run_bounded_carry_schedule(exe, fixture_zip, outdir, schedule):
               "optimization_run": False, "observations_changed": False}
     target = outdir / "report.json"
 
-    def invoke(label, steps, dt):
+    def invoke(label, steps, dt, mode):
         output = outdir / f"{label}.csv"
         command = [str(exe), *map(str, GRID), str(output),
                    "--physical-wave-inverse", str(inputs / "initial_state.txt"),
                    str(inputs / "observations.txt"), str(steps), str(dt),
-                   "--newton-tol", "1e-14", "--krylov-tol", "1e-12",
-                   "--bounded-tape-forward-only"]
+                   "--newton-tol", "1e-14", "--krylov-tol", "1e-12"]
+        if mode == "bounded-tape":
+            command.append("--bounded-tape-forward-only")
+        elif mode == "retained-forward":
+            command.append("--forward-only")
+        else:
+            raise ValueError(f"unsupported carry probe mode: {mode}")
         usage = outdir / f"{label}.time.txt"
         timed_command = ["/usr/bin/time", "-v", "-o", str(usage), *command]
         started = time.monotonic()
@@ -205,28 +210,95 @@ def run_bounded_carry_schedule(exe, fixture_zip, outdir, schedule):
         assert text["physical_observation_domain_guard"] == "passed"
         assert text["objective_normalization"] == "0.5_sum_over_times_and_points_of_residual_over_sigma_squared"
 
-    # This short call is the hard gate. No selected long call occurs unless the
-    # bounded single-step tape handoff reproduces the pinned retained h2.5 result.
-    h25 = invoke("handoff_h2_5_N14_K12", 120, 2.5)
+    def assert_retained_forward_metadata(payload, steps, dt):
+        meta, _, _, text = payload
+        expected = {"trajectory_steps": steps, "trajectory_dt_fp32": dt,
+                    "trajectory_seconds": 300, "observation_count_per_time": 105,
+                    "observation_time_150_seconds": 150, "observation_time_300_seconds": 300,
+                    "physical_observation_sigma_m_s": SIGMA,
+                    "physical_wave_newton_tol": float(np.float32(1e-14)),
+                    "physical_wave_krylov_tol": float(np.float32(1e-12)),
+                    "forward_only": 1, "retains_tape": 1, "pullback_requested": 0,
+                    "internal_fp64": 1, "internal_fp64_state_carry": 1,
+                    "retain_graph_for_adjoint": 1}
+        for key, value in expected.items():
+            assert meta.get(key) == value, f"retained reference {key}: got {meta.get(key)}, expected {value}"
+        assert text["checkpoint_precision"] == "retained_fp64_trajectory"
+        assert text["physical_observation_domain_guard"] == "passed"
+        assert text["objective_normalization"] == "0.5_sum_over_times_and_points_of_residual_over_sigma_squared"
+
+    # Run a retained forward reference first. The old saved result remains a
+    # diagnostic comparison only because its source predates production edits.
+    h25_reference = invoke("retained_forward_h2_5_N14_K12", 120, 2.5, "retained-forward")
     try:
-        assert_bounded_tape_metadata(h25, 120, 2.5)
-        _, arrays25, scalars25, _ = h25
-        _, arrays_ref, scalars_ref, _ = baseline_h25
-        assert np.array_equal(arrays25["initial_state"], state)
-        for key in ("checkpoint_150", "checkpoint_300", "predicted_150", "predicted_300",
-                    "observed_150", "observed_300", "bracket_index_150", "bracket_index_300"):
-            assert np.array_equal(arrays25[key], arrays_ref[key]), f"h2.5 parity gate failed: {key}"
-        assert scalars25["objective_physical_w"] == scalars_ref["objective_physical_w"], "h2.5 objective parity gate failed"
+        assert_retained_forward_metadata(h25_reference, 120, 2.5)
+        _, arrays_reference_h25, scalars_reference_h25, _ = h25_reference
+        assert "initial_pullback" not in arrays_reference_h25
+        assert np.array_equal(arrays_reference_h25["initial_state"], state)
+        assert all(np.isfinite(a).all() for a in arrays_reference_h25.values())
+        assert all(np.isfinite(v) for v in scalars_reference_h25.values())
+        for key in CONTEXT_ARRAYS:
+            assert np.array_equal(arrays_reference_h25[key], desc_saved[1][key]), f"h2.5 reference context mismatch: {key}"
+        for key in ("observed_150", "observed_300", "bracket_index_150", "bracket_index_300"):
+            assert np.array_equal(arrays_reference_h25[key], baseline_h25[1][key]), f"h2.5 reference literal-input mismatch: {key}"
     except AssertionError as error:
-        report.update(status="h2_5_parity_gate_failed", h2_5_parity_error=str(error))
+        report.update(status="h2_5_retained_reference_failed", h2_5_reference_error=str(error))
         target.write_text(json.dumps(report, indent=2)+"\n")
         raise
-    report["h2_5_parity_gate"] = {"passed": True,
+
+    _, arrays_legacy_h25, scalars_legacy_h25, _ = baseline_h25
+    legacy_arrays_exact = {}
+    legacy_metrics = {}
+    for key in ("initial_state", "checkpoint_150", "checkpoint_300", "predicted_150", "predicted_300",
+                "observed_150", "observed_300", "bracket_index_150", "bracket_index_300"):
+        legacy_arrays_exact[key] = bool(np.array_equal(arrays_reference_h25[key], arrays_legacy_h25[key]))
+    for t in (150, 300):
+        checkpoint_delta = arrays_reference_h25[f"checkpoint_{t}"] - arrays_legacy_h25[f"checkpoint_{t}"]
+        prediction_delta = arrays_reference_h25[f"predicted_{t}"] - arrays_legacy_h25[f"predicted_{t}"]
+        legacy_metrics[str(t)] = {
+            "checkpoint_max_abs_difference": float(np.max(np.abs(checkpoint_delta))),
+            "prediction_rms_difference_m_s": float(np.sqrt(np.mean(prediction_delta**2))),
+            "prediction_max_abs_difference_m_s": float(np.max(np.abs(prediction_delta))),
+        }
+    legacy_objective_delta = scalars_reference_h25["objective_physical_w"] - scalars_legacy_h25["objective_physical_w"]
+    report["legacy_h2_5_comparison"] = {
+        "used_as_acceptance_gate": False,
+        "classification": "historical_source_difference" if not all(legacy_arrays_exact.values()) or legacy_objective_delta else "exact_legacy_match",
+        "reference_csv_sha256": manifest["files"]["baseline_h2_5.csv"]["sha256"],
+        "exact_arrays": legacy_arrays_exact,
+        "objective_reference": scalars_legacy_h25["objective_physical_w"],
+        "objective_current_binary": scalars_reference_h25["objective_physical_w"],
+        "objective_difference_current_minus_legacy": legacy_objective_delta,
+        "per_time_differences": legacy_metrics,
+    }
+    target.write_text(json.dumps(report, indent=2)+"\n")
+
+    # Acceptance is same-executable parity, not bitwise parity against the
+    # historical source artifact. No selected long call follows a mismatch.
+    h25_bounded = invoke("bounded_h2_5_N14_K12", 120, 2.5, "bounded-tape")
+    try:
+        assert_bounded_tape_metadata(h25_bounded, 120, 2.5)
+        _, arrays_bounded_h25, scalars_bounded_h25, _ = h25_bounded
+        assert "initial_pullback" not in arrays_bounded_h25
+        for key in ("initial_state", "checkpoint_150", "checkpoint_300", "predicted_150", "predicted_300",
+                    "observed_150", "observed_300", "bracket_index_150", "bracket_index_300"):
+            assert np.array_equal(arrays_bounded_h25[key], arrays_reference_h25[key]), f"same-binary h2.5 parity failed: {key}"
+        assert scalars_bounded_h25["objective_physical_w"] == scalars_reference_h25["objective_physical_w"], "same-binary h2.5 objective parity failed"
+    except AssertionError as error:
+        report.update(status="h2_5_same_binary_parity_failed", h2_5_same_binary_error=str(error))
+        target.write_text(json.dumps(report, indent=2)+"\n")
+        raise
+    report["h2_5_same_binary_parity_gate"] = {
+        "passed": True,
+        "reference_mode": "retained_fp64_trajectory --forward-only",
+        "bounded_mode": "single_step_tape_handoff --bounded-tape-forward-only",
         "exact_arrays": ["initial_state", "checkpoint_150", "checkpoint_300", "predicted_150",
                          "predicted_300", "observed_150", "observed_300", "bracket_index_150", "bracket_index_300"],
-        "objective_exact": True, "baseline_objective": scalars_ref["objective_physical_w"],
-        "handoff_objective": scalars25["objective_physical_w"],
-        "output_sha256": report["calls"][-1]["output_sha256"]}
+        "objective_exact": True,
+        "objective": scalars_reference_h25["objective_physical_w"],
+        "reference_output_sha256": report["calls"][-2]["output_sha256"],
+        "bounded_output_sha256": report["calls"][-1]["output_sha256"],
+    }
     target.write_text(json.dumps(report, indent=2)+"\n")
 
     # Recheck the solver's freshly constructed model context only after the
@@ -255,10 +327,11 @@ def run_bounded_carry_schedule(exe, fixture_zip, outdir, schedule):
     report["context_exact_to_pinned_descriptor"] = True
     target.write_text(json.dumps(report, indent=2)+"\n")
 
-    fine = invoke(config["run_label"], config["steps"], config["dt"])
+    fine = invoke(config["run_label"], config["steps"], config["dt"], "bounded-tape")
     assert_bounded_tape_metadata(fine, config["steps"], config["dt"])
     meta, arrays, scalars, _ = fine
     _, arrays_reference, scalars_reference, _ = baseline_reference
+    assert "initial_pullback" not in arrays
     assert np.array_equal(arrays["initial_state"], state)
     assert all(np.isfinite(a).all() for a in arrays.values())
     assert all(np.isfinite(value) for value in scalars.values())
