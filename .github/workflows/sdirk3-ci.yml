@@ -24,6 +24,11 @@ on:
         required: true
         default: false
         type: boolean
+      returned_state_k12_diagnostic:
+        description: "Run returned fine-H5 N14/K12 plus returned-state FD diagnostics"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -39,7 +44,7 @@ concurrency:
 jobs:
   fast-contracts:
     name: fast-contracts
-    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true && inputs.returned_state_k12_diagnostic != true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -312,7 +317,7 @@ jobs:
 
   core-linux:
     name: core-linux
-    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true && inputs.returned_state_k12_diagnostic != true) }}
     runs-on: ubuntu-24.04
     # The prior 150-minute run passed tests 1–81, including 3,051 s fixed-data
     # refinement, then the job cap canceled the new inverse after 2,572 s,
@@ -595,7 +600,7 @@ jobs:
 
   diagnostic-h5-precision-probe:
     name: DIAGNOSTIC ONLY - PR281 saved-state precision probes
-    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.h5_precision_diagnostic == true || inputs.saved_state_k12_diagnostic == true) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.h5_precision_diagnostic == true || inputs.saved_state_k12_diagnostic == true || inputs.returned_state_k12_diagnostic == true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -612,7 +617,7 @@ jobs:
           fetch-depth: 0
 
       - name: require one diagnostic mode
-        if: ${{ inputs.h5_precision_diagnostic == true && inputs.saved_state_k12_diagnostic == true }}
+        if: ${{ (inputs.h5_precision_diagnostic == true && inputs.saved_state_k12_diagnostic == true) || (inputs.h5_precision_diagnostic == true && inputs.returned_state_k12_diagnostic == true) || (inputs.saved_state_k12_diagnostic == true && inputs.returned_state_k12_diagnostic == true) }}
         run: |
           echo "Select exactly one diagnostic mode."
           exit 2
@@ -658,7 +663,7 @@ jobs:
           PY
 
       - name: verify and unpack exact saved v40a9c2 state fixture
-        if: ${{ inputs.saved_state_k12_diagnostic == true }}
+        if: ${{ inputs.saved_state_k12_diagnostic == true || inputs.returned_state_k12_diagnostic == true }}
         run: |
           set -euo pipefail
           fixture=tools/fixtures/pr281-saved-v40a9c2-k12-37863920808.zip
@@ -689,6 +694,83 @@ jobs:
           run-id: 37803412710
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ runner.temp }}/pr281-n13-correction-reference
+
+      - name: verify early main12c run/artifact/merge API receipt and ZIP digest
+        if: ${{ inputs.returned_state_k12_diagnostic == true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api repos/gonos2k/AD-SDIRK3/actions/runs/37873496629 > "$RUNNER_TEMP/main12c-run-api.json"
+          gh api repos/gonos2k/AD-SDIRK3/actions/artifacts/11593606142 > "$RUNNER_TEMP/main12c-artifact-api.json"
+          gh api repos/gonos2k/AD-SDIRK3/git/commits/8d8f84d92f5be40bf0230bcc05781274d604f857 > "$RUNNER_TEMP/main12c-merge-api.json"
+          gh api repos/gonos2k/AD-SDIRK3/actions/artifacts/11593606142/zip > "$RUNNER_TEMP/pr281-main12c-returned.zip"
+          python3 -B - "$RUNNER_TEMP" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          run_path = root / "main12c-run-api.json"
+          artifact_path = root / "main12c-artifact-api.json"
+          merge_path = root / "main12c-merge-api.json"
+          archive_path = root / "pr281-main12c-returned.zip"
+          run = json.loads(run_path.read_text())
+          artifact = json.loads(artifact_path.read_text())
+          merge = json.loads(merge_path.read_text())
+          pull = next((p for p in run.get("pull_requests", []) if p.get("number") == 281), None)
+          expected_zip_sha = "dfac1516bfcdefb780072311e29cdeb9cf82b0cbccc95c679f5adb0bb8a6830e"
+          expected_head = "12c12e7501807681ec5072cb8dd2d1bac2717607"
+          expected_base = "ee8faadbf728f61fe9db8f92adcf9f8d79a3bac7"
+          if (run.get("id") != 37873496629 or run.get("event") != "pull_request" or
+                  run.get("head_branch") != "agent/fine-wave-inverse-20261007" or
+                  run.get("head_sha") != expected_head or pull is None or
+                  pull.get("head", {}).get("sha") != expected_head or
+                  pull.get("base", {}).get("sha") != expected_base or
+                  artifact.get("id") != 11593606142 or
+                  artifact.get("name") != "physical-inverse-gate-37873496629" or
+                  artifact.get("digest") != f"sha256:{expected_zip_sha}" or
+                  artifact.get("workflow_run", {}).get("id") != 37873496629 or
+                  merge.get("sha") != "8d8f84d92f5be40bf0230bcc05781274d604f857" or
+                  merge.get("tree", {}).get("sha") != "b0c7531636c60634077ad4dde46b7aebc57dcb56" or
+                  expected_head not in [p.get("sha") for p in merge.get("parents", [])] or
+                  expected_base not in [p.get("sha") for p in merge.get("parents", [])]):
+              raise SystemExit("main12c run/artifact/merge API provenance mismatch")
+          archive_sha = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+          if archive_sha != expected_zip_sha:
+              raise SystemExit(f"early artifact ZIP hash mismatch: {archive_sha}")
+          receipt = {
+              "schema": "pr281-early-gate-api-receipt-v1",
+              "run": {"id": run["id"], "event": run["event"],
+                      "head_branch": run["head_branch"], "head_sha": run["head_sha"],
+                      "pull_request_number": pull["number"],
+                      "pull_request_head_sha": pull["head"]["sha"],
+                      "pull_request_base_sha": pull["base"]["sha"]},
+              "artifact": {"id": artifact["id"], "name": artifact["name"],
+                           "digest": artifact["digest"],
+                           "run_id": artifact["workflow_run"]["id"]},
+              "merge_commit": {"sha": merge["sha"], "tree": merge["tree"]["sha"],
+                               "parents": [p["sha"] for p in merge["parents"]]},
+              "archive_sha256": archive_sha,
+              "api_payload_sha256": {
+                  "run": hashlib.sha256(run_path.read_bytes()).hexdigest(),
+                  "artifact": hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+                  "merge_commit": hashlib.sha256(merge_path.read_bytes()).hexdigest(),
+              },
+          }
+          (root / "pr281-main12c-reference-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+          PY
+
+      - name: download early main12c physical-inverse gate evidence
+        if: ${{ inputs.returned_state_k12_diagnostic == true }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: physical-inverse-gate-37873496629
+          run-id: 37873496629
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/pr281-main12c-returned
 
       - name: record and bind source revision
         run: |
@@ -745,11 +827,34 @@ jobs:
             --exe "$exe" \
             --output-dir build/sdirk3-core/pr281_saved_state_k12
 
+      - name: run returned-state N14/K12 and finite differences
+        if: ${{ inputs.returned_state_k12_diagnostic == true }}
+        run: |
+          set -euo pipefail
+          exe="$(find build/sdirk3-core -type f -name test_native_wave_refinement -print -quit)"
+          test -n "$exe"
+          python3 -B tools/pr281_returned_state_k12_probe.py \
+            --fixture-root "$RUNNER_TEMP/pr281-saved-v40a9c2-inputs" \
+            --fixture-zip tools/fixtures/pr281-saved-v40a9c2-k12-37863920808.zip \
+            --finalpoint-artifact-root "$RUNNER_TEMP/pr281-main12c-returned" \
+            --reference-artifact-zip "$RUNNER_TEMP/pr281-main12c-returned.zip" \
+            --reference-receipt "$RUNNER_TEMP/pr281-main12c-reference-receipt.json" \
+            --output-dir build/sdirk3-core/pr281_returned_state_k12_preflight \
+            --dry-preflight
+          python3 -B tools/pr281_returned_state_k12_probe.py \
+            --fixture-root "$RUNNER_TEMP/pr281-saved-v40a9c2-inputs" \
+            --fixture-zip tools/fixtures/pr281-saved-v40a9c2-k12-37863920808.zip \
+            --finalpoint-artifact-root "$RUNNER_TEMP/pr281-main12c-returned" \
+            --reference-artifact-zip "$RUNNER_TEMP/pr281-main12c-returned.zip" \
+            --reference-receipt "$RUNNER_TEMP/pr281-main12c-reference-receipt.json" \
+            --exe "$exe" \
+            --output-dir build/sdirk3-core/pr281_returned_state_k12
+
       - name: upload diagnostic evidence (not a validation result)
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: diagnostic-only-pr281-${{ inputs.saved_state_k12_diagnostic == true && 'saved-v40a9c2-k12' || 'h5-fixed-correction-n13-n14' }}-${{ github.run_id }}
+          name: diagnostic-only-pr281-${{ inputs.returned_state_k12_diagnostic == true && 'returned-main12c-k12-fd' || inputs.saved_state_k12_diagnostic == true && 'saved-v40a9c2-k12' || 'h5-fixed-correction-n13-n14' }}-${{ github.run_id }}
           if-no-files-found: ignore
           path: |
             configure.log
@@ -757,13 +862,17 @@ jobs:
             build/sdirk3-core/CMakeFiles/CMakeOutput.log
             build/sdirk3-core/pr281_h5_precision_probe/
             build/sdirk3-core/pr281_saved_state_k12/
+            build/sdirk3-core/pr281_returned_state_k12_preflight/
+            build/sdirk3-core/pr281_returned_state_k12/
             tools/fixtures/pr281-ci-37726282791-red-fixture.zip
             tools/fixtures/pr281-saved-v40a9c2-k12-37863920808.zip
+            ${{ runner.temp }}/pr281-main12c-reference-receipt.json
+            ${{ runner.temp }}/pr281-main12c-returned.zip
             build/numerical-evidence/source-revisions.txt
 
   build-contract-negatives:
     name: build-contract-negatives
-    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.h5_precision_diagnostic != true && inputs.saved_state_k12_diagnostic != true && inputs.returned_state_k12_diagnostic != true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -793,7 +902,7 @@ jobs:
 
   required:
     name: required
-    if: ${{ always() && !(github.event_name == 'workflow_dispatch' && (inputs.h5_precision_diagnostic == true || inputs.saved_state_k12_diagnostic == true)) }}
+    if: ${{ always() && !(github.event_name == 'workflow_dispatch' && (inputs.h5_precision_diagnostic == true || inputs.saved_state_k12_diagnostic == true || inputs.returned_state_k12_diagnostic == true)) }}
     needs: [fast-contracts, core-linux, build-contract-negatives]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
