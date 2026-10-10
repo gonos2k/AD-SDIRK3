@@ -1,0 +1,226 @@
+{
+  "schema": "pr284-graph-bindings-v1",
+  "timestamp_local": "2026-10-10T10:02:51+09:00",
+  "stage": "final_after_redfix_source_freeze",
+  "target_worktree": "/private/tmp/pr284-small-step-20261010",
+  "base_revision": "0fcde78bacf7ebef85cad49a3d85196e87ffe0c8",
+  "cached_graph_source": "/private/tmp/pr283-small-step-graph",
+  "graph_working_copy": "/private/tmp/pr284-small-step-graph",
+  "graph_refresh_method": "clean code-only rebuild from the 17 exact source mirrors; clean rebuild was needed because incremental update preserved obsolete call-source locations",
+  "graph_stats": {
+    "nodes": 643,
+    "links": 2213,
+    "hyperedges": 0
+  },
+  "source_binding_count": 17,
+  "source_bindings": [
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/test_native_wave_refinement.cpp",
+      "sha256": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/tools/test_fine_wave_inverse.py",
+      "mirror": "/private/tmp/pr284-small-step-graph/test_fine_wave_inverse.py",
+      "sha256": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_tile_unified.h",
+      "sha256": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_implicit_autograd.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_implicit_autograd.h",
+      "sha256": "fa9d052b93de4952cd5e032569116889a8a18e4e25af87eb3127b120b9e9c15e"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/tools/probe_fine_returned_accuracy.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_fine_returned_accuracy.py",
+      "sha256": "839ba54c58c8e70291e2525ab96e75bd4e6403d8c2b09538c06de8c8c8692535"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/.github/workflows/sdirk3-ci.yml",
+      "mirror": "/private/tmp/pr284-small-step-graph/sdirk3-ci.yml",
+      "sha256": "88b31ef21377b0ccc36b536544f1ea18dda00db1a70dccb15a4f99548f0465f4"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/test_fp64_handoff_probe.cpp",
+      "sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/tile_test_fixture.h",
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/tools/probe_fine_gradient_components.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_fine_gradient_components.py",
+      "sha256": "64d6e80b3086a69b644cf8f8f1493152bd77e58dc961f7bc78a463808ad9ca3e"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_newton_solver.cpp",
+      "sha256": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/tools/probe_retained_memory_smoke.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_retained_memory_smoke.py",
+      "sha256": "fef37dd2079102a193f7263aceda89037a0a4215280f7736ddf1358771137f12"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/tools/probe_fine_split_pullbacks.py",
+      "mirror": "/private/tmp/pr283-small-step-graph/probe_fine_split_pullbacks.py",
+      "sha256": "210a2cd4d33c395ffdc9daeff0a89aa973790edba6a6d9ba000c499393674ce9"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_newton_solver.h",
+      "sha256": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_probe_noninterference.cpp",
+      "mirror": "/private/tmp/pr283-small-step-graph/test_probe_noninterference.cpp",
+      "sha256": "5c026b8ec8c70338817e05289868f7e9cac6fa316865686a2c35c0d7ef3869d9"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/tools/probe_small_step_inverse.py",
+      "mirror": "/private/tmp/pr284-small-step-graph/probe_small_step_inverse.py",
+      "sha256": "1530bd32027faeec3178c68408f1de64353713a93a49a99e83b97b34ed7c131a"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+      "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_config.h",
+      "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+    }
+  ],
+  "source_binding_verification": "all 17 source/mirror/recorded SHA256 values match the current PR284 worktree after the final attempt-index fix",
+  "unchanged_native_test_sha256": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7",
+  "unchanged_production_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd"
+  },
+  "changed_source_sha256": {
+    "tools/probe_small_step_inverse.py": "1530bd32027faeec3178c68408f1de64353713a93a49a99e83b97b34ed7c131a",
+    "tools/test_fine_wave_inverse.py": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed",
+    ".github/workflows/sdirk3-ci.yml": "88b31ef21377b0ccc36b536544f1ea18dda00db1a70dccb15a4f99548f0465f4"
+  },
+  "affected_call_paths": {
+    "small_step_driver": {
+      "locations": {
+        "main": 908,
+        "fixed_metric": 101,
+        "validate_resume_report": 125,
+        "invoke_native": 446,
+        "copy_resume_bundle": 510,
+        "resume_preflight": 551,
+        "run_resume": 620,
+        "main_call_fixed_metric": 559,
+        "main_call_resume_preflight": 901,
+        "main_call_run_resume": 902,
+        "resume_call_validate_report": 605,
+        "resume_rebuild_metric_inverse": 671,
+        "resume_native_gradient": 703,
+        "resume_safe_bfgs_update": 827,
+        "main_dispatch_resume_preflight": 931,
+        "main_dispatch_run_resume": 932,
+        "attempt_index": 767,
+        "accepted_update_ordinal": 780,
+        "terminal_gradient_ordinal": 843,
+        "accepted_secant_receipt": 858
+      },
+      "graph_edges": [
+        {
+          "source": "probe_small_step_inverse_main",
+          "target": "probe_small_step_inverse_resume_preflight",
+          "relation": "calls"
+        },
+        {
+          "source": "probe_small_step_inverse_main",
+          "target": "probe_small_step_inverse_run_resume",
+          "relation": "calls"
+        },
+        {
+          "source": "probe_small_step_inverse_main",
+          "target": "probe_small_step_inverse_fixed_metric",
+          "relation": "calls"
+        },
+        {
+          "source": "probe_small_step_inverse_run_resume",
+          "target": "probe_small_step_inverse_fixed_metric",
+          "relation": "calls"
+        },
+        {
+          "source": "probe_small_step_inverse_run_resume",
+          "target": "probe_small_step_inverse_copy_resume_bundle",
+          "relation": "calls"
+        },
+        {
+          "source": "probe_small_step_inverse_run_resume",
+          "target": "probe_small_step_inverse_validate_resume_report",
+          "relation": "calls"
+        }
+      ],
+      "manual_source_review": "main dispatches to resume_preflight or run_resume; both validate fixture/FD inputs and reconstruct the fixed four-column metric. run_resume verifies the predecessor ZIP/report/calls/replay gate, exact accepted state and objective, native/source fingerprints, then rebuilds H=G^-1 from existing accepted secants. It runs a fresh bounded native gradient at the resume point, forms and applies the pending secant, then takes bounded inverse-BFGS directions with strict actual-objective Armijo trials; every accepted endpoint is followed by a fresh gradient and secant update. Existing stage/solver and native objective sources remain unchanged. The final Red fix keeps attempted update labels separate from accepted-update ordinals, pins PR283 resume ZIP/input hashes, and treats the validated terminal-gradient or last accepted-trial objective as final-cost authority."
+    },
+    "legacy_inverse_harness": {
+      "locations": {
+        "main": 959,
+        "run": 762,
+        "evaluate": 345,
+        "safe_bfgs_inverse_update": 384,
+        "bfgs_optimize": 424,
+        "bfgs_call_safe_update": 554
+      },
+      "graph_edges": [
+        {
+          "source": "test_fine_wave_inverse_main",
+          "target": "test_fine_wave_inverse_run",
+          "relation": "calls"
+        },
+        {
+          "source": "test_fine_wave_inverse_run",
+          "target": "test_fine_wave_inverse_bfgs_optimize",
+          "relation": "calls"
+        },
+        {
+          "source": "test_fine_wave_inverse_bfgs_optimize",
+          "target": "test_fine_wave_inverse_evaluate",
+          "relation": "calls"
+        },
+        {
+          "source": "test_fine_wave_inverse_bfgs_optimize",
+          "target": "test_fine_wave_inverse_project_gradient",
+          "relation": "calls"
+        },
+        {
+          "source": "test_fine_wave_inverse_bfgs_optimize",
+          "target": "test_fine_wave_inverse_safe_bfgs_inverse_update",
+          "relation": "calls"
+        }
+      ],
+      "manual_source_review": "The existing inverse harness evaluates native objectives/gradients through evaluate(), projects with project_gradient(), and updates inverse BFGS only through the guarded helper. The PR284 continuation driver reuses this helper while the original PR283 driver remains fixed-Gauss-Newton."
+    },
+    "workflow_dispatch": {
+      "source": ".github/workflows/sdirk3-ci.yml",
+      "manual_source_review": "small-step-continue downloads the predecessor artifact by explicit artifact ID and SHA256, then passes the verified ZIP and SHA into both preflight and execution branches."
+    }
+  },
+  "extraction_gaps": [
+    "AST extraction does not model the nested invoke() closures in main() and run_resume() as independent nodes; the calls from those closures to invoke_native() and validate_trial() are documented from source, not asserted as graph edges.",
+    "Workflow dispatch conditions and artifact transport were manually verified from YAML; the structural code graph is not proof of GitHub execution behavior.",
+    "Graphify call relationships are navigation aids only; BFGS positivity, resume artifact integrity, and objective/Armijo correctness must be established from source and attached runtime evidence."
+  ],
+  "source_revision_matches_target": true,
+  "numerical_validation_performed": false,
+  "model_or_test_run_performed": false
+}
