@@ -1,0 +1,132 @@
+{
+  "timestamp_local": "2026-10-10T19:47:09+09:00",
+  "head": "cd1986edc181143f3471dcaf5746acf035bddf04",
+  "branch": "codex/pr286-analysis-accuracy",
+  "target_worktree": "/private/tmp/pr286-analysis-accuracy-20261010",
+  "source_count": 21,
+  "sources": [
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/test_native_wave_refinement.cpp",
+      "sha256": "c184a4f7f0787a329333b6a7b90da81e15754fb6fbf0f8e3a177970ff40ec5d7"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/test_fine_wave_inverse.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/test_fine_wave_inverse.py",
+      "sha256": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/wrf_sdirk3_tile_unified.h",
+      "sha256": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_implicit_autograd.h",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/wrf_sdirk3_implicit_autograd.h",
+      "sha256": "fa9d052b93de4952cd5e032569116889a8a18e4e25af87eb3127b120b9e9c15e"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_fine_returned_accuracy.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_fine_returned_accuracy.py",
+      "sha256": "839ba54c58c8e70291e2525ab96e75bd4e6403d8c2b09538c06de8c8c8692535"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/.github/workflows/sdirk3-ci.yml",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/sdirk3-ci.yml",
+      "sha256": "7f88e63dea799c3a908c512857ae32c6155338eecf5014087d53c4a733625e72"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/test_fp64_handoff_probe.cpp",
+      "sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/tile_test_fixture.h",
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_fine_gradient_components.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_fine_gradient_components.py",
+      "sha256": "64d6e80b3086a69b644cf8f8f1493152bd77e58dc961f7bc78a463808ad9ca3e"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/wrf_sdirk3_newton_solver.cpp",
+      "sha256": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_retained_memory_smoke.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_retained_memory_smoke.py",
+      "sha256": "fef37dd2079102a193f7263aceda89037a0a4215280f7736ddf1358771137f12"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_fine_split_pullbacks.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_fine_split_pullbacks.py",
+      "sha256": "210a2cd4d33c395ffdc9daeff0a89aa973790edba6a6d9ba000c499393674ce9"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/wrf_sdirk3_newton_solver.h",
+      "sha256": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/tests/test_probe_noninterference.cpp",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/test_probe_noninterference.cpp",
+      "sha256": "5c026b8ec8c70338817e05289868f7e9cac6fa316865686a2c35c0d7ef3869d9"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_small_step_inverse.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_small_step_inverse.py",
+      "sha256": "1530bd32027faeec3178c68408f1de64353713a93a49a99e83b97b34ed7c131a"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/wrf_sdirk3_config.h",
+      "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_accepted_analysis_time.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_accepted_analysis_time.py",
+      "sha256": "c6a5c7b8bbe4c1898f564d6a7805c9e5b18fb522404a78bbd1c5d0fcbb3a0364"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_accepted_analysis_forecast.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_accepted_analysis_forecast.py",
+      "sha256": "e814bb2f64fad92a3c5b6b9ac70e3551f824b783b8e2fa12becfc8b0011bbf28"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_analysis_restart.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_analysis_restart.py",
+      "sha256": "a03e7a639681504b6f952a908da2e6dc8fbaba21220583d29a0b61d6e7b690e5"
+    },
+    {
+      "source": "/private/tmp/pr286-analysis-accuracy-20261010/tools/probe_terminal_gradient_accuracy.py",
+      "mirror": "/private/tmp/pr286-analysis-accuracy-restart-graph-21-20261010/probe_terminal_gradient_accuracy.py",
+      "sha256": "b8997786c3095a1126a806176ef1d13e2118dcba4638f9f2c97d6b5f390dbc23"
+    }
+  ],
+  "binding_hash_mismatches": 0,
+  "graph_stats": {
+    "nodes": 677,
+    "raw_links": 6549,
+    "hyperedges": 0
+  },
+  "graph_sha256": "8daa4f971f77f85dc9eb788956e2c6bedb116aebed1ee9becc9aeb4017447568",
+  "graph_update": "incrementally re-extracted only test_native_wave_refinement.cpp and probe_terminal_gradient_accuracy.py; 19 other source fingerprints remained unchanged",
+  "scope_review": {
+    "restart_contract": "warm live branch now keeps in-place CarriedState with restore disabled; snapshot-restored and cold-constructor branches explicitly restore. All arms use same packed FP64 checkpoint at t=300 and 16 steps at h=.3125 with host tokens 961-976; driver requires restored snapshot endpoint and W105 output bitwise equal to warm-live.",
+    "coverage": "test-harness snapshot includes Newton CarriedState and stage predictors, not preconditioner cache or whole solver. No production API/source change.",
+    "model_or_test_run_performed_by_graph_agent": false
+  },
+  "known_graph_gaps": [
+    "Graph edges are navigation only; direct source reads establish state ordering/value checks.",
+    "Generic function names may generate ambiguous inferred cross-module links; dynamic argv is validated by source/receipt rather than graph relation.",
+    "Graphify multigraph diagnostic on this incremental output: 6549 raw edges, 4460 exact duplicates, 257 dangling endpoints, 3 self-loops; collapsed graph has 1594 edges. Do not interpret edge multiplicity as a semantic count."
+  ]
+}

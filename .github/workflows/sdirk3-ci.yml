@@ -20,7 +20,7 @@ on:
       fine_accuracy_schedule:
         description: 'Explicit fixed-state diagnostic; observations remain 150/300s'
         type: choice
-        options: [h2.5, h1.25, carry-h.625, carry-h.3125, h5-component-fd, h5-split-vjp, small-step-inverse, small-step-continue, accepted-analysis-time, accepted-analysis-forecast, memory-smoke]
+        options: [h2.5, h1.25, carry-h.625, carry-h.3125, h5-component-fd, h5-split-vjp, small-step-inverse, small-step-continue, accepted-analysis-time, accepted-analysis-forecast, analysis-restart, terminal-gradient-fd, memory-smoke]
         default: h2.5
       continuation_artifact_id:
         description: 'Accepted small-step inverse artifact ID (manual continuation only)'
@@ -57,7 +57,8 @@ jobs:
           python3 -m py_compile tools/test_fine_wave_inverse.py \
             tools/probe_small_step_inverse.py tools/probe_fine_split_pullbacks.py \
             tools/probe_fine_returned_accuracy.py tools/probe_fine_gradient_components.py \
-            tools/probe_retained_memory_smoke.py tools/probe_accepted_analysis_time.py tools/probe_accepted_analysis_forecast.py
+            tools/probe_retained_memory_smoke.py tools/probe_accepted_analysis_time.py tools/probe_accepted_analysis_forecast.py \
+            tools/probe_analysis_restart.py tools/probe_terminal_gradient_accuracy.py
       - name: CPU setup shell syntax
         run: bash -n .github/ci/setup_torch_env.sh
       - name: actionlint (pinned binary, checksum-verified)
@@ -176,7 +177,7 @@ jobs:
       actions: read
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.fine_accuracy_diagnostic == true }}
     runs-on: ubuntu-24.04
-    timeout-minutes: ${{ (inputs.fine_accuracy_schedule == 'small-step-inverse' || inputs.fine_accuracy_schedule == 'small-step-continue') && 120 || inputs.fine_accuracy_schedule == 'accepted-analysis-forecast' && 60 || 35 }}
+    timeout-minutes: ${{ inputs.fine_accuracy_schedule == 'terminal-gradient-fd' && 180 || (inputs.fine_accuracy_schedule == 'small-step-inverse' || inputs.fine_accuracy_schedule == 'small-step-continue') && 120 || inputs.fine_accuracy_schedule == 'accepted-analysis-forecast' && 60 || 35 }}
     env:
       UCX_TLS: shm,tcp,self
       OPENBLAS_NUM_THREADS: '1'
@@ -225,7 +226,7 @@ jobs:
         run: |
           gh api repos/gonos2k/AD-SDIRK3/actions/artifacts/11609905043/zip > build/fine-accuracy/fd-reference.zip
       - name: download accepted small-step continuation
-        if: ${{ inputs.fine_accuracy_schedule == 'small-step-continue' || inputs.fine_accuracy_schedule == 'accepted-analysis-time' || inputs.fine_accuracy_schedule == 'accepted-analysis-forecast' }}
+        if: ${{ inputs.fine_accuracy_schedule == 'small-step-continue' || inputs.fine_accuracy_schedule == 'accepted-analysis-time' || inputs.fine_accuracy_schedule == 'accepted-analysis-forecast' || inputs.fine_accuracy_schedule == 'analysis-restart' || inputs.fine_accuracy_schedule == 'terminal-gradient-fd' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PREDECESSOR_ID: ${{ inputs.continuation_artifact_id }}
@@ -280,6 +281,18 @@ jobs:
               --accepted-zip build/fine-accuracy/continuation.zip \
               --accepted-sha256 "$PREDECESSOR_SHA" \
               --baseline-zip build/fine-accuracy/forecast-baseline.zip \
+              --outdir build/fine-accuracy/measurement
+          elif [[ '${{ inputs.fine_accuracy_schedule }}' == 'analysis-restart' ]]; then
+            python3 -B tools/probe_analysis_restart.py \
+              --exe "$PWD/build/fine-accuracy/test_native_wave_refinement" \
+              --accepted-zip build/fine-accuracy/continuation.zip \
+              --accepted-sha256 "$PREDECESSOR_SHA" \
+              --outdir build/fine-accuracy/measurement
+          elif [[ '${{ inputs.fine_accuracy_schedule }}' == 'terminal-gradient-fd' ]]; then
+            python3 -B tools/probe_terminal_gradient_accuracy.py \
+              --exe "$PWD/build/fine-accuracy/test_native_wave_refinement" \
+              --accepted-zip build/fine-accuracy/continuation.zip \
+              --accepted-sha256 "$PREDECESSOR_SHA" \
               --outdir build/fine-accuracy/measurement
           elif [[ '${{ inputs.fine_accuracy_schedule }}' == 'h5-split-vjp' ]]; then
             python3 -B tools/probe_fine_split_pullbacks.py \

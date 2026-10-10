@@ -1,0 +1,9 @@
+{
+  "schema": "pr286-terminal-fd-fullmock-receipt",
+  "helper_sha256": "b8997786c3095a1126a806176ef1d13e2118dcba4638f9f2c97d6b5f390dbc23",
+  "status": "completed_terminal_four_control_fd_diagnostic",
+  "recorded_simulated_calls": 18,
+  "actual_native_processes": 0,
+  "completed_final_analysis": true,
+  "formal_Eg_bound": false
+}
