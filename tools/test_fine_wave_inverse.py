@@ -381,6 +381,46 @@ def project_gradient(evaluation: dict, B: np.ndarray) -> np.ndarray:
     return B.T@evaluation["arrays"]["initial_pullback"]
 
 
+def safe_bfgs_inverse_update(H: np.ndarray, s: np.ndarray, y: np.ndarray,
+                             relative_curvature_tolerance: float=1.0e-14) -> tuple[np.ndarray,dict]:
+    """Apply the existing inverse-BFGS formula only when the update remains SPD."""
+    H=np.asarray(H,dtype=np.float64); s=np.asarray(s,dtype=np.float64); y=np.asarray(y,dtype=np.float64)
+    if H.ndim!=2 or H.shape[0]!=H.shape[1] or s.shape!=(H.shape[0],) or y.shape!=s.shape:
+        raise ValueError("inverse-BFGS update requires a square metric and matching secant vectors")
+    if not np.isfinite(H).all():
+        raise ValueError("inverse-BFGS metric contains NaN or Inf")
+    hscale=max(1.0,float(np.linalg.norm(H,ord=np.inf)))
+    if float(np.linalg.norm(H-H.T,ord=np.inf))>1.0e-12*hscale:
+        raise ValueError("inverse-BFGS metric is materially nonsymmetric")
+    try:
+        np.linalg.cholesky(0.5*(H+H.T))
+    except np.linalg.LinAlgError:
+        raise ValueError("inverse-BFGS metric is not positive definite")
+    fallback=H.copy()
+    if not np.isfinite(s).all() or not np.isfinite(y).all():
+        return fallback,{"applied":False,"reason":"nonfinite_secant"}
+    curvature=float(s@y)
+    threshold=relative_curvature_tolerance*float(np.linalg.norm(s))*float(np.linalg.norm(y))
+    if not np.isfinite(curvature) or curvature<=threshold:
+        return fallback,{"applied":False,"reason":"insufficient_curvature",
+                         "curvature":curvature,"threshold":threshold}
+    rho=1.0/curvature; ident=np.eye(s.size,dtype=np.float64)
+    candidate=(ident-rho*np.outer(s,y))@H@(ident-rho*np.outer(y,s))+rho*np.outer(s,s)
+    if not np.isfinite(candidate).all():
+        return fallback,{"applied":False,"reason":"nonfinite_update",
+                         "curvature":curvature,"threshold":threshold}
+    candidate_scale=max(1.0,float(np.linalg.norm(candidate,ord=np.inf)))
+    if float(np.linalg.norm(candidate-candidate.T,ord=np.inf))>1.0e-12*candidate_scale:
+        return fallback,{"applied":False,"reason":"updated_metric_nonsymmetric",
+                         "curvature":curvature,"threshold":threshold}
+    try:
+        np.linalg.cholesky(0.5*(candidate+candidate.T))
+    except np.linalg.LinAlgError:
+        return fallback,{"applied":False,"reason":"updated_metric_not_spd",
+                         "curvature":curvature,"threshold":threshold}
+    return candidate,{"applied":True,"curvature":curvature,"threshold":threshold}
+
+
 def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
                   descriptor_data: dict, base: np.ndarray, B: np.ndarray,
                   observations: Path,
@@ -510,10 +550,8 @@ def bfgs_optimize(exe: Path, grid: tuple[int,int,int], outdir: Path,
             break
         vnew=accepted["controls"]
         gnew=project_gradient(accepted,B)
-        s=vnew-v; y=gnew-g; ys=float(y@s)
-        if ys>1.0e-14*np.linalg.norm(y)*np.linalg.norm(s):
-            rho=1.0/ys; ident=np.eye(v.size)
-            H=(ident-rho*np.outer(s,y))@H@(ident-rho*np.outer(y,s))+rho*np.outer(s,s)
+        s=vnew-v; y=gnew-g
+        H,_=safe_bfgs_inverse_update(H,s,y)
         v,current,g=vnew,accepted,gnew
         history.append({"iteration":iteration,"controls":v.tolist(),"objective":current["objective"],
                         "gradient_norm":float(np.linalg.norm(g)),"step":step,

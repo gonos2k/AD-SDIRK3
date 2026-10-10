@@ -1,0 +1,91 @@
+{
+  "schema": "pr284-offline-continuation-checks-v1",
+  "predecessor": {
+    "path": "/private/tmp/pr283-small-inverse-37992048928.zip",
+    "zip_sha256": "ad31d82325c780230ff816d4c70340f9b3dfc09abce14f6bd8725448e3c69728",
+    "expected_zip_sha256": "ad31d82325c780230ff816d4c70340f9b3dfc09abce14f6bd8725448e3c69728",
+    "report_sha256": "1dc46eaad8a6fd02795aa6926f77eafb0df858cc2fac09733cd0391886120558",
+    "status": "completed_bounded_updates",
+    "accepted_updates": 2,
+    "native_calls_validated_offline": 4,
+    "native_gradients_validated_offline": 2
+  },
+  "native_source_fingerprint_match": true,
+  "native_source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": {
+      "artifact": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367",
+      "current": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": {
+      "artifact": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+      "current": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": {
+      "artifact": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "current": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": {
+      "artifact": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f",
+      "current": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "artifact": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd",
+      "current": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd"
+    },
+    "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp": {
+      "artifact": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7",
+      "current": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7"
+    },
+    "tools/test_native_wave_refinement.py": {
+      "artifact": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022",
+      "current": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022"
+    }
+  },
+  "fixed_metric_rank": 4,
+  "bfgs_quadratic_check": {
+    "H_times_y_minus_s_l2": 7.850462293418876e-17,
+    "updated_H_spd": true,
+    "materially_nonsymmetric_H_rejected": true
+  },
+  "executable_identity": {
+    "substitution_used": true,
+    "details": "Offline archive validation monkeypatched sha(exe) to the report-pinned executable SHA for a non-executable placeholder; no executable was launched. This validates archived CSV/report consistency, not binary identity."
+  },
+  "commands": [
+    "python -m py_compile tools/probe_small_step_inverse.py tools/test_fine_wave_inverse.py",
+    "python tools/probe_small_step_inverse.py --help",
+    "Offline Python validation called copy_resume_bundle, load_inputs, fixed_metric, and validate_resume_report on the pinned ZIP; sha was overridden only for the placeholder executable path.",
+    "Offline quadratic check called safe_bfgs_inverse_update on Q=[[4,1],[1,2]], s=[0.2,-0.3], y=Q@s; verified H@y=s and Cholesky(H)."
+  ],
+  "native_calls_started": false,
+  "pinned_fixture_input_sha256_and_native_observed_arrays_match": true,
+  "resume_schema_zip_contract": "PR283 schema requires the exact pinned PR283 ZIP SHA; PR284 continuation schemas may chain only with explicit ZIP SHA",
+  "terminal_state_objective_validation": "PR283 uses last accepted trial; PR284 uses linked terminal-gradient call",
+  "attempt_index_contract": "continuation attempt IDs use report updates length; accepted update count remains separate",
+  "pr283_schema_wrong_rehashed_zip_rejected": true,
+  "legacy_gradient_u_labels_rechecked_in_chained_pr284_reports": true,
+  "mocked_continuation_flow": {
+    "script": "/private/tmp/pr284_resume_flow_check.py",
+    "result": "passed",
+    "accepted_update_path": true,
+    "return_code": 0,
+    "accepted_updates_total": 4,
+    "accepted_updates_this_run": 2,
+    "attempt_indices": [
+      3,
+      4
+    ],
+    "second_attempt_reuses_first_terminal_gradient": true,
+    "terminal_gradient": "resume_gradient_u4_terminal",
+    "secant_from_update": 4,
+    "controlled_synthetic_cost_gradient": true,
+    "not_an_independent_physical_model": true,
+    "native_calls_started": false,
+    "executable_substitution": "non-executable placeholder SHA only; invoke_native was mocked"
+  },
+  "static_checks": {
+    "ruff_F821": "passed",
+    "python_compile": "passed",
+    "git_diff_check": "passed"
+  }
+}
