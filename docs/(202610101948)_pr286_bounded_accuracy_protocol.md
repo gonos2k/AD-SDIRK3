@@ -15,3 +15,5 @@
 Graphify 관련 21개 source hash 바인딩과 caller를 확인했다. 추출 결과의 중복·dangling edge는 navigation 한계로 기록했고, 수식·순서·상태 일치는 authoritative source와 실제 실행으로 검증한다.
 
 새 WRF 실행 또는 같은 설정의 RK3 필드/시간 비교는 수행하지 않았다. 생산 소스가 같으므로 PR #283의 적합한 회귀 근거를 새 실행과 구분해 재사용한다.
+
+2026-10-10 20:02 JST 실행시간 보완: 첫 실제 restart 진단은 960스텝+48 branch 스텝에 467.43초를 사용했다. 16개 전방과 center VJP를 완료하기에 120분 수동 한도가 부족할 가능성이 높아 terminal-gradient-fd의 한도만 180분으로 정했다. 자동 CI의 5개 시험/30분 한도와 물리·solver 설정은 변경하지 않았다.
