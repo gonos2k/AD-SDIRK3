@@ -1,0 +1,44 @@
+{
+  "result": "passed",
+  "accepted_artifact_sha256": "7ed6d84a36ca73e2f2b297302a1a9e4ce62f5c458adae47200dbc1af9b424ef3",
+  "single_subprocess_invocation_mocked": true,
+  "synthetic_prediction_offset_m_s": 1e-05,
+  "comparison_report_status": "completed",
+  "per_time_metrics": {
+    "150": {
+      "J_h03125": 0.0002725446388346168,
+      "J_h0625": 0.0584427701104514,
+      "delta_J_direct": 0.058170225471616786,
+      "delta_J_cross": -0.00016310786171541038,
+      "delta_J_quadratic": 0.058333333333332196,
+      "delta_J_decomposition_error": 0.0,
+      "prediction_difference_max_abs": 1.0000000000000026e-05,
+      "prediction_difference_rms": 9.999999999999901e-06,
+      "prediction_difference_rms_over_sigma": 0.03333333333333301,
+      "diagnostic_rms_le_0_1_sigma": true
+    },
+    "300": {
+      "J_h03125": 0.0004518336957446286,
+      "J_h0625": 0.05846732608460245,
+      "delta_J_direct": 0.05801549238885782,
+      "delta_J_cross": -0.00031784094447438933,
+      "delta_J_quadratic": 0.058333333333332196,
+      "delta_J_decomposition_error": 1.3877787807814457e-17,
+      "prediction_difference_max_abs": 1.0000000000000026e-05,
+      "prediction_difference_rms": 9.999999999999901e-06,
+      "prediction_difference_rms_over_sigma": 0.03333333333333301,
+      "diagnostic_rms_le_0_1_sigma": true
+    }
+  },
+  "aggregate_rms_over_sigma": 0.033333333333333014,
+  "aggregate_delta_j_stable": 0.1161857178604746,
+  "aggregate_delta_j_direct": 0.1161857178604746,
+  "aggregate_delta_j_error": 0.0,
+  "source_head_fields": {
+    "producer": "da687f30ae3cbe6ffabae2f7e88e0a43e2cbd357",
+    "accepted": "da687f30ae3cbe6ffabae2f7e88e0a43e2cbd357"
+  },
+  "executable_sha_substitution": "placeholder receipt only; executable never launched",
+  "native_calls_started": false,
+  "physics_correctness_claim": false
+}
