@@ -1,0 +1,807 @@
+{
+  "schema": "pr286-whole-physical-state-source-audit-v1",
+  "accepted_zip_sha256": "8dbe3f9d20ac2d5591cab455c67086978bd51676ed7b2acb8c167d370372bcbd",
+  "origin_zip_sha256": "ad31d82325c780230ff816d4c70340f9b3dfc09abce14f6bd8725448e3c69728",
+  "forecast_zip_sha256": "6a6b894f60824724dd89d8a886e2dba861952e98f600ec3d6019a864427eb862",
+  "source_git_head_forecast": "dcf2693598f0bd05f8648e09a93306917848b6b2",
+  "audit_worktree_head": "cd1986edc181143f3471dcaf5746acf035bddf04",
+  "historical_native_source_entries_verified_at_producer_revision": [
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+      "producer_sha256": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7",
+      "current_sha256": "172466adaf6d3640644861fe6e829377773500bc80384676f5fbc6487b394895",
+      "verified_via_git_show_at": "dcf2693598f0bd05f8648e09a93306917848b6b2"
+    }
+  ],
+  "source_module_sha256": {
+    "wave_quadratic_reference": {
+      "path": "/home/runner/work/AD-SDIRK3/AD-SDIRK3/tools/wave_quadratic_reference.py",
+      "sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431"
+    },
+    "wave_energy_spatial_reference": {
+      "path": "/home/runner/work/AD-SDIRK3/AD-SDIRK3/tools/wave_energy_spatial_reference.py",
+      "sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2"
+    },
+    "wave_quadratic_transport": {
+      "path": "/home/runner/work/AD-SDIRK3/AD-SDIRK3/tools/wave_quadratic_transport.py",
+      "sha256": "526923f41be9a8225b10a6fa022d11b60d0c60ba071d625cbe6d06dc750fc86f"
+    }
+  },
+  "native_source_sha256_producer": {
+    "tools/probe_small_step_inverse.py": "1530bd32027faeec3178c68408f1de64353713a93a49a99e83b97b34ed7c131a",
+    "tools/test_fine_wave_inverse.py": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd",
+    "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7",
+    "tools/test_native_wave_refinement.py": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022"
+  },
+  "native_source_sha256_current_worktree": {
+    "tools/probe_small_step_inverse.py": "1530bd32027faeec3178c68408f1de64353713a93a49a99e83b97b34ed7c131a",
+    "tools/test_fine_wave_inverse.py": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd",
+    "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp": "172466adaf6d3640644861fe6e829377773500bc80384676f5fbc6487b394895",
+    "tools/test_native_wave_refinement.py": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022"
+  },
+  "source_qtruth_sha256_local": "fb4f8f3096a303d2b672e9af2ec18e586e7094d26a36e374fd738ccb70f73dc1",
+  "source_qtruth_sha256_forecast_report": "637b509917babf7a01ef8c837f4057b3714c486a6ff40b5f02b2efb0d798d50b",
+  "source_qtruth_hash_bitwise_match": false,
+  "source_anchor_max_abs_m_s": 2.3141211169530607e-15,
+  "source_anchor_roundoff_tolerance_m_s": 2.842170943040401e-14,
+  "same_profile_stagger_unit_mapping": {
+    "u": [
+      0,
+      1632,
+      "m s-1",
+      "u mass/profile, periodic-x faces"
+    ],
+    "v": [
+      1632,
+      1664,
+      "m s-1",
+      "v mass/profile, y faces"
+    ],
+    "w": [
+      3296,
+      1728,
+      "m s-1",
+      "w vertical faces"
+    ],
+    "ph": [
+      5024,
+      1728,
+      "m2 s-2",
+      "PH/geopotential vertical faces; base PH plus source perturbation"
+    ],
+    "theta": [
+      6752,
+      1536,
+      "K",
+      "theta mass points; base theta plus source perturbation"
+    ],
+    "mu": [
+      8288,
+      192,
+      "Pa",
+      "column MU points; base MU plus source perturbation"
+    ]
+  },
+  "source_state_offset_policy": "U/V/W compare directly to packed source wave. PH/theta/MU source perturbations add to descriptor[base] native equilibrium blocks; the literal saved initial_state is used only for local-chart reconstruction. Source vertical profiles and native states share eta levels/staggers; no interpolation to common fixed Eulerian heights is claimed.",
+  "states_compared": {
+    "delta0": {
+      "0": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0009046276546878696,
+          "owned_point_error_max": 0.0018360781216562516,
+          "owned_point_source_wave_rms": 0.007163706121889436,
+          "error_rms_over_source_wave_rms": 0.12627928048635154
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.00030938380349770705,
+          "owned_point_error_max": 0.0007452048309962746,
+          "owned_point_source_wave_rms": 0.004482136005177259,
+          "error_rms_over_source_wave_rms": 0.06902597403120782
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0602056549282672,
+          "owned_point_error_max": 0.13723026644765923,
+          "owned_point_source_wave_rms": 0.08325209415949315,
+          "error_rms_over_source_wave_rms": 0.723172858726245
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0006340613552916554,
+          "owned_point_error_max": 0.0011245020070056455,
+          "owned_point_source_wave_rms": 0.0007964715194224662,
+          "error_rms_over_source_wave_rms": 0.7960879200695375
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.0520080607200043,
+          "owned_point_error_max": 0.07213725249675917,
+          "owned_point_source_wave_rms": 0.1491089531977727,
+          "error_rms_over_source_wave_rms": 0.34879234012878285
+        }
+      },
+      "150": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.00027041072437963414,
+          "owned_point_error_max": 0.0005661846672330856,
+          "owned_point_source_wave_rms": 0.007686429336183515,
+          "error_rms_over_source_wave_rms": 0.035180278456043046
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0001725313082818264,
+          "owned_point_error_max": 0.0004920855587048209,
+          "owned_point_source_wave_rms": 0.004686221059354177,
+          "error_rms_over_source_wave_rms": 0.03681672419986169
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.06323904026286177,
+          "owned_point_error_max": 0.1234959361681831,
+          "owned_point_source_wave_rms": 0.08170501808447547,
+          "error_rms_over_source_wave_rms": 0.7739921212364022
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.000650056267404031,
+          "owned_point_error_max": 0.0011699462801200156,
+          "owned_point_source_wave_rms": 0.0005931581220602565,
+          "error_rms_over_source_wave_rms": 1.0959240769495766
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.062287955558637566,
+          "owned_point_error_max": 0.08640508794087509,
+          "owned_point_source_wave_rms": 0.1465972469146642,
+          "error_rms_over_source_wave_rms": 0.4248917143368732
+        }
+      },
+      "300": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0006079776120437647,
+          "owned_point_error_max": 0.0017536107468759977,
+          "owned_point_source_wave_rms": 0.007559219131307555,
+          "error_rms_over_source_wave_rms": 0.08042862648679426
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.00024170223116343195,
+          "owned_point_error_max": 0.0006281873512810395,
+          "owned_point_source_wave_rms": 0.004303576918215554,
+          "error_rms_over_source_wave_rms": 0.05616310240451145
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.06059608587995803,
+          "owned_point_error_max": 0.1190044394902543,
+          "owned_point_source_wave_rms": 0.11252673258368173,
+          "error_rms_over_source_wave_rms": 0.5385039135913334
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0006465527317299566,
+          "owned_point_error_max": 0.0011753313192155446,
+          "owned_point_source_wave_rms": 0.0006166135571435795,
+          "error_rms_over_source_wave_rms": 1.0485541945024177
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.06844762172227509,
+          "owned_point_error_max": 0.09500129959997139,
+          "owned_point_source_wave_rms": 0.08995050109584203,
+          "error_rms_over_source_wave_rms": 0.7609476421853872
+        }
+      },
+      "600": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0019260799319242067,
+          "owned_point_error_max": 0.004504669574993763,
+          "owned_point_source_wave_rms": 0.00478613950651319,
+          "error_rms_over_source_wave_rms": 0.4024287067485417
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.000728502237688858,
+          "owned_point_error_max": 0.0017227368136907843,
+          "owned_point_source_wave_rms": 0.00278313501394121,
+          "error_rms_over_source_wave_rms": 0.26175598166803365
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.05163311200731265,
+          "owned_point_error_max": 0.10471362672933537,
+          "owned_point_source_wave_rms": 0.08074693522565266,
+          "error_rms_over_source_wave_rms": 0.6394436130983857
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0005820333428762021,
+          "owned_point_error_max": 0.0010619612237352527,
+          "owned_point_source_wave_rms": 0.001094300891765719,
+          "error_rms_over_source_wave_rms": 0.5318768788875398
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.05721523691863997,
+          "owned_point_error_max": 0.0795675256067625,
+          "owned_point_source_wave_rms": 0.11878004560570785,
+          "error_rms_over_source_wave_rms": 0.4816906461592616
+        }
+      },
+      "900": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.003076688913744111,
+          "owned_point_error_max": 0.00675302737337679,
+          "owned_point_source_wave_rms": 0.0008014038205408413,
+          "error_rms_over_source_wave_rms": 3.8391243401706694
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0009766215906746936,
+          "owned_point_error_max": 0.002461926455597759,
+          "owned_point_source_wave_rms": 0.0004326755894676269,
+          "error_rms_over_source_wave_rms": 2.2571682212910353
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.04502031854431487,
+          "owned_point_error_max": 0.09623846389240498,
+          "owned_point_source_wave_rms": 0.09284468961546385,
+          "error_rms_over_source_wave_rms": 0.48489923043284594
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0004507107189164868,
+          "owned_point_error_max": 0.0008487899814699773,
+          "owned_point_source_wave_rms": 0.0013350007226772486,
+          "error_rms_over_source_wave_rms": 0.3376108426463011
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.03620458577715964,
+          "owned_point_error_max": 0.05027841074161188,
+          "owned_point_source_wave_rms": 0.2549477996860226,
+          "error_rms_over_source_wave_rms": 0.14200783776815054
+        }
+      }
+    },
+    "delta10": {
+      "0": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 1.1594508656827528e-06,
+          "owned_point_error_max": 2.816205833266333e-06,
+          "owned_point_source_wave_rms": 0.007163706121889436,
+          "error_rms_over_source_wave_rms": 0.00016185070213027477
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 5.441154776049321e-07,
+          "owned_point_error_max": 1.6010406524522708e-06,
+          "owned_point_source_wave_rms": 0.004482136005177259,
+          "error_rms_over_source_wave_rms": 0.00012139646743794279
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.00019368548705938132,
+          "owned_point_error_max": 0.000444654733655625,
+          "owned_point_source_wave_rms": 0.08325209415949315,
+          "error_rms_over_source_wave_rms": 0.002326493873995788
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 2.036239255247638e-06,
+          "owned_point_error_max": 3.6878012092955714e-06,
+          "owned_point_source_wave_rms": 0.0007964715194224662,
+          "error_rms_over_source_wave_rms": 0.002556575101045856
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.0001780106968584024,
+          "owned_point_error_max": 0.0002469079295224219,
+          "owned_point_source_wave_rms": 0.1491089531977727,
+          "error_rms_over_source_wave_rms": 0.0011938296999664097
+        }
+      },
+      "150": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 1.3964413416842332e-06,
+          "owned_point_error_max": 3.229681730395652e-06,
+          "owned_point_source_wave_rms": 0.007686429336183515,
+          "error_rms_over_source_wave_rms": 0.00018167620888811785
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 1.2317397616245387e-06,
+          "owned_point_error_max": 3.837612256309369e-06,
+          "owned_point_source_wave_rms": 0.004686221059354177,
+          "error_rms_over_source_wave_rms": 0.00026284286336980626
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.00019866280681907678,
+          "owned_point_error_max": 0.0004529194120550528,
+          "owned_point_source_wave_rms": 0.08170501808447547,
+          "error_rms_over_source_wave_rms": 0.0024314639599452475
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 2.041397739405772e-06,
+          "owned_point_error_max": 3.668978370896525e-06,
+          "owned_point_source_wave_rms": 0.0005931581220602565,
+          "error_rms_over_source_wave_rms": 0.003441574284299178
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.00019722798616670826,
+          "owned_point_error_max": 0.00031460847094422206,
+          "owned_point_source_wave_rms": 0.1465972469146642,
+          "error_rms_over_source_wave_rms": 0.0013453730565725886
+        }
+      },
+      "300": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 3.6177326423538045e-06,
+          "owned_point_error_max": 7.377823392473379e-06,
+          "owned_point_source_wave_rms": 0.007559219131307555,
+          "error_rms_over_source_wave_rms": 0.00047858549666465717
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 1.6016544645162181e-06,
+          "owned_point_error_max": 5.332247455861611e-06,
+          "owned_point_source_wave_rms": 0.004303576918215554,
+          "error_rms_over_source_wave_rms": 0.0003721681975142511
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.00020080365517607964,
+          "owned_point_error_max": 0.0005242722072580364,
+          "owned_point_source_wave_rms": 0.11252673258368173,
+          "error_rms_over_source_wave_rms": 0.0017844973417916476
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 2.016507236215141e-06,
+          "owned_point_error_max": 3.6801672518294026e-06,
+          "owned_point_source_wave_rms": 0.0006166135571435795,
+          "error_rms_over_source_wave_rms": 0.003270293383681789
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.00018918465168323923,
+          "owned_point_error_max": 0.0002677516436051519,
+          "owned_point_source_wave_rms": 0.08995050109584203,
+          "error_rms_over_source_wave_rms": 0.0021032084243940282
+        }
+      },
+      "600": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 7.599118983958488e-06,
+          "owned_point_error_max": 1.560756672448413e-05,
+          "owned_point_source_wave_rms": 0.00478613950651319,
+          "error_rms_over_source_wave_rms": 0.0015877345350291756
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 3.622782192418284e-06,
+          "owned_point_error_max": 9.013218126754062e-06,
+          "owned_point_source_wave_rms": 0.00278313501394121,
+          "error_rms_over_source_wave_rms": 0.0013016911412026847
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.0001809651103325428,
+          "owned_point_error_max": 0.0005071563018645975,
+          "owned_point_source_wave_rms": 0.08074693522565266,
+          "error_rms_over_source_wave_rms": 0.0022411390578084955
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 1.8769369048013296e-06,
+          "owned_point_error_max": 3.939852337708771e-06,
+          "owned_point_source_wave_rms": 0.001094300891765719,
+          "error_rms_over_source_wave_rms": 0.0017151927033274925
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 0.0001826998585841477,
+          "owned_point_error_max": 0.0003453985468695464,
+          "owned_point_source_wave_rms": 0.11878004560570785,
+          "error_rms_over_source_wave_rms": 0.001538135952486688
+        }
+      },
+      "900": {
+        "u": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "u mass/profile, periodic-x faces",
+          "owned_point_policy": "exclude periodic duplicate x-face at i=nx",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 1.1072719869128166e-05,
+          "owned_point_error_max": 2.533302502121795e-05,
+          "owned_point_source_wave_rms": 0.0008014038205408413,
+          "error_rms_over_source_wave_rms": 0.013816654706806299
+        },
+        "v": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "v mass/profile, y faces",
+          "owned_point_policy": "include all physical nonperiodic y-faces",
+          "owned_point_count": 1664,
+          "owned_point_error_rms": 0.0,
+          "owned_point_error_max": 0.0,
+          "owned_point_source_wave_rms": 0.0,
+          "error_rms_over_source_wave_rms": null
+        },
+        "w": {
+          "unit": "m s-1",
+          "stagger_and_mapping": "w vertical faces",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 6.334376859772145e-06,
+          "owned_point_error_max": 1.6914806148089507e-05,
+          "owned_point_source_wave_rms": 0.0004326755894676269,
+          "error_rms_over_source_wave_rms": 0.014640014398700179
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "stagger_and_mapping": "PH/geopotential vertical faces; base PH plus source perturbation",
+          "owned_point_policy": "exclude fixed lower z-face; include dynamic top face",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 0.00018528320146421603,
+          "owned_point_error_max": 0.000486260191337351,
+          "owned_point_source_wave_rms": 0.09284468961546385,
+          "error_rms_over_source_wave_rms": 0.0019956251911833196
+        },
+        "theta": {
+          "unit": "K",
+          "stagger_and_mapping": "theta mass points; base theta plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 1536,
+          "owned_point_error_rms": 1.4826923587003256e-06,
+          "owned_point_error_max": 2.9820595290885876e-06,
+          "owned_point_source_wave_rms": 0.0013350007226772486,
+          "error_rms_over_source_wave_rms": 0.0011106303790809132
+        },
+        "mu": {
+          "unit": "Pa",
+          "stagger_and_mapping": "column MU points; base MU plus source perturbation",
+          "owned_point_policy": "include all mass points",
+          "owned_point_count": 192,
+          "owned_point_error_rms": 8.212761413414874e-05,
+          "owned_point_error_max": 0.00011681306978061912,
+          "owned_point_source_wave_rms": 0.2549477996860226,
+          "error_rms_over_source_wave_rms": 0.0003221350183656884
+        }
+      }
+    }
+  },
+  "physical_W_prediction_error_metrics": {
+    "delta0": {
+      "150": {
+        "rms_m_s": 0.00020179967391902192,
+        "max_abs_m_s": 0.0004516078571504727,
+        "rms_sigma": 0.6726655797300731
+      },
+      "300": {
+        "rms_m_s": 0.0002562155000377283,
+        "max_abs_m_s": 0.0005721310551942537,
+        "rms_sigma": 0.8540516667924277
+      },
+      "600": {
+        "rms_m_s": 0.0006620831273008637,
+        "max_abs_m_s": 0.0012721077652306308,
+        "rms_sigma": 2.2069437576695456
+      },
+      "900": {
+        "rms_m_s": 0.0009444084334414571,
+        "max_abs_m_s": 0.0017687987443410593,
+        "rms_sigma": 3.148028111471524
+      }
+    },
+    "delta10": {
+      "150": {
+        "rms_m_s": 6.821788568082156e-07,
+        "max_abs_m_s": 9.605992324981938e-07,
+        "rms_sigma": 0.002273929522694052
+      },
+      "300": {
+        "rms_m_s": 8.804965767264932e-07,
+        "max_abs_m_s": 1.8105662926322375e-06,
+        "rms_sigma": 0.002934988589088311
+      },
+      "600": {
+        "rms_m_s": 2.9791482084007838e-06,
+        "max_abs_m_s": 6.006717702470611e-06,
+        "rms_sigma": 0.009930494028002614
+      },
+      "900": {
+        "rms_m_s": 7.710417499126856e-06,
+        "max_abs_m_s": 1.4874069412715708e-05,
+        "rms_sigma": 0.02570139166375619
+      }
+    }
+  },
+  "forecast_report_metrics_recomputed": {
+    "analysis": {
+      "600": {
+        "error_max_abs_m_s": 6.006717702470611e-06,
+        "error_rms_m_s": 2.9791482084007838e-06,
+        "error_rms_sigma": 0.009930494028002614,
+        "error_relative_l2": 0.0010053636543784865
+      },
+      "900": {
+        "error_max_abs_m_s": 1.4874069412715708e-05,
+        "error_rms_m_s": 7.710417499126856e-06,
+        "error_rms_sigma": 0.02570139166375619,
+        "error_relative_l2": 0.02756307262711861
+      }
+    },
+    "baseline": {
+      "600": {
+        "error_max_abs_m_s": 0.0012721077652306308,
+        "error_rms_m_s": 0.0006620831273008637,
+        "error_rms_sigma": 2.2069437576695456,
+        "error_relative_l2": 0.2234310835857501
+      },
+      "900": {
+        "error_max_abs_m_s": 0.0017687987443410593,
+        "error_rms_m_s": 0.0009444084334414571,
+        "error_rms_sigma": 3.148028111471524,
+        "error_relative_l2": 3.3760556083452005
+      }
+    }
+  },
+  "handoff_scope": "delta10 and delta0 source/native state comparisons at 0/150/300/600/900; 600 and 900 use the two actual cold-restart output checkpoints.",
+  "whole_state_scope": "per-variable owned/active spatial RMS and maximum over the stated stagger locations; duplicate periodic U x-face and fixed lower W/PH z-faces are excluded, dynamic W/PH top faces are included, all theta/MU mass points and all physical V y-faces are included. No mixed-unit aggregate is computed.",
+  "local_delta_vs_absolute_source_controls": "accepted local delta10 reconstructs actual initial state with base+Bcan@delta; source qtruth is separately reconstructed from absolute inverse.TRUTH coordinates. No coefficient equality is asserted.",
+  "numpy_version": "2.2.6",
+  "scipy_version": "1.15.3",
+  "platform": "macOS-26.7-arm64-arm-64bit",
+  "numpy_blas_config": "Build Dependencies:\n  blas:\n    detection method: system\n    found: true\n    include directory: unknown\n    lib directory: unknown\n    name: accelerate\n    openblas configuration: unknown\n    pc file directory: unknown\n    version: unknown\n  lapack:\n    detection method: system\n    found: true\n    include directory: unknown\n    lib directory: unknown\n    name: accelerate\n    openblas configuration: unknown\n    pc file directory: unknown\n    version: unknown\nCompilers:\n  c:\n    commands: cc\n    linker: ld64\n    name: clang\n    version: 15.0.0\n  c++:\n    commands: c++\n    linker: ld64\n    name: clang\n    version: 15.0.0\n  cython:\n    commands: cython\n    linker: cython\n    name: cython\n    version: 3.1.0\nMachine Information:\n  build:\n    cpu: aarch64\n    endian: little\n    family: aarch64\n    system: darwin\n  host:\n    cpu: aarch64\n    endian: little\n    family: aarch64\n    system: darwin\nPython Information:\n  path: /private/var/folders/w5/_8wgjw3j5cg6mgrth3s2kg9m0000gn/T/build-env-g9clshsu/bin/python\n  version: '3.10'\nSIMD Extensions:\n  baseline:\n  - NEON\n  - NEON_FP16\n  - NEON_VFPV4\n  - ASIMD\n  found:\n  - ASIMDHP\n  not found:\n  - ASIMDFHM\n\n",
+  "eg_status": "open; no full Eg/stationarity certificate",
+  "native_calls_started_by_audit": false
+}

@@ -1,0 +1,111 @@
+{
+  "status": "completed",
+  "runner_return_code": 0,
+  "validation": "full mocked main flow: artifact/source/input preflight; replay CSV validation; restart CSV parse, checkpoint equality, branch guards and recomputed component/W105 receipts",
+  "actual_native_processes": 0,
+  "mocked_invocations": [
+    {
+      "label": "replay_gate_same_exe",
+      "csv_sha256": "f74ffed83301b9748be868f397fe122772f9bd9a1b312e20dce848beeac7c5a6",
+      "return_code": 0,
+      "native_process_started": false
+    },
+    {
+      "label": "analysis_restart_smoke",
+      "csv_sha256": "b247b012a4ebdf5f1ac1b13f115fe16a999b109165265b099c72aade252897d2",
+      "return_code": 0,
+      "native_process_started": false,
+      "validated_forward_metadata": true,
+      "native_checkpoint_300_sha256": "85c29216721ee0a0575eda28abad1320307b28866a01bb99472fa18d3b4f6f1c",
+      "checkpoint_300_bitwise_matches_accepted_terminal": true,
+      "branch_metrics": {
+        "warm_live": {
+          "endpoint_sha256": "5fe8ccdcaf2d925e54449abf63497e84c2cd6c41bd0643f08718762abfe977b3",
+          "predicted_w_105_sha256": "16d0edc8b7ad7705b23a14058f366ff1c0dfa16a0ad14f741924c308754cf8d1",
+          "stage2_predictor_defined": 1.0,
+          "stage3_predictor_defined": 1.0
+        },
+        "snapshot_restored": {
+          "endpoint_sha256": "5fe8ccdcaf2d925e54449abf63497e84c2cd6c41bd0643f08718762abfe977b3",
+          "predicted_w_105_sha256": "16d0edc8b7ad7705b23a14058f366ff1c0dfa16a0ad14f741924c308754cf8d1",
+          "stage2_predictor_defined": 1.0,
+          "stage3_predictor_defined": 1.0
+        },
+        "cold_restart": {
+          "endpoint_sha256": "30d7987f2c1a9967e4d138b27f89c1a0cdfb6326e7524f233517ea3ed7dd9d20",
+          "predicted_w_105_sha256": "57e7ce6dc1b70ea6cd488f89ff164aa1e0ab07c9c2ebc4efcafaa4d4515c6e68",
+          "stage2_predictor_defined": 0.0,
+          "stage3_predictor_defined": 0.0
+        }
+      },
+      "branch_differences_vs_warm_live": {
+        "snapshot_restored_vs_warm_live_u": {
+          "max_abs": 0.0,
+          "rms": 0.0
+        },
+        "cold_restart_vs_warm_live_u": {
+          "max_abs": 1e-08,
+          "rms": 1.0000000000000002e-08
+        },
+        "snapshot_restored_vs_warm_live_v": {
+          "max_abs": 0.0,
+          "rms": 0.0
+        },
+        "cold_restart_vs_warm_live_v": {
+          "max_abs": 1e-08,
+          "rms": 1.0000000000000002e-08
+        },
+        "snapshot_restored_vs_warm_live_w": {
+          "max_abs": 0.0,
+          "rms": 0.0
+        },
+        "cold_restart_vs_warm_live_w": {
+          "max_abs": 1e-08,
+          "rms": 1.0000000000000002e-08
+        },
+        "snapshot_restored_vs_warm_live_ph": {
+          "max_abs": 0.0,
+          "rms": 0.0
+        },
+        "cold_restart_vs_warm_live_ph": {
+          "max_abs": 1e-08,
+          "rms": 1.0000000000000002e-08
+        },
+        "snapshot_restored_vs_warm_live_theta": {
+          "max_abs": 0.0,
+          "rms": 0.0
+        },
+        "cold_restart_vs_warm_live_theta": {
+          "max_abs": 1e-08,
+          "rms": 1.0000000000000002e-08
+        },
+        "snapshot_restored_vs_warm_live_mu": {
+          "max_abs": 0.0,
+          "rms": 0.0
+        },
+        "cold_restart_vs_warm_live_mu": {
+          "max_abs": 1e-08,
+          "rms": 1.0000000000000002e-08
+        },
+        "snapshot_restored_vs_warm_live_W105": {
+          "max_abs_m_s": 0.0,
+          "rms_m_s": 0.0,
+          "ratio_to_original_600s_forecast_rms": 0.0,
+          "ratio_to_original_900s_forecast_rms": 0.0
+        },
+        "cold_restart_vs_warm_live_W105": {
+          "max_abs_m_s": 1e-08,
+          "rms_m_s": 1.0000000000000002e-08,
+          "ratio_to_original_600s_forecast_rms": 0.003356664153801208,
+          "ratio_to_original_900s_forecast_rms": 0.0012969466311172416
+        }
+      }
+    }
+  ],
+  "helper_sha256": "a03e7a639681504b6f952a908da2e6dc8fbaba21220583d29a0b61d6e7b690e5",
+  "cpp_sha256": "c184a4f7f0787a329333b6a7b90da81e15754fb6fbf0f8e3a177970ff40ec5d7",
+  "report_path": "/private/tmp/pr286-analysis-restart-mock-20261010/measurement-after-cppfix/report.json",
+  "cold_restart_vs_warm_W105_rms_m_s": 1.0000000000000002e-08,
+  "restored_snapshot_endpoint_bitwise_equal": true,
+  "restored_snapshot_W105_bitwise_equal": true
+}

@@ -659,12 +659,13 @@ int main(int argc,char** argv) {
     bool physical_wave_bounded_replay_pullback=false;
     bool physical_wave_split_observation_pullbacks=false;
     bool physical_wave_replay_smoke=false;
+    bool physical_wave_restart_smoke=false;
     float physical_wave_newton_tol=1.0e-12f;
     float physical_wave_krylov_tol=1.0e-8f;
     const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
     TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode ||
                 physical_wave_inverse,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only (skip VJP; tape retained) | --bounded-tape-forward-only (one-step FP64 tape handoff) | --bounded-replay-pullback (960-step, 8-step VJP windows) | --split-observation-pullbacks (h5 only)]]");
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only | --bounded-tape-forward-only | --bounded-replay-pullback | --split-observation-pullbacks | --restart-smoke]]]");
     const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     bool implicit_divergence=false;
     float kdamp=0.0f;
@@ -720,6 +721,9 @@ int main(int argc,char** argv) {
             } else if(flag=="--replay-smoke") {
                 TORCH_CHECK(!physical_wave_replay_smoke,"duplicate --replay-smoke flag");
                 physical_wave_replay_smoke=true;
+            } else if(flag=="--restart-smoke") {
+                TORCH_CHECK(!physical_wave_restart_smoke,"duplicate --restart-smoke flag");
+                physical_wave_restart_smoke=true;
             } else if(flag=="--newton-tol") {
                 TORCH_CHECK(!newton_tol_seen && arg<argc,"--newton-tol requires one value");
                 const std::string value(argv[arg++]);
@@ -751,6 +755,12 @@ int main(int argc,char** argv) {
                      !physical_wave_bounded_replay_pullback &&
                      !physical_wave_split_observation_pullbacks),
                     "--replay-smoke is a separate retained-trajectory check mode");
+        TORCH_CHECK(!physical_wave_restart_smoke ||
+                    (physical_wave_bounded_tape_forward_only && physical_wave_steps==960 &&
+                     physical_wave_dt==0.3125f && !physical_wave_replay_smoke &&
+                     !physical_wave_bounded_replay_pullback &&
+                     !physical_wave_split_observation_pullbacks),
+                    "--restart-smoke requires the (960,0.3125) bounded forward-only path");
         const bool accepted_taped_schedule=(physical_wave_steps==30 && physical_wave_dt==10.0f) ||
                                            (physical_wave_steps==60 && physical_wave_dt==5.0f) ||
                                            (physical_wave_steps==120 && physical_wave_dt==2.5f) ||
@@ -781,7 +791,8 @@ int main(int argc,char** argv) {
         g_sdirk3_config.newton_tol=physical_wave_newton_tol;
         g_sdirk3_config.krylov_tol=physical_wave_krylov_tol;
     }
-    if(physical_wave_replay_smoke || physical_wave_bounded_replay_pullback) {
+    if(physical_wave_replay_smoke || physical_wave_bounded_replay_pullback ||
+       physical_wave_restart_smoke) {
         TORCH_CHECK(g_sdirk3_config.newton_tol==1.0e-14f &&
                     g_sdirk3_config.krylov_tol==1.0e-12f &&
                     g_sdirk3_config.precond_type==0 && !g_sdirk3_config.gmres_warmstart &&
@@ -874,6 +885,8 @@ int main(int argc,char** argv) {
         std::vector<wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState>
             bounded_replay_snapshots;
         std::vector<std::uint64_t> bounded_replay_snapshot_digests;
+        wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState restart_warm_snapshot;
+        std::uint64_t restart_warm_snapshot_digest=0;
         if(physical_wave_replay_smoke) {
             constexpr int replay_block_steps=8;
             const int su=g.ny*g.nz*g.nu, sv=g.nv*g.nz*g.nx;
@@ -1109,6 +1122,12 @@ int main(int argc,char** argv) {
                                 static_cast<size_t>(physical_wave_steps/8+1) &&
                             bounded_replay_snapshot_digests.size()==bounded_replay_snapshots.size(),
                             "bounded replay did not retain all endpoints and 8-step boundary snapshots");
+            if(physical_wave_restart_smoke) {
+                auto& restart_newton=newton_solver(g);
+                restart_warm_snapshot=restart_newton.capture_carried_state();
+                restart_warm_snapshot_digest=restart_newton.carried_state_digest();
+                validate_replay_carried_state(restart_warm_snapshot,physical_wave_steps);
+            }
             g.solver.resetInternalFp64Carry();
         } else {
             g.set(initial);
@@ -1321,6 +1340,141 @@ int main(int argc,char** argv) {
         if(!physical_wave_bounded_tape_forward_only &&
            !physical_wave_bounded_replay_pullback)
             g.solver.closeFixedTrajectory();
+        if(physical_wave_restart_smoke) {
+            constexpr int restart_steps=16;
+            const auto run_restart_branch=[&](Grid& branch,const char* label,
+                    const wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState& snapshot,
+                    std::uint64_t snapshot_digest,bool initialize_context,
+                    bool restore_snapshot) {
+                if(initialize_context)
+                    validate_same_physical_wave_context(g,branch,base,rb,phb);
+                branch.solver.resetInternalFp64Carry();
+                auto& branch_newton=newton_solver(branch);
+                if(restore_snapshot) branch_newton.restore_carried_state(snapshot);
+                const auto restored_digest=branch_newton.carried_state_digest();
+                const auto restored_state=branch_newton.capture_carried_state();
+                const bool stage2_match=
+                    snapshot.stage2_predictor.defined()==restored_state.stage2_predictor.defined() &&
+                    (!snapshot.stage2_predictor.defined() ||
+                     torch::equal(snapshot.stage2_predictor,restored_state.stage2_predictor));
+                const bool stage3_match=
+                    snapshot.stage3_predictor.defined()==restored_state.stage3_predictor.defined() &&
+                    (!snapshot.stage3_predictor.defined() ||
+                     torch::equal(snapshot.stage3_predictor,restored_state.stage3_predictor));
+                TORCH_CHECK(restored_digest==snapshot_digest && stage2_match && stage3_match,
+                            "restart-smoke carried-state restore failed for ",label);
+                out<<"M,restart_"<<label<<"_snapshot_digest,"<<snapshot_digest<<"\n";
+                out<<"M,restart_"<<label<<"_restored_digest,"<<restored_digest<<"\n";
+                out<<"M,restart_"<<label<<"_restore_match,1\n";
+                out<<"M,restart_"<<label<<"_stage2_predictor_defined,"
+                   <<(snapshot.stage2_predictor.defined()?1:0)<<"\n";
+                out<<"M,restart_"<<label<<"_stage3_predictor_defined,"
+                   <<(snapshot.stage3_predictor.defined()?1:0)<<"\n";
+                auto state=checkpoint_300.detach().clone();
+                branch.set(state);
+                TORCH_CHECK(torch::equal(branch.state(),state.to(torch::kFloat32)),
+                            "restart-smoke branch initial state publication mismatch for ",label);
+                for(int n=0;n<restart_steps;++n) {
+                    branch.set(state);
+                    branch.solver.requestFixedTrajectory(1,{physical_wave_dt},state);
+                    branch.step(physical_wave_dt,physical_wave_steps+n);
+                    TORCH_CHECK(branch.solver.getLastStepOutcomeCode()==0,
+                                "restart-smoke step rejected for ",label," local index ",n);
+                    const auto endpoints=branch.solver.getFixedTrajectoryFp64Checkpoints();
+                    TORCH_CHECK(endpoints.size()==1 && endpoints[0].defined() &&
+                                endpoints[0].scalar_type()==torch::kFloat64 &&
+                                torch::isfinite(endpoints[0]).all().item<bool>() &&
+                                torch::equal(branch.state(),endpoints[0].to(torch::kFloat32)),
+                                "restart-smoke FP64 endpoint/publication guard failed for ",label,
+                                " local index ",n);
+                    state=endpoints[0].detach().clone();
+                    validate_physical_handoff_state(branch,state);
+                    branch.solver.closeFixedTrajectory();
+                }
+                const auto interpolation=interpolate_physical_w(branch,state,observations,&branch.phbase);
+                put(out,std::string("restart_")+label+"_endpoint_305",state);
+                put(out,std::string("restart_")+label+"_predicted_w_305",interpolation.prediction);
+                out<<"M,restart_"<<label<<"_steps,"<<restart_steps<<"\n";
+                out<<"M,restart_"<<label<<"_dt_fp32,"<<std::setprecision(17)
+                   <<physical_wave_dt<<"\n";
+                out<<"M,restart_"<<label<<"_host_step_first,"<<physical_wave_steps+1<<"\n";
+                out<<"M,restart_"<<label<<"_host_step_last,"<<physical_wave_steps+restart_steps<<"\n";
+                out<<"M,restart_"<<label<<"_admissibility_checks,"<<restart_steps+1<<"\n";
+                return std::pair<torch::Tensor,torch::Tensor>{state,interpolation.prediction};
+            };
+            auto& live_newton=newton_solver(g);
+            const auto live_digest=live_newton.carried_state_digest();
+            TORCH_CHECK(live_digest==restart_warm_snapshot_digest,
+                        "restart-smoke live solver carried state changed after t=300 capture");
+            const auto warm=run_restart_branch(g,"warm_live",restart_warm_snapshot,
+                                               restart_warm_snapshot_digest,false,false);
+
+            Grid restored_grid(g.nx,g.ny,g.nz);
+            const auto restored=run_restart_branch(restored_grid,"snapshot_restored",
+                restart_warm_snapshot,restart_warm_snapshot_digest,true,true);
+            Grid cold_grid(g.nx,g.ny,g.nz);
+            auto& cold_newton=newton_solver(cold_grid);
+            const auto cold_snapshot=cold_newton.capture_carried_state();
+            const auto cold_digest=cold_newton.carried_state_digest();
+            const auto cold=run_restart_branch(cold_grid,"cold_restart",cold_snapshot,
+                                               cold_digest,true,true);
+            TORCH_CHECK(!cold_snapshot.stage2_predictor.defined() &&
+                        !cold_snapshot.stage3_predictor.defined(),
+                        "restart-smoke cold constructor snapshot is not the expected clean state");
+
+            const std::array<const char*,6> names={"u","v","w","ph","theta","mu"};
+            const auto component_sizes=g.sizes();
+            int component_begin=0;
+            for(size_t component=0;component<names.size();++component) {
+                const int component_end=component_begin+component_sizes[component];
+                const auto warm_block=warm.first.slice(0,component_begin,component_end);
+                for(const auto& candidate:std::array<std::pair<const char*,torch::Tensor>,2>{
+                        std::make_pair("snapshot_restored",restored.first),
+                        std::make_pair("cold_restart",cold.first)}) {
+                    const auto block=candidate.second.slice(0,component_begin,component_end);
+                    const auto delta=(block-warm_block).abs();
+                    const double maximum=delta.max().item<double>();
+                    const double rms=std::sqrt(delta.square().mean().item<double>());
+                    out<<"S,restart_"<<candidate.first<<"_vs_warm_live_max_abs_"
+                       <<names[component]<<","<<std::setprecision(17)<<maximum<<"\n";
+                    out<<"S,restart_"<<candidate.first<<"_vs_warm_live_rms_"
+                       <<names[component]<<","<<rms<<"\n";
+                }
+                component_begin=component_end;
+            }
+            TORCH_CHECK(component_begin==warm.first.numel() &&
+                        warm.second.numel()==static_cast<int64_t>(observations.size()) &&
+                        restored.second.numel()==warm.second.numel() &&
+                        cold.second.numel()==warm.second.numel(),
+                        "restart-smoke branch array shapes do not match component/observation layout");
+            for(const auto& candidate:std::array<std::pair<const char*,torch::Tensor>,2>{
+                    std::make_pair("snapshot_restored",restored.second),
+                    std::make_pair("cold_restart",cold.second)}) {
+                const auto delta=(candidate.second-warm.second).abs();
+                out<<"S,restart_"<<candidate.first<<"_vs_warm_live_W105_max_abs_m_s,"
+                   <<std::setprecision(17)<<delta.max().item<double>()<<"\n";
+                out<<"S,restart_"<<candidate.first<<"_vs_warm_live_W105_rms_m_s,"
+                   <<std::sqrt(delta.square().mean().item<double>())<<"\n";
+            }
+            out<<"M,physical_wave_restart_smoke,1\n";
+            out<<"M,restart_checkpoint_seconds,300\nM,restart_endpoint_seconds,305\n";
+            out<<"M,restart_initial_state_shared_bitwise,1\n";
+            out<<"M,restart_snapshot_restored_endpoint_bitwise_equal_warm_live,"
+               <<(torch::equal(restored.first,warm.first)?1:0)<<"\n";
+            out<<"M,restart_cold_endpoint_bitwise_equal_warm_live,"
+               <<(torch::equal(cold.first,warm.first)?1:0)<<"\n";
+            out<<"M,restart_snapshot_restored_W105_bitwise_equal_warm_live,"
+               <<(torch::equal(restored.second,warm.second)?1:0)<<"\n";
+            out<<"M,restart_cold_W105_bitwise_equal_warm_live,"
+               <<(torch::equal(cold.second,warm.second)?1:0)<<"\n";
+            out<<"M,restart_snapshot_semantics,listed_carried_state_only_not_preconditioner_cache\n";
+            out<<"M,restart_warm_continuity_branch,warm_live\n";
+            out<<"M,restart_fresh_constructor_captured_before_context_initializer,1\n";
+            out<<"M,restart_observation_count,105\n";
+            out<<"M,restart_comparison,diagnostic_only_no_observation_score\n";
+            out<<"M,restart_optimizer_run,0\nM,restart_pullback_requested,0\n";
+            out.flush();
+        }
         return 0;
     }
     if(quadratic_trajectory_mode) {
