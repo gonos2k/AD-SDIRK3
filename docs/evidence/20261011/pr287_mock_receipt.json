@@ -1,0 +1,8 @@
+{
+  "helper_sha256": "71e1f09bfeb04b67f1d30d81ec3d267256905ddaafbe931488b00db8a334d18e",
+  "actual_native_processes": 0,
+  "full_status": "completed_gradient_threshold",
+  "preflight_status": "completed_preflight",
+  "full_simulated_calls": 7,
+  "preflight_simulated_calls": 4
+}

@@ -1,0 +1,221 @@
+{
+  "fixture_sha256": "e170be5d1e2b0d87efcdc9ebe0f4dd1d381aceb9e0777dcd074e0dcfe1329d8c",
+  "grid": [
+    16,
+    12,
+    8
+  ],
+  "kx_physical": 0.00015707963267948965,
+  "kx_discrete": 0.00015607225367018573,
+  "ky_physical": 0.00010471975511965977,
+  "ky_discrete": 0.00010442095113814609,
+  "coriolis": "off",
+  "source": "wave_energy_spatial_reference._rhs exact coordinate lift",
+  "ky0_reduction": {
+    "old_operator_shape": [
+      33,
+      33
+    ],
+    "lifted_operator_shape": [
+      41,
+      41
+    ],
+    "old_operator_max_abs_delta": 0.0,
+    "v_row_max_abs": 0.0,
+    "v_column_max_abs": 0.0,
+    "exact": true
+  },
+  "staggered_y_parity": {
+    "ny": 12,
+    "dy": 2500.0,
+    "ky_physical": 0.00010471975511965977,
+    "ky_discrete": 0.00010442095113814609,
+    "v_wall_max_abs": 1.2246467991473532e-16,
+    "divergence_symbol_max_abs_error": 9.486769009248164e-20,
+    "gradient_symbol_max_abs_error": 1.0842021724855044e-19,
+    "summation_by_parts_residual": -2.220446049250313e-16,
+    "passed": true
+  },
+  "selected_mode": {
+    "eigenvalue": {
+      "real": 5.38712954453735e-18,
+      "imag": 0.002568938129106205
+    },
+    "angular_frequency": 0.002568938129106205,
+    "period_s": 2445.829751986147,
+    "background_nmax": 0.005626831621039005,
+    "eigenvector_index": 19,
+    "eigenpair_relative_residual_by_block": {
+      "u": 1.8166075100794208e-13,
+      "v": 1.728930817691572e-13,
+      "w": 4.77715646609635e-13,
+      "phi": 2.073179320037147e-12,
+      "theta": 2.8163408630643493e-15,
+      "mu": 3.7616776073465185e-13
+    },
+    "eigenvector_block_metrics": {
+      "u": {
+        "unit": "m s-1",
+        "rms": 0.8358310981952214,
+        "max_abs": 1.1913306618395827
+      },
+      "v": {
+        "unit": "m s-1",
+        "rms": 0.5592171331672108,
+        "max_abs": 0.7970659608223047
+      },
+      "w": {
+        "unit": "m s-1",
+        "rms": 0.7040346221324089,
+        "max_abs": 1.0
+      },
+      "phi": {
+        "unit": "m2 s-2",
+        "rms": 17.08173027950526,
+        "max_abs": 27.50316288611256
+      },
+      "theta": {
+        "unit": "K",
+        "rms": 0.18462103962137066,
+        "max_abs": 0.2586624568768937
+      },
+      "mu": {
+        "unit": "Pa",
+        "rms": 35.578681022848684,
+        "max_abs": 35.578681022848684
+      }
+    }
+  },
+  "standing_quadratures": {
+    "w_amplitude_max_abs": 0.01,
+    "quadrature_a_block_metrics": {
+      "u": {
+        "unit": "m s-1",
+        "rms": 0.008358310981952213,
+        "max_abs": 0.011913306618395828
+      },
+      "v": {
+        "unit": "m s-1",
+        "rms": 0.005592171331672108,
+        "max_abs": 0.007970659608223048
+      },
+      "w": {
+        "unit": "m s-1",
+        "rms": 0.007040346221324088,
+        "max_abs": 0.01
+      },
+      "phi": {
+        "unit": "m2 s-2",
+        "rms": 2.9871052772514072e-15,
+        "max_abs": 6.134143012964081e-15
+      },
+      "theta": {
+        "unit": "K",
+        "rms": 2.5238210853615856e-17,
+        "max_abs": 4.560253663303722e-17
+      },
+      "mu": {
+        "unit": "Pa",
+        "rms": 5.192250094255357e-15,
+        "max_abs": 5.192250094255357e-15
+      }
+    },
+    "quadrature_b_block_metrics": {
+      "u": {
+        "unit": "m s-1",
+        "rms": 2.0599265971682357e-16,
+        "max_abs": 3.885409770641564e-16
+      },
+      "v": {
+        "unit": "m s-1",
+        "rms": 6.389553806734718e-16,
+        "max_abs": 1.3043867904223722e-15
+      },
+      "w": {
+        "unit": "m s-1",
+        "rms": 7.947799124620792e-17,
+        "max_abs": 1.5168373028997672e-16
+      },
+      "phi": {
+        "unit": "m2 s-2",
+        "rms": 0.17081730279505258,
+        "max_abs": 0.2750316288611256
+      },
+      "theta": {
+        "unit": "K",
+        "rms": 0.0018462103962137066,
+        "max_abs": 0.002586624568768937
+      },
+      "mu": {
+        "unit": "Pa",
+        "rms": 0.35578681022848685,
+        "max_abs": 0.35578681022848685
+      }
+    },
+    "positive_eigenpair_relative_residual_by_block": {
+      "u": 1.8166075100794208e-13,
+      "v": 1.728930817691572e-13,
+      "w": 4.77715646609635e-13,
+      "phi": 2.073179320037147e-12,
+      "theta": 2.8163408630643493e-15,
+      "mu": 3.7616776073465185e-13
+    },
+    "negative_x_partner_relative_residual_by_block": {
+      "u": 1.8166075100794208e-13,
+      "v": 1.728930817691572e-13,
+      "w": 4.77715646609635e-13,
+      "phi": 2.073179320037147e-12,
+      "theta": 2.8163408630643493e-15,
+      "mu": 3.7616776073465185e-13
+    },
+    "qa_evolution_identity_residual_by_block": {
+      "u": 4.9637840208261016e-14,
+      "v": 1.6459034949242396e-13,
+      "w": 4.71006867132052e-13,
+      "phi": 1.8714300468665565e-12,
+      "theta": 2.4219594151071468e-15,
+      "mu": 2.7472952777207657e-13
+    },
+    "qb_evolution_identity_residual_by_block": {
+      "u": 1.810056317315353e-13,
+      "v": 8.432631295391223e-14,
+      "w": 4.767106771724195e-13,
+      "phi": 9.446018294421777e-13,
+      "theta": 1.6766401266184084e-15,
+      "mu": 2.5499517745421647e-13
+    },
+    "negative_x_partner_uses_u_sign_flip_only": true
+  },
+  "observation_xyz_count": 105,
+  "observation_times": [
+    150,
+    300
+  ],
+  "H_shape": [
+    210,
+    2
+  ],
+  "H_singular_values": [
+    0.04573807087483428,
+    0.008923058316243328
+  ],
+  "H_rank": 2,
+  "H_condition": 5.125828976324604,
+  "packed_native_length": 8480,
+  "packed_alias_and_wall_assertions": "passed",
+  "truth_observation_shape": [
+    2,
+    105
+  ],
+  "truth_observation_rms": 0.001509183045424241,
+  "native_calls": 0,
+  "builds": 0,
+  "source_hashes": {
+    "wave_y_reference.py": "2cbd1350be103d988b8baa373b1e7645eee5ac211b7ccd69fef35fc5ea2053fe",
+    "wave_energy_spatial_reference.py": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+    "wave_quadratic_reference.py": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431",
+    "test_fine_wave_inverse.py": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+  },
+  "graph_sha256": "verified by graph receipt /private/tmp/pr287-y-wave-graph-20261010/current-head-receipt.json; graph was built at pre-edit HEAD and is pending post-edit refresh",
+  "source_observation_scope": "linear source dynamics; synthetic observations. Nonlinear native trajectory is not claimed; optional perturbed-PH brackets affect sampling geometry only."
+}
