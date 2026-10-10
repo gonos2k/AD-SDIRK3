@@ -1,0 +1,22 @@
+{
+  "result": "passed",
+  "controller_labels": [
+    "analysis_segment1_t300_to_600",
+    "analysis_segment2_t600_to_900",
+    "baseline_segment1_t300_to_600",
+    "baseline_segment2_t600_to_900"
+  ],
+  "call_count": 4,
+  "exact_300_to_600_to_900_state_handoffs": true,
+  "all_forward_metadata_guards_and_brackets_validated": true,
+  "source_150_300_reconstruction_roundoff_passed": true,
+  "controlled_future_prediction_offset_m_s": {
+    "600": 1e-06,
+    "900": 2e-06
+  },
+  "source_qtruth_sha256": "2dc31c7bf4a6ed34fb4c0577b4ee3f25f6a4d67bd4957623771263d453363ccb",
+  "forecast_metrics_are_synthetic_plumbing_only": true,
+  "exe_hash_substitution": "non-executable placeholder; subprocess native calls intercepted",
+  "native_calls_started": false,
+  "forecast_truth_or_Eg_claim": false
+}

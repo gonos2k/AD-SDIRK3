@@ -1,18 +1,18 @@
 {
   "schema": "pr284-graph-bindings-v1",
-  "timestamp_local": "2026-10-10T10:02:51+09:00",
-  "stage": "final_after_redfix_source_freeze",
+  "timestamp_local": "2026-10-10T15:25:33+09:00",
+  "stage": "final_after_accepted_analysis_time_refresh",
   "target_worktree": "/private/tmp/pr284-small-step-20261010",
-  "base_revision": "0fcde78bacf7ebef85cad49a3d85196e87ffe0c8",
+  "base_revision": "da687f30ae3cbe6ffabae2f7e88e0a43e2cbd357",
   "cached_graph_source": "/private/tmp/pr283-small-step-graph",
   "graph_working_copy": "/private/tmp/pr284-small-step-graph",
-  "graph_refresh_method": "clean code-only rebuild from the 17 exact source mirrors; clean rebuild was needed because incremental update preserved obsolete call-source locations",
+  "graph_refresh_method": "clean code-only rebuild from all 18 exact source mirrors after final accepted-analysis-time hash/decomposition checks",
   "graph_stats": {
-    "nodes": 643,
-    "links": 2213,
+    "nodes": 648,
+    "links": 2234,
     "hyperedges": 0
   },
-  "source_binding_count": 17,
+  "source_binding_count": 18,
   "source_bindings": [
     {
       "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
@@ -47,7 +47,7 @@
     {
       "source": "/private/tmp/pr284-small-step-20261010/.github/workflows/sdirk3-ci.yml",
       "mirror": "/private/tmp/pr284-small-step-graph/sdirk3-ci.yml",
-      "sha256": "88b31ef21377b0ccc36b536544f1ea18dda00db1a70dccb15a4f99548f0465f4"
+      "sha256": "8e9593ade57c304c427256cad31511d44cc3b4fb388b9ecfa333c6b5cc7cc429"
     },
     {
       "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp",
@@ -98,9 +98,14 @@
       "source": "/private/tmp/pr284-small-step-20261010/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
       "mirror": "/private/tmp/pr283-small-step-graph/wrf_sdirk3_config.h",
       "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+    },
+    {
+      "source": "/private/tmp/pr284-small-step-20261010/tools/probe_accepted_analysis_time.py",
+      "mirror": "/private/tmp/pr284-small-step-graph/probe_accepted_analysis_time.py",
+      "sha256": "c6a5c7b8bbe4c1898f564d6a7805c9e5b18fb522404a78bbd1c5d0fcbb3a0364"
     }
   ],
-  "source_binding_verification": "all 17 source/mirror/recorded SHA256 values match the current PR284 worktree after the final attempt-index fix",
+  "source_binding_verification": "all 18 source, mirror, and recorded SHA256 values match current PR284 worktree",
   "unchanged_native_test_sha256": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7",
   "unchanged_production_sha256": {
     "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367",
@@ -112,7 +117,8 @@
   "changed_source_sha256": {
     "tools/probe_small_step_inverse.py": "1530bd32027faeec3178c68408f1de64353713a93a49a99e83b97b34ed7c131a",
     "tools/test_fine_wave_inverse.py": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed",
-    ".github/workflows/sdirk3-ci.yml": "88b31ef21377b0ccc36b536544f1ea18dda00db1a70dccb15a4f99548f0465f4"
+    ".github/workflows/sdirk3-ci.yml": "8e9593ade57c304c427256cad31511d44cc3b4fb388b9ecfa333c6b5cc7cc429",
+    "tools/probe_accepted_analysis_time.py": "c6a5c7b8bbe4c1898f564d6a7805c9e5b18fb522404a78bbd1c5d0fcbb3a0364"
   },
   "affected_call_paths": {
     "small_step_driver": {
@@ -213,14 +219,52 @@
     "workflow_dispatch": {
       "source": ".github/workflows/sdirk3-ci.yml",
       "manual_source_review": "small-step-continue downloads the predecessor artifact by explicit artifact ID and SHA256, then passes the verified ZIP and SHA into both preflight and execution branches."
+    },
+    "accepted_analysis_time": {
+      "source": "tools/probe_accepted_analysis_time.py",
+      "locations": {
+        "main": 18,
+        "predecessor_bundle_copy": 28,
+        "parent_native_gradient_validation": 45,
+        "accepted_gate_csv_hash_check": 80,
+        "fixed_input_and_descriptor_hashes": 55,
+        "native_source_fingerprints": 82,
+        "native_h0625_cli": 87,
+        "per_time_stable_cost_decomposition": 138,
+        "aggregate_cost_delta": 150,
+        "reported_cost_consistency": 157
+      },
+      "workflow_locations": {
+        "schedule_choice": 23,
+        "predecessor_artifact_download": 227,
+        "accepted_analysis_dispatch": 265
+      },
+      "manual_source_review": "Before one bounded forward-only native call at 480x0.625, main validates predecessor ZIP/report, accepted terminal gradient/state/objective, executable and exact replay-gate CSV hashes, source fingerprints, fixture member hashes including canonical Bcan, and observation shape. It compares the native h=.625 run from the exact accepted h=.3125 terminal-gradient state using the same 105 points, W150/W300 targets, sigma 3e-4, N14/K12/EW1 profile. It checks physical guards, unchanged state/context/observations/brackets, recomputes each per-time objective in long double, and records direct total-cost delta separately from the stable sum of cross+quadratic residual changes. RMS thresholds remain diagnostics only.",
+      "graph_navigation_edges": [
+        {
+          "source": "probe_accepted_analysis_time_main",
+          "target": "probe_accepted_analysis_time_save",
+          "relation": "calls"
+        },
+        {
+          "source": "probe_accepted_analysis_time_main",
+          "target": "probe_accepted_analysis_time_sha",
+          "relation": "calls"
+        }
+      ]
     }
   },
   "extraction_gaps": [
     "AST extraction does not model the nested invoke() closures in main() and run_resume() as independent nodes; the calls from those closures to invoke_native() and validate_trial() are documented from source, not asserted as graph edges.",
     "Workflow dispatch conditions and artifact transport were manually verified from YAML; the structural code graph is not proof of GitHub execution behavior.",
-    "Graphify call relationships are navigation aids only; BFGS positivity, resume artifact integrity, and objective/Armijo correctness must be established from source and attached runtime evidence."
+    "Graphify call relationships are navigation aids only; BFGS positivity, resume artifact integrity, and objective/Armijo correctness must be established from source and attached runtime evidence.",
+    "Graphify AST does not extract qualified calls through imported aliases such as driver.copy_resume_bundle, driver.validate_trial, inverse.read_payload, or driver.source_fingerprints; these were followed directly in source.",
+    "Artifact transport, SHA verification, and accepted-analysis dispatch were read in workflow YAML; the graph does not prove GitHub runtime behavior or artifact availability.",
+    "The 0.1-sigma RMS values are diagnostics rather than error bounds or forecast validation; this refresh contains no native/model result."
   ],
   "source_revision_matches_target": true,
   "numerical_validation_performed": false,
-  "model_or_test_run_performed": false
+  "model_or_test_run_performed": false,
+  "current_git_head": "da687f30ae3cbe6ffabae2f7e88e0a43e2cbd357",
+  "working_tree_state": "Base HEAD da687f30; accepted-analysis script is untracked and workflow has uncommitted accepted-analysis-time edits; evidence binds exact content SHA256."
 }

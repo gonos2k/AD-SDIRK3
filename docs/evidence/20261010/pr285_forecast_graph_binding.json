@@ -1,0 +1,22 @@
+{
+  "schema": "pr285-graph-rebind-v1",
+  "timestamp_local": "2026-10-10T16:24:37+09:00",
+  "branch": "codex/pr285-analysis-time-check",
+  "head": "c8cd9b14d5b8f205861944a098809f027bfa9d8a",
+  "merge_commit": "22ba3a4",
+  "source_binding_count": 19,
+  "binding_hash_mismatches": 0,
+  "graph_path": "/private/tmp/pr284-small-step-graph",
+  "graph_stats": {
+    "nodes": 659,
+    "links": 2280,
+    "hyperedges": 0
+  },
+  "accepted_analysis_forecast_sha256": "e814bb2f64fad92a3c5b6b9ac70e3551f824b783b8e2fa12becfc8b0011bbf28",
+  "accepted_analysis_time_sha256": "c6a5c7b8bbe4c1898f564d6a7805c9e5b18fb522404a78bbd1c5d0fcbb3a0364",
+  "small_step_inverse_sha256": "1530bd32027faeec3178c68408f1de64353713a93a49a99e83b97b34ed7c131a",
+  "workflow_sha256": "41fc1625ee55fbeb280faaea8da7748b5015629be6ed9435281d8cb7470c6ab4",
+  "native_test_sha256": "8e852669862f8ece581e1fccfef546aa993fef4e10e9f0dea10deb0a83624df7",
+  "forecast_protocol": "two state-only cold restarts: 300 to 600 s and 600 to 900 s",
+  "model_or_test_run_performed": false
+}
