@@ -412,6 +412,14 @@ MODULE module_implicit_sdirk3
          INTEGER(C_INT), VALUE :: count, mix_full_fields
       END FUNCTION sdirk3_tile_set_theta_mixing_base_checked
 
+      INTEGER(C_INT) FUNCTION sdirk3_tile_set_option2_wind_mixing_base_checked( &
+                    solver_ptr, u_base, v_base, count, mix_full_fields) &
+         BIND(C, name="sdirk3_tile_set_option2_wind_mixing_base_checked")
+         USE, INTRINSIC :: ISO_C_BINDING
+         TYPE(C_PTR), VALUE :: solver_ptr, u_base, v_base
+         INTEGER(C_INT), VALUE :: count, mix_full_fields
+      END FUNCTION sdirk3_tile_set_option2_wind_mixing_base_checked
+
       ! PR 7B (3b-3 P1): checked halo freshness publication. Returns 1 on
       ! success (serial/no-exchange notify is a true no-op), 0 when the
       ! publication is rejected (off-baseline thread). Fortran MUST consume
@@ -887,6 +895,14 @@ CONTAINS
                     MERGE(1_C_INT, 0_C_INT, config_flags%mix_full_fields))
                IF (base_state_status /= 1_C_INT) THEN
                   CALL wrf_error_fatal("SDIRK3: theta mixing base initialization failed")
+               END IF
+               IF (config_flags%diff_opt == 2) THEN
+                  base_state_status = sdirk3_tile_set_option2_wind_mixing_base_checked( &
+                       tile_solvers(ij), C_LOC(grid%u_base(kts)), C_LOC(grid%v_base(kts)), &
+                       kte-kts+1, MERGE(1_C_INT, 0_C_INT, config_flags%mix_full_fields))
+                  IF (base_state_status /= 1_C_INT) THEN
+                     CALL wrf_error_fatal("SDIRK3: option-2 wind mixing base initialization failed")
+                  END IF
                END IF
                ! 9F.D41 (review P0-4): the old line claimed "zero-copy ... saved ~5.4 MB
                ! memory traffic". The C++ side builds strided views and then

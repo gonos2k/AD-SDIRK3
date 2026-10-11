@@ -146,6 +146,14 @@ bool registered_carry_pullback(int steps) {
             sdirk3_tile_set_theta_mixing_base_checked(handle, theta_mixing_base.data(), nz, 0) != 1 ||
             sdirk3_tile_set_theta_mixing_base_checked(handle, theta_mixing_base.data(), nz, 1) != 1)
             throw std::runtime_error("theta mixing base checked ABI status mismatch");
+        if (sdirk3_tile_set_option2_wind_mixing_base_checked(nullptr, theta_mixing_base.data(), theta_mixing_base.data(), nz, 0) != 0 ||
+            sdirk3_tile_set_option2_wind_mixing_base_checked(reinterpret_cast<void*>(1), theta_mixing_base.data(), theta_mixing_base.data(), nz, 0) != 0 ||
+            sdirk3_tile_set_option2_wind_mixing_base_checked(handle, nullptr, theta_mixing_base.data(), nz, 0) != 0 ||
+            sdirk3_tile_set_option2_wind_mixing_base_checked(handle, theta_mixing_base.data(), theta_mixing_base.data(), nz-1, 0) != 0 ||
+            sdirk3_tile_set_option2_wind_mixing_base_checked(handle, theta_mixing_base.data(), theta_mixing_base.data(), nz, 2) != 0 ||
+            sdirk3_tile_set_option2_wind_mixing_base_checked(handle, theta_mixing_base.data(), theta_mixing_base.data(), nz, 0) != 1 ||
+            sdirk3_tile_set_option2_wind_mixing_base_checked(handle, theta_mixing_base.data(), theta_mixing_base.data(), nz, 1) != 1)
+            throw std::runtime_error("option-2 wind mixing base checked ABI status mismatch");
         auto& solver = *static_cast<TileSDIRK3UnifiedSolver*>(handle);
         solver.setWRFIndices(1, nx + 1, 1, ny + 1, 1, nz,
                              1, nx + 1, 1, ny + 1, 1, nz + 1,

@@ -36346,16 +36346,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor13(const torch::Tensor& u, c
     if (nz_u > 1) {
         int nz_diff = std::min(nz_u, static_cast<int>(rdnw.size(0)) + 1);
 
-        // Compute u difference, subtracting base state if mix_full_fields is false
+        // Preserve the legacy switch and allow the initialized WRF profiles only
+        // for option-2 momentum mixing.  The option-2 profile flag is independent
+        // of mix_full_fields_, which also controls other operators.
+        const bool use_u_base = !mix_full_fields_ ||
+            (option2_wind_perturbation_mixing_ &&
+             wrf::sdirk3::g_sdirk3_config.diffusion_option == 2);
         torch::Tensor u_diff;
-        if (mix_full_fields_ || !u_base_.defined() || u_base_.numel() < nz_diff) {
-            // mix_full_fields=true or no base state: use full u
+        if (!use_u_base || !u_base_.defined() || u_base_.numel() < nz_diff) {
+            // Full-field mode or no complete base profile: use full u.
             u_diff = u.slice(1, 1, nz_diff) - u.slice(1, 0, nz_diff - 1);  // [ny, nz-1, nx_u]
         } else {
-            // mix_full_fields=false: subtract base state profile
-            // u_base_ is 1D [nz], broadcast to [1, nz, 1] for subtraction
-            auto u_base_k = u_base_.slice(0, 1, nz_diff).view({1, -1, 1});      // u_base[k]
-            auto u_base_km1 = u_base_.slice(0, 0, nz_diff - 1).view({1, -1, 1}); // u_base[k-1]
+            auto u_base_device = u_base_.to(u.device(), u.scalar_type());
+            auto u_base_k = u_base_device.slice(0, 1, nz_diff).view({1, -1, 1});
+            auto u_base_km1 = u_base_device.slice(0, 0, nz_diff - 1).view({1, -1, 1});
             auto u_pert_k = u.slice(1, 1, nz_diff) - u_base_k;      // u[k] - u_base[k]
             auto u_pert_km1 = u.slice(1, 0, nz_diff - 1) - u_base_km1;  // u[k-1] - u_base[k-1]
             u_diff = u_pert_k - u_pert_km1;  // [ny, nz-1, nx_u]
@@ -36629,16 +36633,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor23(const torch::Tensor& v, c
     if (nz_v > 1) {
         int nz_diff = std::min(nz_v, std::min(nz_w, static_cast<int>(rdnw.size(0)) + 1));
 
-        // Compute v difference, subtracting base state if mix_full_fields is false
+        const bool use_v_base = !mix_full_fields_ ||
+            (option2_wind_perturbation_mixing_ &&
+             wrf::sdirk3::g_sdirk3_config.diffusion_option == 2);
         torch::Tensor v_diff;
-        if (mix_full_fields_ || !v_base_.defined() || v_base_.numel() < nz_diff) {
-            // mix_full_fields=true or no base state: use full v
+        if (!use_v_base || !v_base_.defined() || v_base_.numel() < nz_diff) {
+            // Full-field mode or no complete base profile: use full v.
             v_diff = v.slice(1, 1, nz_diff) - v.slice(1, 0, nz_diff - 1);  // [ny_v, nz-1, nx]
         } else {
-            // mix_full_fields=false: subtract base state profile
-            // v_base_ is 1D [nz], broadcast to [1, nz, 1] for subtraction
-            auto v_base_k = v_base_.slice(0, 1, nz_diff).view({1, -1, 1});      // v_base[k]
-            auto v_base_km1 = v_base_.slice(0, 0, nz_diff - 1).view({1, -1, 1}); // v_base[k-1]
+            auto v_base_device = v_base_.to(v.device(), v.scalar_type());
+            auto v_base_k = v_base_device.slice(0, 1, nz_diff).view({1, -1, 1});
+            auto v_base_km1 = v_base_device.slice(0, 0, nz_diff - 1).view({1, -1, 1});
             auto v_pert_k = v.slice(1, 1, nz_diff) - v_base_k;      // v[k] - v_base[k]
             auto v_pert_km1 = v.slice(1, 0, nz_diff - 1) - v_base_km1;  // v[k-1] - v_base[k-1]
             v_diff = v_pert_k - v_pert_km1;  // [ny_v, nz-1, nx]
@@ -39973,6 +39978,27 @@ void TileSDIRK3UnifiedSolver::setThetaMixingBase(
     theta_mixing_base_ = mix_full_fields ? torch::Tensor() : snapshot;
 }
 
+void TileSDIRK3UnifiedSolver::setOption2WindMixingBase(
+    const float* u_base, const float* v_base, int count, bool mix_full_fields) {
+    TORCH_CHECK(u_base && v_base && count == nz_,
+                "option-2 wind mixing profiles must contain every mass level");
+    const auto options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    auto u_snapshot = torch::from_blob(const_cast<float*>(u_base), {count}, options).clone();
+    auto v_snapshot = torch::from_blob(const_cast<float*>(v_base), {count}, options).clone();
+    TORCH_CHECK(torch::isfinite(u_snapshot).all().item<bool>() &&
+                torch::isfinite(v_snapshot).all().item<bool>(),
+                "option-2 wind mixing profiles must be finite");
+    if (mix_full_fields) {
+        u_base_ = torch::Tensor();
+        v_base_ = torch::Tensor();
+        option2_wind_perturbation_mixing_ = false;
+    } else {
+        u_base_ = std::move(u_snapshot);
+        v_base_ = std::move(v_snapshot);
+        option2_wind_perturbation_mixing_ = true;
+    }
+}
+
 // ========================================================================
 // WRF-conforming vertical mixing for scalars
 // ========================================================================
@@ -42180,6 +42206,7 @@ uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
                             ids_, ide_, jds_, jde_, nprocx_, nprocy_, mypx_, mypy_}) {
         fixed_trajectory_hash_scalar(h, value);
     }
+    fixed_trajectory_hash_bool(h, option2_wind_perturbation_mixing_);
     fixed_trajectory_hash_vector(h, rdx_);
     fixed_trajectory_hash_vector(h, rdy_);
     fixed_trajectory_hash_vector(h, rdnw_);
