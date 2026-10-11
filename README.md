@@ -11,15 +11,16 @@ sets the forward map and its matched tangent/adjoint as the target, while
 identifying the completed two-control rotating-wave run as one restricted
 validation instance. It is the project-level target
 reference; case-specific budgets do not automatically become project completion
-criteria. The integrated forecast accuracy/window and efficiency acceptance
-criterion still need to be fixed.
+criteria. The integrated forecast window and physical error budgets still need
+to be fixed. Efficiency is a separate optional acceptance target.
 
 - **IMEX split** (mode 3 = ARK324L2SA): slow advection/Coriolis/diffusion terms explicit,
   acoustic/gravity terms implicit. The optional HEVI split also moves horizontal acoustic terms explicit.
 - **Matrix-free Newton–Krylov** implicit solve: **FGMRES** (flexible, right-preconditioned — the
   earlier fixed-preconditioner GMRES was replaced during the full-repo review) with Eisenstat–Walker
-  adaptive forcing, a vertical preconditioner, and a trust-region fallback. `A·v = v − dt·γ·J·v` is
-  an RHS JVP inside Newton; a 4D-Var gradient requires the VJP of the composed
+  adaptive forcing, a vertical preconditioner, and a trust-region fallback. The Newton
+  matvec `A·v = v − dt·γ·J·v` uses the RHS JVP `J·v`; a 4D-Var gradient requires
+  the VJP of the composed
   forward and observation map.
 - **Zero-copy interface (prognostic arrays):** Fortran `(i,k,j)` column-major maps to C++
   `(j,k,i)` row-major with no data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.

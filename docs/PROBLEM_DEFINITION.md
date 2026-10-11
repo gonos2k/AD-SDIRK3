@@ -2,11 +2,15 @@
 
 Local timestamp: 2026-10-11 17:47:15 JST (+0900)
 
+Last updated: 2026-10-11 17:57:34 JST (+0900)
+
 This is the single project-level definition of the first-stage research target.
 Case reports retain their own inputs, numerical budgets and completion status.
 This definition does not certify the first-stage target as complete. The target
-forecast window, field-error budgets and performance acceptance criterion remain
-unselected; until they are specified, project-level completion is withheld.
+forecast window and field-error budgets remain unselected; until those required
+choices are specified, project-level completion is withheld. Efficiency is an
+optional acceptance target, not adopted by this definition. If it is selected,
+its same-accuracy cost/timestep criterion must be specified and met.
 
 ## Main problem, derivative problem and validation problem
 
@@ -49,7 +53,7 @@ not permission to reuse a value from a previous experiment.
 | Forward accuracy | Evaluation times/window, owned/physical sampling positions, per-field units, physical weights/scales \(s_X\), and budgets \(\epsilon_X\) | **Window, scales and budgets unselected** |
 | Derivative accuracy | Directions/cotangents and norms/scales, dot/Taylor/FD budgets, true transpose residual and replay checks for that same map/window | Existing budgets apply to their fixtures only; integrated-window coverage remains open |
 | Observation/control problem | Observation operator, times, \(R\), control parameterization, any prior and admissible set | The completed rotating case specifies these; a broader instance is not selected |
-| Efficiency | Same-accuracy comparator, timestep/stability requirement, whole-run cost definition and required improvement | **Acceptance criterion unselected**; no equal-accuracy cost win is established |
+| Efficiency | Same-accuracy comparator, timestep/stability requirement, whole-run cost definition and required improvement | **Optional target not adopted**; if selected, its criterion must be fixed. No equal-accuracy cost win is established |
 
 The selected case record and this definition together form the completion
 contract. Changing an entry creates a new version/instance; it does not silently
@@ -170,9 +174,10 @@ target; it cannot revoke a completed restricted validation instance.
 
 ## Next action and validation of this definition
 
-Fix the still-unselected forecast window, physical error budgets and efficiency
-criterion, then map existing evidence to that instance and address its first
-unmet gate. Do not automatically add another wave, optimizer run, Hessian test,
+Fix the still-unselected forecast window and physical error budgets, then map
+existing evidence to that instance and address its first unmet gate. Adopt an
+efficiency target only through an explicit scope decision; if adopted, fix its
+same-accuracy cost/timestep criterion too. Do not automatically add another wave, optimizer run, Hessian test,
 moisture, terrain or MPI experiment. No project completion percentage is implied.
 
 This documentation was checked against main
