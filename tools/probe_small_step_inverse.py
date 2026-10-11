@@ -472,7 +472,7 @@ def validate_trial(meta, arrays, scalars, text, *, expected_initial,
 def invoke_native(*, exe: Path, outdir: Path, inputs: Path, state: np.ndarray,
                   basis: np.ndarray, delta: np.ndarray, label: str, gradient: bool,
                   center_arrays: dict | None, report: dict,
-                  update_index: int | None = None):
+                  update_index: int | None = None, native_args: tuple[str, ...] = ()):
     """Run and validate one native objective or bounded-replay gradient call."""
     initial = state.copy() if not np.any(delta) else state + basis @ delta
     state_path = outdir / f"{label}.initial_state.txt"
@@ -481,7 +481,8 @@ def invoke_native(*, exe: Path, outdir: Path, inputs: Path, state: np.ndarray,
     command = [str(exe), *map(str, GRID), str(output), "--physical-wave-inverse",
                str(state_path), str(inputs / "observations.txt"), str(STEPS), str(DT),
                "--newton-tol", "1e-14", "--krylov-tol", "1e-12",
-               "--bounded-replay-pullback" if gradient else "--bounded-tape-forward-only"]
+               "--bounded-replay-pullback" if gradient else "--bounded-tape-forward-only",
+               *native_args]
     usage = outdir / f"{label}.time.txt"
     timed = ["/usr/bin/time", "-v", "-o", str(usage), *command]
     report["active_call"] = {"label": label, "kind": "gradient" if gradient else "forward_trial",

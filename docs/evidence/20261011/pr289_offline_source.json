@@ -1,0 +1,158 @@
+{
+  "schema": "pr287-rotating-full-y-offline-audit-v2",
+  "worktree_head": "9126d906f5f6644763b8b397a63845818de3d34d",
+  "fixture_zip_sha256": "e170be5d1e2b0d1e87efcdc9ebe0f4dd1d381aceb9e0777dcd074e0dcfe1329d8c",
+  "source_hashes": {
+    "tools/wave_rotating_reference.py": "f998967fb3cf796054f2aca4d2b843376c2bfbc76353c768908a1d75db0433ba",
+    "tools/wave_y_reference.py": "2cbd1350be103d988b8baa373b1e7645eee5ac211b7ccd69fef35fc5ea2053fe",
+    "tools/wave_energy_spatial_reference.py": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_coriolis.h": "59753c2e567051a3ad1621125dacbe9d6997f568f91245e06cfeecb143a15918",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd"
+  },
+  "grid": [
+    16,
+    12,
+    8
+  ],
+  "full_y_state_size": 484,
+  "coefficient_provenance": {
+    "f_test_value": 9.999999747378752e-05,
+    "f_origin": "synthetic test-descriptor metadata for offline design only; no native f!=0 descriptor/call was run",
+    "rdy_fp32": 0.00039999998989515007,
+    "descriptor_rdy_bits": "0x39d1b717",
+    "rdx_fp32": 0.00039999998989515007,
+    "descriptor_rdx_bits": "0x39d1b717",
+    "kx_discrete": 0.00015607225367018573,
+    "synthetic_metadata_keys": [
+      "rotating_wave_test_enabled",
+      "coriolis_f_effective_field_nx",
+      "coriolis_f_effective_field_ny",
+      "coriolis_f_effective_field_min",
+      "coriolis_f_effective_field_max",
+      "f_input_max_abs",
+      "coriolis_e_effective_field_min",
+      "coriolis_e_effective_field_max",
+      "e_input_max_abs",
+      "coriolis_sina_effective_field_min",
+      "coriolis_sina_effective_field_max",
+      "coriolis_cosa_effective_field_min",
+      "coriolis_cosa_effective_field_max"
+    ],
+    "offline_negative_metadata_cases_rejected": 4
+  },
+  "f0_embedding": {
+    "full_shape": [
+      484,
+      484
+    ],
+    "old_shape": [
+      41,
+      41
+    ],
+    "embedding_shape": [
+      484,
+      41
+    ],
+    "max_abs_invariant_subspace_residual": 2.220446049250313e-15,
+    "roundoff_tolerance": 2e-14,
+    "passed": true,
+    "bitwise_exact": false
+  },
+  "uniform_fixed_background_f_energy_identity": {
+    "uniform_layer_mass": true,
+    "e_sina_zero_cosa_one_assumed": true,
+    "Coriolis_rows_outside_u_v_max_abs": 0.0,
+    "kinetic_power_real": 1.6763806343078613e-08,
+    "relative_kinetic_power_residual": 9.555873429084278e-18,
+    "weighted_Coriolis_skew_residual_on_u_v": 0.0,
+    "passed": true
+  },
+  "selected_mode": {
+    "eigenvalue": {
+      "real": -1.5685083192695864e-17,
+      "imag": 0.0025701755450031286
+    },
+    "angular_frequency": 0.0025701755450031286,
+    "nmax": 0.005626831621039005,
+    "overlap_with_f0_seed": 0.998404519520722,
+    "eigenpair_relative_residual_by_block": {
+      "u": 4.792385947510865e-13,
+      "v": 9.085133686861975e-13,
+      "w": 1.2492927961494139e-12,
+      "phi": 1.8166348434010605e-12,
+      "theta": 9.212534019634513e-14,
+      "mu": 1.5135797857732172e-12
+    },
+    "eigenvector_block_metrics": {
+      "u": {
+        "unit": "m s-1",
+        "rms": 0.5928662603198243,
+        "max_abs": 1.1934555632512738
+      },
+      "v": {
+        "unit": "m s-1",
+        "rms": 0.41482710797545236,
+        "max_abs": 0.8004720440496044
+      },
+      "w": {
+        "unit": "m s-1",
+        "rms": 0.49921261375640624,
+        "max_abs": 1.0
+      },
+      "phi": {
+        "unit": "m2 s-2",
+        "rms": 12.101926714978111,
+        "max_abs": 27.48054403263022
+      },
+      "theta": {
+        "unit": "K",
+        "rms": 0.13084966077424695,
+        "max_abs": 0.2585429034622551
+      },
+      "mu": {
+        "unit": "Pa",
+        "rms": 25.21967300826869,
+        "max_abs": 35.56730579969147
+      }
+    },
+    "near_zero_eigenvalue_count": 100
+  },
+  "time_quadratures": {
+    "w_max_abs": 0.01,
+    "evolution_identity_residual_by_block": {
+      "u": 4.823618100936256e-13,
+      "v": 9.103414079871398e-13,
+      "w": 1.2485723325517684e-12,
+      "phi": 1.8297961164242877e-12,
+      "theta": 9.1310825298597e-14,
+      "mu": 1.5099446708390218e-12
+    }
+  },
+  "full_y_near_zero_spectrum": {
+    "eigenvalues_abs_lt_1e-12": 100,
+    "max_abs_eigenvalue_in_cluster": 1.7767315877320019e-16,
+    "max_abs_rhs_residual": 1.3836271487039053e-13,
+    "max_W_to_max_UV_ratio": 0.837903002668778
+  },
+  "packed_native_state_length": 8480,
+  "fixed_observation_xyz_shape": [
+    105,
+    3
+  ],
+  "base_PH_H_matrix_shape": [
+    210,
+    2
+  ],
+  "base_PH_H_whitened_singular_values": [
+    176.1262638768483,
+    154.1688218500807
+  ],
+  "base_PH_H_rank": 2,
+  "native_calls": 0,
+  "builds": 0,
+  "limitations": "Offline reference/source linear model only; positive FP32 f-plane coefficient synthesized in descriptor metadata. No nonlinear native trajectory or solver parity claim.",
+  "base_PH_H_raw_singular_values": [
+    0.052837879163054484,
+    0.0462506465550242
+  ]
+}
