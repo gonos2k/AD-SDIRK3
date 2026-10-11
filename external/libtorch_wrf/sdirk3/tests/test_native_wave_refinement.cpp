@@ -56,6 +56,7 @@ void configure(bool implicit_divergence=false,float kdamp=0.0f) {
 }
 struct Grid {
     int nx, ny, nz, nu, nv, nw;
+    bool coriolis_fplane_test=false;
     double lx=40000.0, ly=30000.0;
     float dx,dy;
     std::vector<float> u,v,w,ph,th,mu, ru,rv,rw,rph,rth,rmu;
@@ -64,8 +65,9 @@ struct Grid {
     std::vector<float> maps, f, e, setup_state, setup_density;
     TileSDIRK3UnifiedSolver solver;
 
-    Grid(int x, int y, int z)
+    Grid(int x, int y, int z,bool enable_coriolis_fplane_test=false)
       : nx(x),ny(y),nz(z),nu(x+1),nv(y+1),nw(z+1),
+        coriolis_fplane_test(enable_coriolis_fplane_test),
         dx(static_cast<float>(lx/x)),dy(static_cast<float>(ly/y)),
         u(ny*nz*nu),v(nv*nz*nx),w(ny*nw*nx),ph(ny*nw*nx),
         th(ny*nz*nx),mu(ny*nx),ru(u.size()),rv(v.size()),rw(w.size()),
@@ -77,6 +79,8 @@ struct Grid {
         f(maps.size(),0.0f),e(maps.size(),0.0f),
         setup_state(nv*nw*nu,0.0f),setup_density(nv*nw*nu,1.0f),
         solver(x,y,z,dx,dy,{1.0f/dx},{1.0f/dy},metric,0) {
+        if(coriolis_fplane_test)
+            std::fill(f.begin(),f.end(),1.0e-4f);
         solver.setWRFIndices(1,nx+1,1,ny+1,1,nz,
                              1,nx+1,1,ny+1,1,nw,
                              -2,nx+4,-2,ny+4,1,nw);
@@ -647,6 +651,12 @@ void validate_physical_handoff_state(Grid& g,const torch::Tensor& state) {
 }
 
 int main(int argc,char** argv) {
+    bool coriolis_fplane_test=false;
+    if(argc>5 && std::string(argv[argc-1])=="--rotating-wave") {
+        coriolis_fplane_test=true;
+        --argc;
+    }
+    const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
     const bool damping_probe=argc==7 && std::string(argv[5])=="--damping-probe";
     const bool quadratic_probe=argc==7 && std::string(argv[5])=="--quadratic-probe";
     const bool quadratic_forward=argc==9 && std::string(argv[5])=="--quadratic-forward";
@@ -665,8 +675,10 @@ int main(int argc,char** argv) {
     const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
     TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode ||
                 physical_wave_inverse,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only | --bounded-tape-forward-only | --bounded-replay-pullback | --split-observation-pullbacks | --restart-smoke]]]");
-    const bool descriptor_only=argc==6 && std::string(argv[5])=="--descriptor-only";
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --descriptor-only | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only | --bounded-tape-forward-only | --bounded-replay-pullback | --split-observation-pullbacks | --replay-smoke | --restart-smoke]] [--rotating-wave (test-only; descriptor/quadratic-probe/physical-wave-inverse only)]");
+    TORCH_CHECK(!coriolis_fplane_test || descriptor_only || quadratic_probe || physical_wave_inverse,
+                "--rotating-wave is test-only and allowed only with --descriptor-only, "
+                "--quadratic-probe, or --physical-wave-inverse");
     bool implicit_divergence=false;
     float kdamp=0.0f;
     std::string damping_component;
@@ -804,7 +816,7 @@ int main(int argc,char** argv) {
                     g_sdirk3_config.stage3_max_krylov_restarts==0,
                     "replay-smoke requires the fixed inactive GMRES/INN/Stage-3/adaptive profile");
     }
-    Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]));
+    Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]),coriolis_fplane_test);
     auto base=background_state(g);
     const auto eos_errors=validate_eos_target(g,base);
     const int sizes[]={g.ny*g.nz*g.nu,g.nv*g.nz*g.nx,g.ny*g.nw*g.nx,g.ny*g.nw*g.nx,g.ny*g.nz*g.nx,g.ny*g.nx};
@@ -848,6 +860,29 @@ int main(int argc,char** argv) {
             result=std::max(result,std::abs(static_cast<double>(value)));
         return result;
     };
+    auto host_min=[](const std::vector<float>& values) {
+        TORCH_CHECK(!values.empty(),"cannot report min of an empty Coriolis field");
+        return static_cast<double>(*std::min_element(values.begin(),values.end()));
+    };
+    auto host_max=[](const std::vector<float>& values) {
+        TORCH_CHECK(!values.empty(),"cannot report max of an empty Coriolis field");
+        return static_cast<double>(*std::max_element(values.begin(),values.end()));
+    };
+    out<<"M,rotating_wave_test_enabled,"<<(g.coriolis_fplane_test?1:0)<<"\n";
+    out<<"M,coriolis_f_input_storage_numel,"<<g.f.size()<<"\n";
+    out<<"M,coriolis_e_input_storage_numel,"<<g.e.size()<<"\n";
+    out<<"M,coriolis_f_effective_field_ny,"<<g.ny<<"\n";
+    out<<"M,coriolis_f_effective_field_nx,"<<g.nx<<"\n";
+    out<<"M,coriolis_e_effective_field_ny,"<<g.ny<<"\n";
+    out<<"M,coriolis_e_effective_field_nx,"<<g.nx<<"\n";
+    out<<"M,coriolis_f_effective_field_min,"<<std::setprecision(17)<<host_min(g.f)<<"\n";
+    out<<"M,coriolis_f_effective_field_max,"<<std::setprecision(17)<<host_max(g.f)<<"\n";
+    out<<"M,coriolis_e_effective_field_min,"<<std::setprecision(17)<<host_min(g.e)<<"\n";
+    out<<"M,coriolis_e_effective_field_max,"<<std::setprecision(17)<<host_max(g.e)<<"\n";
+    out<<"M,coriolis_sina_effective_field_min,"<<std::setprecision(17)<<host_min(g.e)<<"\n";
+    out<<"M,coriolis_sina_effective_field_max,"<<std::setprecision(17)<<host_max(g.e)<<"\n";
+    out<<"M,coriolis_cosa_effective_field_min,"<<std::setprecision(17)<<host_min(g.maps)<<"\n";
+    out<<"M,coriolis_cosa_effective_field_max,"<<std::setprecision(17)<<host_max(g.maps)<<"\n";
     out<<"M,f_input_max_abs,"<<host_max_abs(g.f)<<"\n";
     out<<"M,e_input_max_abs,"<<host_max_abs(g.e)<<"\n";
     out<<"M,wrf_w_damping_config,"<<g_sdirk3_config.wrf_w_damping<<"\n";
@@ -994,7 +1029,7 @@ int main(int argc,char** argv) {
             replay_endpoints.push_back(initial.detach().clone());
             for(const auto& state:retained_states) replay_endpoints.push_back(state);
             int replay_steps_checked=0;
-            Grid replay_block_2_grid(g.nx,g.ny,g.nz);
+            Grid replay_block_2_grid(g.nx,g.ny,g.nz,g.coriolis_fplane_test);
             double block_2_max_abs=0.0;
             std::vector<torch::Tensor> block_2_cotangents(replay_block_steps);
             block_2_cotangents.back()=cotangent_16;
@@ -1005,7 +1040,7 @@ int main(int argc,char** argv) {
                 replay_steps_checked,block_2_max_abs,out);
             if(!block_2_initial_cotangent.defined()) return 2;
 
-            Grid replay_block_1_grid(g.nx,g.ny,g.nz);
+            Grid replay_block_1_grid(g.nx,g.ny,g.nz,g.coriolis_fplane_test);
             double block_1_max_abs=0.0;
             std::vector<torch::Tensor> block_1_cotangents(replay_block_steps);
             block_1_cotangents.back()=cotangent_8+block_2_initial_cotangent;
@@ -1272,7 +1307,7 @@ int main(int argc,char** argv) {
                     }
                     if(incoming_cotangent.defined())
                         block_cotangents.back()=block_cotangents.back()+incoming_cotangent;
-                    Grid replay_grid(g.nx,g.ny,g.nz);
+                    Grid replay_grid(g.nx,g.ny,g.nz,g.coriolis_fplane_test);
                     double block_max_abs=0.0;
                     incoming_cotangent=replay_carried_state_block(
                         g,replay_grid,base,rb,phb,bounded_replay_states,
@@ -1409,10 +1444,10 @@ int main(int argc,char** argv) {
             const auto warm=run_restart_branch(g,"warm_live",restart_warm_snapshot,
                                                restart_warm_snapshot_digest,false,false);
 
-            Grid restored_grid(g.nx,g.ny,g.nz);
+            Grid restored_grid(g.nx,g.ny,g.nz,g.coriolis_fplane_test);
             const auto restored=run_restart_branch(restored_grid,"snapshot_restored",
                 restart_warm_snapshot,restart_warm_snapshot_digest,true,true);
-            Grid cold_grid(g.nx,g.ny,g.nz);
+            Grid cold_grid(g.nx,g.ny,g.nz,g.coriolis_fplane_test);
             auto& cold_newton=newton_solver(cold_grid);
             const auto cold_snapshot=cold_newton.capture_carried_state();
             const auto cold_digest=cold_newton.carried_state_digest();

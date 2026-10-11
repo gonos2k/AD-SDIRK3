@@ -1,0 +1,96 @@
+{
+  "schema": "pr288-y-wave-forecast-mock-controller-v1",
+  "source_revision": "9126d906f5f6644763b8b397a63845818de3d34d",
+  "forecast_helper_sha256": "d61419cb9a378c656ef9a32e7170311504db9caad18f2e1367c404a406e7a116",
+  "rotating_reference_sha256": "f998967fb3cf796054f2aca4d2b843376c2bfbc76353c768908a1d75db0433ba",
+  "input_artifacts": {
+    "Y_completed_inverse_zip_sha256": "eef0ae8f3ce5ae0830b0603b658e77a03f14d84105bbd068148d1fae10acebbe",
+    "rotating_producer_mock_report_sha256": "5ef2aa4c2a3e80e6cfb8f175a4f3bea01b52f55cd253f880aeb9b0b1f3611746",
+    "rotating_mock_descriptor_sha256": "7a80128c6f87f04865873d3449c620d14780f3de5c216bf143cffc3ef0603f4a"
+  },
+  "results": {
+    "Y": {
+      "layout_dimension": 41,
+      "reconstruction_max_abs": 1.685283856911468e-15,
+      "accepted_start_and_terminal_validated": true,
+      "mock_forward_calls": [
+        {
+          "label": "start_300_to_600",
+          "input_sha": "9f8cbfb85429059ee0149922d1eebaa72a65e4cda93bead68b7f3896e5b86bc4",
+          "native_args": []
+        },
+        {
+          "label": "start_600_to_900",
+          "input_sha": "1dcd8e367e7ca20f42b647002ecbf3b3df7aeb09da81dbeecd41141dbf9f1764",
+          "native_args": []
+        },
+        {
+          "label": "terminal_300_to_600",
+          "input_sha": "67e61bf06bf93f22699b6beb38e5d2f7d309e924dd62c82b175319f8ee473b3e",
+          "native_args": []
+        },
+        {
+          "label": "terminal_600_to_900",
+          "input_sha": "84e7f17aa7f05b094b4cdb53dde5ea2f5785836cf517d17cb63a76177723fae8",
+          "native_args": []
+        }
+      ],
+      "native_calls_executed": 0,
+      "comparison_time_keys": [
+        "0",
+        "150",
+        "300",
+        "600",
+        "900"
+      ],
+      "source_truth_scope": "equilibrium descriptor base + linear 41-component source exp(A t), packed to the native grid; W observation samples include PH-perturbed vertical brackets. This is source-generated synthetic truth, not a nonlinear native trajectory.",
+      "native_args_case_specific": true
+    },
+    "rotating": {
+      "layout_dimension": 484,
+      "reconstruction_max_abs": 0.0,
+      "accepted_start_and_terminal_validated": true,
+      "mock_forward_calls": [
+        {
+          "label": "start_300_to_600",
+          "input_sha": "4955cc0a4569b4b503184c1296e6c590b471845324d81f8eaece9addc121f039",
+          "native_args": [
+            "--rotating-wave"
+          ]
+        },
+        {
+          "label": "start_600_to_900",
+          "input_sha": "c7b6de9955b10d861f3a0305dfb85dbb5f4dfbcf8e3960ac3ad80ee7235da98e",
+          "native_args": [
+            "--rotating-wave"
+          ]
+        },
+        {
+          "label": "terminal_300_to_600",
+          "input_sha": "87514f2e597e008252bf42e80b74113882452e42a652b12290cf376f4a636e20",
+          "native_args": [
+            "--rotating-wave"
+          ]
+        },
+        {
+          "label": "terminal_600_to_900",
+          "input_sha": "226f55c0104f724bfa01162a0c42849b29011d8fbee8666069e111b3c2f39e3b",
+          "native_args": [
+            "--rotating-wave"
+          ]
+        }
+      ],
+      "native_calls_executed": 0,
+      "comparison_time_keys": [
+        "0",
+        "150",
+        "300",
+        "600",
+        "900"
+      ],
+      "source_truth_scope": "equilibrium descriptor base + linear 484-component full-Y constant-f source exp(A t), packed to the native grid; W observation samples include PH-perturbed vertical brackets. This is source-generated synthetic truth, not a nonlinear native trajectory.",
+      "native_args_case_specific": true
+    }
+  },
+  "scope": "Plumbing-only mocked controller checks from one actual Y inverse archive and one producer-mocked rotating inverse archive. The runner was intercepted; no native process or optimizer was run."
+}

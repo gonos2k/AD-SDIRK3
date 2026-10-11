@@ -233,17 +233,19 @@ def block_slices() -> dict:
 
 
 def run_quadratic_probe(exe: Path, outdir: Path, report: dict,
-                        case: dict) -> dict:
+                        case: dict, *, native_args: tuple[str, ...] = (),
+                        pack_fn=None) -> dict:
+    pack_fn = ywave.pack_source_mode if pack_fn is None else pack_fn
     slices = block_slices()
     rows = {}
     for j, q in enumerate(case["quadratures"]):
         small_q = RHS_DIRECTION_SCALE * q
-        direction = ywave.pack_source_mode(case["column"], small_q, 12)
+        direction = pack_fn(case["column"], small_q, 12)
         direction_path = outdir / f"rhs_direction_{j}.txt"
         driver.write_vector(direction_path, direction)
         output = outdir / f"rhs_quadrature_{j}.csv"
         command = [str(exe), *map(str, GRID), str(output),
-                   "--quadratic-probe", str(direction_path)]
+                   "--quadratic-probe", str(direction_path), *native_args]
         _, arrays, _, _ = run_timed(label=f"rhs_quadrature_{j}", command=command,
                                     output=output, outdir=outdir, report=report,
                                     input_file=direction_path)
@@ -363,7 +365,8 @@ def evaluate(exe: Path, outdir: Path, inputs: Path, case: dict,
 
 
 def run_controller(exe: Path, outdir: Path, report: dict, case: dict,
-                   center: dict) -> dict:
+                   center: dict, evaluate_fn=None) -> dict:
+    evaluate_fn = evaluate if evaluate_fn is None else evaluate_fn
     delta = START_CONTROLS.copy()
     H = case["initial_metric"].copy()
     report["source_gradient_initial"] = case["source_gradient"].tolist()
@@ -406,7 +409,7 @@ def run_controller(exe: Path, outdir: Path, report: dict, case: dict,
             trial_delta = current["delta"] + alpha*direction
             label = f"trial_u{update_index}_b{backtrack}"
             try:
-                trial = evaluate(exe, outdir, outdir/"inputs", case, center["arrays"],
+                trial = evaluate_fn(exe, outdir, outdir/"inputs", case, center["arrays"],
                                  report, trial_delta, label, False)
             except (driver.BracketMismatchError, driver.AdmissibilityGuardError) as error:
                 update["line_search"].append({"alpha": alpha, "accepted": False,
@@ -429,7 +432,7 @@ def run_controller(exe: Path, outdir: Path, report: dict, case: dict,
         if accepted is None:
             update["decision"] = "incomplete_no_accepted_actual_cost_step"
             break
-        fresh = evaluate(exe, outdir, outdir/"inputs", case, center["arrays"],
+        fresh = evaluate_fn(exe, outdir, outdir/"inputs", case, center["arrays"],
                          report, accepted["delta"], f"gradient_u{update_index+1}", True)
         same_trial_and_gradient(accepted, fresh)
         s = fresh["delta"] - current["delta"]

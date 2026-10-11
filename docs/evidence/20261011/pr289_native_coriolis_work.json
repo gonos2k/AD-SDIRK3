@@ -1,0 +1,88 @@
+{
+  "schema": "pr289-independent-coriolis-native-work-v1",
+  "native_calls": 2,
+  "cpp_sha256": "8a9cb7875984304340a9e4e60940d1ff8e86484bf2d2ac434daf2f4f4fc7ef10",
+  "coriolis_header_sha256": "59753c2e567051a3ad1621125dacbe9d6997f568f91245e06cfeecb143a15918",
+  "exe_sha256": "35abb97801ef1cfd6f8da23ede49988f0719e9008918712f7bc9f4373c605e24",
+  "direction_sha256": "b19e1a8adea341ae541905b87f724977200df7ca39fcc33325aa36796e3e7711",
+  "f_effective": 9.999999747378752e-05,
+  "calls": {
+    "nonrotating": {
+      "command": [
+        "/private/tmp/pr289-rotating-wave-build/test_native_wave_refinement",
+        "16",
+        "12",
+        "8",
+        "/private/tmp/pr289-coriolis-work-probe/nonrotating.csv",
+        "--quadratic-probe",
+        "/private/tmp/pr289-coriolis-work-probe/velocity_direction.txt"
+      ],
+      "return_code": 0,
+      "seconds": 1.0076619170140475,
+      "csv_sha256": "ba940957286c631d211053b64626b23f065067108b120c95314f411f0b3b816c"
+    },
+    "rotating": {
+      "command": [
+        "/private/tmp/pr289-rotating-wave-build/test_native_wave_refinement",
+        "16",
+        "12",
+        "8",
+        "/private/tmp/pr289-coriolis-work-probe/rotating.csv",
+        "--quadratic-probe",
+        "/private/tmp/pr289-coriolis-work-probe/velocity_direction.txt",
+        "--rotating-wave"
+      ],
+      "return_code": 0,
+      "seconds": 0.4609450828284025,
+      "csv_sha256": "9d42d1428336cb6252b94af0e085756389ee8d3a380466b7fb16aef8128e68e2"
+    }
+  },
+  "checks": [
+    {
+      "amplitude": 1.0,
+      "max_abs_rate_error_by_block": {
+        "u": 6.352747104407253e-22,
+        "v": 4.235164736271502e-22,
+        "w": 0.0,
+        "ph": 0.0,
+        "theta": 0.0,
+        "mu": 0.0
+      },
+      "u_work_unweighted": -9.163254103824642e-08,
+      "v_work_unweighted": 9.16325410382465e-08,
+      "relative_uniform_kinetic_work": 8.715893207551081e-18,
+      "rate_relative_l2": 2.019953021860614e-16
+    },
+    {
+      "amplitude": 0.5,
+      "max_abs_rate_error_by_block": {
+        "u": 4.235164736271502e-22,
+        "v": 6.352747104407253e-22,
+        "w": 0.0,
+        "ph": 0.0,
+        "theta": 0.0,
+        "mu": 0.0
+      },
+      "u_work_unweighted": -9.163254103824638e-08,
+      "v_work_unweighted": 9.163254103824644e-08,
+      "relative_uniform_kinetic_work": 5.810595471700722e-18,
+      "rate_relative_l2": 1.8895128024003936e-16
+    },
+    {
+      "amplitude": 0.25,
+      "max_abs_rate_error_by_block": {
+        "u": 4.235164736271502e-22,
+        "v": 6.352747104407253e-22,
+        "w": 0.0,
+        "ph": 0.0,
+        "theta": 0.0,
+        "mu": 0.0
+      },
+      "u_work_unweighted": -9.163254103824641e-08,
+      "v_work_unweighted": 9.163254103824642e-08,
+      "relative_uniform_kinetic_work": 1.4526488679251802e-18,
+      "rate_relative_l2": 1.9347172575473289e-16
+    }
+  ],
+  "scope": "full RHS difference at same pure-velocity perturbation, f plane versus f=0; uniform fixed background, e=0 and identical remaining physics; independent 4-point loops; no trajectory, optimizer or variable-mass energy claim"
+}
