@@ -1,0 +1,71 @@
+{
+  "scope": "independent raw-artifact audit; no native process launched",
+  "artifact_sha256": "eef0ae8f3ce5ae0830b0603b658e77a03f14d84105bbd068148d1fae10acebbe",
+  "zip_crc": "passed",
+  "run_id": 38095566773,
+  "source_revision": "730c86bb5d06889746ea232efe8aa9c162ec2c4e",
+  "executable_sha256": "ba6aa25225565672f2665bb1f588386deb68b3845c145941bdf2932b303def2f",
+  "source_inventory_verified": true,
+  "call_count": 9,
+  "all_calls_returned_zero": true,
+  "objective_recalculated_by_call": {
+    "gradient_u0": 544.6283539439668,
+    "trial_u0_b0": 7.942149580967568e-06,
+    "gradient_u1": 7.942149580967568e-06,
+    "trial_u1_b0": 7.913879513273548e-06,
+    "gradient_u2": 7.913879513273548e-06
+  },
+  "projected_gradients_by_call": {
+    "gradient_u0": [
+      -3563.710099342367,
+      -1567.6614853794722
+    ],
+    "gradient_u1": [
+      0.02973770097233192,
+      0.02034591269144402
+    ],
+    "gradient_u2": [
+      -3.027509694264674e-08,
+      3.6620707947847275e-08
+    ]
+  },
+  "update_checks": [
+    {
+      "update": 1,
+      "alpha": 1.0,
+      "cost_before": 544.6283539439668,
+      "cost_after": 7.942149580967568e-06,
+      "armijo_bound": 544.5194279134597,
+      "gradient_before_l2": 3893.275254191123,
+      "gradient_after_l2": 0.03603175019850817,
+      "secant_curvature": 1089.265689633011,
+      "fresh_forward_gradient_arrays_equal": true
+    },
+    {
+      "update": 2,
+      "alpha": 1.0,
+      "cost_before": 7.942149580967568e-06,
+      "cost_after": 7.913879513273548e-06,
+      "armijo_bound": 7.942143927144513e-06,
+      "gradient_before_l2": 0.03603175019850817,
+      "gradient_after_l2": 4.751481606286804e-08,
+      "secant_curvature": 5.653819651492768e-08,
+      "fresh_forward_gradient_arrays_equal": true
+    }
+  ],
+  "initial_gradient_l2": 3893.275254191123,
+  "terminal_gradient_l2": 4.751481606286804e-08,
+  "terminal_objective": 7.913879513273548e-06,
+  "terminal_delta": [
+    0.7800004730122119,
+    -0.36000367440330777
+  ],
+  "terminal_threshold": 1e-05,
+  "source_initial_native_gradient_difference_l2": 0.002625350417461198,
+  "claims": {
+    "two_control_projected_gradient_threshold_met": true,
+    "formal_Eg_bound": false,
+    "full_state_stationarity": false,
+    "nonlinear_native_truth": false
+  }
+}

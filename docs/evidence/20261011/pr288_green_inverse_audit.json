@@ -1,0 +1,48 @@
+{
+  "audit_scope": "Green report-level validation of the remote inverse artifact; no native process launched. See Red\u2019s array-level audit for trial/fresh-gradient parity details.",
+  "run_id": 38095566773,
+  "head_sha": "730c86bb5d06889746ea232efe8aa9c162ec2c4e",
+  "artifact_id": 11686772454,
+  "artifact_sha256": "eef0ae8f3ce5ae0830b0603b658e77a03f14d84105bbd068148d1fae10acebbe",
+  "zip_crc": "passed",
+  "source_revision": "730c86bb5d06889746ea232efe8aa9c162ec2c4e",
+  "executable_sha256": "ba6aa25225565672f2665bb1f588386deb68b3845c145941bdf2932b303def2f",
+  "source_hashes_match_current_worktree": true,
+  "report_status": "completed_gradient_threshold",
+  "native_call_count": 9,
+  "all_native_calls_returned_zero": true,
+  "accepted_update_count": 2,
+  "armijo_alpha_by_update": [
+    1.0,
+    1.0
+  ],
+  "safe_bfgs_applied_by_update": [
+    true,
+    true
+  ],
+  "costs": [
+    {
+      "before": 544.6283539439668,
+      "after": 7.942149580967568e-06,
+      "armijo_bound": 544.5194279134597
+    },
+    {
+      "before": 7.942149580967568e-06,
+      "after": 7.913879513273548e-06,
+      "armijo_bound": 7.942143927144513e-06
+    }
+  ],
+  "terminal_controls": [
+    0.7800004730122119,
+    -0.36000367440330777
+  ],
+  "terminal_projected_gradient_l2": 4.751481608572788e-08,
+  "projected_gradient_threshold": 1e-05,
+  "threshold_reached": true,
+  "source_truth_scope": "linear 41-component source Y dynamics with PH-perturbed W-height sampling; not a nonlinear native trajectory",
+  "formal_Eg_bound": false,
+  "full_state_stationarity_checked": false,
+  "red_independent_audit_path": "/private/tmp/pr287-y-wave-inverse-38095566773/red-audit.json",
+  "forecast_precondition_met": true,
+  "artifact_path": "/private/tmp/pr287-y-wave-inverse-38095566773/fixed-fine-accuracy.zip"
+}

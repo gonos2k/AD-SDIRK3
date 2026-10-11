@@ -1,0 +1,690 @@
+{
+  "schema": "green-y-wave-forecast-audit-v1",
+  "run_id": 38098316323,
+  "commit": "7056d080b6267949762411aef2b39582f7f01eca",
+  "status": "completed_state_only_forecast",
+  "zip_path": "/private/tmp/pr288-y-wave-forecast-38098316323/fixed-fine-accuracy.zip",
+  "zip_sha256": "7670c4f12e9df83d65af81ecf6f1e6e5d2a795d1f7b9ab7ba9313c67b3dca0fd",
+  "zip_crc_test": null,
+  "zip_member_count": 27,
+  "extracted_measurement_dir": "/private/tmp/pr288-y-wave-forecast-38098316323/extracted/measurement",
+  "report_path": "/private/tmp/pr288-y-wave-forecast-38098316323/extracted/measurement/report.json",
+  "accepted_inverse_zip_sha256": "eef0ae8f3ce5ae0830b0603b658e77a03f14d84105bbd068148d1fae10acebbe",
+  "accepted_inverse_report_sha256": "2288bb453b7f612e9bdadc5f7f4252ebc6a5343acd9bb2d7250f58e98ad6d074",
+  "accepted_inverse_status": "completed_gradient_threshold",
+  "accepted_inverse_source_revision": "730c86bb5d06889746ea232efe8aa9c162ec2c4e",
+  "source_fingerprint_count": 14,
+  "source_fingerprint_mismatches": {},
+  "executable_sha256": "ba6aa25225565672f2665bb1f588386deb68b3845c145941bdf2932b303def2f",
+  "native_call_count": 4,
+  "native_calls": [
+    {
+      "label": "start_300_to_600",
+      "return_code": 0,
+      "start_s": 300,
+      "end_s": 600,
+      "steps": 960,
+      "dt": 0.3125,
+      "scope": "cold_restart_state_only_forward",
+      "initial_state_sha256": "9cb261c40d43ac68e96f89bc543d2f7ea787fee2b3c4c866b77e4efefe519362",
+      "checkpoint_150_sha256": "00609a172d9ab9ea9023ae41e7fad5f5618c8e2eea2e681d7b7812cdf169cd51",
+      "checkpoint_300_sha256": "1668d106123cde927cb471a5a2aa120d58f387e46ea8466836c591676b17cb4a",
+      "seconds": 518.568078874,
+      "peak_rss_kib": 161736,
+      "guards": {
+        "physical_observation_domain": "passed",
+        "vertical_height_monotonic": "passed",
+        "admissibility_checked_every_step": 1.0
+      }
+    },
+    {
+      "label": "start_600_to_900",
+      "return_code": 0,
+      "start_s": 600,
+      "end_s": 900,
+      "steps": 960,
+      "dt": 0.3125,
+      "scope": "cold_restart_state_only_forward",
+      "initial_state_sha256": "1668d106123cde927cb471a5a2aa120d58f387e46ea8466836c591676b17cb4a",
+      "checkpoint_150_sha256": "a982004dba69a0d2125d5888bcb49c2353b104865feff65be6a05f694ee7a50d",
+      "checkpoint_300_sha256": "645e203de3c47ec79109270594fbb4285fcc663cb239a808712467613b6a55b8",
+      "seconds": 535.636170459,
+      "peak_rss_kib": 161520,
+      "guards": {
+        "physical_observation_domain": "passed",
+        "vertical_height_monotonic": "passed",
+        "admissibility_checked_every_step": 1.0
+      }
+    },
+    {
+      "label": "terminal_300_to_600",
+      "return_code": 0,
+      "start_s": 300,
+      "end_s": 600,
+      "steps": 960,
+      "dt": 0.3125,
+      "scope": "cold_restart_state_only_forward",
+      "initial_state_sha256": "c51417fc9f403b6352edd88e96ed2098f3e76be255aa7a211820bfa55e70240d",
+      "checkpoint_150_sha256": "dab9a08e0d9634aeb998f67c4ba3703449de4ee47093c0c8da03505319d6c733",
+      "checkpoint_300_sha256": "27fcdce6d1ae41c2af0d48760cafd4c8ad53717615eb6406f65a0fdbb45b7af2",
+      "seconds": 520.9039541730001,
+      "peak_rss_kib": 161176,
+      "guards": {
+        "physical_observation_domain": "passed",
+        "vertical_height_monotonic": "passed",
+        "admissibility_checked_every_step": 1.0
+      }
+    },
+    {
+      "label": "terminal_600_to_900",
+      "return_code": 0,
+      "start_s": 600,
+      "end_s": 900,
+      "steps": 960,
+      "dt": 0.3125,
+      "scope": "cold_restart_state_only_forward",
+      "initial_state_sha256": "27fcdce6d1ae41c2af0d48760cafd4c8ad53717615eb6406f65a0fdbb45b7af2",
+      "checkpoint_150_sha256": "a7db90af52601eb0445356bd9490c06656e15ff6b83c8958a8704c421af017d0",
+      "checkpoint_300_sha256": "730154649ba39368968ee223a88e005aa38cef7b8d9ca01f4532cbacba159b96",
+      "seconds": 522.880172512,
+      "peak_rss_kib": 161456,
+      "guards": {
+        "physical_observation_domain": "passed",
+        "vertical_height_monotonic": "passed",
+        "admissibility_checked_every_step": 1.0
+      }
+    }
+  ],
+  "exact_state_transfers": {
+    "start": {
+      "accepted_inverse_checkpoint_300_sha256": "9cb261c40d43ac68e96f89bc543d2f7ea787fee2b3c4c866b77e4efefe519362",
+      "first_segment_endpoint_600_sha256": "1668d106123cde927cb471a5a2aa120d58f387e46ea8466836c591676b17cb4a",
+      "second_segment_initial_state_sha256": "1668d106123cde927cb471a5a2aa120d58f387e46ea8466836c591676b17cb4a",
+      "second_segment_endpoint_900_sha256": "645e203de3c47ec79109270594fbb4285fcc663cb239a808712467613b6a55b8",
+      "exact_600s_handoff": true
+    },
+    "terminal": {
+      "accepted_inverse_checkpoint_300_sha256": "c51417fc9f403b6352edd88e96ed2098f3e76be255aa7a211820bfa55e70240d",
+      "first_segment_endpoint_600_sha256": "27fcdce6d1ae41c2af0d48760cafd4c8ad53717615eb6406f65a0fdbb45b7af2",
+      "second_segment_initial_state_sha256": "27fcdce6d1ae41c2af0d48760cafd4c8ad53717615eb6406f65a0fdbb45b7af2",
+      "second_segment_endpoint_900_sha256": "730154649ba39368968ee223a88e005aa38cef7b8d9ca01f4532cbacba159b96",
+      "exact_600s_handoff": true
+    }
+  },
+  "source_truth_controls": [
+    0.78,
+    -0.36
+  ],
+  "start_controls": [
+    0.25,
+    0.15
+  ],
+  "terminal_controls": [
+    0.7800004730122119,
+    -0.36000367440330777
+  ],
+  "source_truth_reconstruction": {
+    "max_abs_m_s": 5.447031714567174e-16,
+    "roundoff_tolerance_m_s": 5.684341886080802e-14
+  },
+  "owned_state_error_vs_source_truth": {
+    "start": {
+      "0": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.0022149524102173896,
+          "absolute_error_max": 0.006260034913252969,
+          "expected_total_state_rms": 0.003259741282961441
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 0.0014237878730527901,
+          "absolute_error_max": 0.004143277977990238,
+          "expected_total_state_rms": 0.002095385926379562
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.0018656917486509187,
+          "absolute_error_max": 0.00515369098974433,
+          "expected_total_state_rms": 0.002745735026316434
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.04355841221277199,
+          "absolute_error_max": 0.1363940177452605,
+          "expected_total_state_rms": 4429.012659856942
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.0004707836510344192,
+          "absolute_error_max": 0.0012827619819422154,
+          "expected_total_state_rms": 13.200378786627116
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 0.09072563660828296,
+          "absolute_error_max": 0.17644222487797379,
+          "expected_total_state_rms": 4000.0000005126662
+        }
+      },
+      "150": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.0012514027940778959,
+          "absolute_error_max": 0.0035367917202897554,
+          "expected_total_state_rms": 0.002455203554782865
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 0.0008044110221854886,
+          "absolute_error_max": 0.002340867287417201,
+          "expected_total_state_rms": 0.0015782230945687857
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.001054077670742367,
+          "absolute_error_max": 0.0029117324922809953,
+          "expected_total_state_rms": 0.0020680593372058853
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.057378864091527544,
+          "absolute_error_max": 0.17967484022301505,
+          "expected_total_state_rms": 4429.012660073737
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.0006201564833375622,
+          "absolute_error_max": 0.0016897690094808127,
+          "expected_total_state_rms": 13.20037879512415
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 0.11951156675818528,
+          "absolute_error_max": 0.23242864752955938,
+          "expected_total_state_rms": 4000.000001554051
+        }
+      },
+      "300": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.00010432350119917203,
+          "absolute_error_max": 0.00029484567117940173,
+          "expected_total_state_rms": 0.0012905877287996304
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 6.705995038629567e-05,
+          "absolute_error_max": 0.00019514697610256313,
+          "expected_total_state_rms": 0.000829599385024802
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 8.787348770270708e-05,
+          "absolute_error_max": 0.00024274601171907348,
+          "expected_total_state_rms": 0.001087083797116522
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.06278418120048208,
+          "absolute_error_max": 0.19660188535999623,
+          "expected_total_state_rms": 4429.012660279428
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.000678577695435951,
+          "absolute_error_max": 0.0018489542772091028,
+          "expected_total_state_rms": 13.20037880318601
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 0.1307700310593881,
+          "absolute_error_max": 0.2543233130936642,
+          "expected_total_state_rms": 4000.000002542101
+        }
+      },
+      "600": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.002065261599525867,
+          "absolute_error_max": 0.00583696914572109,
+          "expected_total_state_rms": 0.0014079127532320363
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 0.0013275654915052074,
+          "absolute_error_max": 0.0038632669999738903,
+          "expected_total_state_rms": 0.0009050167828082537
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.0017396045975866291,
+          "absolute_error_max": 0.00480541036008794,
+          "expected_total_state_rms": 0.0011859086427359806
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.046528874143809,
+          "absolute_error_max": 0.14569556999049382,
+          "expected_total_state_rms": 4429.0126602645005
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.0005028886968988896,
+          "absolute_error_max": 0.0013702448384869115,
+          "expected_total_state_rms": 13.200378802600921
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 0.09691265779599566,
+          "absolute_error_max": 0.18847656687421477,
+          "expected_total_state_rms": 4000.0000024703927
+        }
+      },
+      "900": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.003067710244352904,
+          "absolute_error_max": 0.008670151260103636,
+          "expected_total_state_rms": 0.0033107626813640508
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 0.001971946928884925,
+          "absolute_error_max": 0.005738441816200114,
+          "expected_total_state_rms": 0.002128182860515485
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.0025839839943013576,
+          "absolute_error_max": 0.007137908198136155,
+          "expected_total_state_rms": 0.0027887112101683768
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 0.003978809799901194,
+          "absolute_error_max": 0.01245962711982429,
+          "expected_total_state_rms": 4429.012659841136
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 4.3003363287476166e-05,
+          "absolute_error_max": 0.00011717335891958669,
+          "expected_total_state_rms": 13.200378786007589
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 0.008287253145828783,
+          "absolute_error_max": 0.016119968890052405,
+          "expected_total_state_rms": 4000.000000436738
+        }
+      }
+    },
+    "terminal": {
+      "0": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.976791582441361e-09,
+          "absolute_error_max": 5.586930111253774e-09,
+          "expected_total_state_rms": 0.003259741282961441
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 1.270696322644081e-09,
+          "absolute_error_max": 3.6977756230280323e-09,
+          "expected_total_state_rms": 0.002095385926379562
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.6650848690587907e-09,
+          "absolute_error_max": 4.599544857833426e-09,
+          "expected_total_state_rms": 0.002745735026316434
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 3.138258526027289e-07,
+          "absolute_error_max": 9.826799214351922e-07,
+          "expected_total_state_rms": 4429.012659856942
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 3.3918607985626634e-09,
+          "absolute_error_max": 9.241931664405456e-09,
+          "expected_total_state_rms": 13.200378786627116
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 6.536522237666794e-07,
+          "absolute_error_max": 1.271215751330601e-06,
+          "expected_total_state_rms": 4000.0000005126662
+        }
+      },
+      "150": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 9.559592132228969e-08,
+          "absolute_error_max": 2.484161125528364e-07,
+          "expected_total_state_rms": 0.002455203554782865
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 1.3855221468735e-07,
+          "absolute_error_max": 3.1521062592986416e-07,
+          "expected_total_state_rms": 0.0015782230945687857
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 9.610673533603745e-08,
+          "absolute_error_max": 2.76067850113991e-07,
+          "expected_total_state_rms": 0.0020680593372058853
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.010066466130968e-05,
+          "absolute_error_max": 3.5356631997274235e-05,
+          "expected_total_state_rms": 4429.012660073737
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 7.117348313104297e-08,
+          "absolute_error_max": 1.8303313176204483e-07,
+          "expected_total_state_rms": 13.20037879512415
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 8.959912219297282e-06,
+          "absolute_error_max": 2.1124950762896333e-05,
+          "expected_total_state_rms": 4000.000001554051
+        }
+      },
+      "300": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 9.771139699062589e-08,
+          "absolute_error_max": 2.6351406256890086e-07,
+          "expected_total_state_rms": 0.0012905877287996304
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 1.4100138921842654e-07,
+          "absolute_error_max": 3.2489039202530674e-07,
+          "expected_total_state_rms": 0.000829599385024802
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.0535682727792319e-07,
+          "absolute_error_max": 3.636278607089226e-07,
+          "expected_total_state_rms": 0.001087083797116522
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.5439906406339636e-05,
+          "absolute_error_max": 4.2162780118815135e-05,
+          "expected_total_state_rms": 4429.012660279428
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.4064702371663562e-07,
+          "absolute_error_max": 3.696809169895232e-07,
+          "expected_total_state_rms": 13.20037880318601
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 7.2694975859087025e-06,
+          "absolute_error_max": 1.5792310023243772e-05,
+          "expected_total_state_rms": 4000.000002542101
+        }
+      },
+      "600": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 6.117779848169847e-08,
+          "absolute_error_max": 1.9361720368952715e-07,
+          "expected_total_state_rms": 0.0014079127532320363
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 8.500651681377038e-08,
+          "absolute_error_max": 2.895634465208824e-07,
+          "expected_total_state_rms": 0.0009050167828082537
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 7.037027442937896e-08,
+          "absolute_error_max": 2.5373295398558996e-07,
+          "expected_total_state_rms": 0.0011859086427359806
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.3651083508578833e-05,
+          "absolute_error_max": 3.8267527997959405e-05,
+          "expected_total_state_rms": 4429.0126602645005
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.3921556160412276e-07,
+          "absolute_error_max": 3.982498189003536e-07,
+          "expected_total_state_rms": 13.200378802600921
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 8.534552387868038e-06,
+          "absolute_error_max": 2.1757054128102027e-05,
+          "expected_total_state_rms": 4000.0000024703927
+        }
+      },
+      "900": {
+        "u": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude periodic duplicate x face",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 4.05836284692428e-08,
+          "absolute_error_max": 1.2187469896653147e-07,
+          "expected_total_state_rms": 0.0033107626813640508
+        },
+        "v": {
+          "unit": "m s-1",
+          "owned_point_policy": "include physical Y faces; symmetric wall faces are zero",
+          "owned_point_count": 1664,
+          "absolute_error_rms": 9.470270812145912e-08,
+          "absolute_error_max": 2.239117641842682e-07,
+          "expected_total_state_rms": 0.002128182860515485
+        },
+        "w": {
+          "unit": "m s-1",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 5.887347474339031e-08,
+          "absolute_error_max": 1.975005894104812e-07,
+          "expected_total_state_rms": 0.0027887112101683768
+        },
+        "ph": {
+          "unit": "m2 s-2",
+          "owned_point_policy": "exclude fixed lower z face; include dynamic top",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 1.2606699984368101e-05,
+          "absolute_error_max": 4.963730498275254e-05,
+          "expected_total_state_rms": 4429.012659841136
+        },
+        "theta": {
+          "unit": "K",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 1536,
+          "absolute_error_rms": 3.008384751620044e-08,
+          "absolute_error_max": 1.1245714581775701e-07,
+          "expected_total_state_rms": 13.200378786007589
+        },
+        "mu": {
+          "unit": "Pa",
+          "owned_point_policy": "all mass points",
+          "owned_point_count": 192,
+          "absolute_error_rms": 1.4966439191064734e-05,
+          "absolute_error_max": 3.4136018257413525e-05,
+          "expected_total_state_rms": 4000.000000436738
+        }
+      }
+    }
+  },
+  "physical_W_prediction_error_vs_source_truth": {
+    "start": {
+      "150": {
+        "rms_m_s": 0.0009629148072196762,
+        "max_abs_m_s": 0.0024896872245311753,
+        "rms_sigma": 3.2097160240655875
+      },
+      "300": {
+        "rms_m_s": 8.02725407482489e-05,
+        "max_abs_m_s": 0.00020757891643823382,
+        "rms_sigma": 0.26757513582749637
+      },
+      "600": {
+        "rms_m_s": 0.0015891547298757048,
+        "max_abs_m_s": 0.004108890241158135,
+        "rms_sigma": 5.2971824329190165
+      },
+      "900": {
+        "rms_m_s": 0.002360505933069661,
+        "max_abs_m_s": 0.006103253820198433,
+        "rms_sigma": 7.868353110232205
+      }
+    },
+    "terminal": {
+      "150": {
+        "rms_m_s": 7.816126163915394e-08,
+        "max_abs_m_s": 1.7368519499450646e-07,
+        "rms_sigma": 0.0002605375387971798
+      },
+      "300": {
+        "rms_m_s": 8.635663132127692e-08,
+        "max_abs_m_s": 2.55718488397904e-07,
+        "rms_sigma": 0.0002878554377375898
+      },
+      "600": {
+        "rms_m_s": 6.956983940082494e-08,
+        "max_abs_m_s": 1.927885477107853e-07,
+        "rms_sigma": 0.0002318994646694165
+      },
+      "900": {
+        "rms_m_s": 3.975778875629185e-08,
+        "max_abs_m_s": 1.1093241898251643e-07,
+        "rms_sigma": 0.00013252596252097285
+      }
+    }
+  },
+  "scope": {
+    "source_truth_scope": "equilibrium descriptor base + linear 41-component source exp(A t), packed to the native grid; W observation samples include PH-perturbed vertical brackets. This is source-generated synthetic truth, not a nonlinear native trajectory.",
+    "whole_state_scope": "per-variable owned-point spatial RMS/max. U excludes periodic duplicate x face; W/PH exclude fixed lower z face and include dynamic top; V includes physical Y faces; theta/MU include all mass points. No mixed-unit aggregate or fixed-Eulerian-height interpolation is claimed.",
+    "cold_restart_scope": "two state-only native restarts per branch: actual inverse checkpoint at 300 to 600, then actual 600 checkpoint to 900; four calls total. No internal solver snapshot is restored.",
+    "formal_Eg_bound": false,
+    "optimizer_or_convergence_reassessment": false
+  },
+  "independent_local_reconstruction_note": "Recomputed source-derived comparison on local host differs only at floating-point roundoff scale (largest tracked scalar delta 6.62e-12 in rms_sigma); the archived run reports source observation reconstruction max 5.45e-16 against tolerance 5.68e-14. The terminal literal/chart reconstruction on local BLAS differed by at most 1.73e-18."
+}

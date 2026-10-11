@@ -1,0 +1,62 @@
+{
+  "run_id": 38096256387,
+  "head_sha": "7056d080b6267949762411aef2b39582f7f01eca",
+  "status": "success",
+  "artifact_id": 11685814663,
+  "artifact_name": "research-core-diagnostics",
+  "artifact_sha256": "0aae9b3cbbb2de3d9ea73eb3bbb4b627b0aa29fd9b88dd316d789a4bc3118d50",
+  "artifact_size_bytes": 359688,
+  "crc": "passed",
+  "ctests": {
+    "count": 5,
+    "names": [
+      "Diagnostic_Observer_Noninterference_Contract",
+      "Fixed_Trajectory_Derivative",
+      "Fixed_Trajectory_Lifecycle",
+      "FP64_State_Handoff_Contract",
+      "Full_Tile_Step_Adjoint"
+    ],
+    "passed": 5,
+    "failed": 0
+  },
+  "replay": {
+    "grid": [
+      16,
+      12,
+      8
+    ],
+    "steps": 16,
+    "dt": 0.3125,
+    "endpoint_parity": "16/16 bitwise equal",
+    "full_gradient_relative_error": 0.0,
+    "component_gradient_relative_errors": {
+      "u": 0.0,
+      "v": 0.0,
+      "w": 0.0,
+      "ph": 0.0,
+      "theta": 0.0,
+      "mu": 0.0
+    },
+    "gradient_gate_tolerance": "1e-08",
+    "snapshot_steps": [
+      0,
+      8
+    ],
+    "all_stage_predictors_defined": true,
+    "both_block_restore_digest_and_predictor_checks_passed": true,
+    "admissibility_checks": 17,
+    "optimizer_run": false
+  },
+  "profile": {
+    "newton_tol_config": "9.9999998245167004e-15",
+    "krylov_tol_config": "9.999999960041972e-13",
+    "nk_adaptive_tol_config": "1",
+    "ewt_rtol_config": "9.9999999747524271e-07"
+  },
+  "inputs": {
+    "initial_state_sha256": "31d25b7ae25240bda21a62d02512cecf600f034e02533bfabcde6fbc6a15cc72",
+    "observations_sha256": "a7442e053a3c72218d81865746be866346bb5cd342185d7f2e68c5a46fffcce3",
+    "csv_initial_state_equal_literal": true
+  },
+  "audit_passed": true
+}

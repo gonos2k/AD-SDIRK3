@@ -1,0 +1,72 @@
+{
+  "result": "mock_flow_passed",
+  "accepted_zip_sha256": "7906496e2245ab0197a4181d62025e2f347499fdd437ea42cea0927c9cddc79a",
+  "inverse_report_sha256": "9ea8160e2b08d1459eebb46c19b5ccc75ac871a7d6dba1615e855a53009854fe",
+  "two_branches": [
+    "start",
+    "terminal"
+  ],
+  "calls": 4,
+  "call_labels": [
+    "start_300_to_600",
+    "start_600_to_900",
+    "terminal_300_to_600",
+    "terminal_600_to_900"
+  ],
+  "state_times": [
+    0,
+    150,
+    300,
+    600,
+    900
+  ],
+  "start_u_rms_900": 0.003067710207670686,
+  "terminal_u_rms_900": 5.904459099490207e-06,
+  "W_prediction_sigma_errors": {
+    "start": {
+      "150": {
+        "rms_m_s": 0.0009629151749442923,
+        "max_abs_m_s": 0.002489672192813447,
+        "rms_sigma": 3.209717249814308
+      },
+      "300": {
+        "rms_m_s": 8.027348851900468e-05,
+        "max_abs_m_s": 0.00020755329652126118,
+        "rms_sigma": 0.26757829506334896
+      },
+      "600": {
+        "rms_m_s": 0.0015891543307505977,
+        "max_abs_m_s": 0.0041088466596524015,
+        "rms_sigma": 5.297181102501993
+      },
+      "900": {
+        "rms_m_s": 0.002360506940476321,
+        "max_abs_m_s": 0.006103219930705528,
+        "rms_sigma": 7.8683564682544045
+      }
+    },
+    "terminal": {
+      "150": {
+        "rms_m_s": 1.7712093266225906e-06,
+        "max_abs_m_s": 4.579566229899988e-06,
+        "rms_sigma": 0.005904031088741969
+      },
+      "300": {
+        "rms_m_s": 6.69252575642181e-08,
+        "max_abs_m_s": 1.7304255870093446e-07,
+        "rms_sigma": 0.000223084191880727
+      },
+      "600": {
+        "rms_m_s": 3.119700127941237e-06,
+        "max_abs_m_s": 8.066161897346373e-06,
+        "rms_sigma": 0.010399000426470791
+      },
+      "900": {
+        "rms_m_s": 4.543296382180911e-06,
+        "max_abs_m_s": 1.1746941898553055e-05,
+        "rms_sigma": 0.01514432127393637
+      }
+    }
+  },
+  "claim": "synthetic plumbing only; mocked four forecast outputs; no native calls/model validation"
+}
