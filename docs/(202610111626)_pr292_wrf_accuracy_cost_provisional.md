@@ -1,6 +1,8 @@
 # PR292 WRF accuracy-cost comparison (provisional)
 
-Local timestamp: 2026-10-11 16:26:17 JST (+0900)
+Created: 2026-10-11 16:26:17 JST (+0900)
+
+Last updated: 2026-10-11 16:47:39 JST (+0900)
 
 **Status: the narrow option-2 theta-mixing correction, four post-rebuild runs, offline comparison, and independent Green/Red audit passed.** This is a narrow `em_b_wave` accuracy-cost sample, not a general phase closure.
 
@@ -16,7 +18,7 @@ Raw arrays, run plans, source pins, and validation logs are preserved in [the ev
 
 ## Build and run receipts
 
-Worktree revision: `de23ed32509ada2c90fbf7dabbf261da480c78ed`. The authoritative five-file source pin and production diff hash are recorded in ``production_source_pin.json``. The final clean C++ plus affected WRF rebuild receipt is ``build_receipt_after.json``: it records executable SHA-256 `2b629416618ddef4ceeea8ba51d07b8a7df514f5df6abab107c51e3f78fcc2de`, LibTorch archive SHA-256 `4369098b25d74cd3f44b792c1537661d8a6c3b4256a75afb3a7c0690ad284ffd`, and `configure.wrf` SHA-256 `8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289`. The `final compile log` reports GNU Fortran 15.2.0 and a successful WRF link; the `selected CTest log` shows `Base_State_Checked_ABI` and `Scalar_Diffusion_Contract` passed. The recorded toolchain is GNU Fortran 15.2.0, Apple Clang 21.0.0, Open MPI 5.0.9, netCDF 4.9.3, netCDF-Fortran 4.6.2, and Homebrew LibTorch 2.10.0; this Python analyzer uses NumPy/netCDF4, not a separate Python Torch runtime.
+Base revision (before the pinned working changes): `de23ed32509ada2c90fbf7dabbf261da480c78ed`. The authoritative five-file source pin and production diff hash are recorded in ``production_source_pin.json``. The final clean C++ plus affected WRF rebuild receipt is ``build_receipt_after.json``: it records executable SHA-256 `2b629416618ddef4ceeea8ba51d07b8a7df514f5df6abab107c51e3f78fcc2de`, LibTorch archive SHA-256 `4369098b25d74cd3f44b792c1537661d8a6c3b4256a75afb3a7c0690ad284ffd`, and `configure.wrf` SHA-256 `8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289`. The `final compile log` reports GNU Fortran 15.2.0 and a successful WRF link; the `selected CTest log` shows `Base_State_Checked_ABI` and `Scalar_Diffusion_Contract` passed. The recorded toolchain is GNU Fortran 15.2.0, Apple Clang 21.0.0, Open MPI 5.0.9, netCDF 4.9.3, netCDF-Fortran 4.6.2, and Homebrew LibTorch 2.10.0; this Python analyzer uses NumPy/netCDF4, not a separate Python Torch runtime.
 
 All four run rows in ``after/runs.json`` completed with return code zero. Each has the same `wrfinput_d01` SHA-256 `e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9`, records its namelist and executable hashes, and checks the executed route from WRF logs: RK3 routes false for the C++ SDIRK marker; SDIRK3 routes true. The frozen source namelist hash is `6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06`. Run plans record 1 MPI rank and 1 OpenMP thread.
 
