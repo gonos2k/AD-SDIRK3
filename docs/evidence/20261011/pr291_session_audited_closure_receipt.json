@@ -1,0 +1,8 @@
+{
+  "path": "docs/evidence/20261011/pr291_session_audited_closure.zip",
+  "sha256": "bb43af748bcdc61c40e915c90d667e30d0cbe3026fa982c9d4f7f3d368470ce5",
+  "manifest_entries": 62,
+  "crc": "passed",
+  "manifest_hashes": "all passed",
+  "original_pr290_snapshot_sha256": "a6bae28238b77b1cbfeb792fed37739599bd4ed615941ee3f0a7f35a71cd544e"
+}

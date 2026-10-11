@@ -1,0 +1,47 @@
+{
+  "schema": "pr290-final-green-scientific-closure-audit-v1",
+  "status": "passed_with_p2_documentation_followup",
+  "review_scope": "Fresh read-only audit of PR290 closure docs, source/graph receipts, inverse and forecast archives, optimizer and horizontal postprocessors. No code edits, network writes, tests, or native/energy/optimization runs.",
+  "scientific_findings": {
+    "p0": [],
+    "p1": [],
+    "p2": [
+      {
+        "finding": "Follow-up PR description is stale.",
+        "evidence": "PR_description.md still says the inverse/unused forecast remain pending, while runs 38106368123 and 38112463542 completed and the closure report records them.",
+        "recommendation": "Rewrite follow-up PR description to cover the merged metric fix plus completed narrow forecast evidence."
+      },
+      {
+        "finding": "Durable report points to local absolute artifact paths.",
+        "evidence": "The closure document links /Users/yhlee/AD-SDIRK3-review-evidence/... ZIP, audit JSON and CSV paths, which do not resolve for GitHub reviewers.",
+        "recommendation": "Include compact audit JSON/16-row CSV as repository evidence or link to the run artifacts with IDs and SHA-256; retain raw ZIP hashes and archive IDs."
+      },
+      {
+        "finding": "Measured mode frequency differs from the earlier stated expected decimal at last-bit scale.",
+        "evidence": {
+          "earlier_expected_rad_s": 0.0025701755450031065,
+          "descriptor_audit_old_and_corrected_rad_s": 0.0025701755450031286,
+          "absolute_difference_rad_s": 2.211772431870429e-17,
+          "relative_difference": 8.605530607317937e-15,
+          "old_equals_corrected": true
+        },
+        "recommendation": "Record the measured value and a numerical tolerance in the follow-up evidence; this is not a change across the metric fix. The same-host descriptor audit reports identical old/fixed eigenvector arrays."
+      }
+    ]
+  },
+  "checked": {
+    "source_lineage": "Fix commit 59b301aedc3de7352ca208eb4de01a7344666ff7 is parent of merge 1b0ccea8371d70d6de95a124ef389beff3ee31df; inverse/forecast artifacts remain pinned to source 746ad78d029c6cf92c498288daee445fe4b3c22d.",
+    "graphify": "Pre/post source-binding receipts are available; pre-edit 44 source hashes have zero mismatches, post-edit graph receipt has zero source hash mismatches.",
+    "optimizer_roundoff": "Corrected evidence-only chart gate retains ZIP/source/input/state hashes and exact literal==native CSV equality; gamma4 is used only for cross-host base+B@delta reconstruction. Original strict-gate failure is retained separately.",
+    "forecast_artifacts": "Both inverse and forecast ZIP SHA/CRC, report links, source pins and reported executable hashes agree with the archived receipts. Forecast makes exactly four state-only calls and no extra optimizer/gradient calls.",
+    "cold_restarts": "All four calls retain effective constant FP32 f, domain/height/admissibility guards, exact inverse-checkpoint-300 to segment-600 and segment-checkpoint-600 to segment-900 state handoffs.",
+    "forecast_metrics": "All 16 rows in unused_forecast_error_comparison.csv were checked against actual_forecast_horizontal_audit.json for RMS values, ratio/reduction arithmetic, source perturbation denominator, units, and owned-point counts. All 16 terminal errors are lower than start errors.",
+    "max_terminal_to_start_error_ratio": {
+      "quantity": "zeta",
+      "time_s": 600,
+      "value": 0.0009683324506524264
+    },
+    "limitations": "The evidence is a two-control dry flat constant-f CPU tile comparison to a frozen linear source. No same-setup em_b_wave/RK3 comparison, nonlinear WRF claim, full-state stationarity, or formal Eg bound is supported or claimed."
+  },
+  "follow_up_pr_recommendation": "Include the durable closure report and portable CSV/compact audit receipt, update PR description to remove pending-forecast language, and state the measured omega plus tolerance. Do not upload or regenerate native/model evidence in this review."
+}

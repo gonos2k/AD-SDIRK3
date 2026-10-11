@@ -41,6 +41,13 @@ reference, with NumPy 2.2.6 and SciPy 1.15.3 pinned in
 `.github/ci/requirements-core.txt`. They do not qualify a native-grid WRF forecast
 or production data-assimilation workflow.
 
+A separately scoped dry, flat, constant-f, single-CPU-tile wave case is empirically
+complete for two initial-state coefficients: 960-step forward/replay optimization
+and cold-restart forecasts at 600/900 seconds. All six state-variable and horizontal
+vorticity/divergence errors decrease against the frozen linear source with noise-free
+observations. See [the rotating-case closure record](<docs/(202610111426)_pr290_narrow_rotating_forecast_closure.md>)
+for the original producer, exact restart lineage, per-variable errors, and scope.
+
 Earlier RHS singular-value and solver-probe amplitudes below predate the horizontal-PGF
 and dry-theta corrections. They are historical measurements, not current operator, forecast
 or stability certifications.
