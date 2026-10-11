@@ -1,0 +1,13 @@
+{
+  "zip_sha256": "8ab675671d72b790ecc25aebcad26a675f9030444a567bd282fd6166318279cc",
+  "payload_count": 85,
+  "all_crc_and_member_sha256_match": true,
+  "fresh_zip_extraction": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/pr297-extract-8cady0if",
+  "portable_cli_exit": 0,
+  "metric_rows_exact": 24,
+  "rk3_delta_arrays_exact": 48,
+  "portable_remainder_exit": 0,
+  "all_remainder_arrays_exact": true,
+  "model_run": false,
+  "rebuild": false
+}
