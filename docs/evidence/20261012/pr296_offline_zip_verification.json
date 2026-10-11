@@ -1,0 +1,32 @@
+{
+  "extracted_at": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/pr296-verify-95lmqh5f",
+  "all_four_commands_pass": true,
+  "checks": [
+    {
+      "case": "initial",
+      "kind": "full",
+      "returncode": 0,
+      "comparisons_equal": true
+    },
+    {
+      "case": "initial",
+      "kind": "terms",
+      "returncode": 0,
+      "headline_and_regions_equal": true
+    },
+    {
+      "case": "stored",
+      "kind": "full",
+      "returncode": 0,
+      "comparisons_equal": true
+    },
+    {
+      "case": "stored",
+      "kind": "terms",
+      "returncode": 0,
+      "headline_and_regions_equal": true
+    }
+  ],
+  "zip_sha256": "8adbea641fdd3e785b6c1853768783af2012cedcfb8e91acc4725fe1a4db5274",
+  "crc_and_305_payload_sha256": "pass"
+}
