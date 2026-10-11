@@ -476,6 +476,9 @@ public:
     void setBaseState(const float* p_base, const float* t_init_base,
                      const float* ph_base, const float* mu_base);
 
+    // WRF t_base is the initial 1D perturbation-theta mixing profile, not t_init.
+    void setThetaMixingBase(const float* profile, int count, bool mix_full_fields);
+
     // Compute 3D vertical metrics from geopotential for horizontal diffusion
     // PARITY FIX 2025-12-09: Required for proper g/(dn*rdz) scaling
     // Should be called after setBaseState when ph_base is available
@@ -1500,6 +1503,7 @@ private:
     // Reference state (will be set from WRF)
     torch::Tensor p_base_;     // Base state pressure (3D)
     torch::Tensor th_base_;    // Base state potential temperature (3D)
+    torch::Tensor theta_mixing_base_; // WRF t_base; undefined for full-field mixing
     torch::Tensor t_init_pert_; // Original WRF t_init = th_base - 300 K (3D)
     torch::Tensor rho_base_;   // Base state density (3D)
     torch::Tensor mu_base_;    // Base state column mass (2D)

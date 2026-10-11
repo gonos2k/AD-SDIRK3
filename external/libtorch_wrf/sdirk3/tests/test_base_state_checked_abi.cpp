@@ -137,6 +137,15 @@ bool registered_carry_pullback(int steps) {
             nx, ny, nz, spacing, spacing, create_rdnw.data(), 1200 + steps,
             nu, nv, nw);
         if (!handle) throw std::runtime_error("registered carry solver creation failed");
+        std::vector<float> theta_mixing_base(nz, 0.0f);
+        if (sdirk3_tile_set_theta_mixing_base_checked(nullptr, theta_mixing_base.data(), nz, 0) != 0 ||
+            sdirk3_tile_set_theta_mixing_base_checked(reinterpret_cast<void*>(1), theta_mixing_base.data(), nz, 0) != 0 ||
+            sdirk3_tile_set_theta_mixing_base_checked(handle, nullptr, nz, 0) != 0 ||
+            sdirk3_tile_set_theta_mixing_base_checked(handle, theta_mixing_base.data(), nz-1, 0) != 0 ||
+            sdirk3_tile_set_theta_mixing_base_checked(handle, theta_mixing_base.data(), nz, 2) != 0 ||
+            sdirk3_tile_set_theta_mixing_base_checked(handle, theta_mixing_base.data(), nz, 0) != 1 ||
+            sdirk3_tile_set_theta_mixing_base_checked(handle, theta_mixing_base.data(), nz, 1) != 1)
+            throw std::runtime_error("theta mixing base checked ABI status mismatch");
         auto& solver = *static_cast<TileSDIRK3UnifiedSolver*>(handle);
         solver.setWRFIndices(1, nx + 1, 1, ny + 1, 1, nz,
                              1, nx + 1, 1, ny + 1, 1, nz + 1,

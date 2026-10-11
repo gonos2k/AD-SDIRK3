@@ -96,6 +96,21 @@ namespace {
 
 extern "C" {
 
+int sdirk3_tile_set_theta_mixing_base_checked(
+    void* solver_ptr, const float* profile, int count, int mix_full_fields) {
+    try {
+        if (!solver_ptr || (mix_full_fields != 0 && mix_full_fields != 1)) return 0;
+        std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
+        const auto found = g_tile_solvers.find(solver_ptr);
+        if (found == g_tile_solvers.end()) return 0;
+        found->second->setThetaMixingBase(profile, count, mix_full_fields != 0);
+        return 1;
+    } catch (const std::exception& error) {
+        std::cerr << "SDIRK3 theta mixing base: " << error.what() << std::endl;
+        return 0;
+    }
+}
+
 /**
  * Zero-copy version of base state setter
  * 
