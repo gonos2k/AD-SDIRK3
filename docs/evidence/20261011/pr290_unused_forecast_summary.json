@@ -1,0 +1,240 @@
+{
+  "schema": "constant-f-two-control-unused-forecast-summary-v1",
+  "forecasts_run": 38112463542,
+  "inverse_run": 38106368123,
+  "status": "empirical_complete_declared_case",
+  "comparisons": [
+    {
+      "time_s": 600,
+      "quantity": "u",
+      "unit": "m s-1",
+      "start_error_rms": 0.003083474819443886,
+      "terminal_error_rms": 5.532819454776428e-07,
+      "source_perturbation_signal_rms": 0.0036013880458778567,
+      "terminal_to_start_error_ratio": 0.0001794345593447813,
+      "error_reduction_percent": 99.98205654406553,
+      "terminal_relative_to_source_signal": 0.00015363019436656611
+    },
+    {
+      "time_s": 600,
+      "quantity": "v",
+      "unit": "m s-1",
+      "start_error_rms": 0.0019846113385887736,
+      "terminal_error_rms": 8.408865219573231e-07,
+      "source_perturbation_signal_rms": 0.0023179548815748844,
+      "terminal_to_start_error_ratio": 0.00042370337486596465,
+      "error_reduction_percent": 99.9576296625134,
+      "terminal_relative_to_source_signal": 0.0003627708755858099
+    },
+    {
+      "time_s": 600,
+      "quantity": "w",
+      "unit": "m s-1",
+      "start_error_rms": 0.002596385824302023,
+      "terminal_error_rms": 4.979265913757029e-07,
+      "source_perturbation_signal_rms": 0.0030324855028251445,
+      "terminal_to_start_error_ratio": 0.00019177681017787818,
+      "error_reduction_percent": 99.9808223189822,
+      "terminal_relative_to_source_signal": 0.0001641975174858449
+    },
+    {
+      "time_s": 600,
+      "quantity": "ph",
+      "unit": "m2 s-2",
+      "start_error_rms": 0.06294165680753878,
+      "terminal_error_rms": 1.5015223958817365e-05,
+      "source_perturbation_signal_rms": 0.07351360183634989,
+      "terminal_to_start_error_ratio": 0.0002385578124314473,
+      "error_reduction_percent": 99.97614421875686,
+      "terminal_relative_to_source_signal": 0.0002042509628659341
+    },
+    {
+      "time_s": 600,
+      "quantity": "theta",
+      "unit": "K",
+      "start_error_rms": 0.0006805440191470565,
+      "terminal_error_rms": 1.2478179390631125e-07,
+      "source_perturbation_signal_rms": 0.0007948511083504911,
+      "terminal_to_start_error_ratio": 0.00018335594817614227,
+      "error_reduction_percent": 99.98166440518239,
+      "terminal_relative_to_source_signal": 0.00015698763277221031
+    },
+    {
+      "time_s": 600,
+      "quantity": "mu",
+      "unit": "Pa",
+      "start_error_rms": 0.13116653998471334,
+      "terminal_error_rms": 2.05763014983286e-05,
+      "source_perturbation_signal_rms": 0.15319783730619704,
+      "terminal_to_start_error_ratio": 0.00015687157335038832,
+      "error_reduction_percent": 99.98431284266496,
+      "terminal_relative_to_source_signal": 0.00013431195805462106
+    },
+    {
+      "time_s": 600,
+      "quantity": "zeta",
+      "unit": "s^-1",
+      "start_error_rms": 2.51308918595893e-08,
+      "terminal_error_rms": 2.4335058101477222e-11,
+      "source_perturbation_signal_rms": 2.9351973701504433e-08,
+      "terminal_to_start_error_ratio": 0.0009683324506524264,
+      "error_reduction_percent": 99.90316675493476,
+      "terminal_relative_to_source_signal": 0.0008290774020497957
+    },
+    {
+      "time_s": 600,
+      "quantity": "divergence",
+      "unit": "s^-1",
+      "start_error_rms": 6.964437513038794e-07,
+      "terminal_error_rms": 2.4748259267843297e-10,
+      "source_perturbation_signal_rms": 8.134213323199566e-07,
+      "terminal_to_start_error_ratio": 0.0003553518747423564,
+      "error_reduction_percent": 99.96446481252576,
+      "terminal_relative_to_source_signal": 0.00030424895788335
+    },
+    {
+      "time_s": 900,
+      "quantity": "u",
+      "unit": "m s-1",
+      "start_error_rms": 0.0030834747309522615,
+      "terminal_error_rms": 7.104068982532541e-07,
+      "source_perturbation_signal_rms": 0.003601388045876041,
+      "terminal_to_start_error_ratio": 0.00023039167181170995,
+      "error_reduction_percent": 99.97696083281883,
+      "terminal_relative_to_source_signal": 0.00019725919262345056
+    },
+    {
+      "time_s": 900,
+      "quantity": "v",
+      "unit": "m s-1",
+      "start_error_rms": 0.0019846112909213064,
+      "terminal_error_rms": 1.0334169305654825e-06,
+      "source_perturbation_signal_rms": 0.0023179548815733886,
+      "terminal_to_start_error_ratio": 0.000520715031347899,
+      "error_reduction_percent": 99.94792849686522,
+      "terminal_relative_to_source_signal": 0.00044583133985076384
+    },
+    {
+      "time_s": 900,
+      "quantity": "w",
+      "unit": "m s-1",
+      "start_error_rms": 0.0025963857799145332,
+      "terminal_error_rms": 6.365852783960527e-07,
+      "source_perturbation_signal_rms": 0.0030324855028234557,
+      "terminal_to_start_error_ratio": 0.0002451813144720765,
+      "error_reduction_percent": 99.97548186855279,
+      "terminal_relative_to_source_signal": 0.00020992195273591494
+    },
+    {
+      "time_s": 900,
+      "quantity": "ph",
+      "unit": "m2 s-2",
+      "start_error_rms": 0.06294166049832788,
+      "terminal_error_rms": 2.111106897640964e-05,
+      "source_perturbation_signal_rms": 0.0735136018363492,
+      "terminal_to_start_error_ratio": 0.0003354069277687786,
+      "error_reduction_percent": 99.96645930722312,
+      "terminal_relative_to_source_signal": 0.0002871722844352752
+    },
+    {
+      "time_s": 900,
+      "quantity": "theta",
+      "unit": "K",
+      "start_error_rms": 0.0006805440467321729,
+      "terminal_error_rms": 1.9097944398143495e-07,
+      "source_perturbation_signal_rms": 0.0007948511083507053,
+      "terminal_to_start_error_ratio": 0.0002806276021346119,
+      "error_reduction_percent": 99.97193723978654,
+      "terminal_relative_to_source_signal": 0.0002402707148231977
+    },
+    {
+      "time_s": 900,
+      "quantity": "mu",
+      "unit": "Pa",
+      "start_error_rms": 0.1311665417076757,
+      "terminal_error_rms": 2.6294138648446856e-05,
+      "source_perturbation_signal_rms": 0.15319783730612965,
+      "terminal_to_start_error_ratio": 0.0002004637638998464,
+      "error_reduction_percent": 99.97995362361002,
+      "terminal_relative_to_source_signal": 0.00017163518174152965
+    },
+    {
+      "time_s": 900,
+      "quantity": "zeta",
+      "unit": "s^-1",
+      "start_error_rms": 2.5130897524797433e-08,
+      "terminal_error_rms": 2.1781760498591676e-11,
+      "source_perturbation_signal_rms": 2.9351973701542732e-08,
+      "terminal_to_start_error_ratio": 0.0008667322954581682,
+      "error_reduction_percent": 99.91332677045418,
+      "terminal_relative_to_source_signal": 0.0007420884442073084
+    },
+    {
+      "time_s": 900,
+      "quantity": "divergence",
+      "unit": "s^-1",
+      "start_error_rms": 6.964437323772317e-07,
+      "terminal_error_rms": 3.1112007923960456e-10,
+      "source_perturbation_signal_rms": 8.134213323195003e-07,
+      "terminal_to_start_error_ratio": 0.0004467267989872369,
+      "error_reduction_percent": 99.95532732010128,
+      "terminal_relative_to_source_signal": 0.00038248330462693227
+    }
+  ],
+  "all_16_comparisons_improved": true,
+  "minimum_error_reduction_percent": 99.90316675493476,
+  "narrow_scope": "dry flat constant f fixed-background source single CPU tile declared X/Y boundary two coefficients; cold restarts and linear source reference",
+  "formal_Eg_bound": false,
+  "new_WRF_RK3_field_runtime_comparison": false,
+  "extra_optimizer_or_gradient_native_calls": 0,
+  "native_call_timings": [
+    {
+      "label": "start_300_to_600",
+      "seconds": 548.410336656,
+      "max_rss": null
+    },
+    {
+      "label": "start_600_to_900",
+      "seconds": 544.6831478129999,
+      "max_rss": null
+    },
+    {
+      "label": "terminal_300_to_600",
+      "seconds": 548.1577703820001,
+      "max_rss": null
+    },
+    {
+      "label": "terminal_600_to_900",
+      "seconds": 585.3315229289999,
+      "max_rss": null
+    }
+  ],
+  "total_forward_call_seconds": 2226.58277778,
+  "forecast_source_revision": "746ad78d029c6cf92c498288daee445fe4b3c22d",
+  "native_executable_sha256": "485e90cc7e313b81785a3db0a7a5e6944192710a3d38925bdb5a157ffeb747a5",
+  "forecast_source_sha256": {
+    "tools/test_y_wave_forecast.py": "d61419cb9a378c656ef9a32e7170311504db9caad18f2e1367c404a406e7a116",
+    "tools/test_y_wave_inverse.py": "294a2347e9f90283211495a66841a79f660264a71d592171dcf021069e157a24",
+    "tools/probe_small_step_inverse.py": "bac0c35866e3dd3bd04a3825cb7322d1dfb6d1faaf258438a4288b806ac4ac63",
+    "tools/test_fine_wave_inverse.py": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed",
+    "tools/wave_y_reference.py": "2cbd1350be103d988b8baa373b1e7645eee5ac211b7ccd69fef35fc5ea2053fe",
+    "tools/wave_quadratic_reference.py": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431",
+    "tools/wave_rotating_reference.py": "f998967fb3cf796054f2aca4d2b843376c2bfbc76353c768908a1d75db0433ba",
+    "tools/test_rotating_wave_inverse.py": "4f8d53e9ac0ae19ea2f324918349d8b96e5a6a1d2ca6bd870e759291277e1072",
+    "tools/wave_energy_spatial_reference.py": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2",
+    "tools/wave_quadratic_transport.py": "526923f41be9a8225b10a6fa022d11b60d0c60ba071d625cbe6d06dc750fc86f",
+    "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp": "8a9cb7875984304340a9e4e60940d1ff8e86484bf2d2ac434daf2f4f4fc7ef10",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_coriolis.h": "59753c2e567051a3ad1621125dacbe9d6997f568f91245e06cfeecb143a15918",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "244970b6c874ef50d3fc85477d463bc846c32b440a9ff834740590728cb9439f",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "95d7c1dd938005d4be32418d68a8609dfe5ccb1a0addd5daff54ccac49c797cd",
+    "dyn_em/module_big_step_utilities_em.F": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+    "dyn_em/module_implicit_sdirk3.F": "6964e33832d2152652aba699f520fb8bf3c84cbd23df1b002873788d747839cf"
+  },
+  "green_review": "passed",
+  "red_review": "passed",
+  "completion_scope": "dry flat constant f fixed-background source single CPU tile declared X/Y boundary two coefficients; cold restarts and linear source reference",
+  "finalized_at": "2026-10-11T14:29:34.311094+09:00"
+}

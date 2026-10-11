@@ -1,0 +1,150 @@
+{
+  "schema": "pr290-final-team-audit-red-v1",
+  "auditor": "Red",
+  "audited_at_utc": "2026-10-11T05:36:03Z",
+  "result": "narrow empirical closure and merged metric fix verified; no P0/P1 findings; P2 follow-ups are evidence publication and one unrelated stale queued run, with minor stale local pointers",
+  "scope": "Read-only audit of the PR290 session evidence, raw inverse/forecast/CI artifacts, source and input lineage, closure package manifest, repository refs, monitor state, worktrees and publication status. No native calls were made.",
+  "artifact_integrity": {
+    "inverse": {
+      "run_id": 38106368123,
+      "artifact_id": 11691711140,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/PR290-20261011/run-38106368123/inverse.zip",
+      "sha256": "e83f88c5284875e0634d854e2824c4993940eac9d9d273dcc78a788461e081c1",
+      "crc": "pass",
+      "report_sha256": "6b2e13227745ee53c937d6a3cd93a7e98ecfc979357ff338b1e4b6af6fff1c9b",
+      "status": "completed_gradient_threshold",
+      "producer_revision": "746ad78d029c6cf92c498288daee445fe4b3c22d",
+      "producer_source_pins": "18/18 match original producer checkout",
+      "input_pins": "4/4 match archived input bytes",
+      "reported_executable_sha256": "485e90cc7e313b81785a3db0a7a5e6944192710a3d38925bdb5a157ffeb747a5",
+      "executable_binary_in_artifact": false,
+      "terminal_projected_gradient_l2": 8.323828831306462e-07,
+      "declared_threshold": 1e-05
+    },
+    "forecast": {
+      "run_id": 38112463542,
+      "artifact_id": 11693311070,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/PR290-20261011/run-38112463542/forecast.zip",
+      "sha256": "ccc89601639fd94ebfe09c6be6c6651380fda889ab8dcdcbf7fc10b5e2eff107",
+      "crc": "pass",
+      "report_sha256": "a9adc3cac7710e9b2a94446e89ce5b98485b53169cbd5c2109c1dd7f3995da89",
+      "status": "completed_state_only_forecast",
+      "source_revision": "746ad78d029c6cf92c498288daee445fe4b3c22d",
+      "source_pins": "19/19 initial and final maps match the producer checkout and each other",
+      "input_chain": "forecast copied all four accepted inverse inputs with matching SHA-256",
+      "executable_sha256": "485e90cc7e313b81785a3db0a7a5e6944192710a3d38925bdb5a157ffeb747a5",
+      "executable_report_matches_inverse": true,
+      "forward_calls": 4,
+      "call_labels": [
+        "start_300_to_600",
+        "start_600_to_900",
+        "terminal_300_to_600",
+        "terminal_600_to_900"
+      ],
+      "cold_restart_handoffs": "exact checkpoint-to-input equality at 300, 600 and 900 seconds",
+      "optimizer_or_gradient_calls": 0
+    },
+    "corrected_metric_ci": {
+      "run_id": 38110744931,
+      "revision": "59b301aedc3de7352ca208eb4de01a7344666ff7",
+      "conclusion": "success",
+      "diagnostics_artifact_sha256": "ab59788c1727e825cda873994bf29ae7531ead14779c22bf39c76b432e1a503a",
+      "artifact_crc": "pass"
+    }
+  },
+  "closure_package": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/AD_SDIRK3_PR290_rotating_case_closure_20261011.zip",
+    "sha256": "a6bae28238b77b1cbfeb792fed37739599bd4ed615941ee3f0a7f35a71cd544e",
+    "crc": "pass",
+    "manifest_entries": 58,
+    "manifest_sizes_and_hashes": "all 58 entries match the ZIP and current evidence tree",
+    "unmanifested_files": 0,
+    "manifest_self_entry": "omitted, as expected for a self-referential snapshot manifest",
+    "final_audit_json_in_snapshot": false
+  },
+  "repository_lineage": {
+    "pr_290": {
+      "state": "MERGED",
+      "merge_commit": "1b0ccea8371d70d6de95a124ef389beff3ee31df",
+      "fix_commit": "59b301aedc3de7352ca208eb4de01a7344666ff7",
+      "fix_commit_is_ancestor_of_remote_main": true,
+      "fix_is_present_on_main": true
+    },
+    "current_remote_main": "1b0ccea8371d70d6de95a124ef389beff3ee31df",
+    "producer": "746ad78d029c6cf92c498288daee445fe4b3c22d",
+    "producer_branch_and_forecast_tag": "both still point to producer revision 746ad78",
+    "source_difference": "The metric correction changes tools/wave_rotating_reference.py from producer SHA f998967f... to main SHA e2fa436f...; the inverse/forecast were intentionally produced and validated against the original source pins, not rerun on corrected main.",
+    "local_main_ref": "stale at b4bbd42 in the PR290 worktree; remote adsdirk3/main is 1b0ccea. The new closure worktree is correctly based on 1b0ccea.",
+    "open_prs": 0
+  },
+  "operations": {
+    "in_progress_github_runs": 0,
+    "queued_github_runs": [
+      {
+        "run_id": 31118092164,
+        "status": "queued",
+        "created_at": "2026-08-06T15:57:53Z",
+        "head_branch": "agent/9f-d125-digest-cannot-lie",
+        "head_sha": "55cec8c8dd22dcd0f49b6218d7fd82fbbdf82d44",
+        "relationship_to_pr290": "unrelated historical workflow run"
+      }
+    ],
+    "inverse_and_forecast_runs": "both completed successfully",
+    "monitor_pid": 3188,
+    "monitor_pid_alive": false,
+    "continuation_lock_file": "still contains PID 3188 although that process is gone; it is stale, not an active lock holder",
+    "continuation_state": "empirical_complete_declared_case, but it retains failure_type/failure from the earlier local exact-chart gate stop",
+    "prior_gate_failure": "historical and preserved; the corrected gamma4 audit passed and the forecast was separately launched from the pinned producer tag",
+    "relevant_worktrees": {
+      "pr289_producer": "746ad78; tracked source pins match; has untracked tools/__pycache__ only",
+      "pr290_fix": "59b301a; no tracked changes; local docs are ignored",
+      "pr291_closure": "based on current remote main 1b0ccea; README.md is being edited with the narrow closure summary and a docs link; no PR existed at the last GitHub query"
+    },
+    "unrelated_prunable_worktrees": [
+      "/private/tmp/pr274-ci-20261004",
+      "/private/tmp/pr281-linux-precision-probe-38c05f"
+    ],
+    "forecast_tag": "research/pr289-forecast-20261011134301 resolves to 746ad78 and matches forecast run head SHA"
+  },
+  "stale_or_historical_records": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/PR290-20261011/latest_progress_path.txt",
+      "issue": "points to the 13:19 pending-continuation report while the 14:26 closure report is newer"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/PR290-20261011/continuation_state.json",
+      "issue": "final empirical-complete status retains the old CalledProcessError fields; continuation_state_original_stop.json correctly preserves the original stop separately"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/PR290-20261011/red_inverse_archive_review.json",
+      "issue": "historical review status says forecast pending; later red_forecast_closure_review.json and the 14:26 closure document supersede it"
+    }
+  ],
+  "findings": [
+    {
+      "id": "P2-evidence-publication",
+      "severity": "P2",
+      "finding": "The final closure report, 16-row CSV, Red/Green review receipts and raw artifact audit are present in the ignored local docs/evidence tree and closure ZIP, but are absent from the merged repository. .gitignore line 108 ignores docs/; no follow-up PR is open.",
+      "minimum_action": "Publish a narrow source-backed closure note, CSV and review receipts in a follow-up PR based on remote main 1b0ccea. Force-add the intended docs or add a narrow ignore exception. Include or reference this final Red receipt and a fresh package manifest."
+    },
+    {
+      "id": "P2-stale-index",
+      "severity": "P2",
+      "finding": "The evidence folder's latest_progress_path points to a superseded pending report, and the final continuation-state JSON mixes completion with the earlier gate failure.",
+      "minimum_action": "Update the progress pointer and publish a clean terminal index that links the preserved historical stop and the final successful audits without rewriting the raw monitor log."
+    },
+    {
+      "id": "P2-unrelated-queued-run",
+      "severity": "P2",
+      "finding": "GitHub reports one unrelated workflow run, 31118092164, still queued since 2026-08-06. It is not on the PR290 producer/forecast revisions and does not affect the completed closure.",
+      "minimum_action": "Review and clear that stale queue entry separately if it still belongs to an active request; it was not changed during this audit."
+    }
+  ],
+  "non_findings": [
+    "No WRF em_b_wave run or same-setup RK3 field/runtime comparison was performed, and the closure document states this. These are explicit broader-validation limits, not failures of the declared narrow case.",
+    "The forecast executable binary is absent from workflow artifacts; its reported SHA is matched across inverse, forecast and source receipts. This limitation is explicitly disclosed.",
+    "No formal Eg bound, Hessian result, full-state stationarity, variable-mass energy claim or general-weather claim is made.",
+    "The source hash change between producer 746ad78 and corrected main is expected and correctly handled by preserving the original producer pins; no pin was weakened."
+  ],
+  "native_calls_by_this_audit": 0
+}

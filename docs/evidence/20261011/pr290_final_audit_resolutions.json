@@ -1,0 +1,34 @@
+{
+  "schema": "pr291-final-audit-resolutions-v1",
+  "timestamp_local": "2026-10-11T14:39:43.676302+09:00",
+  "scientific_status": "empirical_complete_declared_case",
+  "green_p0_p1": 0,
+  "red_p0_p1": 0,
+  "resolved": [
+    {
+      "finding": "closure report/results not tracked",
+      "resolution": "README links tracked closure report, compact JSON/CSV, fresh Green/Red audit receipts and immutable raw evidence archive"
+    },
+    {
+      "finding": "local-only artifact links",
+      "resolution": "published closure document uses repository-relative evidence links; raw source/input receipts are unchanged"
+    },
+    {
+      "finding": "stale current status/pointer and dead monitor lock",
+      "resolution": "current terminal state no longer has an active failure; original stop, old state, original PR body and dead lock are archived; latest pointer names completed closure report"
+    },
+    {
+      "finding": "last-bit expected frequency decimal",
+      "resolution": "reported measured old/fixed omega0.0025701755450031286 and 1e-11 relative comparison tolerance; 8.6e-15 relative to independent decimal, no correction-induced change"
+    }
+  ],
+  "separate_scope": [
+    {
+      "run_id": 31118092164,
+      "status": "historical queued run from August on unrelated branch",
+      "action": "recorded only; not canceled or treated as a blocker to this case"
+    }
+  ],
+  "no_new_native_calls": true,
+  "no_source_pin_relaxation": true
+}
