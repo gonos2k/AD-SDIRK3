@@ -1361,6 +1361,56 @@ BENCH_START(relax_bdy_dry_tim)
      !$OMP END PARALLEL DO
 BENCH_END(relax_bdy_dry_tim)
 
+! [PARITY full RHS] Same-input state, combined tendencies, and native flux operands.
+! Layout: little-endian int32 version=1, 12 int32 domain/memory bounds, float32
+! rdx/rdy, then
+! float32 arrays in this order: u2,v2,w2,ph2,t2,mu2,ru_tend,rv_tend,mu_tend,
+! ru,rv,muu,muv,mut,dnw,c1h,c2h,msfux,msfuy,msfvx,msfvy,msftx,msfty.
+   IF ( grid%itimestep == 1 .AND. rk_step == 1 ) THEN
+     BLOCK
+       CHARACTER(LEN=8) :: full_rhs_env
+       INTEGER :: full_rhs_status, full_rhs_unit, full_rhs_iostat, full_rhs_close
+       INTEGER(KIND=4) :: full_rhs_version
+       REAL(KIND=4) :: full_rhs_rdx, full_rhs_rdy
+       LOGICAL :: full_rhs_single_rank
+       full_rhs_version = 1
+       full_rhs_rdx = grid%rdx
+       full_rhs_rdy = grid%rdy
+       CALL get_environment_variable("WRF_PARITY_RK_TEND_DUMP", full_rhs_env, STATUS=full_rhs_status)
+       full_rhs_single_rank = .TRUE.
+#ifdef DM_PARALLEL
+       full_rhs_single_rank = ntasks == 1 .AND. ntasks_x == 1 .AND. ntasks_y == 1
+#endif
+       IF ( full_rhs_status == 0 .AND. TRIM(full_rhs_env) == "1" .AND. &
+            full_rhs_single_rank .AND. grid%num_tiles == 1 .AND. &
+            ips <= ids .AND. ipe >= ide-1 .AND. jps <= jds .AND. jpe >= jde-1 .AND. &
+            kps <= kds .AND. kpe >= kde .AND. &
+            config_flags%mp_physics == 0 .AND. config_flags%periodic_x .AND. &
+            .NOT. config_flags%periodic_y .AND. config_flags%symmetric_ys .AND. &
+            config_flags%symmetric_ye ) THEN
+         OPEN(NEWUNIT=full_rhs_unit, FILE="wrf_full_rhs_snapshot.bin", &
+              FORM="unformatted", ACCESS="stream", STATUS="replace", &
+              CONVERT="little_endian", IOSTAT=full_rhs_iostat)
+         IF (full_rhs_iostat == 0) THEN
+           WRITE(full_rhs_unit, IOSTAT=full_rhs_iostat) full_rhs_version, &
+                ids, ide, jds, jde, kds, kde, ims, ime, jms, jme, kms, kme, &
+                full_rhs_rdx, full_rhs_rdy
+           IF (full_rhs_iostat == 0) THEN
+             WRITE(full_rhs_unit, IOSTAT=full_rhs_iostat) grid%u_2, grid%v_2, grid%w_2, &
+                  grid%ph_2, grid%t_2, grid%mu_2, grid%ru_tend, grid%rv_tend, mu_tend, &
+                  grid%ru, grid%rv, grid%muu, grid%muv, grid%mut, grid%dnw, grid%c1h, grid%c2h, &
+                  grid%msfux, grid%msfuy, grid%msfvx, grid%msfvy, grid%msftx, grid%msfty
+           END IF
+           CLOSE(full_rhs_unit, IOSTAT=full_rhs_close)
+           IF (full_rhs_iostat /= 0 .OR. full_rhs_close /= 0) &
+                CALL wrf_error_fatal("failed writing wrf_full_rhs_snapshot.bin")
+         ELSE
+           CALL wrf_error_fatal("failed opening wrf_full_rhs_snapshot.bin")
+         END IF
+       END IF
+     END BLOCK
+   END IF
+
      ! [PARITY sub] TEMP (2026-07-10, revert after parity campaign): frozen coupled tendencies
      ! after rk_tendency + rk_addtend_dry, for comparison with [SPLIT-EXPLICIT KCOUPLED].
      IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
