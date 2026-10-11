@@ -10,7 +10,7 @@ No numerical equation, tolerance, EOS or mixing-profile behavior changed. The tw
 
 ## Exact instance and actual runs
 
-Source base: `3e707c05a93283ce8043344251ec14dcce36524c` plus the two SHA-pinned diagnostic edits. The build and start-to-end checks pin six authoritative formula/source files; each run receipt explicitly repeats five of those hashes. The sixth, `module_big_step_utilities_em.F`, remains pinned by the build/end checks. Original producer receipts are retained; source-to-committed-blob equivalence remains pending until the separate post-commit receipt is produced.
+Source base: `3e707c05a93283ce8043344251ec14dcce36524c` plus the two SHA-pinned diagnostic edits. The build and start-to-end checks pin six authoritative formula/source files; each run receipt explicitly repeats five of those hashes. The sixth, `module_big_step_utilities_em.F`, remains pinned by the build/end checks. Original producer receipts are retained; the [post-commit receipt](evidence/20261012/pr295_committed_source_equivalence.json) confirms that all six pinned source bytes equal the committed blobs. It records source commit `7365cc38e3c9c54a65692603abca7aa690cbf8f3`; later documentation-only commits preserve those bytes.
 
 - Dry, flat 16×16×16 `test/em_b_wave`, option-2 diffusion (`khdif=1000`, `kvdif=10`), `mix_full_fields=false`, `phi_adv_z=1`; original input SHA `e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9`.
 - One MPI rank and one OpenMP thread; GNU Fortran 15.2, Apple Clang 21, Open MPI 5.0.9, netCDF 4.9.3/netCDF-Fortran 4.6.2, LibTorch 2.10. Full `em_b_wave` build succeeded, including affected objects.

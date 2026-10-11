@@ -1,0 +1,40 @@
+{
+  "schema": "build-to-committed-source-equivalence-v1",
+  "source_commit": "7365cc38e3c9c54a65692603abca7aa690cbf8f3",
+  "producer_base_revision": "3e707c05a93283ce8043344251ec14dcce36524c",
+  "comparison_scope": "six authoritative source bytes; original build/run receipts are unchanged",
+  "source_files": {
+    "dyn_em/solve_em.F": {
+      "build_source_sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c",
+      "committed_blob_sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c",
+      "equal": true
+    },
+    "dyn_em/module_em.F": {
+      "build_source_sha256": "fb424486dbf9c903f77da6a15baf35e6772847e786b18d0297139eb48f0d586e",
+      "committed_blob_sha256": "fb424486dbf9c903f77da6a15baf35e6772847e786b18d0297139eb48f0d586e",
+      "equal": true
+    },
+    "dyn_em/module_small_step_em.F": {
+      "build_source_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "committed_blob_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "equal": true
+    },
+    "dyn_em/module_big_step_utilities_em.F": {
+      "build_source_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "committed_blob_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "equal": true
+    },
+    "dyn_em/module_implicit_sdirk3.F": {
+      "build_source_sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "committed_blob_sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "equal": true
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "build_source_sha256": "24c861f77f2e866e22387adfafe25693fde0b863e61faad8934df4fd61d78d84",
+      "committed_blob_sha256": "24c861f77f2e866e22387adfafe25693fde0b863e61faad8934df4fd61d78d84",
+      "equal": true
+    }
+  },
+  "all_equal": true,
+  "executable_sha256": "5e6358add0d857b036adcfc2b05f133276ddb21516e1558918f1d0e3ba8bd9d3"
+}
