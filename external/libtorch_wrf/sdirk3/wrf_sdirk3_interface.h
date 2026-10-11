@@ -1201,6 +1201,11 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
 int sdirk3_tile_set_theta_mixing_base_checked(
     void* solver_ptr, const float* profile, int count, int mix_full_fields);
 
+// Snapshot WRF u_base/v_base for option-2 momentum mixing only.
+int sdirk3_tile_set_option2_wind_mixing_base_checked(
+    void* solver_ptr, const float* u_base, const float* v_base,
+    int count, int mix_full_fields);
+
 int sdirk3_tile_set_base_state_checked(
     void* solver_ptr,
     float* pb_ptr, float* t_init_ptr, float* phb_ptr, float* mub_ptr,

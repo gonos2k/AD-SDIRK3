@@ -479,6 +479,10 @@ public:
     // WRF t_base is the initial 1D perturbation-theta mixing profile, not t_init.
     void setThetaMixingBase(const float* profile, int count, bool mix_full_fields);
 
+    // WRF u_base/v_base profiles used only by option-2 momentum mixing.
+    void setOption2WindMixingBase(const float* u_base, const float* v_base,
+                                  int count, bool mix_full_fields);
+
     // Compute 3D vertical metrics from geopotential for horizontal diffusion
     // PARITY FIX 2025-12-09: Required for proper g/(dn*rdz) scaling
     // Should be called after setBaseState when ph_base is available
@@ -1518,6 +1522,7 @@ private:
 
     torch::Tensor u_base_;     // Base state u-wind profile (1D, nz levels)
     torch::Tensor v_base_;     // Base state v-wind profile (1D, nz levels)
+    bool option2_wind_perturbation_mixing_ = false;
 
     // Reference state for advection (to avoid Newton iteration feedback)
     torch::Tensor U_ref_stage_;  // State at beginning of SDIRK stage for advection terms

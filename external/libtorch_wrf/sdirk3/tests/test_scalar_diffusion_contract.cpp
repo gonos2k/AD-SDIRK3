@@ -9,6 +9,7 @@
 #include <iostream>
 #include <iomanip>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -2852,6 +2853,327 @@ bool run_theta_mixing_base_actual_rhs_contract() {
     return ok;
 }
 
+// Option 2 mixes wind perturbations relative to WRF's separate U_BASE and
+// V_BASE profiles when mix_full_fields is false. Exercise the production RHS
+// branch and its state derivative without coupling these profiles to EOS
+// theta or claiming complete WRF operator parity.
+bool run_option2_wind_mixing_base_actual_rhs_contract() {
+    using namespace wrf::sdirk3;
+    auto& cfg=g_sdirk3_config;
+    constexpr float spacing=1000.0f;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+    const std::vector<float> c1h(nz,1.0f),c2h(nz,0.0f);
+    const std::vector<float> u_base{1.0f,3.0f,6.0f,10.0f};
+    const std::vector<float> v_base{0.0f,2.0f,5.0f,9.0f};
+
+    const auto evaluate=[&](int option,bool diffusion,bool configure_profile,
+                            bool mix_full_fields,const torch::Tensor& state,
+                            std::vector<std::unique_ptr<Option2RhsFixture>>* keep_alive=nullptr,
+                            bool use_autograd=false,float kvdif=10.0f,
+                            float grid_spacing=spacing) {
+        cfg=SDIRK3Config{};
+        cfg.diffusion_option=option;
+        cfg.khdif=0.0f;
+        cfg.kvdif=diffusion?kvdif:0.0f;
+        cfg.mass_coordinate_mode=1;
+        cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false;
+        cfg.wrf_damp_opt=0;
+        cfg.imex_split_mode=3;
+        cfg.hevi_split=false;
+        cfg.use_stress_tensor=true;
+        cfg.use_autograd=use_autograd || state.requires_grad();
+        cfg.retain_graph_for_adjoint=cfg.use_autograd;
+        cfg.imex_slow_in_tangent=true;
+        cfg.imex_phys_in_tangent=true;
+        cfg.frozen_physics_jvp=false;
+
+        auto fixture=std::make_unique<Option2RhsFixture>(false,grid_spacing,c1h,c2h);
+        auto& solver=fixture->solver;
+        auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
+        TORCH_CHECK(grid,"option-2 wind mixing-base fixture has no extended GridInfo");
+        grid->smagorinsky_opt=1;
+        (solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,
+            false,false,false,false,false,"option-2 wind mixing-base actual RHS test");
+        if (configure_profile)
+            solver.setOption2WindMixingBase(u_base.data(),v_base.data(),nz,
+                                             mix_full_fields);
+        auto rhs=(solver.*access(ActualRhsTag{}))(state,RhsMode::ExplicitOnly);
+        if (state.requires_grad() || keep_alive) {
+            TORCH_CHECK(keep_alive,"AD RHS fixture lifetime owner is required");
+            keep_alive->push_back(std::move(fixture));
+            return rhs.clone();
+        }
+        return rhs.detach().clone();
+    };
+
+    const auto make_state=[&](bool perturb) {
+        auto u=torch::empty({ny,nz,nx+1},opt);
+        auto v=torch::empty({ny+1,nz,nx},opt);
+        auto w=torch::zeros({ny,nw,nx},opt);
+        auto ph=torch::zeros({ny,nw,nx},opt);
+        auto theta=torch::empty({ny,nz,nx},opt);
+        auto mu=torch::zeros({ny,nx},opt);
+        for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+            const double x=2*pi*i/nx, y=2*pi*j/ny;
+            const float du=perturb?static_cast<float>(0.20*std::sin(x)*(k+1)):0.0f;
+            const float dv=perturb?static_cast<float>(0.15*std::cos(x+y)*(k+1)):0.0f;
+            u[j][k][i]=u_base[k]+du;
+            v[j][k][i]=v_base[k]+dv;
+            theta[j][k][i]=perturb?static_cast<float>(0.1*std::sin(x)+0.03*k):0.0f;
+            mu[j][i]=perturb?static_cast<float>(80.0*std::sin(x)*std::cos(y)):0.0f;
+            for (int kw=0;kw<nw;++kw) {
+                const double eta=double(kw)/(nw-1);
+                ph[j][kw][i]=perturb?static_cast<float>(9.81*20.0*eta*std::sin(x+y)):0.0f;
+            }
+        }
+        // The U period seam must agree; the V test uses the fixture's
+        // symmetric-Y closure and keeps its input profile identical there.
+        for (int j=0;j<ny;++j) for (int k=0;k<nz;++k)
+            u[j][k][nx].copy_(u[j][k][0]);
+        for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+            v[ny][k][i].copy_(v[0][k][i]);
+        return torch::cat({u.reshape({-1}),v.reshape({-1}),w.reshape({-1}),
+            ph.reshape({-1}),theta.reshape({-1}),mu.reshape({-1})});
+    };
+
+    bool ok=true;
+    {
+        Option2RhsFixture fixture(false,spacing,c1h,c2h);
+        bool rejected=false;
+        try {
+            fixture.solver.setOption2WindMixingBase(
+                u_base.data(),v_base.data(),nz-1,false);
+        } catch (const c10::Error&) {
+            rejected=true;
+        }
+        std::cout << (rejected?"PASS ":"FAIL ")
+                  << "option-2 wind mixing-base profile count rejects incomplete levels\n";
+        ok=rejected&&ok;
+    }
+
+    const auto background=make_state(false);
+    const auto bg_on=evaluate(2,true,true,false,background);
+    const auto bg_off=evaluate(2,false,true,false,background);
+    const auto bg_delta=bg_on-bg_off;
+    const double bg_u=bg_delta.slice(0,0,su).abs().max().item<double>();
+    const double bg_v=bg_delta.slice(0,su,su+sv).abs().max().item<double>();
+    const auto full_on=evaluate(2,true,true,true,background);
+    const auto full_off=evaluate(2,false,true,true,background);
+    const auto full_delta=full_on-full_off;
+    const double full_u=full_delta.slice(0,0,su).abs().max().item<double>();
+    const double full_v=full_delta.slice(0,su,su+sv).abs().max().item<double>();
+    const auto shear=make_state(true);
+    const auto shear_on=evaluate(2,true,true,false,shear);
+    const auto shear_off=evaluate(2,false,true,false,shear);
+    const auto shear_delta=shear_on-shear_off;
+    const double shear_u=shear_delta.slice(0,0,su).abs().max().item<double>();
+    const double shear_v=shear_delta.slice(0,su,su+sv).abs().max().item<double>();
+    const bool wind_pass=torch::isfinite(bg_delta).all().item<bool>() &&
+        torch::isfinite(full_delta).all().item<bool>() &&
+        torch::isfinite(shear_delta).all().item<bool>() &&
+        std::max(bg_u,bg_v)<=1.0e-7 &&
+        full_u>1.0e-8 && full_v>1.0e-8 &&
+        shear_u>1.0e-8 && shear_v>1.0e-8;
+    std::cout << (wind_pass?"PASS ":"FAIL ")
+              << "option-2 wind mixing-base actual RHS U/V background="
+              << bg_u << "/" << bg_v << " full-field=" << full_u << "/" << full_v
+              << " perturbed=" << shear_u << "/" << shear_v << '\n';
+    ok=wind_pass&&ok;
+
+    // This setter only controls option-2 mixing. Option 1 is a separate
+    // operator contract and must remain bitwise unchanged when it is set.
+    const auto option1_without=evaluate(1,true,false,false,shear);
+    const auto option1_with=evaluate(1,true,true,false,shear);
+    const double option1_delta=(option1_with-option1_without).abs().max().item<double>();
+    const bool option1_pass=option1_delta==0.0;
+    std::cout << (option1_pass?"PASS ":"FAIL ")
+              << "option-1 wind mixing-base setter regression neutral difference="
+              << option1_delta << '\n';
+    ok=option1_pass&&ok;
+
+    // One mixed theta/PH/MU direction checks that the option-2 U diffusion
+    // increment remains differentiable through density, geometry, and mass.
+    const auto u_diffusion=[&](const torch::Tensor& state,
+                              std::vector<std::unique_ptr<Option2RhsFixture>>* keep_alive=nullptr,
+                              bool use_autograd=false,float kvdif=10.0f,
+                              float grid_spacing=spacing,bool configure_profile=true,
+                              bool mix_full_fields=false) {
+        const auto on=evaluate(2,true,configure_profile,mix_full_fields,state,
+                               keep_alive,use_autograd,kvdif,grid_spacing);
+        const auto off=evaluate(2,false,configure_profile,mix_full_fields,state,
+                                keep_alive,use_autograd,kvdif,grid_spacing);
+        return std::make_pair(on.slice(0,0,su),off.slice(0,0,su));
+    };
+    // Keep U independent of x and V zero to suppress advective contributions
+    // while retaining a nonzero vertical-mixing signal for the derivative.
+    auto base=background.detach().clone();
+    auto base_u=base.slice(0,0,su).view({ny,nz,nx+1});
+    auto base_v=base.slice(0,su,su+sv).view({ny+1,nz,nx});
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+        const double y=2*pi*j/ny;
+        base_u[j][k][i]=u_base[k]+0.2f*(k+1)*
+            static_cast<float>(1.0+0.3*std::cos(y));
+        base_v[j][k][i]=0.0f;
+    }
+    for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+        base_v[ny][k][i]=0.0f;
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k)
+        base_u[j][k][nx].copy_(base_u[j][k][0]);
+    auto ad_base=base.detach().clone();
+    auto ad_ph=ad_base.slice(0,su+sv+sw,su+sv+2*sw).view({ny,nw,nx});
+    auto ad_theta=ad_base.slice(0,su+sv+2*sw,su+sv+2*sw+st).view({ny,nz,nx});
+    auto ad_mu=ad_base.slice(0,total-sm,total).view({ny,nx});
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+        const double x=2*pi*i/nx,y=2*pi*j/ny;
+        const double eta=double(k)/(nz-1);
+        ad_theta[j][k][i]=static_cast<float>(17.0+8.0*(1.0-eta));
+        ad_mu[j][i]=static_cast<float>(80.0*std::sin(x)+60.0*std::cos(y));
+        for (int kw=0;kw<nw;++kw) {
+            const double eta_w=double(kw)/(nw-1);
+            const double terrain=80.0*std::sin(x)+60.0*std::cos(y);
+            ad_ph[j][kw][i]=static_cast<float>(9.81*terrain*eta_w);
+        }
+    }
+    constexpr float ad_kvdif=1000.0f;
+    constexpr float ad_spacing=1000000.0f;
+    // Select a fixed interior U point from the prescribed sin(x)/cos(y)
+    // perturbation pattern before any AD or FD response.
+    const int output_j=0,output_k=1,output_i=nx/4;
+    auto direction=torch::zeros_like(ad_base);
+    auto dph=direction.slice(0,su+sv+sw,su+sv+2*sw).view({ny,nw,nx});
+    auto dtheta=direction.slice(0,su+sv+2*sw,su+sv+2*sw+st).view({ny,nz,nx});
+    auto dmu=direction.slice(0,total-sm,total).view({ny,nx});
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+        const double x=2*pi*i/nx,y=2*pi*j/ny;
+        dtheta[j][k][i]=static_cast<float>(0.2*(1.0+0.1*k+0.3*std::sin(x+y)));
+        dmu[j][i]=static_cast<float>(300.0*(1.0+0.25*std::cos(x-y)));
+        for (int kw=0;kw<nw;++kw) {
+            const double eta=double(kw)/(nw-1);
+            dph[j][kw][i]=static_cast<float>(9.81*30.0*eta*(1.0+0.4*std::sin(x)*std::cos(y)));
+        }
+    }
+    constexpr bool configure_profile=true, mix_full_fields=false;
+    const auto base_pair=u_diffusion(ad_base,nullptr,true,ad_kvdif,ad_spacing,
+                                     configure_profile,mix_full_fields);
+    const auto base_delta=base_pair.first-base_pair.second;
+    auto cotangent=torch::zeros_like(base_delta);
+    cotangent.view({ny,nz,nx+1})[output_j][output_k][output_i]=1.0f;
+    auto base_leaf=ad_base.detach().clone().requires_grad_(true);
+    std::vector<std::unique_ptr<Option2RhsFixture>> base_contexts;
+    const auto base_ad_pair=u_diffusion(base_leaf,&base_contexts,true,
+        ad_kvdif,ad_spacing,configure_profile,mix_full_fields);
+    const double primal_error=std::max(
+        (base_ad_pair.first-base_pair.first).abs().max().item<double>(),
+        (base_ad_pair.second-base_pair.second).abs().max().item<double>());
+
+    const auto fd_at=[&](const torch::Tensor& state,const torch::Tensor& tangent,double h) {
+        const auto plus=u_diffusion(state+h*tangent,nullptr,true,ad_kvdif,ad_spacing,
+                                    configure_profile,mix_full_fields);
+        const auto minus=u_diffusion(state-h*tangent,nullptr,true,ad_kvdif,ad_spacing,
+                                     configure_profile,mix_full_fields);
+        const auto fd=((plus.first-plus.second)-(minus.first-minus.second))/(2.0*h);
+        const double projected=(fd*cotangent).sum().item<double>();
+        const double scale=(cotangent.abs()*(plus.first.abs()+plus.second.abs()+
+            minus.first.abs()+minus.second.abs())).sum().item<double>();
+        const double floor=3.0*std::numeric_limits<float>::epsilon()*scale/(2.0*h);
+        const auto point_floor=3.0*std::numeric_limits<float>::epsilon()*(
+            plus.first.abs()+plus.second.abs()+minus.first.abs()+minus.second.abs())/(2.0*h);
+        return std::make_tuple(projected,floor,fd,point_floor);
+    };
+    const auto saved_state=ad_base.detach().clone();
+    const auto saved_direction=direction.detach().clone();
+    const auto coarse_before=fd_at(saved_state,saved_direction,4.0);
+    const auto fine_before=fd_at(saved_state,saved_direction,2.0);
+    auto jvp_state=ad_base.detach().clone();
+    auto jvp_direction=direction.detach().clone();
+    const auto jvp_state_before=jvp_state.clone();
+    const auto jvp_direction_before=jvp_direction.clone();
+    std::vector<std::unique_ptr<Option2RhsFixture>> jvp_contexts;
+    const auto eval_diffusion=[&](const torch::Tensor& state) {
+        const auto pair=u_diffusion(state,&jvp_contexts,true,ad_kvdif,ad_spacing,
+                                    configure_profile,mix_full_fields);
+        return pair.first-pair.second;
+    };
+    bool used_fd_fallback=false;
+    std::string fallback_reason;
+    const auto jvp=wrf::sdirk3::compute_jvp_fwad_or_fd(
+        eval_diffusion,jvp_state,jvp_direction,0,0.0f,&used_fd_fallback,&fallback_reason);
+    const double ad=(jvp*cotangent).sum().item<double>();
+    const auto coarse=fd_at(saved_state,saved_direction,4.0);
+    const auto fine=fd_at(saved_state,saved_direction,2.0);
+    const auto fd_vector=std::get<2>(fine);
+    const double fd_coarse=std::get<0>(coarse),fd_fine=std::get<0>(fine);
+    const double fd_floor=std::get<1>(fine);
+    const double jvp_norm=jvp.norm().item<double>(),fd_norm=fd_vector.norm().item<double>();
+    const double pointwise_error=(jvp-fd_vector).abs().max().item<double>();
+    const double pointwise_floor=std::get<3>(fine).max().item<double>();
+    const double theta_min_base=ad_base.slice(0,su+sv+2*sw,su+sv+2*sw+st)
+        .abs().min().item<double>();
+    const auto theta_min=[&](const torch::Tensor& state) {
+        return state.slice(0,su+sv+2*sw,su+sv+2*sw+st).abs().min().item<double>();
+    };
+    const bool theta_gate_same=theta_min_base>1.0e-3 &&
+        theta_min(ad_base+4.0*direction)>1.0e-3 &&
+        theta_min(ad_base-4.0*direction)>1.0e-3 &&
+        theta_min(ad_base+2.0*direction)>1.0e-3 &&
+        theta_min(ad_base-2.0*direction)>1.0e-3;
+    const bool ph_mu_nonzero=ad_ph.abs().max().item<double>()>0.0 &&
+        ad_mu.abs().max().item<double>()>0.0;
+    const bool state_unchanged=torch::equal(jvp_state,jvp_state_before);
+    const bool direction_unchanged=torch::equal(jvp_direction,jvp_direction_before);
+    const bool fd_prepost_identical=
+        torch::equal(std::get<2>(coarse_before),std::get<2>(coarse)) &&
+        torch::equal(std::get<2>(fine_before),std::get<2>(fine));
+    const double direction_norm_before=jvp_direction_before.norm().item<double>();
+    const double direction_norm_after=jvp_direction.norm().item<double>();
+    const double error=std::abs(ad-fd_fine);
+    const double budget=0.15*std::abs(ad)+fd_floor;
+    const double scan=std::abs(fd_coarse-fd_fine);
+    const double base_norm=base_delta.norm().item<double>();
+    const bool derivative_pass=!used_fd_fallback && std::isfinite(ad) &&
+        std::isfinite(fd_coarse) && std::isfinite(fd_fine) && base_norm>1.0e-8 &&
+        primal_error<=1.0e-7 && theta_gate_same && ph_mu_nonzero &&
+        state_unchanged && direction_unchanged && fd_prepost_identical &&
+        std::abs(ad)>100.0*fd_floor && std::abs(fd_fine)>100.0*fd_floor &&
+        error<=budget && scan<=0.20*std::abs(ad)+std::get<1>(coarse)+fd_floor &&
+        pointwise_error<=0.20*std::max(jvp_norm,fd_norm)+pointwise_floor;
+    const auto& config=g_sdirk3_config;
+    std::cout << (derivative_pass?"PASS ":"FAIL ")
+              << "option-2 wind-profile U diffusion mixed theta/PH/MU AD-FD"
+              << " imex=" << config.effective_imex_split_mode()
+              << " mass_mode=" << config.mass_coordinate_mode
+              << " omega=" << config.effective_wrf_omega_ww_cp()
+              << " mu_hdiv=" << config.effective_mu_horizontal_div_only()
+              << " autograd=" << config.use_autograd
+              << " retain=" << config.retain_graph_for_adjoint
+              << " slow_tangent=" << config.imex_slow_in_tangent
+              << " phys_tangent=" << config.imex_phys_in_tangent
+              << " frozen_physics=" << config.frozen_physics_jvp
+              << " ad=" << ad << " fd4=" << fd_coarse << " fd2=" << fd_fine
+              << " fd_roundoff=" << fd_floor << " jvp_norm=" << jvp_norm
+              << " fd_norm=" << fd_norm << " pointwise_error=" << pointwise_error
+              << " pointwise_floor=" << pointwise_floor
+              << " base_norm=" << base_norm << " primal_error=" << primal_error
+              << " theta_min_base=" << theta_min_base
+              << " theta_min_plus4=" << theta_min(ad_base+4.0*direction)
+              << " theta_min_minus4=" << theta_min(ad_base-4.0*direction)
+              << " theta_min_plus2=" << theta_min(ad_base+2.0*direction)
+              << " theta_min_minus2=" << theta_min(ad_base-2.0*direction)
+              << " theta_gate_same=" << theta_gate_same << " ph_mu_nonzero=" << ph_mu_nonzero
+              << " state_unchanged=" << state_unchanged
+              << " direction_unchanged=" << direction_unchanged
+              << " direction_norm_before=" << direction_norm_before
+              << " direction_norm_after=" << direction_norm_after
+              << " fd_prepost_identical=" << fd_prepost_identical
+              << " retained_contexts=" << jvp_contexts.size()
+              << " base_contexts=" << base_contexts.size()
+              << " fd_fallback=" << used_fd_fallback
+              << " fallback_reason=" << fallback_reason << '\n';
+    return derivative_pass&&ok;
+}
+
 // The 1D metric fallback must use one implied layer depth for the outer
 // divergence factor and the terrain gradient, even with stretched eta levels.
 bool run_u_terrain_fallback(torch::Dtype dtype) {
@@ -4441,6 +4763,7 @@ int main(int argc, char** argv) {
     ok = run_option1_scalar_rhs_contract() && ok;
     ok = run_option2_scalar_rhs_layer_mass_contract() && ok;
     ok = run_theta_mixing_base_actual_rhs_contract() && ok;
+    ok = run_option2_wind_mixing_base_actual_rhs_contract() && ok;
     ok = run_scalar_helper_signed_dnw_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
     ok = run_normal_rhs() && ok;
