@@ -303,6 +303,7 @@ inline const char* rhs_mode_name(wrf::sdirk3::RhsMode m) {
 #include <stdexcept>
 #include <sstream>
 #include <fstream>   // [PARITY dump] matched-input dyn_em parity binary dump
+#include <cstdint>
 #include <limits>
 #include <vector>
 #include <algorithm>  // PARITY FIX 2025-12-25: For std::copy, std::min
@@ -6922,6 +6923,10 @@ vertical_coefficients:
         if (split_mode >= 2 && wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
             int prev = imex_split_check_count.fetch_add(1);
             if (prev < 2) {
+                const char* full_rhs_dump_env = std::getenv("WRF_PARITY_RK_TEND_DUMP");
+                const bool write_full_rhs_snapshot = prev == 0 && full_rhs_dump_env != nullptr &&
+                    std::strcmp(full_rhs_dump_env, "1") == 0;
+                bool full_rhs_snapshot_failed = false;
                 torch::NoGradGuard no_grad;
                 // DIAGNOSTIC ONLY: Temporarily overwrites U_ref_stage_ so that
                 // computeUnifiedRHS sees consistent w_ref for the split check.
@@ -6929,6 +6934,43 @@ vertical_coefficients:
                 U_ref_stage_ = U_n.detach().clone();
                 try {
                     auto F_full = computeUnifiedRHS(U_n, RhsMode::Full).detach().to(torch::kCPU);
+                    if (write_full_rhs_snapshot) {
+                        bool no_external_forcing = false;
+                        if (F_phys.defined() && F_phys.numel() > 0) {
+                            const auto F_phys_cpu = F_phys.detach().to(torch::kCPU).contiguous();
+                            no_external_forcing = torch::count_nonzero(F_phys_cpu).item<int64_t>() == 0;
+                        }
+                        const bool eligible = nprocx_ == 1 && nprocy_ == 1 &&
+                            its_ <= ids_ && ite_ >= ide_ - 1 &&
+                            jts_ <= jds_ && jte_ >= jde_ - 1 &&
+                            kts_ <= kds_ && kte_ >= kde_ - 1 &&
+                            config_flags_periodic_x_ && !config_flags_periodic_y_ &&
+                            config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
+                            no_external_forcing;
+                        if (!eligible) {
+                            full_rhs_snapshot_failed = true;
+                            throw std::runtime_error("full RHS snapshot requires one full-domain dry tile with periodic X, symmetric Y, and zero F_phys");
+                        }
+                        auto state_cpu = U_n.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+                        auto rhs_cpu = F_full.to(torch::kFloat32).contiguous();
+                        // Layout: little-endian uint32 version=1, int32 nx/ny/nz/nxu/nyv/nzw,
+                        // then float32 packed U_n and F_full (u,v,w,ph,t,mu blocks in pack order).
+                        const uint32_t version = 1;
+                        const int32_t dims[6] = {nx_, ny_, nz_, nx_u_, ny_v_, nz_w_};
+                        std::ofstream out("port_full_rhs_snapshot.bin", std::ios::binary | std::ios::trunc);
+                        if (!out) {
+                            full_rhs_snapshot_failed = true;
+                        } else {
+                            out.write(reinterpret_cast<const char*>(&version), sizeof(version));
+                            out.write(reinterpret_cast<const char*>(dims), sizeof(dims));
+                            out.write(reinterpret_cast<const char*>(state_cpu.data_ptr<float>()),
+                                      static_cast<std::streamsize>(state_cpu.numel() * sizeof(float)));
+                            out.write(reinterpret_cast<const char*>(rhs_cpu.data_ptr<float>()),
+                                      static_cast<std::streamsize>(rhs_cpu.numel() * sizeof(float)));
+                            out.close();
+                            full_rhs_snapshot_failed = !out;
+                        }
+                    }
                     auto F_fast = computeUnifiedRHS(U_n, RhsMode::ImplicitOnly).detach().to(torch::kCPU);
                     auto F_slow = computeUnifiedRHS(U_n, RhsMode::ExplicitOnly).detach().to(torch::kCPU);
                     float split_err = (F_full - F_fast - F_slow).norm().item<float>();
@@ -6936,12 +6978,16 @@ vertical_coefficients:
                     std::cerr << "[IMEX SPLIT CHECK] ||F_full - F_fast - F_slow|| = " << split_err
                               << "  (rel=" << split_err / std::max(full_norm, 1.0f) << ")" << std::endl;
                 } catch (const c10::Error& e) {
+                    if (write_full_rhs_snapshot) full_rhs_snapshot_failed = true;
                     std::cerr << "[IMEX SPLIT CHECK] skipped due RHS exception: "
                               << e.what_without_backtrace() << std::endl;
                 } catch (const std::exception& e) {
+                    if (write_full_rhs_snapshot) full_rhs_snapshot_failed = true;
                     std::cerr << "[IMEX SPLIT CHECK] skipped due RHS exception: "
                               << e.what() << std::endl;
                 }
+                if (full_rhs_snapshot_failed)
+                    throw std::runtime_error("failed writing port_full_rhs_snapshot.bin");
             }
         }
 

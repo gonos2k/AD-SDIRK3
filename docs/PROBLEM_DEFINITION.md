@@ -166,6 +166,10 @@ The latter corrects option-2 theta mixing and records improved T/PH/W difference
 but retains U/V/MU discrepancies and provisional RK3 references. It does not
 supply a complete integrated trajectory-adjoint certification.
 
+The [same-state U/V/MU record](<(202610120016)_pr295_same_state_uvmu_rhs_snapshot.md>) now preserves complete component
+comparisons at two common inputs. Small U/V residuals remain; it does not certify
+full spatial-operator equality or select quantitative project error budgets.
+
 First-stage completion requires the selected instance's forward, same-map
 JVP/VJP, replay and observation/state-improvement gates to pass their declared
 budgets. If efficiency is included in its acceptance contract, its same-accuracy
