@@ -303,7 +303,8 @@ def uniform_energy_metric(column: dict, ny: int = NY_DEFAULT) -> np.ndarray:
         raise ValueError(
             "energy identity is asserted only for a uniform fixed background"
         )
-    h33 = np.asarray(column["H_source_physical"], dtype=np.complex128)
+    # Rows contain source [u,w,phi,theta,mu], so use H = T^* H_physical T.
+    h33 = np.asarray(column["H"], dtype=np.complex128)
     if h33.shape != (4 * nz + 1, 4 * nz + 1):
         raise ValueError("source energy metric has an unexpected shape")
     size = state_size(column, ny)
