@@ -1,17 +1,26 @@
 # AD-SDIRK3
 
-A **differentiable SDIRK3** (3rd-order singly-diagonally-implicit Runge–Kutta) implicit time
-integrator built into **WRF v4.7.0**, using **PyTorch / libtorch** with a zero-copy Fortran↔C++
-interface and autodiff (JVP and VJP are implemented and contract-tested on the supported paths;
-HVP via double-backward is a design goal). The goal is a differentiable dynamical core for
-**4D-Var adjoint** modeling.
+AD-SDIRK3 develops a **differentiable WRF v4.7.0 dynamical core** for
+**4D-Var adjoint** modeling using PyTorch / libtorch and a Fortran↔C++ interface.
+Its current principal path is the four-stage, third-order **ARK324L2SA IMEX**
+method (mode 3). JVP and VJP are contract-tested on supported paths; HVP remains
+a design goal.
+
+The [first-stage problem and completion boundary](docs/PROBLEM_DEFINITION.md)
+sets the forward map and its matched tangent/adjoint as the target, while
+identifying the completed two-control rotating-wave run as one restricted
+validation instance. It is the project-level target
+reference; case-specific budgets do not automatically become project completion
+criteria. The integrated forecast accuracy/window and efficiency acceptance
+criterion still need to be fixed.
 
 - **IMEX split** (mode 3 = ARK324L2SA): slow advection/Coriolis/diffusion terms explicit,
   acoustic/gravity terms implicit. The optional HEVI split also moves horizontal acoustic terms explicit.
 - **Matrix-free Newton–Krylov** implicit solve: **FGMRES** (flexible, right-preconditioned — the
   earlier fixed-preconditioner GMRES was replaced during the full-repo review) with Eisenstat–Walker
   adaptive forcing, a vertical preconditioner, and a trust-region fallback. `A·v = v − dt·γ·J·v` is
-  a JVP; the 4D-Var gradient is a VJP.
+  an RHS JVP inside Newton; a 4D-Var gradient requires the VJP of the composed
+  forward and observation map.
 - **Zero-copy interface (prognostic arrays):** Fortran `(i,k,j)` column-major maps to C++
   `(j,k,i)` row-major with no data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
   **Base-state initialisation is not zero-copy**: it materialises owned contiguous per-tile
