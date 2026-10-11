@@ -1,10 +1,16 @@
 # WRF-SDIRK3 differentiable core (libtorch)
 
-The differentiable SDIRK3 implicit time integrator for WRF v4.7.0: a matrix-free
-Newton–Krylov solve built on PyTorch / libtorch C++ with a zero-copy Fortran↔C++
+The AD-SDIRK3 project's differentiable time-integration core for WRF v4.7.0.
+The principal mode-3 path is four-stage, third-order ARK324L2SA IMEX, with
+matrix-free Newton–Krylov solves built on PyTorch / libtorch and a Fortran↔C++
 interface. **Research code** — the supported single-rank path builds and runs
-production WRF (`em_b_wave`); convergence at the operational timestep is an
-active investigation (see the repository root `README.md` and `doc/`).
+production WRF (`em_b_wave`); integrated accuracy and the full observation-window
+adjoint remain separate acceptance questions.
+
+The [project problem definition](../../../docs/PROBLEM_DEFINITION.md) owns the
+first-stage scope and completion gates. This README records supported code
+paths and their contracts; the completed rotating two-control inverse is one
+validation instance of those paths.
 
 ## Overview
 
