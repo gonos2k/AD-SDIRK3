@@ -1061,6 +1061,41 @@ BENCH_START(vert_diff_tim)
            DO ij = 1 , grid%num_tiles
 
              CALL wrf_debug ( 200 , ' call vertical_diffusion_2 ' )
+             BLOCK
+               CHARACTER(LEN=8) :: vdiff_env
+               INTEGER :: vdiff_env_status, vdiff_unit, vdiff_iostat, vdiff_close
+               LOGICAL :: capture_single_rank
+               capture_single_rank = .TRUE.
+#ifdef DM_PARALLEL
+               capture_single_rank = ntasks == 1 .AND. ntasks_x == 1 .AND. ntasks_y == 1
+#endif
+               IF (grid%itimestep == 1 .AND. rk_step == 1 .AND. ij == 1 .AND. &
+                   grid%num_tiles == 1 .AND. capture_single_rank) THEN
+                 CALL get_environment_variable("WRF_PARITY_RK_TEND_DUMP", vdiff_env, STATUS=vdiff_env_status)
+                 IF (vdiff_env_status == 0 .AND. TRIM(vdiff_env) == "1" .AND. &
+                     grid%i_start(ij) <= ids .AND. grid%i_end(ij) >= ide-1 .AND. &
+                     grid%j_start(ij) <= jds .AND. grid%j_end(ij) >= jde-1 .AND. &
+                     k_start <= kds .AND. k_end >= kde-1 .AND. &
+                     config_flags%mp_physics == 0 .AND. config_flags%map_proj == 0 .AND. &
+                     config_flags%periodic_x .AND. .NOT. config_flags%periodic_y .AND. &
+                     config_flags%symmetric_ys .AND. config_flags%symmetric_ye .AND. &
+                     MAXVAL(ABS(grid%ht(ims:ime,jms:jme))) == 0. ) THEN
+                   OPEN(NEWUNIT=vdiff_unit, FILE="wrf_u_vdiff_before.bin", FORM="unformatted", &
+                        ACCESS="stream", STATUS="replace", CONVERT="little_endian", IOSTAT=vdiff_iostat)
+                   IF (vdiff_iostat == 0) THEN
+                     WRITE(vdiff_unit, IOSTAT=vdiff_iostat) 1_4, ids, ide, jds, jde, kds, kde, &
+                          ims, ime, jms, jme, kms, kme, grid%rdx, grid%rdy
+                     IF (vdiff_iostat == 0) WRITE(vdiff_unit, IOSTAT=vdiff_iostat) &
+                          ru_tendf, grid%xkmv, grid%rho, grid%defor13, grid%rdz
+                     CLOSE(vdiff_unit, IOSTAT=vdiff_close)
+                     IF (vdiff_iostat /= 0 .OR. vdiff_close /= 0) &
+                          CALL wrf_error_fatal("failed writing wrf_u_vdiff_before.bin")
+                   ELSE
+                     CALL wrf_error_fatal("failed opening wrf_u_vdiff_before.bin")
+                   END IF
+                 END IF
+               END IF
+             END BLOCK
              CALL vertical_diffusion_2( ru_tendf, rv_tendf, rw_tendf,            &
                                       t_tendf, tke_tend,                         &
                                       moist_tend, num_moist,                      &
@@ -1095,6 +1130,42 @@ BENCH_START(hor_diff_tim)
          DO ij = 1 , grid%num_tiles
 
            CALL wrf_debug ( 200 , ' call horizontal_diffusion_2' )
+           BLOCK
+             CHARACTER(LEN=8) :: hdiff_env
+             INTEGER :: hdiff_env_status, hdiff_unit, hdiff_iostat, hdiff_close
+             INTEGER(KIND=4) :: hdiff_version
+             REAL(KIND=4) :: hdiff_rdx, hdiff_rdy
+             LOGICAL :: capture_hdiff, capture_single_rank
+             capture_hdiff = .FALSE.
+             hdiff_version = 1
+             hdiff_rdx = grid%rdx
+             hdiff_rdy = grid%rdy
+             capture_single_rank = .TRUE.
+#ifdef DM_PARALLEL
+             capture_single_rank = ntasks == 1 .AND. ntasks_x == 1 .AND. ntasks_y == 1
+#endif
+             IF (grid%itimestep == 1 .AND. rk_step == 1 .AND. ij == 1 .AND. &
+                 grid%num_tiles == 1 .AND. capture_single_rank) THEN
+               CALL get_environment_variable("WRF_PARITY_RK_TEND_DUMP", hdiff_env, STATUS=hdiff_env_status)
+               IF (hdiff_env_status == 0 .AND. TRIM(hdiff_env) == "1" .AND. &
+                   grid%i_start(ij) <= ids .AND. grid%i_end(ij) >= ide-1 .AND. &
+                   grid%j_start(ij) <= jds .AND. grid%j_end(ij) >= jde-1 .AND. &
+                   k_start <= kds .AND. k_end >= kde-1 .AND. &
+                   config_flags%mp_physics == 0 .AND. config_flags%map_proj == 0 .AND. &
+                   config_flags%periodic_x .AND. .NOT. config_flags%periodic_y .AND. &
+                   config_flags%symmetric_ys .AND. config_flags%symmetric_ye .AND. &
+                   MAXVAL(ABS(grid%ht(ims:ime,jms:jme))) == 0. ) capture_hdiff = .TRUE.
+             END IF
+             IF (capture_hdiff) THEN
+               OPEN(NEWUNIT=hdiff_unit, FILE="wrf_u_hdiff_snapshot.bin", FORM="unformatted", &
+                    ACCESS="stream", STATUS="replace", CONVERT="little_endian", IOSTAT=hdiff_iostat)
+               IF (hdiff_iostat /= 0) CALL wrf_error_fatal("failed opening wrf_u_hdiff_snapshot.bin")
+               WRITE(hdiff_unit, IOSTAT=hdiff_iostat) hdiff_version, &
+                    ids, ide, jds, jde, kds, kde, ims, ime, jms, jme, kms, kme, hdiff_rdx, hdiff_rdy
+               IF (hdiff_iostat /= 0) CALL wrf_error_fatal("failed writing wrf_u_hdiff_snapshot.bin header")
+               WRITE(hdiff_unit, IOSTAT=hdiff_iostat) ru_tendf
+               IF (hdiff_iostat /= 0) CALL wrf_error_fatal("failed writing wrf_u_hdiff_snapshot.bin input")
+             END IF
            CALL horizontal_diffusion_2( t_tendf, ru_tendf, rv_tendf, rw_tendf, &
                                       tke_tend,                              &
                                       moist_tend, num_moist,                  &
@@ -1118,6 +1189,14 @@ BENCH_START(hor_diff_tim)
                                       grid%i_start(ij), grid%i_end(ij),      &
                                       grid%j_start(ij), grid%j_end(ij),      &
                                       k_start    , k_end                    )
+             IF (capture_hdiff) THEN
+               WRITE(hdiff_unit, IOSTAT=hdiff_iostat) ru_tendf, grid%xkmh, grid%rho, &
+                    grid%defor11, grid%defor12, grid%div, grid%rdzw, grid%zx, grid%zy
+               CLOSE(hdiff_unit, IOSTAT=hdiff_close)
+               IF (hdiff_iostat /= 0 .OR. hdiff_close /= 0) &
+                    CALL wrf_error_fatal("failed writing wrf_u_hdiff_snapshot.bin payload")
+             END IF
+           END BLOCK
          ENDDO
          !$OMP END PARALLEL DO
 BENCH_END(hor_diff_tim)

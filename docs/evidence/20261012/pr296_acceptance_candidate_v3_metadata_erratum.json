@@ -1,0 +1,11 @@
+{
+  "schema": "pr296-frozen-candidate-metadata-erratum-v1",
+  "recorded_at_local": "2026-10-12T02:13:37.749492",
+  "frozen_contract_sha256": "77bc4dcc7b8e0bde91d6089e9aaa11a67a49311f824d88c97919bbbb8e64fe3f",
+  "location": "sampling.PH",
+  "issue": "The frozen sampling label describes physical height in metres while budgets.PH and executed comparisons use PH geopotential in m^2/s^2.",
+  "interpretation": "Use budgets.PH.units and epsilon for the PH field gate: raw PH excluding lower face, epsilon=0.010249750539744869 m^2/s^2. The equivalent height epsilon is 0.00104482676246 m for g=9.81.",
+  "numerical_rule_changed": false,
+  "frozen_bytes_changed": false,
+  "evaluator_evidence": "green_acceptance/native_qualification_v3/evaluate_v3.py owned(f) uses f[PH][1:,:,:]; units come from budgets.PH."
+}

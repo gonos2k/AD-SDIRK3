@@ -2,7 +2,7 @@
 
 Local timestamp: 2026-10-11 17:47:15 JST (+0900)
 
-Last updated: 2026-10-11 17:57:34 JST (+0900)
+Last updated: 2026-10-12 02:11:01 JST (+0900)
 
 This is the single project-level definition of the first-stage research target.
 Case reports retain their own inputs, numerical budgets and completion status.
@@ -112,6 +112,27 @@ Cost comparisons require both candidates to satisfy the selected field-error
 budgets. Record whole-run wall time and solver work under a pinned compiler,
 library, rank/thread and input setup; one small run does not establish a general
 speed advantage.
+
+## Named dry-case acceptance candidate (version 3)
+
+A concrete [packed-U cause and criteria record](<(202610120157)_pr296_packed_u_diffusion_cause_and_criteria.md>) now defines a **proposed** research acceptance instance: dry, flat 16×16×16 `test/em_b_wave`, one MPI rank/thread, 240 s, at 60/120/180/240 s. This candidate does not select a universal project forecast window or revoke the completed rotating case. Its exact input is pinned in the evidence; effective ideal-case `hypsometric_opt=1` overrides nominal namelist 2.
+
+The candidate freezes `epsilon_X=max(0.01*S_X(240),3*q_X(240))`, where `S` is the initial-subtracted archived RK3 h=1.875 response RMS and `q` is its raw FP32 perturbation-output spacing. These **fixed numbers** apply at every checkpoint. The 1% is a deliberate proposed research target, not a governing-equation consequence. Output spacing is not an internal arithmetic-error bound.
+
+| Field | Fixed RMS budget | Unit |
+|---|---:|---|
+| U | 7.74441704e-4 | m/s |
+| V | 1.012200724e-4 | m/s |
+| W | 7.794439857e-6 | m/s |
+| PH | 0.01024975054 | m²/s² |
+| Theta | 3.619571392e-5 | K |
+| MU | 0.01459090046 | Pa |
+
+A reference qualifies empirically only if one h=0.9375 RK3 comparison to h=1.875 changes every field by at most `epsilon_X/3` at all checkpoints, with exact boundaries and admissibility. This observed sensitivity is not a proof of true-error bounds or third-order convergence. The one authorized qualification run failed all 24 field/time tests; no indefinite refinement ladder follows. Candidate-vs-reference differences remain provisional until reference qualification. No efficiency requirement is added.
+
+The frozen JSON `sampling.PH` label describes height in metres, whereas its `budgets.PH` and executed gate use geopotential in m²/s². The separate metadata erratum records this inconsistency without changing the frozen bytes or numeric gate; the PH epsilon in the table is authoritative.
+
+The changed stress path separately requires independent primitive-flux oracles, all owned seam faces, periodic shift consistency, and first-order derivative checks. A `gamma_n*sum|terms|` bound only covers accumulation of already computed terms; it cannot certify all primitive arithmetic or full cross-model RHS. The corrected U diffusion gates have direct evidence, while complete W/PH/theta RHS and integrated observation-window derivatives remain open.
 
 ## Completed restricted rotating inverse
 
