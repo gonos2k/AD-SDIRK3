@@ -404,6 +404,14 @@ MODULE module_implicit_sdirk3
          REAL(C_FLOAT), VALUE :: diff_6th_thresh, c_s, c_k
       END FUNCTION sdirk3_tile_set_base_state_checked
 
+      INTEGER(C_INT) FUNCTION sdirk3_tile_set_theta_mixing_base_checked( &
+                    solver_ptr, profile, count, mix_full_fields) &
+         BIND(C, name="sdirk3_tile_set_theta_mixing_base_checked")
+         USE, INTRINSIC :: ISO_C_BINDING
+         TYPE(C_PTR), VALUE :: solver_ptr, profile
+         INTEGER(C_INT), VALUE :: count, mix_full_fields
+      END FUNCTION sdirk3_tile_set_theta_mixing_base_checked
+
       ! PR 7B (3b-3 P1): checked halo freshness publication. Returns 1 on
       ! success (serial/no-exchange notify is a true no-op), 0 when the
       ! publication is rejected (off-baseline thread). Fortran MUST consume
@@ -872,6 +880,13 @@ CONTAINS
                   WRITE(message, '(A,I0)') &
                        "SDIRK3: FATAL - base state initialization FAILED for tile ", ij
                   CALL wrf_error_fatal(message)
+               END IF
+               ! Vertical theta mixing uses WRF's initialized 1D t_base, not EOS t_init.
+               base_state_status = sdirk3_tile_set_theta_mixing_base_checked( &
+                    tile_solvers(ij), C_LOC(grid%t_base(kts)), kte-kts+1, &
+                    MERGE(1_C_INT, 0_C_INT, config_flags%mix_full_fields))
+               IF (base_state_status /= 1_C_INT) THEN
+                  CALL wrf_error_fatal("SDIRK3: theta mixing base initialization failed")
                END IF
                ! 9F.D41 (review P0-4): the old line claimed "zero-copy ... saved ~5.4 MB
                ! memory traffic". The C++ side builds strided views and then

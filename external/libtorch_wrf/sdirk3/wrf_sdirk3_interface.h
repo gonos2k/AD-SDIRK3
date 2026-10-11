@@ -1197,6 +1197,10 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
 // 9F.D41 (review P0-2): status-returning form. Returns 1 on full success, 0 on any
 // failure with nothing published. Prefer this over the void form below, which cannot
 // report failure and whose caller therefore could not avoid publishing a false success.
+// Snapshot the exact WRF t_base profile. Returns 1 on success, 0 on invalid input.
+int sdirk3_tile_set_theta_mixing_base_checked(
+    void* solver_ptr, const float* profile, int count, int mix_full_fields);
+
 int sdirk3_tile_set_base_state_checked(
     void* solver_ptr,
     float* pb_ptr, float* t_init_ptr, float* phb_ptr, float* mub_ptr,

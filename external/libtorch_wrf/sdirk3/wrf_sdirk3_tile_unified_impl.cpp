@@ -23969,6 +23969,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             const torch::Tensor scalar_stage_rdz = option2_stage_active
                 ? option2_stage_rdz : torch::Tensor();
 
+            // WRF vertical_diffusion_2 mixes thp - t_base when mix_full_fields is false.
+            // t_base is distinct from the EOS t_init field; constants such as +300 cancel.
+            const auto theta_for_mixing = option2_vertical && theta_mixing_base_.defined()
+                ? t - theta_mixing_base_.to(t.options()).view({1, nz_, 1}) : t;
+
             // Check if we have valid density for stress tensor calculation
             // PERF FIX 2025-12-28: Pre-copy to CPU for flow control check
             auto t_check_cpu = t.detach().to(torch::kCPU);
@@ -24185,7 +24190,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     }
                 }
 
-                auto t_diff_v = compute_vertical_mixing_scalar(t, Kv_scalar, rdnw_tensor,
+                auto t_diff_v = compute_vertical_mixing_scalar(theta_for_mixing, Kv_scalar, rdnw_tensor,
                                                                    rho, t_full, mu_full, scalar_stage_rdz);
                 if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
                     t_tend = t_tend + t_diff_v;
@@ -24520,7 +24525,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto w_diff_v = compute_vertical_mixing_w(w, Kv, rdnw_tensor, rho);
                 rw_tend = rw_tend + w_diff_v;
 
-                auto t_diff_v = compute_vertical_mixing_scalar(t, Kv_scalar, rdnw_tensor,
+                auto t_diff_v = compute_vertical_mixing_scalar(theta_for_mixing, Kv_scalar, rdnw_tensor,
                                                                    rho, t_full, mu_full, scalar_stage_rdz);
                 if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
                     t_tend = t_tend + t_diff_v;
@@ -39959,6 +39964,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::avg_mass_to_w(const torch::Tensor& f) {
     return avg_z_to_w(f);
 }
 
+void TileSDIRK3UnifiedSolver::setThetaMixingBase(
+    const float* profile, int count, bool mix_full_fields) {
+    TORCH_CHECK(profile && count == nz_, "theta mixing profile must contain every mass level");
+    const auto snapshot = torch::from_blob(const_cast<float*>(profile), {count},
+        torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)).clone();
+    TORCH_CHECK(torch::isfinite(snapshot).all().item<bool>(), "theta mixing profile must be finite");
+    theta_mixing_base_ = mix_full_fields ? torch::Tensor() : snapshot;
+}
+
 // ========================================================================
 // WRF-conforming vertical mixing for scalars
 // ========================================================================
@@ -42177,7 +42191,7 @@ uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
     hash_context_tensor(
         getRdnTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
     for (const float value : {cf1_, cf2_, cf3_, cfn_, cfn1_}) fixed_trajectory_hash_scalar(h, value);
-    for (const auto& x : {p_base_, th_base_, t_init_pert_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
+    for (const auto& x : {p_base_, th_base_, t_init_pert_, theta_mixing_base_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
                           fnm_cpu_, fnp_cpu_, c1f_, c2f_, c1h_, c2h_,
                           msftx_cpu_, msfty_cpu_, msfux_cpu_, msfuy_cpu_, msfvx_cpu_, msfvy_cpu_,
                           f_, e_, sina_, cosa_, zx_, zy_, cqu_, cqv_, cqw_}) {

@@ -2673,6 +2673,185 @@ bool run_scalar_helper_signed_dnw_contract() {
     return pass;
 }
 
+// WRF's diff_opt=2 scalar mixing uses thp-t_base when mix_full_fields is
+// false.  Keep t_base separate from the EOS t_init supplied by setBaseState,
+// and verify the production RHS for both diffusion dispatches against the
+// independent vertical_diffusion_s flux equation.
+bool run_theta_mixing_base_actual_rhs_contract() {
+    using namespace wrf::sdirk3;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+    const std::vector<float> c1h(nz,1.0f),c2h(nz,0.0f);
+    const std::vector<float> mixing_base{1.0f,3.0f,6.0f,10.0f};
+    constexpr float spacing=1000.0f;
+    constexpr double gravity=9.81;
+    constexpr float xkhv=30.0f; // WRF km_opt=1: xkhv=3*kvdif, kvdif=10.
+    const int64_t theta_begin=su+sv+2*sw;
+
+    struct RunResult {
+        torch::Tensor theta_rhs;
+        double source_error=0.0;
+        double source_signal=0.0;
+    };
+    const auto evaluate=[&](int option,bool on,bool mix_full_fields,
+                            bool perturb,bool configure_profile=true) -> RunResult {
+        auto& cfg=g_sdirk3_config;
+        cfg=SDIRK3Config{};
+        cfg.diffusion_option=option;
+        cfg.khdif=0.0f;
+        cfg.kvdif=on?10.0f:0.0f;
+        cfg.mass_coordinate_mode=1;
+        cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false;
+        cfg.wrf_damp_opt=0;
+        cfg.imex_split_mode=3;
+        cfg.hevi_split=false;
+        cfg.use_stress_tensor=false;
+
+        Option2RhsFixture fixture(false,spacing,c1h,c2h);
+        auto& solver=fixture.solver;
+        auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
+        TORCH_CHECK(grid,"theta mixing-base fixture has no extended GridInfo");
+        grid->smagorinsky_opt=1;
+        if (grid->qv.defined() && grid->qv.numel()>0)
+            grid->qv=torch::zeros_like(grid->qv);
+        (solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,
+            false,false,false,false,false,"theta mixing-base actual RHS test");
+        if (configure_profile)
+            solver.setThetaMixingBase(mixing_base.data(),nz,mix_full_fields);
+
+        // Option 1 has no namelist xkhv-to-scalar fallback in this solver;
+        // supply the WRF isotropic scalar coefficient explicitly.  Option 2
+        // exercises the native km_opt=1 fallback xkhv=3*kvdif.
+        std::vector<float> kv_scalar(ny*nw*nx,xkhv);
+        if (option==1 && on)
+            (solver.*access(DiffusionTag{}))(
+                nullptr,nullptr,nullptr,kv_scalar.data());
+
+        auto u=torch::zeros({ny,nz,nx+1},opt);
+        auto v=torch::zeros({ny+1,nz,nx},opt);
+        auto w=torch::zeros({ny,nw,nx},opt);
+        auto ph=torch::zeros({ny,nw,nx},opt);
+        auto theta=torch::empty({ny,nz,nx},opt);
+        auto mu=torch::zeros({ny,nx},opt);
+        for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+            const float dtheta=perturb
+                ? static_cast<float>(0.25*std::sin(2*pi*i/nx)*(k+1)+
+                                     0.125*std::cos(pi*(j+0.5)/ny))
+                : 0.0f;
+            theta[j][k][i]=mixing_base[k]+dtheta;
+        }
+        const auto state=torch::cat({u.reshape({-1}),v.reshape({-1}),w.reshape({-1}),
+            ph.reshape({-1}),theta.reshape({-1}),mu.reshape({-1})});
+
+        // Reconstruct only the source flux, independently of the production
+        // scalar-diffusion helper.  t_init stays the fixture's zero EOS
+        // perturbation; the separately pinned WRF t_base profile is nonzero.
+        const auto pbase=grid->p_base.to(opt);
+        const auto thbase=grid->th_base.to(opt);
+        const auto mubase=grid->mu_base.to(opt);
+        const auto alb=compute_inverse_density(thbase,pbase,287.0f,717.5f,
+                                                1004.5f,100000.0f);
+        const auto rdnw=(solver.*access(RdnwTag{}))(torch::kCPU,torch::kFloat32,nz);
+        const auto c1=torch::tensor(c1h,opt),c2=torch::tensor(c2h,opt);
+        const auto prho=calc_p_rho_wrf(ph,theta,mu,mubase,alb,pbase,rdnw,c1,c2,
+            287.0f,717.5f,1004.5f,100000.0f,300.0f);
+        const auto rho=prho.alt.reciprocal();
+        const auto z_w=(ph+grid->ph_base.to(opt))/static_cast<float>(gravity);
+        const auto rdz_bottom=2.0f/(z_w.slice(1,1,2)-z_w.slice(1,0,1));
+        const auto rdz_middle=2.0f/(z_w.slice(1,2,nw)-z_w.slice(1,0,nw-2));
+        const auto rdz_top=torch::zeros({ny,1,nx},opt);
+        const auto rdz=torch::cat({rdz_bottom,rdz_middle,rdz_top},1);
+        // Option 1 consumes the cached metric; option 2 supplies its current
+        // stage metric.  Pin the same flat-grid WRF metric for the option-1
+        // direct RHS fixture.
+        if (option==1) (solver.*access(Rdz3dCacheTag{}))=rdz;
+        const auto rhs=(solver.*access(ActualRhsTag{}))(
+            state,RhsMode::ExplicitOnly).detach().clone();
+
+        auto qmix=theta;
+        // WRF's perturbation-base subtraction belongs specifically to option
+        // 2 vertical_diffusion_2.  Option 1 must remain unchanged by this
+        // option-2 compatibility setter.
+        if (option==2 && !mix_full_fields)
+            qmix=qmix-torch::tensor(mixing_base,opt).view({1,nz,1});
+        auto h3=torch::zeros({ny,nw,nx},opt);
+        const auto rho_avg=0.5f*rho.slice(1,1,nz)+0.5f*rho.slice(1,0,nz-1);
+        const auto dq=qmix.slice(1,1,nz)-qmix.slice(1,0,nz-1);
+        h3.slice(1,1,nz).copy_(-xkhv*rho_avg*dq*rdz.slice(1,1,nz));
+        const auto dnw=-rdnw.reciprocal().view({1,nz,1});
+        auto raw=static_cast<float>(gravity)*
+            (h3.slice(1,1,nz+1)-h3.slice(1,0,nz))/dnw;
+        double source_error=0.0,source_signal=0.0;
+        if (option==2) {
+            const auto kv=torch::full({ny,nw,nx},xkhv,opt);
+            const auto mu_full=mu+mubase;
+            const auto helper=(solver.*access(VerticalScalarStageTag{}))(
+                qmix,kv,rdnw,rho,theta+300.0f,mu_full,rdz);
+            source_error=(helper-raw).abs().max().item<double>();
+            source_signal=raw.abs().max().item<double>();
+        }
+        return {rhs.slice(0,theta_begin,theta_begin+st).view({ny,nz,nx}),
+                source_error,source_signal};
+    };
+
+    bool ok=true;
+    const double eps=std::numeric_limits<float>::epsilon();
+    {
+        Option2RhsFixture fixture(false,spacing,c1h,c2h);
+        bool rejected=false;
+        try {
+            fixture.solver.setThetaMixingBase(mixing_base.data(),nz-1,false);
+        } catch (const c10::Error&) {
+            rejected=true;
+        }
+        std::cout << (rejected?"PASS ":"FAIL ")
+                  << "theta mixing-base profile count rejects incomplete levels\n";
+        ok=rejected&&ok;
+    }
+    // Option 1 has a distinct vertical_diffusion_3dmp/t_init contract.  This
+    // setter is option-2-specific: configuring it must leave option-1 output
+    // bitwise identical to the no-setter baseline.
+    const auto option1_default=evaluate(1,true,false,true,false);
+    const auto option1_set=evaluate(1,true,false,true,true);
+    const double option1_neutral=(option1_default.theta_rhs-option1_set.theta_rhs)
+        .abs().max().item<double>();
+    const bool option1_pass=option1_neutral==0.0;
+    std::cout << (option1_pass?"PASS ":"FAIL ")
+              << "option-1 theta mixing-base setter regression neutral difference="
+              << option1_neutral << '\n';
+    ok=option1_pass&&ok;
+
+    const auto bg_off=evaluate(2,false,false,false);
+    const auto bg_on=evaluate(2,true,false,false);
+    const double stationary=(bg_on.theta_rhs-bg_off.theta_rhs).abs().max().item<double>();
+    const auto perturb_off=evaluate(2,false,false,true);
+    const auto perturb_on=evaluate(2,true,false,true);
+    const auto observed=perturb_on.theta_rhs-perturb_off.theta_rhs;
+    const double perturb_signal=observed.abs().max().item<double>();
+    const auto full_off=evaluate(2,false,true,false);
+    const auto full_on=evaluate(2,true,true,false);
+    const auto full_observed=full_on.theta_rhs-full_off.theta_rhs;
+    const double full_signal=full_observed.abs().max().item<double>();
+    const double source_signal=perturb_on.source_signal;
+    const double source_error=std::max(perturb_on.source_error,full_on.source_error);
+    const double source_tolerance=256.0*eps*std::max(1.0,source_signal);
+    const bool option2_pass=torch::isfinite(bg_on.theta_rhs).all().item<bool>() &&
+        torch::isfinite(observed).all().item<bool>() &&
+        torch::isfinite(full_observed).all().item<bool>() &&
+        stationary<=1.0e-12 && perturb_signal>1.0e-8 &&
+        full_signal>10.0*perturb_signal && source_signal>100.0*source_tolerance &&
+        source_error<=source_tolerance;
+    std::cout << (option2_pass?"PASS ":"FAIL ")
+              << "option-2 theta t_base actual RHS background=" << stationary
+              << " perturb_signal=" << perturb_signal << " full_signal=" << full_signal
+              << " source_signal=" << source_signal
+              << " independent_flux_error=" << source_error
+              << " source_tol=" << source_tolerance << '\n';
+    ok=option2_pass&&ok;
+    return ok;
+}
+
 // The 1D metric fallback must use one implied layer depth for the outer
 // divergence factor and the terrain gradient, even with stretched eta levels.
 bool run_u_terrain_fallback(torch::Dtype dtype) {
@@ -4261,6 +4440,7 @@ int main(int argc, char** argv) {
     ok = run_external_weight_cfn_epoch_contract(true) && ok;
     ok = run_option1_scalar_rhs_contract() && ok;
     ok = run_option2_scalar_rhs_layer_mass_contract() && ok;
+    ok = run_theta_mixing_base_actual_rhs_contract() && ok;
     ok = run_scalar_helper_signed_dnw_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
     ok = run_normal_rhs() && ok;
