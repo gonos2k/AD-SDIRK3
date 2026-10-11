@@ -1,0 +1,150 @@
+{
+  "schema": "named-research-case-acceptance-candidate-v3",
+  "contract_id": "dry-em-b-wave-16cubed-240s-fixed-physical-budgets-v3",
+  "frozen_at_local": "2026-10-12T01:34:45.915796+09:00",
+  "status": "root-proposed named-case candidate; not a user-selected project-wide target",
+  "case": {
+    "model": "WRF test/em_b_wave, dry and flat, 16x16x16, final time 240 s; dx=dy=100 km",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "rk3_primary_reference": "fortran_rk3_h1p875, 1.875 s, post-fix executable 2b629416618ddef4ceeea8ba51d07b8a7df514f5df6abab107c51e3f78fcc2de",
+    "rk3_reference_sensitivity": "fortran_rk3_h3p75, 3.75 s, same post-fix executable",
+    "coarse_sequence_point": "fortran_rk3_h7p5, 7.5 s, pre-fix executable b9cb542c81eca2437b56240cf6a2e67698ce4e386151da12e72813ea3ddf439c",
+    "source_config": "All three use one-rank/one-thread standard Fortran RK3, scheme=0/rk_ord=3, same input SHA; namelist diffs only timestep fields. Executable hashes differ for h7.5 versus the two finer runs, but the post-fix source change is on the C++/SDIRK bridge path, RK3 actual_cpp_sdirk_route=false, and post-fix closure proves pre/post h3.75 RK3 fields bitwise equal at all five output times.",
+    "start_states_exact": true,
+    "start_state_checks": {
+      "7.5_vs_1.875_U": true,
+      "7.5_vs_1.875_V": true,
+      "7.5_vs_1.875_W": true,
+      "7.5_vs_1.875_PH": true,
+      "7.5_vs_1.875_T": true,
+      "7.5_vs_1.875_MU": true,
+      "3.75_vs_1.875_U": true,
+      "3.75_vs_1.875_V": true,
+      "3.75_vs_1.875_W": true,
+      "3.75_vs_1.875_PH": true,
+      "3.75_vs_1.875_T": true,
+      "3.75_vs_1.875_MU": true
+    }
+  },
+  "evaluation_times_seconds": [
+    60,
+    120,
+    180,
+    240
+  ],
+  "sampling": {
+    "U": "m/s; unique periodic X faces only",
+    "V": "m/s; both physical Y walls included",
+    "W": "m/s; fixed lower W face excluded, top included",
+    "PH": "height Z=(PH+PHB)/g in m; fixed lower face excluded, top included",
+    "T": "physical potential temperature T+300 K; all mass points",
+    "MU": "total dry column mass MU+MUB in Pa; all mass points",
+    "counts": {
+      "U": 4096,
+      "V": 4352,
+      "W": 4096,
+      "PH": 4096,
+      "T": 4096,
+      "MU": 256
+    }
+  },
+  "budget_definition": "epsilon_X=max(0.01*RMS(reference_X(240)-reference_X(0)),3*q_X(240)); fixed numeric epsilon is applied at all four evaluation times. q is raw reference FP32 perturbation-output spacing, not internal arithmetic uncertainty. No candidate-derived floor or post-result relaxation.",
+  "budgets": {
+    "U": {
+      "time": "0001-01-01_00:04:00",
+      "field": "U",
+      "units": "m/s; unique periodic X faces only",
+      "response_rms": 0.07744417040064483,
+      "one_percent_response_target": 0.0007744417040064484,
+      "output_ulp_rms": 1.4866685364198997e-07,
+      "three_ulp_floor": 4.460005609259699e-07,
+      "epsilon": 0.0007744417040064484,
+      "epsilon_over_3_for_reference_qualification": 0.00025814723466881614,
+      "floor_dominates": false
+    },
+    "V": {
+      "time": "0001-01-01_00:04:00",
+      "field": "V",
+      "units": "m/s; both physical Y walls included",
+      "response_rms": 0.010122007244795247,
+      "one_percent_response_target": 0.00010122007244795247,
+      "output_ulp_rms": 8.793520763303062e-10,
+      "three_ulp_floor": 2.6380562289909185e-09,
+      "epsilon": 0.00010122007244795247,
+      "epsilon_over_3_for_reference_qualification": 3.374002414931749e-05,
+      "floor_dominates": false
+    },
+    "W": {
+      "time": "0001-01-01_00:04:00",
+      "field": "W",
+      "units": "m/s; fixed lower W face excluded, top included",
+      "response_rms": 0.000779443985679733,
+      "one_percent_response_target": 7.79443985679733e-06,
+      "output_ulp_rms": 6.939605513493515e-11,
+      "three_ulp_floor": 2.0818816540480544e-10,
+      "epsilon": 7.79443985679733e-06,
+      "epsilon_over_3_for_reference_qualification": 2.5981466189324436e-06,
+      "floor_dominates": false
+    },
+    "PH": {
+      "time": "0001-01-01_00:04:00",
+      "field": "PH",
+      "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+      "response_rms": 1.0249750539744868,
+      "one_percent_response_target": 0.010249750539744869,
+      "output_ulp_rms": 0.00040504559035177146,
+      "three_ulp_floor": 0.0012151367710553143,
+      "epsilon": 0.010249750539744869,
+      "epsilon_over_3_for_reference_qualification": 0.0034165835132482897,
+      "floor_dominates": false
+    },
+    "T": {
+      "time": "0001-01-01_00:04:00",
+      "field": "T",
+      "units": "physical potential temperature T+300 K; all mass points",
+      "response_rms": 0.003619571391542998,
+      "one_percent_response_target": 3.619571391542998e-05,
+      "output_ulp_rms": 5.493276240452202e-06,
+      "three_ulp_floor": 1.6479828721356606e-05,
+      "epsilon": 3.619571391542998e-05,
+      "epsilon_over_3_for_reference_qualification": 1.2065237971809995e-05,
+      "floor_dominates": false
+    },
+    "MU": {
+      "time": "0001-01-01_00:04:00",
+      "field": "MU",
+      "units": "total dry column mass MU+MUB in Pa; all mass points",
+      "response_rms": 1.4590900457561187,
+      "one_percent_response_target": 0.014590900457561187,
+      "output_ulp_rms": 7.521766104772069e-07,
+      "three_ulp_floor": 2.2565298314316207e-06,
+      "epsilon": 0.014590900457561187,
+      "epsilon_over_3_for_reference_qualification": 0.004863633485853729,
+      "floor_dominates": false
+    }
+  },
+  "reference_qualification": {
+    "gate": "One RK3 h=0.9375 run vs archived h=1.875: per-field RMS change at every checkpoint <= fixed epsilon_X/3; all physical admissibility and boundary invariants pass.",
+    "status": "unqualified; run not performed at freeze",
+    "meaning": "observed resolution sensitivity only, not exact-solution error bound or measured order",
+    "run_limit": "one new refinement; failure stops qualification and does not authorize an unbounded ladder"
+  },
+  "candidate_accuracy": {
+    "gate": "Only after reference qualification, candidate vs h=1.875 per-field RMS <= fixed epsilon_X at every evaluation time; no aggregate cross-unit norm",
+    "timing": "No fixed-operator 240-s run has occurred at freeze"
+  },
+  "operator_gate": {
+    "requirements": [
+      "All physical input states and auxiliary context equal before subtraction",
+      "Independent primitive term oracle at every owned boundary, including west U face",
+      "Exact periodic output aliases, symmetric V wall and fixed lower W invariants",
+      "First-order directional derivative and periodic translation tests for changed stress path",
+      "Record remaining complete-RHS discrepancy separately; do not certify all spatial equations from corrected U terms"
+    ],
+    "roundoff_limits": "gamma_n*sum|terms| only bounds accumulation of already computed terms; it is not a bound on all primitive operations or full cross-model RHS. Oracle test tolerance must account for its own expression DAG and exported representation."
+  },
+  "efficiency": "optional; not an acceptance condition",
+  "integrated_derivatives": "Existing supported fixture budgets remain valid; no broader observation-window VJP/JVP gate closed here",
+  "source_v2_sha256": "1225b0893c116c2d61fcb5896d0f6f79cec94de2159630b5e2d395c442e49777",
+  "versioning": "Changing scope or budgets creates a new contract version; it never revokes closed rotating-wave validation."
+}

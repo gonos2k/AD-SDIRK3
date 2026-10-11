@@ -613,6 +613,16 @@ struct CoupledSlowGuard {
     ~CoupledSlowGuard() { g_export_coupled_slow = false; }
 };
 
+// The packed U layout contains the physical closing face, followed by face-1
+// padding. Interior stress stencils already compute the closing face; publish
+// that same periodic value at the owned west face before RHS projection.
+static torch::Tensor close_packed_u_faces(const torch::Tensor& q, int64_t n) {
+    TORCH_CHECK(q.dim() == 3 && n > 1 && q.size(2) == n + 2,
+                "packed U closure requires physical faces plus one padding face");
+    return torch::cat({q.slice(2, n, n + 1), q.slice(2, 1, n + 1),
+                       q.slice(2, 1, 2)}, 2);
+}
+
 // WRF vertical order-3 advection tendency for a mass-level field (advect_scalar vertical
 // section, namelist v_sca/mom_adv_order=3; module_advect_em.F): w-level fluxes
 //   kf=1, nz-1:  vflux = Omega * (fzm*q(kf) + fzp*q(kf-1))     [stretch weights, NOT 0.5]
@@ -23834,6 +23844,29 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         }
                     }
 
+                    // Observe the first Full horizontal U increment in the same
+                    // coupled convention as ru_tend; do not evaluate another RHS.
+                    const char* hdiff_env = std::getenv("WRF_PARITY_RK_TEND_DUMP");
+                    static std::atomic<bool> hdiff_snapshot_written{false};
+                    if (mode == RhsMode::Full && hdiff_env != nullptr &&
+                        std::strcmp(hdiff_env, "1") == 0 &&
+                        !hdiff_snapshot_written.exchange(true)) {
+                        const auto increment = u_diff_h.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+                        const auto mass = velocity_mass_u.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+                        TORCH_CHECK(increment.sizes() == mass.sizes(),
+                                    "horizontal U snapshot requires matching mass");
+                        const int32_t header[4] = {1, static_cast<int32_t>(increment.size(0)),
+                            static_cast<int32_t>(increment.size(1)), static_cast<int32_t>(increment.size(2))};
+                        std::ofstream out("port_hdiff_u_snapshot.bin", std::ios::binary | std::ios::trunc);
+                        out.write(reinterpret_cast<const char*>(header), sizeof(header));
+                        out.write(reinterpret_cast<const char*>(increment.data_ptr<double>()),
+                                  static_cast<std::streamsize>(increment.numel() * sizeof(double)));
+                        out.write(reinterpret_cast<const char*>(mass.data_ptr<double>()),
+                                  static_cast<std::streamsize>(mass.numel() * sizeof(double)));
+                        out.close();
+                        TORCH_CHECK(out, "failed writing port_hdiff_u_snapshot.bin");
+                    }
+
                     v_diff_h = compute_horizontal_diffusion_v_wrf(u, v, w, Kh_mom, rdx, rdy,
                                                                   msfvx_, msfvy_, msftx_, msfty_, muv_2d, ph_full_for_diff, rho_uv,
                                                                   option2_stage_zx,option2_stage_zy,
@@ -24132,6 +24165,26 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                     option2_u_diffusion_to_coupled.sizes() == u_diff_v.sizes(),
                                     "option-2 U vertical diffusion requires a matching U map/mass scale");
                         u_diff_v = u_diff_v * option2_u_diffusion_to_coupled;
+                    }
+                    const char* vdiff_env = std::getenv("WRF_PARITY_RK_TEND_DUMP");
+                    static std::atomic<bool> vdiff_snapshot_written{false};
+                    if (mode == RhsMode::Full && vdiff_env != nullptr &&
+                        std::strcmp(vdiff_env, "1") == 0 &&
+                        !vdiff_snapshot_written.exchange(true)) {
+                        const auto increment = u_diff_v.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+                        const auto mass = velocity_mass_u.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+                        TORCH_CHECK(increment.sizes() == mass.sizes(),
+                                    "vertical U snapshot requires matching mass");
+                        const int32_t header[4] = {1, static_cast<int32_t>(increment.size(0)),
+                            static_cast<int32_t>(increment.size(1)), static_cast<int32_t>(increment.size(2))};
+                        std::ofstream out("port_vdiff_u_snapshot.bin", std::ios::binary | std::ios::trunc);
+                        out.write(reinterpret_cast<const char*>(header), sizeof(header));
+                        out.write(reinterpret_cast<const char*>(increment.data_ptr<double>()),
+                                  static_cast<std::streamsize>(increment.numel() * sizeof(double)));
+                        out.write(reinterpret_cast<const char*>(mass.data_ptr<double>()),
+                                  static_cast<std::streamsize>(mass.numel() * sizeof(double)));
+                        out.close();
+                        TORCH_CHECK(out, "failed writing port_vdiff_u_snapshot.bin");
                     }
                     ru_tend = ru_tend + u_diff_v;
                     uterm_site(wrf::sdirk3::USlowSiteKind::VerticalDiffusion);
@@ -36494,14 +36547,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor13(const torch::Tensor& u, c
         }
     }
     if (!config_flags_periodic_y_ && ny > 1) {
-        // Copy j=1 to j=0 (bottom y-boundary)
-        defor13.select(0, 0).copy_(defor13.select(0, 1));
+        // The symmetric wall is a V face, not the first U mass row.
+        // Fortran preserves this owned south D13 row in the packed case.
+        if (!(wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+              isPackedPeriodicDomain())) {
+            defor13.select(0, 0).copy_(defor13.select(0, 1));
+        }
         // Copy j=ny-2 to j=ny-1 (top y-boundary)
         if (ny > 2) {
             defor13.select(0, ny - 1).copy_(defor13.select(0, ny - 2));
         }
     }
 
+    if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+        isPackedPeriodicDomain()) {
+        defor13 = close_packed_u_faces(defor13, nx_ - 1);
+    }
     return defor13;
 }
 
@@ -36902,6 +36963,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress(
         Kv_vort.slice(1, 1, k_max + 1).slice(2, 1, i_max + 1).copy_(Kv_avg);
         // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
         rho_vort.slice(1, 1, k_max + 1).slice(2, 1, i_max + 1).copy_(rho_avg);
+    }
+
+    if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+        isPackedPeriodicDomain()) {
+        // The initialized zero at face 0 is not a wall stress on a periodic
+        // domain. Use the fnm/fnp averages already computed across the seam.
+        Kv_vort = close_packed_u_faces(Kv_vort, nx_ - 1);
+        rho_vort = close_packed_u_faces(rho_vort, nx_ - 1);
     }
 
     // Compute stress tensor: τ₁₃ = -ρ * Km * defor13 (already vectorized)
@@ -38489,6 +38558,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
     // Stress already includes rho, and g*dz/dnw yields a coupled tendency.
     // Do not multiply it by the dry column mass a second time.
     if (physical_stress) tendency = -tendency;
+    if (physical_stress && isPackedPeriodicDomain()) {
+        tendency = close_packed_u_faces(tendency, nx_ - 1);
+    }
 
     return tendency;
 }

@@ -1,0 +1,65 @@
+{
+  "schema": "pr296-reachable-producer-source-binding-v1",
+  "recorded_at_local": "2026-10-12T02:15:02.009106",
+  "producer_commit": "78255e14ad4f2d8e07e9e764b47b9eb24266dd53",
+  "run_receipts_head_note": "Native runs recorded parent HEAD plus exact working source hashes. This receipt independently verifies all those hashes against committed authoritative source blobs.",
+  "all_source_bytes_equal": true,
+  "files": {
+    "dyn_em/solve_em.F": {
+      "run_source_sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c",
+      "producer_blob_sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c",
+      "equal": true
+    },
+    "dyn_em/module_em.F": {
+      "run_source_sha256": "fb424486dbf9c903f77da6a15baf35e6772847e786b18d0297139eb48f0d586e",
+      "producer_blob_sha256": "fb424486dbf9c903f77da6a15baf35e6772847e786b18d0297139eb48f0d586e",
+      "equal": true
+    },
+    "dyn_em/module_small_step_em.F": {
+      "run_source_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "producer_blob_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "equal": true
+    },
+    "dyn_em/module_big_step_utilities_em.F": {
+      "run_source_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "producer_blob_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "equal": true
+    },
+    "dyn_em/module_implicit_sdirk3.F": {
+      "run_source_sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "producer_blob_sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "equal": true
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "run_source_sha256": "ff722deccd094ac507a16eb4940423b4a60a11ce124df11fd20be78b5bb4f2c3",
+      "producer_blob_sha256": "ff722deccd094ac507a16eb4940423b4a60a11ce124df11fd20be78b5bb4f2c3",
+      "equal": true
+    },
+    "dyn_em/module_first_rk_step_part2.F": {
+      "run_source_sha256": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c",
+      "producer_blob_sha256": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c",
+      "equal": true
+    },
+    "external/libtorch_wrf/sdirk3/tests/test_scalar_diffusion_contract.cpp": {
+      "compiled_test_source_sha256": "15d5fcd7cf7f6813630d8d6c21d345be9723cb64cb936725ee02501b43cc9050",
+      "producer_blob_sha256": "15d5fcd7cf7f6813630d8d6c21d345be9723cb64cb936725ee02501b43cc9050",
+      "equal": true
+    }
+  },
+  "final_local_binaries": {
+    "wrf.exe": {
+      "path": "/private/tmp/pr296-seam-cause-20261012/main/wrf.exe",
+      "sha256": "f7c4e1dbb69a3ec68e5376294e326cbaff339531f31dac13ed47e0fcbf413b64"
+    },
+    "libwrf_sdirk3_libtorch.a": {
+      "path": "/private/tmp/pr296-seam-cause-20261012/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+      "sha256": "5f28e24cc3019c59c45ed8942e9ad104fc6a8a2c62f59416fe0d04fec317556f"
+    }
+  },
+  "frozen_contract_sha256": "77bc4dcc7b8e0bde91d6089e9aaa11a67a49311f824d88c97919bbbb8e64fe3f",
+  "native_run_counts": {
+    "short_term_captures": 12,
+    "qualification_240s": 3
+  },
+  "limitation": "Receipt proves byte binding, not a fresh rerun from clean producer checkout."
+}

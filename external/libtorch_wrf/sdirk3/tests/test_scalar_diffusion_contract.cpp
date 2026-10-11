@@ -1536,6 +1536,108 @@ bool run_vertical_u_stress_actual_shape() {
     return pass;
 }
 
+// Packed periodic-X option-2 U stresses must publish the physical closing
+// face at x=0, keep face-1 padding at x=17, and preserve the symmetric-Y
+// south D13 row. These analytic flux checks use raw coupled stress
+// increments; they do not apply a layer-mass normalization.
+bool run_packed_u_stress_boundary_contract() {
+    constexpr int mass_x=17,mass_y=17,mass_z=16;
+    constexpr int u_x=mass_x+1,v_y=mass_y+1,w_z=mass_z+1;
+    constexpr int nphysical=mass_x-1,j=5,k=7;
+    constexpr float a=1.0e-3f,d13_step=1.0e-2f,kh=2.0f,kv=2.0f;
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    cfg.periodic_x=true; cfg.periodic_y=false;
+    cfg.open_xs=cfg.open_xe=cfg.open_ys=cfg.open_ye=false;
+    cfg.specified=false; cfg.nested=false;
+    TileSDIRK3UnifiedSolver solver(mass_x,mass_y,mass_z,1.0f,1.0f,
+        {1.0f},{1.0f},std::vector<float>(mass_z,1.0f),0);
+    solver.setStaggeredDimensions(u_x,v_y,w_z);
+    solver.setWRFIndices(1,mass_x,1,mass_y,1,mass_z,
+        1,mass_x,1,mass_y,1,w_z,-2,mass_x+4,-2,mass_y+4,1,w_z);
+    solver.setBoundaryConditions(true,false,false,false,true,true,
+        false,false,false,false,false,false);
+    set_asymmetric_vertical_interpolation(solver,mass_z);
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    const auto map_m=torch::ones({mass_y,mass_x},opt);
+    const auto map_u=torch::ones({mass_y,u_x},opt);
+    const auto map_v=torch::ones({v_y,mass_x},opt);
+    solver.*access(MapTxTag{})=map_m; solver.*access(MapTyTag{})=map_m;
+    solver.*access(MapUxTag{})=map_u; solver.*access(MapUyTag{})=map_u;
+    solver.*access(MapVxTag{})=map_v; solver.*access(MapVyTag{})=map_v;
+
+    auto u=torch::empty({mass_y,mass_z,u_x},opt);
+    for(int jj=0;jj<mass_y;++jj) u.select(0,jj).fill_(a*jj*jj);
+    const auto v=torch::zeros({v_y,mass_z,mass_x},opt);
+    const auto w=torch::zeros({mass_y,w_z,mass_x},opt);
+    const auto kh_field=torch::full({mass_y,mass_z,mass_x},kh,opt);
+    const auto rho=torch::ones({mass_y,mass_z,mass_x},opt);
+    const auto muu=torch::ones({mass_y,mass_x},opt);
+    auto ph=torch::empty({mass_y,w_z,mass_x},opt);
+    for(int kk=0;kk<w_z;++kk) ph.select(1,kk).fill_(9.81f*kk);
+    const auto zx=torch::zeros({mass_y,w_z,u_x},opt);
+    const auto zy=torch::zeros({v_y,w_z,mass_x},opt);
+    const auto rdzw=torch::ones({mass_y,mass_z,mass_x},opt);
+    const auto rdz=torch::ones({mass_y,w_z,mass_x},opt);
+    const auto h=(call_option2_momentum_helper(access(UOption2HelperTag{}),solver,
+        u,v,w,kh_field,1.0f,1.0f,map_u,map_v,map_m,muu,ph,rho,zx,zy,
+        rdzw,rdz).contiguous());
+
+    auto d13=torch::zeros({mass_y,w_z,u_x},opt);
+    for(int kk=1;kk<mass_z;++kk) d13.select(1,kk).fill_(d13_step*kk);
+    const auto kv_field=torch::full({mass_y,mass_z,mass_x},kv,opt);
+    const auto rdnw=torch::ones({mass_z},opt);
+    const auto vd=(solver.*access(VerticalUStressTag{}))(
+        torch::zeros_like(u),d13,kv_field,rho,rdnw).contiguous();
+
+    // D13=du/dz here; symmetric Y preserves owned south row j=0, while the
+    // north storage ghost remains the documented copy of row j=ny-2.
+    auto u_y=torch::empty_like(u);
+    for(int jj=0;jj<mass_y;++jj) {
+        const float aj=(jj==0)?0.4f:(jj==1)?0.1f:(0.2f+0.001f*jj);
+        for(int kk=0;kk<mass_z;++kk) u_y[jj][kk].fill_(aj*kk);
+    }
+    const auto d13_y=(solver.*access(Defor13StageGeometryTag{}))(
+        u_y,w,torch::ones({1},opt),rdnw,zx,torch::Tensor(),torch::Tensor(),rdz);
+
+    const double g=solver.getGridInfo()->g;
+    const double expected_h=g*kh*(2.0*a);
+    const double tau_h0=-kh*a*(2.0*j-1.0);
+    const double tau_h1=-kh*a*(2.0*(j+1)-1.0);
+    const double expected_v=g*kv*d13_step;
+    const double tau_v0=-rho[j][k][0].item<double>()*kv*d13_step*k;
+    const double tau_v1=-rho[j][k+1][0].item<double>()*kv*d13_step*(k+1);
+    const double eps=std::numeric_limits<float>::epsilon();
+    const double gamma32=32.0*eps/(1.0-32.0*eps);
+    const double h_budget=gamma32*g*(std::abs(tau_h0)+std::abs(tau_h1));
+    const double v_budget=gamma32*g*(std::abs(tau_v0)+std::abs(tau_v1));
+    const double d13_budget=gamma32*std::max(1.0,std::abs(0.4)+std::abs(0.1));
+    const auto ha=h.accessor<float,3>(),va=vd.accessor<float,3>(),da=d13_y.accessor<float,3>();
+    const double h_seam=ha[j][k][0],h_closing=ha[j][k][nphysical];
+    const double h_padding=ha[j][k][u_x-1],h_face1=ha[j][k][1];
+    const double v_seam=va[j][k][0],v_closing=va[j][k][nphysical];
+    const double v_padding=va[j][k][u_x-1],v_face1=va[j][k][1];
+    const double south=da[0][k][1],south_expected=0.4;
+    const double north_ghost_error=std::abs(double(da[mass_y-1][k][1])-double(da[mass_y-2][k][1]));
+    const bool pass=std::isfinite(h_seam)&&std::isfinite(v_seam)&&
+        std::abs(h_seam-expected_h)<=h_budget&&std::abs(h_closing-expected_h)<=h_budget&&
+        std::abs(h_padding-h_face1)<=h_budget&&
+        std::abs(v_seam-expected_v)<=v_budget&&std::abs(v_closing-expected_v)<=v_budget&&
+        std::abs(v_padding-v_face1)<=v_budget&&
+        std::abs(south-south_expected)<=d13_budget&&
+        std::abs(double(da[1][k][1])-0.1)<=d13_budget&&north_ghost_error<=d13_budget;
+    std::cout<<std::setprecision(10)<<(pass?"PASS ":"FAIL ")
+        <<"packed option-2 U stress closure h="<<h_seam<<"/"<<h_closing
+        <<"/"<<h_face1<<"/"<<h_padding<<" expected="<<expected_h
+        <<" h_budget="<<h_budget<<" v="<<v_seam<<"/"<<v_closing
+        <<"/"<<v_face1<<"/"<<v_padding<<" expected="<<expected_v
+        <<" v_budget="<<v_budget<<" D13_south="<<south
+        <<" expected_south="<<south_expected<<" D13_row1="<<da[1][k][1]
+        <<" north_ghost_error="<<north_ghost_error<<" D13_budget="<<d13_budget<<'\n';
+    return pass;
+}
+
 bool run_vertical_v_stress_actual_shape() {
     constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
     constexpr int v_y = mass_y + 1, v_z = mass_z;
@@ -4628,6 +4730,8 @@ int main(int argc, char** argv) {
         return dump_option2_w_fourier_sign(true);
     if (argc==2 && std::string(argv[1])=="--vertical-u-actual-shape")
         return run_vertical_u_stress_actual_shape() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--packed-u-stress-boundary")
+        return run_packed_u_stress_boundary_contract() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--vertical-v-actual-shape")
         return run_vertical_v_stress_actual_shape() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--vertical-u-stress-raw")
@@ -4755,6 +4859,7 @@ int main(int argc, char** argv) {
     ok = run_packed_periodic_seam(torch::kFloat64) && ok;
     ok = run_packed_u_rdz_seam() && ok;
     ok = run_vertical_u_stress_actual_shape() && ok;
+    ok = run_packed_u_stress_boundary_contract() && ok;
     ok = run_vertical_v_stress_actual_shape() && ok;
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
