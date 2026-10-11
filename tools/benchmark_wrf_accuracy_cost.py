@@ -173,7 +173,7 @@ def _load_run(run: dict, plan_dir: Path) -> dict:
 
     ordered_times = sorted(frames, key=lambda value: datetime.strptime(value, "%Y-%m-%d_%H:%M:%S"))
     initial_time = datetime.strptime(ordered_times[0], "%Y-%m-%d_%H:%M:%S")
-    endpoint = (initial_time + timedelta(seconds=ENDPOINT_SECONDS)).strftime("%Y-%m-%d_%H:%M:%S")
+    endpoint = (initial_time + timedelta(seconds=ENDPOINT_SECONDS)).isoformat(sep="_", timespec="seconds")
     if ordered_times[0] not in frames or endpoint not in frames:
         raise ValueError(f"{label}: exact start and {ENDPOINT_SECONDS}s endpoint frames are required")
     if dimensions != (16, 16, 16):
@@ -264,7 +264,7 @@ def analyze(plan_path: Path, reference_label: str, out_path: Path,
     reference_run = runs[reference_label]
     reference_start = reference_run["timestamps"][0]
     expected_endpoint = (datetime.strptime(reference_start, "%Y-%m-%d_%H:%M:%S") +
-                         timedelta(seconds=ENDPOINT_SECONDS)).strftime("%Y-%m-%d_%H:%M:%S")
+                         timedelta(seconds=ENDPOINT_SECONDS)).isoformat(sep="_", timespec="seconds")
     initial = reference_run["frames"][reference_start]
     result = {
         "schema": "wrf-dry-accuracy-cost-analysis-v1",
