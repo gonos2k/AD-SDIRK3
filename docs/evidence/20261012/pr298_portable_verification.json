@@ -1,6 +1,6 @@
 {
   "all_manifest_payloads_valid": true,
-  "payload_count": 154,
+  "payload_count": 155,
   "native_runs_added": 0,
   "p2_tests": 3,
   "cases": {
@@ -151,7 +151,7 @@
       }
     }
   },
-  "zip_sha256": "73dcc602735282f27d74a7ebaa0c0102038705adf3bb7470313ae4a5ffe1b275",
+  "zip_sha256": "78fa7d2eb06072800dca6d175e3f2edc24767b7d67689c4b9a6cc6a262c3bc35",
   "zip_crc_all_members_passed": true,
-  "verification_method": "Fresh ZIP extraction into /private/tmp/pr298-portable-extracted-20261012; verify_bundle.py exited0; explicit comparison_available/state-gate assertions plus elementwise comparison of every NPZ array and3 contract tests."
+  "verification_method": "Fresh final ZIP extraction /private/tmp/pr298-final-portable-extracted-20261012; verifier exited0; explicit availability/state-gate assertions and equality of every array;3 tests."
 }
