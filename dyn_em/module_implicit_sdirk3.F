@@ -332,13 +332,14 @@ MODULE module_implicit_sdirk3
          INTEGER(C_INT), VALUE :: specified, nested
       END SUBROUTINE sdirk3_tile_set_boundary_conditions_v2
       
-      ! Checked solver-local native transport selectors (phi_adv_z=1/2, v_sca_adv_order=3).
+      ! Checked solver-local transport selectors and WRF bottom CF coefficients.
       INTEGER(C_INT) FUNCTION sdirk3_tile_set_native_transport_options_checked( &
-           solver_ptr, phi_adv_z, v_sca_adv_order) &
+           solver_ptr, phi_adv_z, v_sca_adv_order, cf1, cf2, cf3) &
          BIND(C, name="sdirk3_tile_set_native_transport_options_checked")
          USE, INTRINSIC :: ISO_C_BINDING
          TYPE(C_PTR), VALUE :: solver_ptr
          INTEGER(C_INT), VALUE :: phi_adv_z, v_sca_adv_order
+         REAL(C_FLOAT), VALUE :: cf1, cf2, cf3
       END FUNCTION sdirk3_tile_set_native_transport_options_checked
 
       ! Map projection setter for idealized case detection
@@ -709,10 +710,11 @@ CONTAINS
          ELSE
             solver_valid(ij) = .TRUE.
             native_transport_rc = sdirk3_tile_set_native_transport_options_checked( &
-                 tile_solvers(ij), config_flags%phi_adv_z, config_flags%v_sca_adv_order)
+                 tile_solvers(ij), config_flags%phi_adv_z, config_flags%v_sca_adv_order, &
+                 REAL(grid%cf1, C_FLOAT), REAL(grid%cf2, C_FLOAT), REAL(grid%cf3, C_FLOAT))
             IF (native_transport_rc /= 1_C_INT) THEN
                WRITE(message, '(A,I0,A,I0,A,I0)') &
-                    "SDIRK3: unsupported native transport settings for tile ", tile_id, &
+                    "SDIRK3: invalid native transport selectors or bottom CFs for tile ", tile_id, &
                     " (phi_adv_z=", config_flags%phi_adv_z, ", v_sca_adv_order=", &
                     config_flags%v_sca_adv_order
                CALL wrf_error_fatal(TRIM(message)//")")

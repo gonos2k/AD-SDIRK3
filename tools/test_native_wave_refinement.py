@@ -15,9 +15,11 @@ import importlib.util
 import json
 import math
 import platform
+import re
 import subprocess
 import tempfile
 from pathlib import Path
+import struct
 
 import numpy as np
 import scipy
@@ -26,11 +28,338 @@ from scipy.linalg import expm
 
 ROOT = Path(__file__).resolve().parents[1]
 REF_PATH = ROOT / "tools" / "wave_energy_spatial_reference.py"
+LEGACY_PHASE_B_PACKET_SHA256 = "8816c7fd7f3ed67a0ecb5488576ff825c9c04403786347af09ef996ed2d5781b"
 SPEC = importlib.util.spec_from_file_location("wave_energy_spatial_reference", REF_PATH)
 assert SPEC and SPEC.loader
 REF = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(REF)
 RUN_LOG: list[str] = []
+
+
+SOURCE_PROFILE_FIELDS = (
+    "state", "pbase", "p", "t_init_perturb", "phbase", "mubase", "al", "alb",
+    "rdnw", "rdn", "dnw", "dn", "fnm", "fnp",
+    "c1f", "c2f", "c1h", "c2h", "mapm", "mapu", "mapv",
+    "f", "e", "sina", "cosa", "t_base", "u_base", "v_base",
+)
+
+
+def _periodic_pad_2d(a: np.ndarray, ny: int, nx: int) -> np.ndarray:
+    """Pad source physical cells to the solver's packed closing row/column."""
+    if a.shape != (ny - 1, nx - 1):
+        raise AssertionError(f"expected physical horizontal shape {(ny-1, nx-1)}, got {a.shape}")
+    out = np.empty((ny, nx), dtype=np.float32)
+    out[:-1, :-1] = a
+    out[:-1, -1] = a[:, 0]
+    out[-1, :-1] = a[-1, :]
+    out[-1, -1] = a[-1, 0]
+    return out
+
+
+def _periodic_pad_3d(a: np.ndarray, ny: int, nx: int) -> np.ndarray:
+    """Convert NetCDF [k,j,i] to packed solver [j,k,i] with X wrap/Y close."""
+    if a.ndim != 3 or a.shape[1:] != (ny - 1, nx - 1):
+        raise AssertionError(f"expected [k,{ny-1},{nx-1}] profile, got {a.shape}")
+    src = np.ascontiguousarray(a.transpose(1, 0, 2), dtype=np.float32)
+    out = np.empty((ny, src.shape[1], nx), dtype=np.float32)
+    out[:-1, :, :-1] = src
+    out[:-1, :, -1] = src[:, :, 0]
+    out[-1, :, :-1] = src[-1, :, :]
+    out[-1, :, -1] = src[-1, :, 0]
+    return out
+
+
+def _memory_pad_2d(a: np.ndarray) -> np.ndarray:
+    """Add one halo row/column to a packed 17x17 mass map buffer."""
+    if a.shape != (17, 17):
+        raise AssertionError(f"expected packed mass map (17,17), got {a.shape}")
+    out = np.empty((18, 18), dtype=np.float32)
+    out[:17, :17] = a
+    out[:17, 17] = a[:, 1]
+    out[17, :] = out[15, :]
+    return out
+
+
+def write_actual_source_profile(nc_path: Path, phase_b_snapshot: Path,
+                                state_gate: Path, ft_pgf_reader: Path, output: Path,
+                                ft_pgf_snapshot: Path | None = None) -> dict:
+    """Validate and serialize one corrected WRF source60 state/context bundle."""
+    from netCDF4 import Dataset
+
+    gate = json.loads(state_gate.read_text())
+    if gate.get("status") != "all_source60_input_call_state_checks_exact" or \
+            gate.get("call_state_fields_exact") != ["U", "V", "W", "PH", "THM", "MU"]:
+        raise AssertionError("source60 gate does not certify exact six-field state")
+    packet = phase_b_snapshot.read_bytes()
+    if len(packet) < 48:
+        raise AssertionError("Phase-B component packet is truncated")
+    h = struct.unpack("<12i", packet[:48])
+    version, nx, ny, nz, nxu, nyv, nzw, count, flags, native_set, phi, vorder = h
+    if (version, nx, ny, nz, nxu, nyv, nzw, count, flags, native_set, phi, vorder) != \
+            (2, 17, 17, 16, 18, 18, 17, 24531, 127, 1, 1, 3):
+        raise AssertionError(f"unexpected Phase-B header: {h}")
+    state = np.frombuffer(packet, dtype="<f4", count=count, offset=48).copy()
+    if not np.isfinite(state).all():
+        raise AssertionError("Phase-B packed input state contains nonfinite values")
+    # Existing source gate binds the call state to the corrected source60 frame;
+    # packet hash and gate are kept beside this bundle as provenance.
+    with Dataset(nc_path) as ds:
+        if sha256_file(nc_path) != gate.get("corrected_input_fixture", {}).get("sha256"):
+            raise AssertionError("source60 NetCDF hash does not match the state-gate receipt")
+        if len(ds.dimensions["west_east"]) != 16 or len(ds.dimensions["south_north"]) != 16 or len(ds.dimensions["bottom_top"]) != 16:
+            raise AssertionError("corrected source file dimensions do not match the pinned 16x16x16 case")
+        def var(name: str) -> np.ndarray:
+            if name not in ds.variables:
+                raise AssertionError(f"source profile is missing {name}")
+            a = np.asarray(ds.variables[name][0], dtype=np.float32)
+            if not np.isfinite(a).all():
+                raise AssertionError(f"source profile {name} contains nonfinite values")
+            return a
+        # C-contiguous solver blocks use [j,k,i] / [j,i].
+        pbase = _periodic_pad_3d(var("PB"), ny, nx)
+        t_base = var("T_BASE")
+        thbase = _periodic_pad_3d(var("T_INIT"), ny, nx)
+        phbase = _periodic_pad_3d(var("PHB"), ny, nx)
+        mubase = _periodic_pad_2d(var("MUB"), ny, nx)
+        alb = _periodic_pad_3d(var("ALB"), ny, nx)
+        mapm = _memory_pad_2d(_periodic_pad_2d(var("MAPFAC_M"), ny, nx))
+        raw_u, raw_v = var("MAPFAC_U"), var("MAPFAC_V")
+        mapu = np.empty((ny + 1, nx + 1), dtype=np.float32)
+        mapu[:ny-1, :nx] = raw_u
+        mapu[:ny-1, nx] = raw_u[:, 1]
+        mapu[-2, :] = mapu[-3, :]
+        mapu[-1, :] = mapu[-2, :]
+        mapv = np.empty((ny + 1, nx + 1), dtype=np.float32)
+        mapv[:ny, :nx-1] = raw_v
+        mapv[:ny, nx-1] = raw_v[:, 0]
+        mapv[:ny, nx] = raw_v[:, 1]
+        mapv[-1, :] = mapv[-2, :]
+        f = _memory_pad_2d(_periodic_pad_2d(var("F"), ny, nx))
+        e = _memory_pad_2d(_periodic_pad_2d(var("E"), ny, nx))
+        sina = _memory_pad_2d(_periodic_pad_2d(var("SINALPHA"), ny, nx))
+        cosa = _memory_pad_2d(_periodic_pad_2d(var("COSALPHA"), ny, nx))
+        vec = lambda name, n: np.pad(var(name), (0, max(0, n - var(name).size)), mode="edge")[:n]
+        vectors = {name: vec(name, n) for name, n in (
+            ("RDNW", 17), ("RDN", 16), ("DNW", 16), ("DN", 16),
+            ("FNM", 17), ("FNP", 17), ("C1F", 17), ("C2F", 17),
+            ("C1H", 16), ("C2H", 16))}
+        # The runtime Full call records its actual W-level interpolation
+        # tensors. Prefer these over an assumed top extrapolation from input.
+        component_payload_offset = 48 + 2 * count * 4
+        component_f64 = np.frombuffer(packet, dtype="<f8", offset=component_payload_offset)
+        ph3_count = ny * nzw * nx
+        mass2_count = ny * nx
+        ph_fnm_offset = (3 * ph3_count + nzw + 7 * ph3_count + 1 +
+                         6 * ph3_count + mass2_count + 2 * nzw)
+        ph_fnm = component_f64[ph_fnm_offset:ph_fnm_offset + nzw]
+        ph_fnp = component_f64[ph_fnm_offset + nzw:ph_fnm_offset + 2 * nzw]
+        if ph_fnp.size != nzw or ph_fnm.size != nzw or \
+                not np.isfinite(ph_fnm).all() or not np.isfinite(ph_fnp).all():
+            raise AssertionError("same-call Full PH FNM/FNP tensors are missing or nonfinite")
+        vectors["FNM"] = ph_fnm.astype(np.float32)
+        vectors["FNP"] = ph_fnp.astype(np.float32)
+        source_cf = [float(ds.variables[n][0]) for n in ("CF1", "CF2", "CF3")]
+        dx, dy = float(ds.getncattr("DX")), float(ds.getncattr("DY"))
+        run_dir = phase_b_snapshot.parent
+        namelist = (run_dir / "namelist.input").read_text()
+        rsl = (run_dir / "rsl.error.0000").read_text()
+        runtime_cf, runtime_cf_source, cf_record_count = select_runtime_cf_coefficients(
+            rsl, phase_b_snapshot)
+        def nml_float(name: str) -> float:
+            match = re.search(rf"(?im)^\s*{name}\s*=\s*([-+0-9.eEdD]+)", namelist)
+            if not match:
+                raise AssertionError(f"Phase-B namelist is missing {name}")
+            return float(match.group(1).replace("D", "E").replace("d", "e"))
+        config = re.search(r"Grid config: rdx=([^,]+), rdy=([^,]+), kdamp=([^,]+), khdif=([^,]+), kvdif=([^\s]+)", rsl)
+        smag = re.search(r"Smagorinsky: opt=(\d+), c_s=([^,]+), c_k=([^\s]+)", rsl)
+        precond = re.search(r"precond_type\s*=\s*(\d+)", rsl)
+        newton = re.search(r"(?m)^\s*newton_tol:\s*([-+0-9.eEdD]+)", rsl)
+        krylov = re.search(r"g_sdirk3_config\.krylov_tol\s*=\s*([-+0-9.eEdD]+)", rsl)
+        max_newton = re.search(r"(?m)^\s*max_newton_iter:\s*(\d+)", rsl)
+        max_krylov = re.search(r"g_sdirk3_config\.max_krylov_iter\s*=\s*(\d+)", rsl)
+        restart = re.search(r"GMRES restart:\s*(\d+)", rsl)
+        if not (config and smag and precond and newton and krylov and max_newton and max_krylov and restart):
+            raise AssertionError("Phase-B runtime log lacks effective WRF grid/Smagorinsky/preconditioner settings")
+        rdx, rdy, kdamp, effective_kh, effective_kv = map(float, config.groups())
+        smag_opt, cs, ck = smag.groups()
+        c_s, c_k = float(cs), float(ck)
+        khdif, kvdif = nml_float("khdif"), nml_float("kvdif")
+        diff_opt = int(nml_float("diff_opt"))
+        newton_tol = float(newton.group(1).replace("D", "E").replace("d", "e"))
+        krylov_tol = float(krylov.group(1).replace("D", "E").replace("d", "e"))
+        max_newton_iter, max_krylov_iter, gmres_restart = int(max_newton.group(1)), int(max_krylov.group(1)), int(restart.group(1))
+        if abs(rdx - 1.0 / dx) > 1e-10 or abs(rdy - 1.0 / dy) > 1e-10 or \
+                effective_kh != khdif or effective_kv != kvdif or int(smag_opt) != 1 or int(precond.group(1)) != 2:
+            raise AssertionError("Phase-B effective runtime settings disagree with the source/namelist profile")
+        operands_path = run_dir / "port_u_pgf_operands_snapshot.bin"
+        operand_bytes = operands_path.read_bytes()
+        if len(operand_bytes) < 20:
+            raise AssertionError("same-call Full PGF operand sidecar is truncated")
+        operand_header = struct.unpack("<5i", operand_bytes[:20])
+        if operand_header != (1, 17, 16, 17, 17):
+            raise AssertionError(f"unexpected same-call Full PGF operand header {operand_header}")
+        operand_count, operand_ph_count = 17 * 16 * 17, 17 * 17 * 17
+        operand_data = np.frombuffer(operand_bytes, dtype="<f8", offset=20)
+        if operand_data.size != 3 * operand_count + operand_ph_count:
+            raise AssertionError("same-call Full PGF operand sidecar has an unexpected payload length")
+        cpp_p_call = operand_data[:operand_count].astype(np.float32)
+        cpp_al_call = operand_data[operand_count:2 * operand_count].astype(np.float32)
+        alt_call = operand_data[2 * operand_count:3 * operand_count].astype(np.float32)
+        ph_call = operand_data[3 * operand_count:].astype(np.float32)
+        if not all(np.isfinite(x).all() for x in (cpp_p_call, cpp_al_call, alt_call, ph_call)):
+            raise AssertionError("same-call Full PGF operands contain nonfinite values")
+        inferred_ft_pgf = run_dir.parent / "pr302_phaseB_fortran_rk3_h15" / "wrf_u_pgf_snapshot.bin"
+        ft_pgf_path = ft_pgf_snapshot.resolve() if ft_pgf_snapshot else inferred_ft_pgf
+        if not ft_pgf_path.is_file():
+            raise AssertionError(f"same-call Fortran PGF snapshot is missing: {ft_pgf_path}; pass --ft-pgf-snapshot for non-legacy capture layouts")
+        ft_reader_path = ft_pgf_reader.resolve()
+        spec = importlib.util.spec_from_file_location("pr302_ft_pgf_reader", ft_reader_path)
+        if not spec or not spec.loader:
+            raise AssertionError(f"cannot load authoritative Fortran PGF reader: {ft_reader_path}")
+        ft_reader = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ft_reader)
+        ft_pgf = ft_reader.read_ft_pgf(ft_pgf_path)
+        ft_p = np.asarray(ft_reader.actual_phys(ft_pgf, "P"), dtype=np.float32)
+        ft_al = np.asarray(ft_reader.actual_phys(ft_pgf, "AL"), dtype=np.float32)
+        if ft_p.shape != (16, 16, 16) or ft_al.shape != (16, 16, 16):
+            raise AssertionError(f"unexpected post-start Fortran P/AL shapes: {ft_p.shape} / {ft_al.shape}")
+        # Fortran's authoritative same-call inputs are cropped as [j,k,i]; the
+        # native bundle stores [j,k,i] packed values with periodic-X/Y closing.
+        p_call = _periodic_pad_3d(ft_p.transpose(1, 0, 2), ny, nx).reshape(-1)
+        al_call = _periodic_pad_3d(ft_al.transpose(1, 0, 2), ny, nx).reshape(-1)
+        if not np.isfinite(p_call).all() or not np.isfinite(al_call).all():
+            raise AssertionError("post-start Fortran P/AL source operands contain nonfinite values")
+        blocks = [state, pbase.reshape(-1), p_call, thbase.reshape(-1), phbase.reshape(-1),
+                  mubase.reshape(-1), al_call, alb.reshape(-1)] + [vectors[n] for n in
+                  ("RDNW", "RDN", "DNW", "DN", "FNM", "FNP", "C1F", "C2F", "C1H", "C2H")] + \
+                 [mapm.reshape(-1), mapu.reshape(-1), mapv.reshape(-1), f.reshape(-1), e.reshape(-1),
+                  sina.reshape(-1), cosa.reshape(-1), t_base, var("U_BASE"), var("V_BASE")]
+        # Versioned little-endian bundle: header, sixteen scalar controls, then
+        # fixed-order FP32 blocks with lengths implied by 17x17x16 packed dimensions.
+        dims = (1, nx, ny, nz, nxu, nyv, nzw, count, flags, native_set, phi, vorder)
+        with output.open("wb") as out:
+            out.write(struct.pack("<12i", *dims))
+            out.write(struct.pack("<16f", dx, dy, c_s, c_k, khdif, kvdif, *runtime_cf, kdamp,
+                                  newton_tol, krylov_tol, max_newton_iter, max_krylov_iter,
+                                  gmres_restart, diff_opt))
+            for block in blocks:
+                out.write(np.asarray(block, dtype="<f4").tobytes(order="C"))
+    return {"bundle": str(output), "bundle_sha256": sha256_file(output),
+            "phase_b_snapshot_sha256": sha256_file(phase_b_snapshot),
+            "pgf_operand_snapshot_sha256": sha256_file(operands_path),
+            "pgf_operand_header": list(operand_header),
+            "cpp_pgf_operand_snapshot_sha256": sha256_file(operands_path),
+            "fortran_pgf_snapshot": {"path": str(ft_pgf_path),
+                                     "sha256": sha256_file(ft_pgf_path),
+                                     "bounds": ft_pgf["bounds"],
+                                     "path_source": "explicit_cli" if ft_pgf_snapshot else "legacy_sibling_inference",
+                                     "seed_source": "actual_phys(read_ft_pgf, P/AL)"},
+            "fortran_pgf_reader": {"path": str(ft_reader_path),
+                                   "sha256": sha256_file(ft_reader_path)},
+            "pgf_operand_max_abs": {"p_ft": float(np.max(np.abs(p_call))),
+                                    "al_ft": float(np.max(np.abs(al_call))),
+                                    "p_cpp_diag": float(np.max(np.abs(cpp_p_call))),
+                                    "al_cpp_diag": float(np.max(np.abs(cpp_al_call))),
+                                    "alt": float(np.max(np.abs(alt_call))),
+                                    "ph": float(np.max(np.abs(ph_call)))},
+            "full_call_phi_fnm_fnp_max_abs": {"fnm": float(np.max(np.abs(ph_fnm))),
+                                              "fnp": float(np.max(np.abs(ph_fnp)))},
+            "source_nc_sha256": sha256_file(nc_path), "source_gate": str(state_gate),
+            "header": list(h), "field_order": list(SOURCE_PROFILE_FIELDS),
+            "bundle_format": "native-source-profile-v1-f32-le",
+            "runtime_config": {"diffusion_option": diff_opt, "khdif": khdif, "kvdif": kvdif,
+                               "kdamp": kdamp, "smagorinsky_opt": int(smag_opt),
+                               "c_s": c_s, "c_k": c_k, "precond_type": int(precond.group(1)),
+                               "newton_tol": newton_tol, "krylov_tol": krylov_tol,
+                               "gmres_restart": gmres_restart, "max_krylov_iter": max_krylov_iter,
+                               "max_newton_iter": max_newton_iter,
+                               "native_cf1_cf2_cf3": runtime_cf,
+                               "native_cf_source": runtime_cf_source,
+                               "native_cf_record_count": cf_record_count,
+                               "native_runtime_log": str(run_dir / "rsl.error.0000"),
+                               "native_runtime_log_sha256": sha256_file(run_dir / "rsl.error.0000"),
+                               "wrfinput_cf1_cf2_cf3": source_cf}}
+
+
+def compare_source_rhs_to_phase_b(cpp_rhs: np.ndarray, projected_state: np.ndarray,
+                                 profile_bundle: Path, phase_b_packet: Path,
+                                 full_snapshot: Path) -> dict:
+    """Fail closed on exact six-field physical-owner parity before temporal steps."""
+    raw = full_snapshot.read_bytes()
+    if len(raw) < 28:
+        raise AssertionError("Phase-B Full RHS snapshot is truncated")
+    header = struct.unpack("<7i", raw[:28])
+    if header != (1, 17, 17, 16, 18, 18, 17):
+        raise AssertionError(f"unexpected Phase-B Full RHS snapshot header: {header}")
+    expected_payload = np.frombuffer(raw, dtype="<f4", offset=28)
+    count = 24531
+    if expected_payload.size != 2 * count:
+        raise AssertionError(f"Phase-B Full RHS payload has {expected_payload.size} values, expected {2*count}")
+    with profile_bundle.open("rb") as stream:
+        profile_header = struct.unpack("<12i", stream.read(48))
+        stream.seek(48 + 64)
+        input_state = np.frombuffer(stream.read(count * 4), dtype="<f4")
+    if profile_header[0] != 1 or input_state.size != count:
+        raise AssertionError("source profile bundle header/state is malformed")
+    captured_state, expected_rhs = expected_payload[:count], expected_payload[count:]
+    if not exact_fp32_bits(captured_state, input_state):
+        raise AssertionError("Phase-B Full snapshot state differs from the gated component-packet input_state")
+    packet_data = phase_b_packet.read_bytes()
+    if len(packet_data) < 48 + 2 * count * 4:
+        raise AssertionError("Phase-B component packet lacks its projected-state block")
+    packet_header = struct.unpack("<12i", packet_data[:48])
+    if packet_header[0] != 2 or packet_header[7] != count:
+        raise AssertionError(f"unexpected Phase-B component packet header: {packet_header}")
+    expected_projected = np.frombuffer(packet_data, dtype="<f4", count=count,
+                                       offset=48 + count * 4)
+    actual_projected = np.asarray(projected_state, dtype=np.float32).reshape(-1)
+    if actual_projected.size != count or not exact_fp32_bits(actual_projected, expected_projected):
+        max_abs = float(np.max(np.abs(actual_projected.astype(np.float64) -
+                                      expected_projected.astype(np.float64)))) if actual_projected.size == count else float("inf")
+        raise AssertionError(f"native projectStateBoundaries result differs from same-call Phase-B projected_state: max_abs={max_abs:.9g}")
+    actual = np.asarray(cpp_rhs, dtype=np.float32).reshape(-1)
+    if actual.size != count:
+        raise AssertionError(f"native ingestion RHS has {actual.size} values, expected {count}")
+    sizes = (4896, 4896, 4913, 4913, 4624, 289)
+    shapes = ((17, 16, 18), (18, 16, 17), (17, 17, 17),
+              (17, 17, 17), (17, 16, 17), (17, 17))
+    names = ("U", "V", "W", "PH", "THM", "MU")
+    owner_slices = ((slice(0,16),slice(None),slice(0,16)),
+                    (slice(1,16),slice(None),slice(0,16)),
+                    (slice(0,16),slice(1,17),slice(0,16)),
+                    (slice(0,16),slice(1,17),slice(0,16)),
+                    (slice(0,16),slice(None),slice(0,16)),
+                    (slice(0,16),slice(0,16)))
+    report = {}
+    off = 0
+    for name, size, shape, owner in zip(names, sizes, shapes, owner_slices):
+        ref_block = expected_rhs[off:off + size]
+        act_block = actual[off:off + size]
+        if ref_block.size != size:
+            raise AssertionError(f"Phase-B Full RHS is missing {name} storage values")
+        ref_owner = ref_block.reshape(shape)[owner]
+        act_owner = act_block.reshape(shape)[owner]
+        if not np.isfinite(ref_owner).all() or not np.isfinite(act_owner).all():
+            raise AssertionError(f"source ingestion Full RHS {name} owner contains NaN or Inf")
+        exact = exact_fp32_bits(ref_owner, act_owner)
+        delta = act_owner.astype(np.float64) - ref_owner.astype(np.float64)
+        max_abs = float(np.max(np.abs(delta)))
+        report[name] = {"owner_count": int(ref_owner.size), "exact_float32": exact,
+                        "max_abs": max_abs,
+                        "rms": float(np.sqrt(np.mean(delta * delta))),
+                        "mismatch_count": int(np.count_nonzero(
+                            np.ascontiguousarray(ref_owner, dtype=np.float32).view(np.uint32) !=
+                            np.ascontiguousarray(act_owner, dtype=np.float32).view(np.uint32))),
+                        "snapshot_storage_values_missing": 0}
+        off += size
+    all_exact = all(field["exact_float32"] for field in report.values())
+    return {"status": "exact_six_field_owner_parity" if all_exact else "rhs_owner_mismatch",
+            "exact_six_field_owner_parity": all_exact, "snapshot_header": list(header),
+            "snapshot_sha256": sha256_file(full_snapshot),
+            "component_packet_sha256": sha256_file(phase_b_packet),
+            "projected_state_exact": True,
+            "fields": report,
+            "owner_policy": "U unique periodic faces i=0..15; V interior symmetric-Y faces j=1..15; W/PH dynamic k=1..16; THM/MU physical mass owners"}
 
 
 def sha256_file(path: Path) -> str:
@@ -39,6 +368,38 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def select_runtime_cf_coefficients(rsl_text: str, phase_b_packet: Path) -> tuple[list[float], str, int]:
+    """Use runtime-forwarded CFs; allow defaults only for the pinned old packet."""
+    transport_lines = [line for line in rsl_text.splitlines()
+                       if "[NATIVE TRANSPORT CONFIG]" in line]
+    pattern = re.compile(r"\[NATIVE TRANSPORT CONFIG\][^\r\n]*?\bcf1=([-+0-9.eEdD]+)\s+"
+                         r"cf2=([-+0-9.eEdD]+)\s+cf3=([-+0-9.eEdD]+)")
+    if transport_lines:
+        rows = []
+        for line in transport_lines:
+            match = pattern.search(line)
+            if not match:
+                raise AssertionError("NATIVE TRANSPORT CONFIG line lacks cf1/cf2/cf3")
+            values = [float(value.replace("D", "E").replace("d", "e"))
+                      for value in match.groups()]
+            if not np.isfinite(values).all():
+                raise AssertionError("runtime NATIVE TRANSPORT CONFIG has nonfinite CF coefficients")
+            rows.append(values)
+        if any(row != rows[0] for row in rows[1:]):
+            raise AssertionError("runtime NATIVE TRANSPORT CONFIG CF tuples differ across emitted tiles")
+        return rows[0], "captured_rsl_native_transport_config", len(rows)
+    if sha256_file(phase_b_packet) == LEGACY_PHASE_B_PACKET_SHA256:
+        return [0.5, 0.0, 0.0], "legacy_phaseB_packet_constructor_defaults_no_cf_record", 0
+    raise AssertionError("runtime log has no NATIVE TRANSPORT CONFIG CF record; defaults are allowed only for the pinned legacy Phase-B packet")
+
+
+def exact_fp32_bits(a: np.ndarray, b: np.ndarray) -> bool:
+    """Compare IEEE-754 FP32 bit patterns, including signed zero."""
+    x = np.ascontiguousarray(a, dtype=np.float32)
+    y = np.ascontiguousarray(b, dtype=np.float32)
+    return x.shape == y.shape and np.array_equal(x.view(np.uint32), y.view(np.uint32))
 
 
 def read_payload(path: Path) -> tuple[dict[str, float], dict[str, np.ndarray], dict[str, float], dict[str, str]]:
@@ -51,7 +412,12 @@ def read_payload(path: Path) -> tuple[dict[str, float], dict[str, np.ndarray], d
             if not row:
                 continue
             if row[0] == "M":
-                meta[row[1]] = float(row[2])
+                # Exact legacy compatibility for already captured C++ rows
+                # written as M before source_profile_mode became a text row.
+                if row[1] == "source_profile_mode" and row[2] in ("retained_replay", "branch_fd"):
+                    text_meta[row[1]] = row[2]
+                else:
+                    meta[row[1]] = float(row[2])
             elif row[0] == "A":
                 count = int(row[2])
                 value = np.asarray([float(x) for x in row[3:]], dtype=np.float64)
@@ -63,6 +429,63 @@ def read_payload(path: Path) -> tuple[dict[str, float], dict[str, np.ndarray], d
             elif row[0] == "T":
                 text_meta[row[1]] = row[2]
     return meta, arrays, scalars, text_meta
+
+
+def parse_converged_stage_rho(path: Path, repetitions: int) -> dict:
+    """Read converged implicit-stage rho, falling back to Newton's unconditional marker."""
+    newton_pattern = re.compile(r"\[Newton\] CONVERGED stage=(\d+)\s+iters=(\d+)\s+"
+                                r"\|\|S⁻¹R\|\|_rms=([^\s]+)")
+    summary_matches = []
+    newton_matches = []
+    if path.is_file():
+        for line_number, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+            if "SDIRK3_STAGE_HISTORY_SUMMARY" in line and \
+                    "convergence_applicable=1" in line and "converged=1" in line:
+                stage = re.search(r"target_stage=(\d+)", line)
+                residual = re.search(r"scaled_final_residual=([^\s]+)", line)
+                if not stage or not residual:
+                    continue
+                try:
+                    value = float(residual.group(1))
+                except ValueError:
+                    continue
+                if math.isfinite(value):
+                    summary_matches.append({"line": line_number, "stage": int(stage.group(1)),
+                                            "scaled_final_residual": value,
+                                            "marker": "stage_history_summary"})
+            newton = newton_pattern.search(line)
+            if newton:
+                try:
+                    value = float(newton.group(3))
+                except ValueError:
+                    continue
+                if math.isfinite(value):
+                    newton_matches.append({"line": line_number, "stage": int(newton.group(1)),
+                                           "iterations": int(newton.group(2)),
+                                           "scaled_final_residual": value,
+                                           "marker": "newton_converged"})
+    matches = summary_matches if summary_matches else newton_matches
+    source = "stage_history_summary" if summary_matches else (
+        "newton_converged_marker" if newton_matches else "unavailable")
+    expected_ids = [2, 3, 4] * repetitions
+    sequence_valid = [x["stage"] for x in matches] == expected_ids
+    partitions = None
+    if sequence_valid:
+        if repetitions == 5:
+            partitions = {"retained_baseline": matches[0:6],
+                          "full_replay": matches[6:12],
+                          "step1_snapshot_replay": matches[12:15]}
+        elif repetitions == 2:
+            partitions = {"two_step_branch": matches[0:6]}
+        else:
+            partitions = {"sequence": matches}
+    return {"source_log": str(path), "source": source,
+            "converged_applicable_stage_count": len(matches),
+            "expected_stage_ids": expected_ids,
+            "observed_stage_ids": [x["stage"] for x in matches],
+            "sequence_status": "validated" if sequence_valid else "unknown",
+            "run_partitions": partitions, "stages": matches,
+            "scope": "nonlinear convergence diagnostic only; not a state or gradient error bound"}
 
 
 def source_column(nz: int, nx: int, phb_faces: np.ndarray) -> dict:
@@ -547,10 +970,292 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--exe", type=Path, required=True, help="built test_native_wave_refinement executable")
     parser.add_argument("--output", type=Path, help="optional compact JSON evidence output")
+    parser.add_argument("--source60-netcdf", type=Path,
+                        help="opt in to the pinned corrected source60 WRF input")
+    parser.add_argument("--phase-b-snapshot", type=Path,
+                        help="PR302 Phase-B Full component packet whose input_state seeds the profile")
+    parser.add_argument("--source60-gate", type=Path,
+                        help="existing source60 six-field call-state gate receipt")
+    parser.add_argument("--ft-pgf-reader", type=Path,
+                        help="authoritative parser for the same-call Fortran P/AL PGF capture")
+    parser.add_argument("--ft-pgf-snapshot", type=Path,
+                        help="same-call Fortran PGF snapshot; use this when the legacy sibling path is absent")
+    parser.add_argument("--diagnostic-2step", action="store_true",
+                        help="run a separately labeled source-profile diagnostic map after a failed exact RHS gate")
     args = parser.parse_args()
     exe = args.exe.resolve()
     if not exe.is_file():
         raise SystemExit(f"native wave executable not found: {exe}")
+    actual_args = (args.source60_netcdf, args.phase_b_snapshot, args.source60_gate,
+                   args.ft_pgf_reader)
+    if any(actual_args) or args.ft_pgf_snapshot:
+        if not all(actual_args):
+            raise SystemExit("--source60-netcdf, --phase-b-snapshot, --source60-gate, and --ft-pgf-reader must be supplied together")
+        output_path = (args.output or Path("native-source-profile-result.json")).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        bundle = output_path.with_suffix(".bundle.bin")
+        receipt = write_actual_source_profile(args.source60_netcdf.resolve(),
+                                              args.phase_b_snapshot.resolve(),
+                                              args.source60_gate.resolve(),
+                                              args.ft_pgf_reader.resolve(), bundle,
+                                              args.ft_pgf_snapshot.resolve() if args.ft_pgf_snapshot else None)
+        full_snapshot = args.phase_b_snapshot.resolve().parent / "port_full_rhs_snapshot.bin"
+        run_dir = output_path.with_suffix(".native")
+        run_dir.mkdir(parents=True, exist_ok=True)
+        ingest_csv = run_dir / "ingestion.csv"
+        command = [str(exe), "17", "17", "16", str(ingest_csv),
+                   "--source-profile", str(bundle), "0", "15"]
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        RUN_LOG.append(f"COMMAND: {' '.join(command)}\n{completed.stdout}{completed.stderr}\n")
+        (run_dir / "ingestion.log").write_text(completed.stdout + completed.stderr)
+        if completed.returncode:
+            raise RuntimeError(f"native actual-source profile ingestion failed ({completed.returncode}); see {run_dir}")
+        meta, arrays, scalars, text_meta = read_payload(ingest_csv)
+        if text_meta.get("source_profile_status") != "ingested" or meta.get("source_profile_steps") != 0:
+            raise AssertionError(f"native source-profile ingestion did not stop before stepping; raw output: {ingest_csv}")
+        try:
+            rhs_gate = compare_source_rhs_to_phase_b(
+                arrays["rhs_base"], arrays["source_profile_projected_input_state"],
+                bundle, args.phase_b_snapshot.resolve(), full_snapshot)
+        except Exception as error:
+            failed = {**receipt, "status": "source_ingestion_structural_gate_failed",
+                      "ingestion_csv": str(ingest_csv), "phase_b_full_snapshot": str(full_snapshot),
+                      "failure": str(error), "source_profile_steps_run": 0,
+                      "exact_gate_relaxed": False}
+            output_path.write_text(json.dumps(failed, indent=2, sort_keys=True) + "\n")
+            output_path.with_suffix(".log").write_text("\n".join(RUN_LOG))
+            raise AssertionError(f"source ingestion structural gate failed; diagnostic mode cannot bypass it; raw files preserved under {run_dir}: {error}") from error
+        gate_error = None if rhs_gate["exact_six_field_owner_parity"] else rhs_gate["status"]
+        if gate_error:
+            failed = {**receipt, "status": "source_ingestion_gate_failed",
+                      "ingestion_csv": str(ingest_csv), "phase_b_full_snapshot": str(full_snapshot),
+                      "failure": gate_error, "source_profile_steps_run": 0,
+                      "baseline_rhs_gate": rhs_gate, "exact_gate_relaxed": False}
+            output_path.write_text(json.dumps(failed, indent=2, sort_keys=True) + "\n")
+            output_path.with_suffix(".log").write_text("\n".join(RUN_LOG))
+            if not args.diagnostic_2step:
+                raise AssertionError(f"source ingestion exact RHS parity failed before temporal stepping; raw CSV/log preserved under {run_dir}")
+            fields = rhs_gate["fields"]
+            if any(not fields[name]["exact_float32"] for name in ("W", "PH", "THM", "MU")) or \
+                    any(not math.isfinite(fields[name][metric]) for name in ("U", "V")
+                        for metric in ("max_abs", "rms")):
+                raise AssertionError("diagnostic 2-step mode permits only finite U/V exact-bit mismatches; W/PH/THM/MU must remain exact")
+        if gate_error and not args.diagnostic_2step:
+            raise AssertionError("diagnostic mode is required to continue after a failed exact RHS gate")
+        csv_path = run_dir / "two_step.csv"
+        command = [str(exe), "17", "17", "16", str(csv_path),
+                   "--source-profile", str(bundle), "2", "15"]
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        RUN_LOG.append(f"COMMAND: {' '.join(command)}\n{completed.stdout}{completed.stderr}\n")
+        (run_dir / "two_step.log").write_text(completed.stdout + completed.stderr)
+        if completed.returncode:
+            raise RuntimeError(f"native actual-source two-step probe failed ({completed.returncode}); see {run_dir}")
+        meta, arrays, scalars, text_meta = read_payload(csv_path)
+        if text_meta.get("source_profile_status") != "accepted_with_retained_and_replay_vjp" or \
+                meta.get("source_profile_probe") != 1 or meta.get("source_profile_steps") != 2:
+            raise AssertionError("native source-profile output did not certify two accepted ARK steps and replay")
+
+        # One mixed, vertically varying PH+THM direction. The scales are
+        # physical amplitudes; the direction is normalized once before FD runs.
+        state = arrays["source_profile_projected_input_state"].copy()
+        state_count = state.size
+        off_w = 9792
+        off_ph, off_thm = off_w + 4913, off_w + 4913 + 4913
+        if state_count != 24531 or off_thm + 4624 + 289 != state_count:
+            raise AssertionError("source-profile packed field offsets changed")
+        direction = np.zeros(state_count, dtype=np.float64)
+        ph = np.zeros((17, 17, 17), dtype=np.float64)
+        thm = np.zeros((17, 16, 17), dtype=np.float64)
+        zph = np.linspace(0.0, 1.0, 17, dtype=np.float64)
+        zth = np.linspace(0.0, 1.0, 16, dtype=np.float64)
+        ph_profile = np.sin(np.pi * zph[1:])
+        thm_profile = np.cos(np.pi * zth)
+        ph_profile /= np.linalg.norm(ph_profile)
+        thm_profile /= np.linalg.norm(thm_profile)
+        ph[:16, 1:, :16] = (100.0 / np.sqrt(2.0) * ph_profile[None, :, None])
+        thm[:16, :, :16] = (1.0 / np.sqrt(2.0) * thm_profile[None, :, None])
+        direction[off_ph:off_ph + ph.size] = ph.reshape(-1)
+        direction[off_thm:off_thm + thm.size] = thm.reshape(-1)
+        profile_norms = {"PH_dimensionless_profile_l2": float(np.linalg.norm(ph_profile)),
+                         "THM_dimensionless_profile_l2": float(np.linalg.norm(thm_profile))}
+        terminal_ph = arrays["source_profile_terminal_cotangent_ph"]
+        terminal_thm = arrays["source_profile_terminal_cotangent_thm"]
+        grad_ph = arrays["source_profile_vjp_ph"]
+        grad_thm = arrays["source_profile_vjp_thm"]
+        endpoint_base = arrays["source_profile_endpoint_2"]
+        vjp_pairings = {"PH": float(np.dot(grad_ph, direction)),
+                        "THM": float(np.dot(grad_thm, direction))}
+        fp_epsilon = np.finfo(np.float64).eps
+        epsilons = (0.02, 0.01, 0.005)
+        fd_records = {"PH": [], "THM": []}
+        taylor_records = {"PH": [], "THM": []}
+        fd_assessment = {}
+        branch_runs = []
+        baseline_omega = [arrays[f"source_profile_stage_omega_{i}"] for i in range(1, 9)]
+        baseline_rho = parse_converged_stage_rho(run_dir / "two_step.log", repetitions=5)
+        for eps in epsilons:
+            endpoints = []
+            omegas = []
+            for sign in (-1.0, 1.0):
+                override = state + sign * eps * direction
+                override_path = run_dir / f"initial_{'minus' if sign < 0 else 'plus'}_{eps:g}.txt"
+                with override_path.open("w") as stream:
+                    stream.write(f"{override.size}\n")
+                    np.savetxt(stream, override, fmt="%.17g")
+                branch_csv = run_dir / f"branch_{'minus' if sign < 0 else 'plus'}_{eps:g}.csv"
+                branch_cmd = [str(exe), "17", "17", "16", str(branch_csv),
+                              "--source-profile", str(bundle), "1", "15", str(override_path)]
+                branch = subprocess.run(branch_cmd, check=False, capture_output=True, text=True)
+                RUN_LOG.append(f"COMMAND: {' '.join(branch_cmd)}\n{branch.stdout}{branch.stderr}\n")
+                (run_dir / f"branch_{'minus' if sign < 0 else 'plus'}_{eps:g}.log").write_text(
+                    branch.stdout + branch.stderr)
+                if branch.returncode:
+                    raise RuntimeError(f"source-profile branch run failed at eps={eps:g}, sign={sign:g}; see {run_dir}")
+                _, branch_arrays, _, branch_text = read_payload(branch_csv)
+                if branch_text.get("source_profile_status") != "accepted_branch_fd_endpoint":
+                    raise AssertionError("source-profile branch output has an unexpected status")
+                endpoints.append(branch_arrays["source_profile_endpoint_2"])
+                omegas.append([branch_arrays[f"source_profile_stage_omega_{i}"] for i in range(1, 9)])
+                branch_runs.append({"epsilon": eps, "sign": int(sign), "csv": str(branch_csv),
+                                    "converged_stage_rho": parse_converged_stage_rho(
+                                        run_dir / f"branch_{'minus' if sign < 0 else 'plus'}_{eps:g}.log",
+                                        repetitions=2)})
+            safe = True
+            flips = 0
+            zero_count = 0
+            min_margin = float("inf")
+            for stage in range(8):
+                ref, neg, pos = baseline_omega[stage], omegas[0][stage], omegas[1][stage]
+                if ref.size != neg.size or ref.size != pos.size:
+                    raise AssertionError("source-profile omega stage shapes differ")
+                # The helper emits its established WRF vertical face domain;
+                # restrict branch signs to active hard-upwind faces k=2..14.
+                ref3, neg3, pos3 = (x.reshape(17, 17, 17) for x in (ref, neg, pos))
+                active = ref3[:16, 2:15, :16]
+                neg_active = neg3[:16, 2:15, :16]
+                pos_active = pos3[:16, 2:15, :16]
+                flips += int(np.count_nonzero((active > 0) != (neg_active > 0)))
+                flips += int(np.count_nonzero((active > 0) != (pos_active > 0)))
+                zero_count += int(np.count_nonzero(active == 0) +
+                                   np.count_nonzero(neg_active == 0) +
+                                   np.count_nonzero(pos_active == 0))
+                min_margin = min(min_margin, float(np.min(np.abs(active))))
+            safe = flips == 0 and zero_count == 0
+            for run in branch_runs[-2:]:
+                run.update({"branch_safe": safe, "omega_sign_flips_for_epsilon": flips,
+                            "active_omega_zeros_across_triplet": zero_count,
+                            "minimum_active_omega_margin": min_margin})
+            for field, cot in (("PH", terminal_ph), ("THM", terminal_thm)):
+                objective_minus = float(np.dot(cot, endpoints[0]))
+                objective_plus = float(np.dot(cot, endpoints[1]))
+                fd = float((objective_plus - objective_minus) / (2.0 * eps))
+                fd_floor = float(64.0 * fp_epsilon *
+                            float(np.sum(np.abs(cot) *
+                                (np.abs(endpoints[1]) + np.abs(endpoints[0])))) / (2.0 * eps))
+                fd_records[field].append({"epsilon": eps, "central_fd": fd,
+                                          "vjp_directional_pairing": vjp_pairings[field],
+                                          "relative_error": abs(fd - vjp_pairings[field]) /
+                                              max(abs(fd), abs(vjp_pairings[field]), 1.0e-300),
+                                          "fd_roundoff_floor": fd_floor,
+                                          "signal_above_floor": bool(abs(fd) > fd_floor and
+                                                                     abs(vjp_pairings[field]) > fd_floor)})
+                fd_records[field][-1]["branch_safe"] = safe
+                fd_records[field][-1]["active_omega_zeros_across_triplet"] = zero_count
+                fd_records[field][-1]["minimum_active_omega_margin"] = min_margin
+                r_plus_dot = float(np.dot(cot, endpoints[1] - endpoint_base))
+                r_minus_dot = float(np.dot(cot, endpoints[0] - endpoint_base))
+                linear = eps * vjp_pairings[field]
+                remainder_plus = r_plus_dot - linear
+                remainder_minus = r_minus_dot + linear
+                floor_plus = float(64.0 * fp_epsilon *
+                    (float(np.sum(np.abs(cot) * (np.abs(endpoints[1]) + np.abs(endpoint_base)))) +
+                     abs(linear)))
+                floor_minus = float(64.0 * fp_epsilon *
+                    (float(np.sum(np.abs(cot) * (np.abs(endpoints[0]) + np.abs(endpoint_base)))) +
+                     abs(linear)))
+                taylor_records[field].append({"epsilon": eps,
+                    "R_plus": remainder_plus, "R_minus": remainder_minus,
+                    "roundoff_floor_plus": floor_plus, "roundoff_floor_minus": floor_minus,
+                    "above_roundoff_floor": bool(abs(remainder_plus) > floor_plus and
+                                                  abs(remainder_minus) > floor_minus),
+                    "branch_safe": safe})
+        for field in ("PH", "THM"):
+            rows = fd_records[field]
+            ratios = []
+            taylor = taylor_records[field]
+            for i, (a, b) in enumerate(zip(taylor, taylor[1:])):
+                for side in ("plus", "minus"):
+                    ra, rb = abs(a[f"R_{side}"]), abs(b[f"R_{side}"])
+                    floor_ok = a["above_roundoff_floor"] and b["above_roundoff_floor"]
+                    ratio = ra / rb if rb > 0.0 else None
+                    ratios.append({"epsilon_pair": [a["epsilon"], b["epsilon"]],
+                                   "side": side, "ratio": ratio,
+                                   "above_roundoff_floor": floor_ok,
+                                   "accepted": bool(floor_ok and ratio is not None and 3.5 <= ratio <= 4.5)})
+            fd_pass = all(row["branch_safe"] and row["signal_above_floor"] and
+                          row["relative_error"] < 5.0e-4 for row in rows)
+            taylor_pass = len(ratios) == 4 and all(x["accepted"] for x in ratios)
+            for row in rows:
+                row["accepted_for_derivative"] = fd_pass
+            for idx, item in enumerate(taylor):
+                item["adjacent_ratios"] = [r for r in ratios
+                    if r["epsilon_pair"][0] == item["epsilon"]]
+            fd_assessment[field] = {
+                "status": "accepted" if fd_pass and taylor_pass else "inconclusive",
+                "fd_central_difference_pass": fd_pass,
+                "taylor_remainder_pass": taylor_pass,
+                "adjacent_taylor_remainder_ratios": ratios,
+                "criteria": {"relative_error_lt": 5.0e-4,
+                             "signal_above_roundoff_floor": True,
+                             "roundoff_floor": "64*eps64 times absolute cotangent-weighted endpoint magnitudes; conservative numerical screen, not a formal state/gradient error bound",
+                             "adjacent_error_ratio": [3.5, 4.5],
+                             "adjacent_error_ratio_definition": "|R(epsilon)|/|R(epsilon/2)| for R_plus=dot(lambda,y_plus-y0)-epsilon*AD and R_minus=dot(lambda,y_minus-y0)+epsilon*AD",
+                             "requires_branch_safe": True}}
+
+        receipt.update({"status": "diagnostic_source_profile_map_complete" if gate_error else "native_source_profile_map_complete",
+                        "baseline_rhs_gate": rhs_gate,
+                        "baseline_rhs_gate_failure": gate_error,
+                        "exact_gate_relaxed": False,
+                        "temporal_result_scope": "diagnostic_map_only" if gate_error else "source_profile_map",
+                        "phase_b_full_snapshot": str(full_snapshot),
+                        "native_output_meta": meta,
+                        "native_text_meta": text_meta,
+                        "mixed_direction": {"component_normalization": "each dimensionless vertical profile has per-column L2 norm 1, repeated over physical XY owners, then weighted 1/sqrt(2)",
+                                             "profile_norms": profile_norms,
+                                             "ph_scale_m2_s2": 100.0,
+                                             "thm_scale_k": 1.0, "epsilon_candidates": epsilons},
+                        "vjp_directional_pairings": vjp_pairings,
+                        "finite_difference": fd_records,
+                        "taylor_remainders": taylor_records,
+                        "finite_difference_assessment": fd_assessment,
+                        "newton_convergence_diagnostics": {
+                            "baseline": baseline_rho,
+                            "finite_difference_branches": [r["converged_stage_rho"] for r in branch_runs],
+                            "configured_newton_tolerance": meta.get("newton_tol_config"),
+                            "configured_krylov_tolerance": meta.get("krylov_tol_config"),
+                            "scope": "ρ reports converged-stage nonlinear residual only; it is not a state/gradient error bound"},
+                        "derivative_semantics": {
+                            "jvp": "central finite difference of the two-step endpoint vector along the pinned mixed PH+THM direction",
+                            "vjp": "retained and full-replay pullbacks for separate PH-only and THM-only terminal cotangents",
+                            "omega": "authoritative compute_wrf_ww_cp evaluated from each of the eight accepted ARK stage states",
+                            "map_claim": "source-profile diagnostic map; no claim of exact six-field source Full-RHS parity when that gate failed"},
+                        "omega_branch_checks": branch_runs,
+                        "replay_endpoint_and_vjp_exact": meta.get("source_profile_replay_exact") == 1.0,
+                        "branch_runs": branch_runs,
+                        "arrays": {k: {"count": int(v.size), "finite": bool(np.isfinite(v).all()),
+                                       "max_abs": float(np.max(np.abs(v))) if v.size else 0.0}
+                                   for k, v in arrays.items()},
+                        "native_run_log": str(output_path.with_suffix(".log")),
+                        "native_raw_dir": str(run_dir),
+                        "executable": str(exe), "executable_sha256": sha256_file(exe),
+                        "cpp_sha256": sha256_file(ROOT / "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp"),
+                        "python_sha256": sha256_file(Path(__file__).resolve())})
+        output_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+        output_path.with_suffix(".log").write_text("\n".join(RUN_LOG))
+        print(json.dumps({"status": receipt["status"], "output": str(output_path),
+                          "bundle_sha256": receipt["bundle_sha256"],
+                          "source_profile_steps": meta["source_profile_steps"]}, sort_keys=True))
+        return
     coarse = run_grid(exe, 8, 6, 4)
     fine = run_grid(exe, 16, 12, 8)
     damping_probe = {component: run_damping_probe(exe,component) for component in ("U","V")}

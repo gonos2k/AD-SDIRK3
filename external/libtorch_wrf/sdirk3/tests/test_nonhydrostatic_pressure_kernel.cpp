@@ -306,10 +306,39 @@ bool run_ad_fd() {
     return ok;
 }
 
+bool run_actual_cf_constant_closure() {
+    auto f = fixture(false);
+    constexpr double pressure = 1234.5;
+    f.p = torch::full_like(f.p, pressure);
+    constexpr float cf1_f = 2.0955763f, cf2_f = -1.7350880f, cf3_f = 0.6395117f;
+    const auto run = [&](double cf1, double cf2, double cf3) {
+        return native_nonhydrostatic_pressure_core(
+            f.p, f.php, f.msfux, f.msfuy, f.msfvx, f.msfvy, f.mu_pert,
+            f.c1h, f.rdnw, 0.013, 0.021, cf1, cf2, cf3, f.fnm, f.fnp,
+            false, 0.0, 0.0);
+    };
+    const auto actual = run(cf1_f, cf2_f, cf3_f);
+    const auto expected_u = torch::full_like(actual.dpn_u.slice(1, 0, f.nz), pressure);
+    const auto expected_v = torch::full_like(actual.dpn_v.slice(1, 0, f.nz), pressure);
+    bool ok = close(actual.dpn_u.slice(1, 0, f.nz), expected_u, 1.0e-4,
+                    "actual CF preserve constant U dpn through dynamic levels") &&
+              close(actual.dpn_v.slice(1, 0, f.nz), expected_v, 1.0e-4,
+                    "actual CF preserve constant V dpn through dynamic levels");
+    const auto legacy = run(0.5, 0.0, 0.0);
+    ok &= close(legacy.dpn_u.select(1, 0), torch::full_like(legacy.dpn_u.select(1, 0),
+                                                            0.5 * pressure), 1.0e-12,
+                "legacy CF bottom control is half constant U pressure");
+    ok &= close(legacy.dpn_v.select(1, 0), torch::full_like(legacy.dpn_v.select(1, 0),
+                                                            0.5 * pressure), 1.0e-12,
+                "legacy CF bottom control is half constant V pressure");
+    std::cout << "actual_cf_constant_closure " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
 }  // namespace
 
 int main() {
-    const bool ok = run_scalar_matrix() && run_ad_fd();
+    const bool ok = run_scalar_matrix() && run_actual_cf_constant_closure() && run_ad_fd();
     std::cout << "nonhydrostatic_pressure_kernel " << (ok ? "PASS" : "FAIL") << "\n";
     return ok ? 0 : 1;
 }

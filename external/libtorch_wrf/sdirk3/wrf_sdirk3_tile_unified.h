@@ -436,6 +436,8 @@ public:
 
     // Set checked native selectors outside a frozen trajectory; WRF sets them at creation.
     void setNativeTransportOptions(int phi_adv_z, int v_sca_adv_order);
+    void setNativeTransportOptions(int phi_adv_z, int v_sca_adv_order,
+                                   float cf1, float cf2, float cf3);
 
     // OPT Pass33+: Explicit non-copyable/non-movable due to std::atomic and std::mutex members
     TileSDIRK3UnifiedSolver(const TileSDIRK3UnifiedSolver&) = delete;
@@ -947,6 +949,8 @@ public:
     void resetInternalFp64Carry() { clearInternalFp64Carry(); }
     // Test-only observation; no production model setting or RHS change.
     // The accepted ARK derivatives, not a later RHS re-evaluation, define the step.
+    // Native option-2 observation is stage-only: producer ThetaFaces remain
+    // undefined because their capture would disable the guarded option-2 operator.
     struct ArkBudgetTrace {
         struct ThetaFaces {
             torch::Tensor adv_x, adv_y, adv_z, diff_x, diff_y;
