@@ -117,6 +117,7 @@
    REAL :: hx,hy,pi
 
    REAL :: w_max, w_min
+   INTEGER :: w_input_k_end
    LOGICAL :: w_needs_to_be_set
 !  
 ! Define variables local (topo_wind local vars)
@@ -1494,20 +1495,22 @@ endif
 
    IF ( ( start_of_simulation .OR. config_flags%cycling ) .AND. ( .NOT. config_flags%restart ) ) THEN
 
-! If W already exists (not zero), then we leave it alone.  How to do this?  We find the
-! max/min on this node at the surface.  If parallel, we collect the max/min from all procs.
-! If the max/min throughout the entire domain at the surface is identically 0, then we say
-! that the W field is NOT initialized, and we run the set_w_surface routines for the
-! two time levels of W.  If the field is already initialized, we do NOT run those two
-! routines.
+! For the default use_input_w=.false. path, retain the historical surface-only
+! missing-W test.  When W is explicitly requested as input, scan the full column:
+! a valid interior W field can have zero surface values.  If the selected range
+! is effectively zero, fall back to the set_w_surface initialization below.
 
+      w_input_k_end = 1
+      IF ( config_flags%use_input_w ) w_input_k_end = MIN(kte,kde)
       w_max = grid%w_2(its,1,jts)
       w_min = grid%w_2(its,1,jts)
       DO j = jts, MIN(jte,jde-1)
-         DO i = its, MIN(ite,ide-1)
-         w_max = MAX ( w_max , grid%w_2(i,1,j) )
-         w_min = MIN ( w_min , grid%w_2(i,1,j) )
-         END DO
+         DO k = 1, w_input_k_end
+            DO i = its, MIN(ite,ide-1)
+               w_max = MAX ( w_max , grid%w_2(i,k,j) )
+               w_min = MIN ( w_min , grid%w_2(i,k,j) )
+            ENDDO
+         ENDDO
       END DO
 #ifdef DM_PARALLEL
       w_max = wrf_dm_max_real ( w_max )

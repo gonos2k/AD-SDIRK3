@@ -1,0 +1,253 @@
+{
+  "arrays_npz": {
+    "bytes": 172536,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_pressure/preserve_w/preserve_w_full_hv_pgf_residual_arrays.npz",
+    "sha256": "3d0fa5d1b63f0e770f62a3a324bc0fc8f28be015a78ec36a9e6d716fac728290"
+  },
+  "case": "preserve_w",
+  "equations": {
+    "R": "delta_full - delta_hdiff - delta_vdiff",
+    "all_subtractions_elementwise_after_same_state_gates": true,
+    "post_pgf": "R - delta_pgf"
+  },
+  "executable_sha256": "5589c1a02f491bfc4e14c9e0f9bef32dea562e8e99bf59132bf22fa13b557338",
+  "gates": {
+    "Full_state": {
+      "passed": true,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_metric/preserve_w/physical_rhs_arrays.json",
+      "sha256": "1f50aa33a56b7c956fe05bdf274347f5bbba7c28085af1411958d5fbb51dc4cd"
+    },
+    "H_V_frame_pair": {
+      "passed": true,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_transport/preserve_w_hv_physical_components.json",
+      "sha256": "3d05ea140056098e46a00cc9a4b7d5e7eab08b4c09e744cddd6737fd9ce86cda"
+    },
+    "PGF_state": {
+      "passed": true,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_pressure/preserve_w/preserve_w_pgf_physical_analysis.json",
+      "sha256": "e85c9d39d19c7acdab004fb5039bb0e81e3041ed4db1575cc54800dabe24e1f1"
+    },
+    "full_delta_matches_hv_producer_exactly": true,
+    "same_call_state": {
+      "passed": true,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_execution/preserve_w/preserve_w_state_gate.json",
+      "sha256": "4121dca94559ca74948b7ef60ba9054343892f516c4e5824ce9bbe999b8ee571"
+    }
+  },
+  "geometry": "owner U faces j=0..15,k=0..15,i=0..15; periodic closing face i=16 excluded",
+  "inputs": {
+    "full_arrays": {
+      "bytes": 160675,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_metric/preserve_w/physical_rhs_arrays.npz",
+      "sha256": "63fd672dc4f874713546f8c9bab609dbe6eadc8bb48e375366f448951764d511"
+    },
+    "full_metadata": {
+      "bytes": 4634,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_metric/preserve_w/physical_rhs_arrays.json",
+      "sha256": "1f50aa33a56b7c956fe05bdf274347f5bbba7c28085af1411958d5fbb51dc4cd"
+    },
+    "hv_arrays": {
+      "bytes": 242955,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_transport/preserve_w_hv_physical_arrays.npz",
+      "sha256": "8a738ad324e068b78a48b12ef293892ae640cc43e9baf48a8686a3f8a5040d0f"
+    },
+    "hv_metadata": {
+      "bytes": 11014,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_transport/preserve_w_hv_physical_components.json",
+      "sha256": "3d05ea140056098e46a00cc9a4b7d5e7eab08b4c09e744cddd6737fd9ce86cda"
+    },
+    "pgf_arrays": {
+      "bytes": 124654,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_pressure/preserve_w/preserve_w_pgf_physical_arrays.npz",
+      "sha256": "f153b1e3b8ddb2ac86b402dc62e1d11101e6ce68c804fdb3e24bac11dda42294"
+    },
+    "pgf_metadata": {
+      "bytes": 4281,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_pressure/preserve_w/preserve_w_pgf_physical_analysis.json",
+      "sha256": "e85c9d39d19c7acdab004fb5039bb0e81e3041ed4db1575cc54800dabe24e1f1"
+    },
+    "run_receipt": {
+      "bytes": 22816,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_execution/preserve_w/preserve_w_runs.json",
+      "sha256": "9e94ac9270421803a3d8819d83ca77b33261a4651206fbfd9780263cd4a4567c"
+    },
+    "source_state_gate": {
+      "bytes": 35827,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_execution/preserve_w/preserve_w_state_gate.json",
+      "sha256": "4121dca94559ca74948b7ef60ba9054343892f516c4e5824ce9bbe999b8ee571"
+    }
+  },
+  "metrics_by_region": {
+    "all_4096_owners": {
+      "R_full_minus_hdiff_minus_vdiff": {
+        "count": 4096,
+        "max": 3.742524927593307e-07,
+        "max_abs": 3.742524927593307e-07,
+        "min": -3.095784796554123e-07,
+        "rms": 8.399407820855302e-08
+      },
+      "R_minus_delta_pgf": {
+        "count": 4096,
+        "max": 1.721206786234653e-08,
+        "max_abs": 3.437810054113908e-08,
+        "min": -3.437810054113908e-08,
+        "rms": 3.069105111049417e-09
+      },
+      "delta_full_cpp_minus_ft": {
+        "count": 4096,
+        "max": 3.7425265555570597e-07,
+        "max_abs": 3.7425265555570597e-07,
+        "min": -3.095788963410693e-07,
+        "rms": 8.399722196386991e-08
+      },
+      "delta_hdiff_cpp_minus_ft": {
+        "count": 4096,
+        "max": 7.413181972454958e-09,
+        "max_abs": 7.413181972454958e-09,
+        "min": -1.0572984409061906e-09,
+        "rms": 6.522008311621489e-10
+      },
+      "delta_pgf_cpp_minus_ft": {
+        "count": 4096,
+        "max": 3.7426161190396853e-07,
+        "max_abs": 3.7426161190396853e-07,
+        "min": -3.095563796594539e-07,
+        "rms": 8.393147979614885e-08
+      },
+      "delta_vdiff_cpp_minus_ft": {
+        "count": 4096,
+        "max": 1.5887399019147875e-11,
+        "max_abs": 1.5887399019147875e-11,
+        "min": -1.3428059127140474e-11,
+        "rms": 1.5366731881494838e-12
+      },
+      "pgf_projection": {
+        "cosine": 0.999332210982186,
+        "deltaPGF_energy_share_of_R_pct": 99.85100119597695,
+        "signed_projection_share_of_R_pct": 99.85874369313711,
+        "squared_residual_reduction_pct": 99.8664861902973
+      }
+    },
+    "interior_x1_to15": {
+      "R_full_minus_hdiff_minus_vdiff": {
+        "count": 3840,
+        "max": 3.742524927593307e-07,
+        "max_abs": 3.742524927593307e-07,
+        "min": -3.095784796554123e-07,
+        "rms": 8.421281042026463e-08
+      },
+      "R_minus_delta_pgf": {
+        "count": 3840,
+        "max": 1.721206786234653e-08,
+        "max_abs": 3.437810054113908e-08,
+        "min": -3.437810054113908e-08,
+        "rms": 3.079968974571605e-09
+      },
+      "delta_full_cpp_minus_ft": {
+        "count": 3840,
+        "max": 3.7425265555570597e-07,
+        "max_abs": 3.7425265555570597e-07,
+        "min": -3.095788963410693e-07,
+        "rms": 8.421713882480076e-08
+      },
+      "delta_hdiff_cpp_minus_ft": {
+        "count": 3840,
+        "max": 7.413181972454958e-09,
+        "max_abs": 7.413181972454958e-09,
+        "min": -1.0572984409061906e-09,
+        "rms": 6.519556369883862e-10
+      },
+      "delta_pgf_cpp_minus_ft": {
+        "count": 3840,
+        "max": 3.7426161190396853e-07,
+        "max_abs": 3.7426161190396853e-07,
+        "min": -3.095563796594539e-07,
+        "rms": 8.415426512489453e-08
+      },
+      "delta_vdiff_cpp_minus_ft": {
+        "count": 3840,
+        "max": 1.5887399019147875e-11,
+        "max_abs": 1.5887399019147875e-11,
+        "min": -1.3428059127140474e-11,
+        "rms": 1.515131327883028e-12
+      },
+      "pgf_projection": {
+        "cosine": 0.999330960980464,
+        "deltaPGF_energy_share_of_R_pct": 99.86100702602764,
+        "signed_projection_share_of_R_pct": 99.86362195748379,
+        "squared_residual_reduction_pct": 99.86623688893992
+      }
+    },
+    "periodic_seam_x0": {
+      "R_full_minus_hdiff_minus_vdiff": {
+        "count": 256,
+        "max": 2.070251376153831e-07,
+        "max_abs": 2.2477598641659916e-07,
+        "min": -2.2477598641659916e-07,
+        "rms": 8.064193203588866e-08
+      },
+      "R_minus_delta_pgf": {
+        "count": 256,
+        "max": 1.37213921846563e-08,
+        "max_abs": 2.286374214234627e-08,
+        "min": -2.286374214234627e-08,
+        "rms": 2.90126966307159e-09
+      },
+      "delta_full_cpp_minus_ft": {
+        "count": 256,
+        "max": 2.0702487193268576e-07,
+        "max_abs": 2.2477608629471815e-07,
+        "min": -2.2477608629471815e-07,
+        "rms": 8.062651973653332e-08
+      },
+      "delta_hdiff_cpp_minus_ft": {
+        "count": 256,
+        "max": 7.247184060973074e-09,
+        "max_abs": 7.247184060973074e-09,
+        "min": -7.473227887862206e-10,
+        "rms": 6.558677440487379e-10
+      },
+      "delta_pgf_cpp_minus_ft": {
+        "count": 256,
+        "max": 2.0701624854735476e-07,
+        "max_abs": 2.2477141710495662e-07,
+        "min": -2.2477141710495662e-07,
+        "rms": 8.051576076567795e-08
+      },
+      "delta_vdiff_cpp_minus_ft": {
+        "count": 256,
+        "max": 1.1436305836048087e-11,
+        "max_abs": 1.1436305836048087e-11,
+        "min": -1.0568556700447355e-11,
+        "rms": 1.8296140805785164e-12
+      },
+      "pgf_projection": {
+        "cosine": 0.9993530328288744,
+        "deltaPGF_energy_share_of_R_pct": 99.68732751286808,
+        "signed_projection_share_of_R_pct": 99.77894586639496,
+        "squared_residual_reduction_pct": 99.87056421992185
+      }
+    }
+  },
+  "native_calls": 2,
+  "owner_count": 4096,
+  "preserve_w_input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+  "schema": "pr300-preserve-w-full-hv-pgf-residual-v1",
+  "scope": "Preserve-W state component accounting only. The exact same-call Fortran/C++ state gates pass; all six call fields match the source-60 frame with use_input_w=true. This does not claim forecast parity or a broader causal diagnosis.",
+  "source60_state_interpretation": {
+    "call_P_note": "Runtime pressure is recomputed at startup and is reported separately from the prognostic input-state gate.",
+    "call_field_reset": [],
+    "call_fields_matching_source60": [
+      "U",
+      "V",
+      "PH",
+      "THM",
+      "MU",
+      "W"
+    ],
+    "same_call_state_gate_passed": true,
+    "status": "all_six_actual_call_fields_exact_to_source60",
+    "use_input_w_true": true
+  },
+  "units": "m/s^2"
+}
