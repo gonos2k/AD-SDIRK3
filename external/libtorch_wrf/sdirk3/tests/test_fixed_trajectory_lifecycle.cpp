@@ -77,6 +77,19 @@ static void reset_invalidates() {
   (void)t.solver.pullbackFixedTrajectory(terminal()); t.solver.closeFixedTrajectory();
   std::cout << "FIXED_TRAJECTORY_RESET_INVALIDATES passed\n";
 }
+static void native_transport_context_mutation_rejects() {
+  TileCase t(100000.0f, 0.0f, true); t.set(x0());
+  t.solver.setNativeTransportOptions(2, 3);
+  t.solver.beginFixedTrajectory(1);
+  t.checkFixedInputs();
+  // The per-solver transport context is immutable once a fixed trajectory is
+  // requested, so a setter call itself must be rejected.
+  expect_rejected([&]{t.solver.setNativeTransportOptions(1, 3);},
+                  "native transport options cannot change after a fixed trajectory is requested");
+  t.checkFixedInputs();
+  t.solver.closeFixedTrajectory();
+  std::cout << "FIXED_TRAJECTORY_NATIVE_TRANSPORT_CONTEXT_REJECT passed\n";
+}
 static void config_mutation_rejects() {
   TileCase t(100000.0f, 0.0f, true); t.set(x0()); t.solver.beginFixedTrajectory(2); t.step(.1f); t.step(.1f);
   wrf::sdirk3::g_sdirk3_config.imex_split_mode=2;
@@ -283,6 +296,7 @@ int main() {
     configure(top_lid); run("deferred_request", deferred_request_lifecycle);
     configure(top_lid); run("reset_invalidates", reset_invalidates);
     configure(top_lid); run("config_mutation", config_mutation_rejects);
+    configure(top_lid); run("native_transport_context", native_transport_context_mutation_rejects);
     configure(top_lid); run("map_mutation_before_final", [&]{map_mutation_rejects(false);});
     configure(top_lid); run("map_mutation_after_final", [&]{map_mutation_rejects(true);});
     configure(top_lid); run("handoff", handoff_rejects);

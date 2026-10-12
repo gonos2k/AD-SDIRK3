@@ -38,6 +38,13 @@ MODULE module_sdirk3_advect_u_diag
    PUBLIC :: advect_u_diag_begin
    PUBLIC :: advect_u_diag_horizontal_done
    PUBLIC :: advect_u_diag_finish
+   PUBLIC :: thm_advect_diag_type, thm_advect_diag_arm, thm_advect_diag_disarm
+   PUBLIC :: thm_advect_diag_begin, thm_advect_diag_horizontal_done, thm_advect_diag_finish
+   PUBLIC :: ph_rhs_diag_type, ph_rhs_diag_arm, ph_rhs_diag_disarm
+   PUBLIC :: ph_rhs_diag_begin, ph_rhs_diag_vertical_done, ph_rhs_diag_top_reset
+   PUBLIC :: ph_rhs_diag_gw_done, ph_rhs_diag_finish
+   PUBLIC :: write_ph_thm_omega_snapshot, write_thm_mix_parts, write_ph_thm_add_parts
+   PUBLIC :: ph_thm_session_arm, ph_thm_session_disarm, ph_thm_session_is_armed
 
    ! Self-contained: no USE, so this module cannot perturb compile order in dyn_em.
    INTEGER, PARAMETER :: dp = KIND(1.0D0)
@@ -70,7 +77,40 @@ MODULE module_sdirk3_advect_u_diag
       REAL, ALLOCATABLE, DIMENSION(:,:,:) :: snap_h, snap_v
    END TYPE advect_u_diag_type
 
+   ! Narrow first-call component observers for the actual THM scalar and PH calls.
+   ! module_em arms these only around the known t/PH call sites under the existing
+   ! WRF_PARITY_RK_TEND_DUMP gate; no routine is re-evaluated.
+   TYPE thm_advect_diag_type
+      LOGICAL :: trace = .FALSE.
+      REAL, ALLOCATABLE, DIMENSION(:,:,:) :: field, rom, before, after_h
+   END TYPE thm_advect_diag_type
+
+   TYPE ph_rhs_diag_type
+      LOGICAL :: trace = .FALSE.
+      REAL, ALLOCATABLE, DIMENSION(:,:,:) :: field, ww, before, after_v, after_reset, after_gw
+   END TYPE ph_rhs_diag_type
+
+   LOGICAL, SAVE :: parity_thm_advect_armed = .FALSE.
+   LOGICAL, SAVE :: parity_ph_rhs_armed = .FALSE.
+!$OMP THREADPRIVATE(parity_thm_advect_armed, parity_ph_rhs_armed)
+   LOGICAL, SAVE :: parity_ph_thm_session = .FALSE.
+
 CONTAINS
+
+! The one-rank/one-tile parity capture spans rk_tendency through rk_addtend_dry,
+! which are separate OpenMP regions. This process-local latch carries only that
+! existing gated first-call context; it is never set when the parity env is off.
+   SUBROUTINE ph_thm_session_arm()
+      parity_ph_thm_session = .TRUE.
+   END SUBROUTINE ph_thm_session_arm
+
+   SUBROUTINE ph_thm_session_disarm()
+      parity_ph_thm_session = .FALSE.
+   END SUBROUTINE ph_thm_session_disarm
+
+   LOGICAL FUNCTION ph_thm_session_is_armed()
+      ph_thm_session_is_armed = parity_ph_thm_session
+   END FUNCTION ph_thm_session_is_armed
 
 !-----------------------------------------------------------------------
 ! Parse the environment once per thread. Fails closed on a malformed value: a probe
@@ -306,5 +346,239 @@ CONTAINS
       DEALLOCATE( diag%snap_v )
       diag%phase = DIAG_IDLE
    END SUBROUTINE advect_u_diag_finish
+
+!-----------------------------------------------------------------------
+! The caller arms these only around rk_tendency's explicit THM scalar call and
+! rhs_ph. THREADPRIVATE keeps the small capture context attached to its OpenMP
+! call thread; default execution adds no allocations or I/O in these routines.
+   SUBROUTINE thm_advect_diag_arm()
+      parity_thm_advect_armed = .TRUE.
+   END SUBROUTINE thm_advect_diag_arm
+
+   SUBROUTINE thm_advect_diag_disarm()
+      parity_thm_advect_armed = .FALSE.
+   END SUBROUTINE thm_advect_diag_disarm
+
+   SUBROUTINE thm_advect_diag_begin( diag, field, tendency, rom )
+      TYPE(thm_advect_diag_type), INTENT(INOUT) :: diag
+      REAL, DIMENSION(:,:,:), INTENT(IN) :: field, rom, tendency
+      diag%trace = parity_thm_advect_armed
+      IF ( .NOT. diag%trace ) RETURN
+      ALLOCATE(diag%field(SIZE(field,1),SIZE(field,2),SIZE(field,3)))
+      ALLOCATE(diag%rom(SIZE(rom,1),SIZE(rom,2),SIZE(rom,3)))
+      ALLOCATE(diag%before(SIZE(tendency,1),SIZE(tendency,2),SIZE(tendency,3)))
+      ALLOCATE(diag%after_h(SIZE(tendency,1),SIZE(tendency,2),SIZE(tendency,3)))
+      diag%field=field
+      diag%rom=rom
+      diag%before=tendency
+      diag%after_h=tendency
+   END SUBROUTINE thm_advect_diag_begin
+
+   SUBROUTINE thm_advect_diag_horizontal_done( diag, tendency )
+      TYPE(thm_advect_diag_type), INTENT(INOUT) :: diag
+      REAL, DIMENSION(:,:,:), INTENT(IN) :: tendency
+      IF ( .NOT. diag%trace ) RETURN
+      diag%after_h = tendency
+   END SUBROUTINE thm_advect_diag_horizontal_done
+
+   SUBROUTINE thm_advect_diag_finish( diag, tendency, &
+                                      ids, ide, jds, jde, kds, kde, &
+                                      ims, ime, jms, jme, kms, kme, &
+                                      rdx, rdy, time_step, horz_order, vert_order, scalar_adv_opt, &
+                                      fzm, fzp, rdzw )
+      TYPE(thm_advect_diag_type), INTENT(INOUT) :: diag
+      INTEGER, INTENT(IN) :: ids, ide, jds, jde, kds, kde
+      INTEGER, INTENT(IN) :: ims, ime, jms, jme, kms, kme
+      INTEGER, INTENT(IN) :: time_step, horz_order, vert_order, scalar_adv_opt
+      REAL, INTENT(IN) :: rdx, rdy
+      REAL, DIMENSION(kms:kme), INTENT(IN) :: fzm, fzp, rdzw
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: tendency
+      INTEGER :: du, ios, iclose
+      REAL(KIND=4) :: fdx, fdy
+
+      IF ( .NOT. diag%trace ) RETURN
+      fdx = rdx
+      fdy = rdy
+      OPEN(NEWUNIT=du, FILE='wrf_thm_advect_parts.bin', FORM='unformatted', &
+           ACCESS='stream', STATUS='replace', CONVERT='little_endian', IOSTAT=ios)
+      IF ( ios /= 0 ) CALL wrf_error_fatal('[THM ADV DIAG] cannot open wrf_thm_advect_parts.bin')
+      WRITE(du,IOSTAT=ios) 1_4, ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,fdx,fdy, &
+                           1_4,1_4,time_step,horz_order,vert_order,scalar_adv_opt
+      IF ( ios == 0 ) WRITE(du,IOSTAT=ios) diag%field,diag%rom,diag%before,diag%after_h,tendency
+      IF ( ios == 0 ) WRITE(du,IOSTAT=ios) fzm,fzp,rdzw
+      CLOSE(du,IOSTAT=iclose)
+      IF ( ios /= 0 .OR. iclose /= 0 ) CALL wrf_error_fatal('[THM ADV DIAG] failed writing wrf_thm_advect_parts.bin')
+      CALL wrf_message('[THM ADV DIAG] wrote wrf_thm_advect_parts.bin')
+      DEALLOCATE(diag%field,diag%rom,diag%before,diag%after_h)
+      diag%trace = .FALSE.
+   END SUBROUTINE thm_advect_diag_finish
+
+!-----------------------------------------------------------------------
+   SUBROUTINE ph_rhs_diag_arm()
+      parity_ph_rhs_armed = .TRUE.
+   END SUBROUTINE ph_rhs_diag_arm
+
+   SUBROUTINE ph_rhs_diag_disarm()
+      parity_ph_rhs_armed = .FALSE.
+   END SUBROUTINE ph_rhs_diag_disarm
+
+   SUBROUTINE ph_rhs_diag_begin( diag, field, ww, tendency )
+      TYPE(ph_rhs_diag_type), INTENT(INOUT) :: diag
+      REAL, DIMENSION(:,:,:), INTENT(IN) :: field, ww, tendency
+      diag%trace = parity_ph_rhs_armed
+      IF ( .NOT. diag%trace ) RETURN
+      ALLOCATE(diag%field(SIZE(field,1),SIZE(field,2),SIZE(field,3)))
+      ALLOCATE(diag%ww(SIZE(ww,1),SIZE(ww,2),SIZE(ww,3)))
+      ALLOCATE(diag%before(SIZE(tendency,1),SIZE(tendency,2),SIZE(tendency,3)))
+      ALLOCATE(diag%after_v(SIZE(tendency,1),SIZE(tendency,2),SIZE(tendency,3)))
+      ALLOCATE(diag%after_reset(SIZE(tendency,1),SIZE(tendency,2),SIZE(tendency,3)))
+      ALLOCATE(diag%after_gw(SIZE(tendency,1),SIZE(tendency,2),SIZE(tendency,3)))
+      diag%field=field
+      diag%ww=ww
+      diag%before=tendency
+      diag%after_v=tendency
+      diag%after_reset=tendency
+      diag%after_gw=tendency
+   END SUBROUTINE ph_rhs_diag_begin
+
+   SUBROUTINE ph_rhs_diag_vertical_done( diag, tendency )
+      TYPE(ph_rhs_diag_type), INTENT(INOUT) :: diag
+      REAL, DIMENSION(:,:,:), INTENT(IN) :: tendency
+      IF ( .NOT. diag%trace ) RETURN
+      diag%after_v = tendency
+      diag%after_reset = tendency
+   END SUBROUTINE ph_rhs_diag_vertical_done
+
+   SUBROUTINE ph_rhs_diag_top_reset( diag, tendency, j, kde, jms, kms )
+      TYPE(ph_rhs_diag_type), INTENT(INOUT) :: diag
+      REAL, DIMENSION(:,:,:), INTENT(IN) :: tendency
+      INTEGER, INTENT(IN) :: j, kde, jms, kms
+      INTEGER :: joff, koff
+      IF ( .NOT. diag%trace ) RETURN
+      ! rhs_ph resets one j-row and then adds GW on that row before advancing j.
+      ! Save only the boundary row here so earlier rows' GW increments are not folded
+      ! into the boundary-reset component.
+      joff = j - jms + 1
+      koff = kde - kms + 1
+      IF (joff < 1 .OR. joff > SIZE(diag%after_reset,3) .OR. &
+          koff < 1 .OR. koff > SIZE(diag%after_reset,2)) &
+         CALL wrf_error_fatal('[PH RHS DIAG] top-reset index is outside captured memory bounds')
+      diag%after_reset(:,koff,joff) = tendency(:,koff,joff)
+   END SUBROUTINE ph_rhs_diag_top_reset
+
+   SUBROUTINE ph_rhs_diag_gw_done( diag, tendency )
+      TYPE(ph_rhs_diag_type), INTENT(INOUT) :: diag
+      REAL, DIMENSION(:,:,:), INTENT(IN) :: tendency
+      IF ( .NOT. diag%trace ) RETURN
+      diag%after_gw = tendency
+   END SUBROUTINE ph_rhs_diag_gw_done
+
+   SUBROUTINE ph_rhs_diag_finish( diag, tendency, &
+                                  ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
+                                  rdx,rdy,advective_order,phi_adv_z,non_hydrostatic,top_lid, &
+                                  fnm,fnp,rdnw )
+      TYPE(ph_rhs_diag_type), INTENT(INOUT) :: diag
+      INTEGER, INTENT(IN) :: ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme
+      INTEGER, INTENT(IN) :: advective_order,phi_adv_z
+      REAL, INTENT(IN) :: rdx,rdy
+      REAL, DIMENSION(kms:kme), INTENT(IN) :: fnm,fnp,rdnw
+      LOGICAL, INTENT(IN) :: non_hydrostatic,top_lid
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: tendency
+      INTEGER :: du,ios,iclose
+      INTEGER(KIND=4) :: nh,tl
+      REAL(KIND=4) :: fdx,fdy
+
+      IF ( .NOT. diag%trace ) RETURN
+      nh=MERGE(1_4,0_4,non_hydrostatic)
+      tl=MERGE(1_4,0_4,top_lid)
+      fdx=rdx
+      fdy=rdy
+      OPEN(NEWUNIT=du, FILE='wrf_ph_rhs_parts.bin', FORM='unformatted', &
+           ACCESS='stream', STATUS='replace', CONVERT='little_endian', IOSTAT=ios)
+      IF ( ios /= 0 ) CALL wrf_error_fatal('[PH RHS DIAG] cannot open wrf_ph_rhs_parts.bin')
+      WRITE(du,IOSTAT=ios) 1_4,ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,fdx,fdy, &
+                           1_4,1_4,advective_order,phi_adv_z,nh,tl
+      IF ( ios == 0 ) WRITE(du,IOSTAT=ios) diag%field,diag%ww,diag%before,diag%after_v, &
+                                           diag%after_reset,diag%after_gw,tendency
+      IF ( ios == 0 ) WRITE(du,IOSTAT=ios) fnm,fnp,rdnw
+      CLOSE(du,IOSTAT=iclose)
+      IF ( ios /= 0 .OR. iclose /= 0 ) CALL wrf_error_fatal('[PH RHS DIAG] failed writing wrf_ph_rhs_parts.bin')
+      CALL wrf_message('[PH RHS DIAG] wrote wrf_ph_rhs_parts.bin')
+      DEALLOCATE(diag%field,diag%ww,diag%before,diag%after_v,diag%after_reset,diag%after_gw)
+      diag%trace=.FALSE.
+   END SUBROUTINE ph_rhs_diag_finish
+
+!-----------------------------------------------------------------------
+! Companion records use the same explicit, little-endian stream contract as the
+! existing Full observer. They contain only operands/results from the one live call.
+   SUBROUTINE write_ph_thm_omega_snapshot( t, wwE, wwI, &
+       ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,rdx,rdy,dt,time_step, &
+       rk_step,ieva,phi_adv_z,h_sca_order,v_sca_order,scalar_adv_opt,nonhydro,top_lid,zadvect_implicit )
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: t,wwE,wwI
+      INTEGER, INTENT(IN) :: ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme
+      INTEGER, INTENT(IN) :: time_step,rk_step,phi_adv_z,h_sca_order,v_sca_order,scalar_adv_opt
+      REAL, INTENT(IN) :: rdx,rdy,dt
+      LOGICAL, INTENT(IN) :: ieva,nonhydro,top_lid
+      INTEGER, INTENT(IN) :: zadvect_implicit
+      INTEGER :: du,ios,iclose
+      INTEGER(KIND=4) :: ieva_i,nh_i,top_i
+      REAL(KIND=4) :: fdx,fdy,fdt
+      ieva_i=MERGE(1_4,0_4,ieva); nh_i=MERGE(1_4,0_4,nonhydro)
+      top_i=MERGE(1_4,0_4,top_lid)
+      fdx=rdx; fdy=rdy; fdt=dt
+      OPEN(NEWUNIT=du,FILE='wrf_ph_thm_omega.bin',FORM='unformatted',ACCESS='stream', &
+           STATUS='replace',CONVERT='little_endian',IOSTAT=ios)
+      IF (ios /= 0) CALL wrf_error_fatal('[PH/THM DIAG] cannot open wrf_ph_thm_omega.bin')
+      WRITE(du,IOSTAT=ios) 1_4,ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,fdx,fdy,fdt, &
+                           1_4,time_step,rk_step,ieva_i,phi_adv_z,h_sca_order,v_sca_order,scalar_adv_opt,nh_i,top_i,zadvect_implicit
+      IF (ios == 0) WRITE(du,IOSTAT=ios) t,wwE,wwI
+      CLOSE(du,IOSTAT=iclose)
+      IF (ios /= 0 .OR. iclose /= 0) CALL wrf_error_fatal('[PH/THM DIAG] failed writing wrf_ph_thm_omega.bin')
+      CALL wrf_message('[PH/THM DIAG] wrote wrf_ph_thm_omega.bin')
+   END SUBROUTINE write_ph_thm_omega_snapshot
+
+   SUBROUTINE write_thm_mix_parts( before_v,after_v,before_h,after_h, &
+       ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,rdx,rdy,itimestep,rk_step, &
+       diff_opt,km_opt,pbl_opt,use_theta_m,mix_full_fields )
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: before_v,after_v,before_h,after_h
+      INTEGER, INTENT(IN) :: ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme
+      INTEGER, INTENT(IN) :: itimestep,rk_step,diff_opt,km_opt,pbl_opt
+      REAL, INTENT(IN) :: rdx,rdy
+      INTEGER, INTENT(IN) :: use_theta_m
+      LOGICAL, INTENT(IN) :: mix_full_fields
+      INTEGER :: du,ios,iclose
+      INTEGER(KIND=4) :: theta_i,mix_i
+      REAL(KIND=4) :: fdx,fdy
+      theta_i=use_theta_m; mix_i=MERGE(1_4,0_4,mix_full_fields)
+      fdx=rdx; fdy=rdy
+      OPEN(NEWUNIT=du,FILE='wrf_thm_mix_parts.bin',FORM='unformatted',ACCESS='stream', &
+           STATUS='replace',CONVERT='little_endian',IOSTAT=ios)
+      IF (ios /= 0) CALL wrf_error_fatal('[THM MIX DIAG] cannot open wrf_thm_mix_parts.bin')
+      WRITE(du,IOSTAT=ios) 1_4,ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,fdx,fdy, &
+                           itimestep,rk_step,diff_opt,km_opt,pbl_opt,theta_i,mix_i
+      IF (ios == 0) WRITE(du,IOSTAT=ios) before_v,after_v,before_h,after_h
+      CLOSE(du,IOSTAT=iclose)
+      IF (ios /= 0 .OR. iclose /= 0) CALL wrf_error_fatal('[THM MIX DIAG] failed writing wrf_thm_mix_parts.bin')
+      CALL wrf_message('[THM MIX DIAG] wrote wrf_thm_mix_parts.bin')
+   END SUBROUTINE write_thm_mix_parts
+
+   SUBROUTINE write_ph_thm_add_parts( ph_before,t_before,ph_after,t_after, &
+       ph_tendf_before,t_tendf_before,ph_save,t_save,h_diabatic, &
+       ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,rk_step )
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: ph_before,t_before,ph_after,t_after
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: ph_tendf_before,t_tendf_before
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: ph_save,t_save,h_diabatic
+      INTEGER, INTENT(IN) :: ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,rk_step
+      INTEGER :: du,ios,iclose
+      OPEN(NEWUNIT=du,FILE='wrf_ph_thm_add_parts.bin',FORM='unformatted',ACCESS='stream', &
+           STATUS='replace',CONVERT='little_endian',IOSTAT=ios)
+      IF (ios /= 0) CALL wrf_error_fatal('[PH/THM ADD DIAG] cannot open wrf_ph_thm_add_parts.bin')
+      WRITE(du,IOSTAT=ios) 1_4,ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,1_4,rk_step
+      IF (ios == 0) WRITE(du,IOSTAT=ios) ph_before,t_before,ph_after,t_after, &
+                                          ph_tendf_before,t_tendf_before,ph_save,t_save,h_diabatic
+      CLOSE(du,IOSTAT=iclose)
+      IF (ios /= 0 .OR. iclose /= 0) CALL wrf_error_fatal('[PH/THM ADD DIAG] failed writing wrf_ph_thm_add_parts.bin')
+      CALL wrf_message('[PH/THM ADD DIAG] wrote wrf_ph_thm_add_parts.bin')
+   END SUBROUTINE write_ph_thm_add_parts
 
 END MODULE module_sdirk3_advect_u_diag

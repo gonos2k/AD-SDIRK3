@@ -419,6 +419,10 @@ private:
     friend struct wrf::sdirk3::test::PrincipalFactoryCase;
     // UnifiedRHS for physics computation (FINAL_DESIGN.md compliant)
     std::unique_ptr<wrf::sdirk3::UnifiedRHS> unified_rhs_;
+    // Native WRF transport selection. Zero means no WRF bridge setter: preserve each
+    // standalone operator's existing path-specific default.
+    int native_phi_adv_z_ = 0;
+    int native_v_sca_adv_order_ = 0;
     
 public:
     TileSDIRK3UnifiedSolver(int nx, int ny, int nz, 
@@ -429,6 +433,9 @@ public:
                            int tile_id);
     
     ~TileSDIRK3UnifiedSolver();
+
+    // Set checked native selectors outside a frozen trajectory; WRF sets them at creation.
+    void setNativeTransportOptions(int phi_adv_z, int v_sca_adv_order);
 
     // OPT Pass33+: Explicit non-copyable/non-movable due to std::atomic and std::mutex members
     TileSDIRK3UnifiedSolver(const TileSDIRK3UnifiedSolver&) = delete;

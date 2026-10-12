@@ -1,0 +1,14 @@
+Internal ctest changing into directory: /Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_thm_flux/green_tests/build
+Test project /Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_thm_flux/green_tests/build
+    Start 1: FNM_FNP_Geometry_Contract
+1/4 Test #1: FNM_FNP_Geometry_Contract ........   Passed    0.38 sec
+    Start 2: Potential_Temperature_Contract
+2/4 Test #2: Potential_Temperature_Contract ...   Passed    0.89 sec
+    Start 3: Fixed_Trajectory_Lifecycle
+3/4 Test #3: Fixed_Trajectory_Lifecycle .......   Passed   34.12 sec
+    Start 4: Base_State_Checked_ABI
+4/4 Test #4: Base_State_Checked_ABI ...........   Passed    1.25 sec
+
+100% tests passed, 0 tests failed out of 4
+
+Total Test time (real) =  36.64 sec

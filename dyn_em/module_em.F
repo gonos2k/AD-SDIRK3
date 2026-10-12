@@ -8,6 +8,10 @@ MODULE module_em
    
    USE module_advect_em, only: advect_u, advect_v, advect_w, advect_scalar, advect_scalar_pd, advect_scalar_mono, &
         advect_weno_u, advect_weno_v, advect_weno_w, advect_scalar_weno,  advect_scalar_wenopd
+
+   USE module_sdirk3_advect_u_diag, ONLY : thm_advect_diag_arm, thm_advect_diag_disarm, &
+       ph_rhs_diag_arm, ph_rhs_diag_disarm, write_ph_thm_omega_snapshot, write_ph_thm_add_parts, &
+       ph_thm_session_arm, ph_thm_session_disarm, ph_thm_session_is_armed
    
    USE module_big_step_utilities_em, only: grid_config_rec_type, calculate_full, couple_momentum, calc_mu_uv, calc_mu_uv_1, &
         calc_ww_cp, calc_cq, calc_alt, calc_php, set_tend, rhs_ph, horizontal_pressure_gradient, pg_buoy_w, w_damp, &
@@ -346,6 +350,8 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
    REAL , DIMENSION( ims:ime , jms:jme )         :: muu_old, muu_new                                                              
    REAL , DIMENSION( ims:ime , jms:jme )         :: muv_old, muv_new                                                              
    LOGICAL                                       :: ieva
+   LOGICAL                                       :: parity_ph_thm_capture, parity_capture_rankok, parity_thm_weno
+   LOGICAL, SAVE                                 :: parity_ph_thm_written = .FALSE.
    
 !<DESCRIPTION>
 !
@@ -449,6 +455,45 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
 ! IEVA ON/OFF
    
    ieva = CHK_IEVA( config_flags, rk_step ) 
+
+! First-call PH/THM component observer. The existing parity environment and
+! one-tile/rank case gate the read-only snapshots; no RHS or forcing call is added.
+   parity_ph_thm_capture = .FALSE.
+   parity_thm_weno = ( (config_flags%scalar_adv_opt == WENO_SCALAR .OR. &
+                        config_flags%scalar_adv_opt == WENOPD_SCALAR .OR. &
+                        config_flags%moist_adv_opt == WENO_SCALAR .OR. &
+                        config_flags%moist_adv_opt == WENOPD_SCALAR) .AND. rk_step == rk_order )
+   parity_capture_rankok = .TRUE.
+#ifdef DM_PARALLEL
+   parity_capture_rankok = ntasks == 1 .AND. ntasks_x == 1 .AND. ntasks_y == 1
+#endif
+   IF ( rk_step == 1 .AND. .NOT. parity_ph_thm_written .AND. parity_capture_rankok ) THEN
+      BLOCK
+         CHARACTER(LEN=8) :: ph_thm_env
+         INTEGER :: ph_thm_status
+         CALL get_environment_variable("WRF_PARITY_RK_TEND_DUMP", ph_thm_env, STATUS=ph_thm_status)
+         IF ( ph_thm_status == 0 .AND. TRIM(ph_thm_env) == "1" .AND. &
+              .NOT. ieva .AND. .NOT. parity_thm_weno .AND. &
+              its <= ids .AND. ite >= ide-1 .AND. jts <= jds .AND. jte >= jde-1 .AND. &
+              kts <= kds .AND. kte >= kde-1 .AND. config_flags%mp_physics == 0 .AND. &
+              config_flags%map_proj == 0 .AND. &
+              MAXVAL(ABS(ht(its:MIN(ite,ide-1),jts:MIN(jte,jde-1)))) == 0. .AND. &
+              config_flags%periodic_x .AND. .NOT. config_flags%periodic_y .AND. &
+              config_flags%symmetric_ys .AND. config_flags%symmetric_ye .AND. &
+              .NOT. config_flags%open_xs .AND. .NOT. config_flags%open_xe .AND. &
+              .NOT. config_flags%open_ys .AND. .NOT. config_flags%open_ye .AND. &
+              .NOT. config_flags%specified .AND. .NOT. config_flags%nested .AND. .NOT. config_flags%polar ) THEN
+            parity_ph_thm_capture = .TRUE.
+            CALL write_ph_thm_omega_snapshot( t, wwE, wwI, &
+                ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,rdx,rdy,dt,time_step, &
+                rk_step,ieva,config_flags%phi_adv_z,config_flags%h_sca_adv_order, &
+                config_flags%v_sca_adv_order,config_flags%scalar_adv_opt,non_hydrostatic,top_lid, &
+                config_flags%zadvect_implicit )
+            CALL ph_thm_session_arm()
+            parity_ph_thm_written = .TRUE.
+         END IF
+      END BLOCK
+   END IF
 
    IF( ieva ) THEN
    
@@ -622,6 +667,7 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                                its, ite, jts, jte, kts, kte  )
    ELSE
 
+     IF ( parity_ph_thm_capture ) CALL thm_advect_diag_arm()
      CALL advect_scalar ( t, t, t_tend, ru, rv, wwE,    &
                           c1h, c2h,                     &
                           mut, time_step, config_flags, &
@@ -631,6 +677,7 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                           ids, ide, jds, jde, kds, kde, &
                           ims, ime, jms, jme, kms, kme, &
                           its, ite, jts, jte, kts, kte )
+     IF ( parity_ph_thm_capture ) CALL thm_advect_diag_disarm()
 
    ENDIF
 
@@ -665,6 +712,7 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
 
    END IF
 
+   IF ( parity_ph_thm_capture ) CALL ph_rhs_diag_arm()
    CALL rhs_ph( ph_tend, u, v, wwE, ph, ph, phb, w, &
                 mut, muu, muv,                     &
                 c1f, c2f,                          &
@@ -678,6 +726,7 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                 ids, ide, jds, jde, kds, kde,      &
                 ims, ime, jms, jme, kms, kme,      &
                 its, ite, jts, jte, kts, kte      )
+   IF ( parity_ph_thm_capture ) CALL ph_rhs_diag_disarm()
 
     IF( ieva ) THEN
       
@@ -1108,6 +1157,10 @@ SUBROUTINE rk_addtend_dry ( ru_tend, rv_tend, rw_tend, ph_tend, t_tend,      &
 
 ! Local
    INTEGER :: i, j, k
+   LOGICAL :: add_dump_rankok, add_dump_active
+   LOGICAL, SAVE :: add_dump_written = .FALSE.
+   REAL, ALLOCATABLE, DIMENSION(:,:,:) :: ph_tend_before_add, t_tend_before_add
+   REAL, ALLOCATABLE, DIMENSION(:,:,:) :: ph_tendf_before_add, t_tendf_before_add
 
 !<DESCRIPTION>
 !
@@ -1121,6 +1174,26 @@ SUBROUTINE rk_addtend_dry ( ru_tend, rv_tend, rw_tend, ph_tend, t_tend,      &
 !</DESCRIPTION>
 
 !  Finally, add the forward-step tendency to the rk_tendency
+
+   add_dump_active = .FALSE.
+   add_dump_rankok = .TRUE.
+#ifdef DM_PARALLEL
+   add_dump_rankok = ntasks == 1 .AND. ntasks_x == 1 .AND. ntasks_y == 1
+#endif
+   IF (rk_step == 1 .AND. .NOT. add_dump_written .AND. add_dump_rankok .AND. &
+       ph_thm_session_is_armed() .AND. &
+       ips <= ids .AND. ipe >= ide-1 .AND. jps <= jds .AND. jpe >= jde-1 .AND. &
+       kps <= kds .AND. kpe >= kde) THEN
+      add_dump_active = .TRUE.
+      ALLOCATE(ph_tend_before_add(ims:ime,kms:kme,jms:jme), &
+               t_tend_before_add(ims:ime,kms:kme,jms:jme), &
+               ph_tendf_before_add(ims:ime,kms:kme,jms:jme), &
+               t_tendf_before_add(ims:ime,kms:kme,jms:jme))
+      ph_tend_before_add = ph_tend
+      t_tend_before_add = t_tend
+      ph_tendf_before_add = ph_tendf
+      t_tendf_before_add = t_tendf
+   END IF
 
 ! u/v/w/save contain bc tendency that needs to be multiplied by msf
 ! (u by msfuy, v by msfvx)
@@ -1185,6 +1258,15 @@ SUBROUTINE rk_addtend_dry ( ru_tend, rv_tend, rw_tend, ph_tend, t_tend,      &
       MU_TEND(i,j) =  MU_TEND(i,j) +  MU_TENDF(i,j)
    ENDDO
    ENDDO
+
+   IF (add_dump_active) THEN
+      CALL write_ph_thm_add_parts( ph_tend_before_add,t_tend_before_add,ph_tend,t_tend, &
+           ph_tendf_before_add,t_tendf_before_add,ph_save,t_save,h_diabatic, &
+           ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,rk_step )
+      DEALLOCATE(ph_tend_before_add,t_tend_before_add,ph_tendf_before_add,t_tendf_before_add)
+      add_dump_written = .TRUE.
+      CALL ph_thm_session_disarm()
+   END IF
 
 END SUBROUTINE rk_addtend_dry
 

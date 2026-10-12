@@ -291,6 +291,22 @@ dynamic-state violations; absent env leaves every operand untouched.
 /
 ```
 
+### WRF native 연직 수송 설정
+
+Fortran bridge는 기존 namelist의 `phi_adv_z`와 `v_sca_adv_order`를 각
+solver에 전달합니다. 현재 native 연결의 지원 범위는 `phi_adv_z=1/2`,
+`v_sca_adv_order=3`, 질량층 4개 이상입니다. 다른 scalar 연직 차수는
+선택한 식을 조용히 대체하지 않고 초기화 오류로 거부합니다. 이는 새 사용자
+옵션이 아니며, 현재 건조 단일 타일 검증의 적용 범위입니다. 실제 같은 상태
+대조는 `scalar_adv_opt=1`, `zadvect_implicit=0` 구성에서 수행했습니다.
+
+설정하지 않은 standalone solver는 기존 경로별 기본값을 유지합니다:
+Full PH는 옵션 2, acoustic PH는 옵션 1, Full THM은 기존 가중 보간입니다.
+native THM의 차수 3만 hard upwind sign을 사용하며 전역 smoothing과
+운동량 수송 설정은 유지합니다. 두 선택자는 고정 궤적 fingerprint에 포함되고,
+궤적을 요청하거나 기록 중이면 변경할 수 없습니다. hard sign의 미분 검증은
+플럭스 부호를 유지하는 방향에 한정되며 영 플럭스의 일반 미분을 보증하지 않습니다.
+
 ### 4DVAR operation note
 
 `save_trajectory` retains sampled stage-1 states. The legacy replay applies an

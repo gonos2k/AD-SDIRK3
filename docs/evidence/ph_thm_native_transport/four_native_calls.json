@@ -1,0 +1,206 @@
+{
+  "schema": "pr302_phaseA_phaseB_four_native_call_summary_v1",
+  "status": "all four explicitly authorized short calls completed; no additional native calls",
+  "scope": "two Phase A observer-source captures and two Phase B native-transport captures, each 15 s configured run on the same corrected input",
+  "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+  "namelist_source_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+  "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+  "phaseA": {
+    "producer_head": "2627dd4e4d958613d1bb1f7385cebd2a5c88836f",
+    "build_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_build/pr302_phaseA_targeted_build_receipt.json",
+    "build_receipt_sha256": "7e9408682b14c676daf559449d65534f325eb0ffe45cc6f3f6acbe538e923582",
+    "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_a/pr302_phaseA_runs.json",
+    "run_receipt_sha256": "9fae375bba6986dd419379f5915e27f5a0beec14d20eac537c943b1c3e2a4972",
+    "completion_append": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_a/pr302_phaseA_completion_append.json",
+    "completion_append_sha256": "aae3ad06917839d5a66f0cfe973bfa1dc8daf93e1c81a209ede8134e102c10af"
+  },
+  "phaseB": {
+    "producer_head": "cd6a47e208d5ef97ff675691d97ff65a69b129ae",
+    "pr_head": "83e2ea85caafb91c56691f957e65dce676a48999",
+    "post_build_delta": "four test-only source files; Phase B production source and built binaries remain bound to cd6a47e2",
+    "build_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_build/pr302_phaseB_targeted_build_receipt.json",
+    "build_receipt_sha256": "cab25a3732fbad0de2b5daa9492286c24b8342cac149a2a79f87802f591a093f",
+    "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/pr302_phaseB_runs.json",
+    "run_receipt_sha256": "a87fe7cc8a0bf59477970b0fd168946bfb5a5afde5aba5bb47e983383cc0288d",
+    "completion_append": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/pr302_phaseB_completion_append.json",
+    "completion_append_sha256": "0221b5a644c70174884a81594af390d00434152813998b4e37a8b7588e16bb91"
+  },
+  "calls": [
+    {
+      "phase": "phase_a",
+      "label": "pr302_phaseA_fortran_rk3_h15",
+      "method": "RK3",
+      "status": "completed",
+      "return_code": 0,
+      "completion_marker": true,
+      "wall_seconds": 2.949733167188242,
+      "workdir": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_a/captures/pr302_phaseA_fortran_rk3_h15",
+      "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+      "namelist_sha256": "0184a0ac4af4402a2f6fa7041c9457cc09ea5bd334dd5d666d42e44559261741",
+      "executable_sha256": "d7c08bd48f31cf434d0034ae4d1b91130a024750af5091a057d1d6f91b277f1d",
+      "cpp_archive_sha256": "4d65965dec37560cb0c86940fc5756f24add5ddec4664ea24ac29c1cb7860c6b",
+      "full_snapshot": {
+        "bytes": 627340,
+        "sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d"
+      },
+      "sidecars": {
+        "wrf_ph_thm_omega.bin": {
+          "present": true,
+          "bytes": 148824,
+          "sha256": "5164fd7b0e3e7720fc35901db45ab09687991b2700eaa3c022f69bf6c8468eb8"
+        },
+        "wrf_thm_advect_parts.bin": {
+          "present": true,
+          "bytes": 248148,
+          "sha256": "ab820f96c388318caf52f7c5323317588e1478cf498cdb8ddda2bc24a5eff695"
+        },
+        "wrf_ph_rhs_parts.bin": {
+          "present": true,
+          "bytes": 347292,
+          "sha256": "b4a8953cbc9d1d2aca3ac5fe95b47b3b7e366da208d8fec4b7c5c2bc5513aea7"
+        },
+        "wrf_thm_mix_parts.bin": {
+          "present": true,
+          "bytes": 198376,
+          "sha256": "d8da83d423287e51046090fd03b3c6b3400f7605011df480241b847656b4b58f"
+        },
+        "wrf_ph_thm_add_parts.bin": {
+          "present": true,
+          "bytes": 446208,
+          "sha256": "173ebf7fde75691b852f1ef5b713d27c1025ca039d207f1bae58d40dae3afade"
+        }
+      },
+      "native_transport_config": []
+    },
+    {
+      "phase": "phase_a",
+      "label": "pr302_phaseA_cpp_ark3_h15",
+      "method": "ARK3",
+      "status": "completed",
+      "return_code": 0,
+      "completion_marker": true,
+      "wall_seconds": 1.1674125827848911,
+      "workdir": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_a/captures/pr302_phaseA_cpp_ark3_h15",
+      "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+      "namelist_sha256": "fded603d258432131e0b952340f2200b11efce19dd09ac3cdddf176871d729dd",
+      "executable_sha256": "d7c08bd48f31cf434d0034ae4d1b91130a024750af5091a057d1d6f91b277f1d",
+      "cpp_archive_sha256": "4d65965dec37560cb0c86940fc5756f24add5ddec4664ea24ac29c1cb7860c6b",
+      "full_snapshot": {
+        "bytes": 196276,
+        "sha256": "10040610be1dd44c38d88cf29a0566b47166b98d05dbfe4dd6f11d1c9b69abc2"
+      },
+      "sidecars": {
+        "port_full_rhs_components_snapshot.bin": {
+          "present": true,
+          "bytes": 1431964,
+          "sha256": "e3a809d8557091bba5bd299465c9484d74f1e7286cac6cfbcc056d28f5d6dcd3"
+        }
+      },
+      "native_transport_config": []
+    },
+    {
+      "phase": "phase_b",
+      "label": "pr302_phaseB_fortran_rk3_h15",
+      "method": "RK3",
+      "status": "completed",
+      "return_code": 0,
+      "completion_marker": true,
+      "wall_seconds": 1.5423757079988718,
+      "workdir": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/captures/pr302_phaseB_fortran_rk3_h15",
+      "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+      "namelist_sha256": "0184a0ac4af4402a2f6fa7041c9457cc09ea5bd334dd5d666d42e44559261741",
+      "executable_sha256": "8c3f4cb140a03e7184548b57e7bcaccd38d3195f74123b7bd73955b70ce20a5c",
+      "cpp_archive_sha256": "20142c079bcb883433a73637a8d1d63da008ed91e1f5292290caefcd825c6912",
+      "full_snapshot": {
+        "bytes": 627340,
+        "sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d"
+      },
+      "sidecars": {
+        "wrf_ph_thm_omega.bin": {
+          "present": true,
+          "bytes": 148824,
+          "sha256": "5164fd7b0e3e7720fc35901db45ab09687991b2700eaa3c022f69bf6c8468eb8"
+        },
+        "wrf_thm_advect_parts.bin": {
+          "present": true,
+          "bytes": 248148,
+          "sha256": "ab820f96c388318caf52f7c5323317588e1478cf498cdb8ddda2bc24a5eff695"
+        },
+        "wrf_ph_rhs_parts.bin": {
+          "present": true,
+          "bytes": 347292,
+          "sha256": "b4a8953cbc9d1d2aca3ac5fe95b47b3b7e366da208d8fec4b7c5c2bc5513aea7"
+        },
+        "wrf_thm_mix_parts.bin": {
+          "present": true,
+          "bytes": 198376,
+          "sha256": "d8da83d423287e51046090fd03b3c6b3400f7605011df480241b847656b4b58f"
+        },
+        "wrf_ph_thm_add_parts.bin": {
+          "present": true,
+          "bytes": 446208,
+          "sha256": "173ebf7fde75691b852f1ef5b713d27c1025ca039d207f1bae58d40dae3afade"
+        }
+      },
+      "native_transport_config": []
+    },
+    {
+      "phase": "phase_b",
+      "label": "pr302_phaseB_cpp_ark3_h15",
+      "method": "ARK3",
+      "status": "completed",
+      "return_code": 0,
+      "completion_marker": true,
+      "wall_seconds": 1.20725129195489,
+      "workdir": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/captures/pr302_phaseB_cpp_ark3_h15",
+      "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+      "namelist_sha256": "fded603d258432131e0b952340f2200b11efce19dd09ac3cdddf176871d729dd",
+      "executable_sha256": "8c3f4cb140a03e7184548b57e7bcaccd38d3195f74123b7bd73955b70ce20a5c",
+      "cpp_archive_sha256": "20142c079bcb883433a73637a8d1d63da008ed91e1f5292290caefcd825c6912",
+      "full_snapshot": {
+        "bytes": 196276,
+        "sha256": "2848b8c5b2974bb832b88e1ba81e9805be49a7bd78091c3b1951c8a2ddb601dc"
+      },
+      "sidecars": {
+        "port_full_rhs_components_snapshot.bin": {
+          "present": true,
+          "bytes": 1392672,
+          "sha256": "8816c7fd7f3ed67a0ecb5488576ff825c9c04403786347af09ef996ed2d5781b",
+          "version": 2,
+          "header_int32": [
+            2,
+            17,
+            17,
+            16,
+            18,
+            18,
+            17,
+            24531,
+            127,
+            1,
+            1,
+            3
+          ],
+          "header_bytes": 48,
+          "float64_payload_blocks": 43,
+          "float64_payload_values": 149547,
+          "bytes_expected": 1392672,
+          "native_transport": {
+            "native_set": 1,
+            "phi_adv_z": 1,
+            "v_sca_adv_order": 3
+          }
+        }
+      },
+      "native_transport_config": [
+        {
+          "native_set": 1,
+          "phi_adv_z": 1,
+          "v_sca_adv_order": 3
+        }
+      ]
+    }
+  ],
+  "runtime_note": "Per-run elapsed times are recorded as provenance only; this receipt makes no accuracy or cost comparison claim.",
+  "tests": "Four focused CMake test targets are owned by GreenRHS; this executor has not built or run them. Phase B executable and 24-member archive are retained pending that link/test review."
+}

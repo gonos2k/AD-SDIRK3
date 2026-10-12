@@ -16,6 +16,19 @@
 
 namespace wrf { namespace sdirk3 { namespace acoustic {
 
+struct PhiVerticalAdvection {
+    torch::Tensor tendency;
+    torch::Tensor gradient_upper;
+    torch::Tensor gradient_lower;
+};
+
+// Shared owner for WRF rhs_ph's two vertical staggering orders. `metric` carries
+// the signed eta/physical derivative scale for mass intervals; omega is W-staggered.
+PhiVerticalAdvection phi_vertical_advection(
+    const torch::Tensor& ph_total, const torch::Tensor& omega,
+    const torch::Tensor& metric, const torch::Tensor& fnm, const torch::Tensor& fnp,
+    int phi_adv_z);
+
 // Small-step acoustic PERTURBATION prognostics + diagnostics. Perturbations are the coupled
 // deviations produced by small_step_prep (module_small_step_em.F:238-279); they start ~0 at
 // rk_step 1 (u_1=u_2) and accumulate across the substep loop.
@@ -249,7 +262,7 @@ torch::Tensor rhs_ph_stage(
     const torch::Tensor& msfty,
     const torch::Tensor& c1f, const torch::Tensor& c2f,
     const torch::Tensor& fnm, const torch::Tensor& fnp, const torch::Tensor& rdnw,
-    float cfn, float cfn1, float rdx, float rdy, float g);
+    float cfn, float cfn1, float rdx, float rdy, float g, int phi_adv_z = 1);
 
 // Fortran horizontal_pressure_gradient: raw neighbor differences and SUMS.
 // phi_difference_sum includes both bounding w levels. Apply averaging and

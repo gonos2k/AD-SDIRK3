@@ -21,6 +21,7 @@
 // FIX Round108: Re-added <atomic> for TLS cache generation counter
 #include <atomic>
 #include <cstring>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
@@ -2446,6 +2447,25 @@ void sdirk3_debug_step(void* solver_ptr, int tile_id, int itimestep) {
  * Set map projection for idealized case detection
  * Called during initialization to identify idealized cases (map_proj = 0)
  */
+int sdirk3_tile_set_native_transport_options_checked(
+    void* solver_ptr, int phi_adv_z, int v_sca_adv_order) {
+    try {
+        std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
+        auto it = g_tile_solvers.find(solver_ptr);
+        if (it == g_tile_solvers.end()) return 0;
+        auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(it->second.get());
+        if (!unified_solver) return 0;
+        unified_solver->setNativeTransportOptions(phi_adv_z, v_sca_adv_order);
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3_NATIVE_TRANSPORT_CONFIG_REJECTED: " << e.what() << std::endl;
+        return 0;
+    } catch (...) {
+        std::cerr << "SDIRK3_NATIVE_TRANSPORT_CONFIG_REJECTED: unknown exception" << std::endl;
+        return 0;
+    }
+}
+
 void sdirk3_tile_set_map_projection(void* solver_ptr, int map_proj)
 {
     std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);

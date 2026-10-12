@@ -1,0 +1,1598 @@
+{
+  "acceptance_limit": "Numerical closure is reported without tolerance/pass threshold. Component RMS values are never subtracted. CPP other_raw is not independent causal evidence.",
+  "baseline_observer_noninterference": {
+    "archive_analysis_path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_analysis/pr301_six_rhs_analysis.json",
+    "archive_analysis_sha256": "0b412a10e17346c905d669008ad58466232f8396cdf184bf03fca7450bbfccf4",
+    "archive_physical_arrays_path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_analysis/pr301_six_rhs_physical_arrays.npz",
+    "archive_physical_arrays_sha256": "18dabe7ae98bb2bba8a2211270e8c998259d839ecf7f490abcd849fb01886c77",
+    "comparisons": {
+      "cpp_mu": {
+        "delta_current_minus_archived": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 256,
+        "owner_count": 256,
+        "units": "Pa/s"
+      },
+      "cpp_ph": {
+        "delta_current_minus_archived": {
+          "count": 4096,
+          "max_abs": 9.82736237347126e-05,
+          "mean": 6.3138874432586145e-09,
+          "rms": 3.8066950505280554e-05
+        },
+        "exact_equal_count": 256,
+        "owner_count": 4096,
+        "units": "m^2/s^3"
+      },
+      "cpp_thm": {
+        "delta_current_minus_archived": {
+          "count": 4096,
+          "max_abs": 1.3558574210037477e-06,
+          "mean": 3.105830038558839e-10,
+          "rms": 2.509709536403453e-07
+        },
+        "exact_equal_count": 325,
+        "owner_count": 4096,
+        "units": "K/s"
+      },
+      "cpp_u": {
+        "delta_current_minus_archived": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "units": "m/s^2"
+      },
+      "cpp_v": {
+        "delta_current_minus_archived": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 3840,
+        "owner_count": 3840,
+        "units": "m/s^2"
+      },
+      "cpp_w": {
+        "delta_current_minus_archived": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "units": "m/s^2"
+      },
+      "ft_mu": {
+        "delta_current_minus_archived": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 256,
+        "owner_count": 256,
+        "units": "Pa/s"
+      },
+      "ft_ph": {
+        "delta_current_minus_archived": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "units": "m^2/s^3"
+      },
+      "ft_thm": {
+        "delta_current_minus_archived": {
+          "count": 4096,
+          "max_abs": 1.3552527156068805e-20,
+          "mean": 1.920637752675425e-23,
+          "rms": 1.5315766651788886e-21
+        },
+        "exact_equal_count": 2290,
+        "owner_count": 4096,
+        "units": "K/s"
+      },
+      "ft_u": {
+        "delta_current_minus_archived": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "units": "m/s^2"
+      },
+      "ft_v": {
+        "delta_current_minus_archived": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 3840,
+        "owner_count": 3840,
+        "units": "m/s^2"
+      },
+      "ft_w": {
+        "delta_current_minus_archived": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "units": "m/s^2"
+      }
+    },
+    "same_input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "same_top_lid": false,
+    "scope": "Current PR302 Full physical rates vs archived PR301 same-input rates for FT and CPP independently; measured fieldwise with owner masks, no bitwise pass requirement."
+  },
+  "capture_file_hashes": {
+    "port_full_rhs_components_snapshot.bin": {
+      "bytes": 1392672,
+      "sha256": "8816c7fd7f3ed67a0ecb5488576ff825c9c04403786347af09ef996ed2d5781b"
+    },
+    "pr302_phaseB_cpp_ark3_h15/diagnostics.txt": {
+      "bytes": 84,
+      "sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224"
+    },
+    "pr302_phaseB_cpp_ark3_h15/namelist.input": {
+      "bytes": 6295,
+      "sha256": "fded603d258432131e0b952340f2200b11efce19dd09ac3cdddf176871d729dd"
+    },
+    "pr302_phaseB_cpp_ark3_h15/port_full_rhs_snapshot.bin": {
+      "bytes": 196276,
+      "sha256": "2848b8c5b2974bb832b88e1ba81e9805be49a7bd78091c3b1951c8a2ddb601dc"
+    },
+    "pr302_phaseB_cpp_ark3_h15/wrfinput_d01": {
+      "bytes": 1032729,
+      "sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df"
+    },
+    "pr302_phaseB_fortran_rk3_h15/diagnostics.txt": {
+      "bytes": 84,
+      "sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224"
+    },
+    "pr302_phaseB_fortran_rk3_h15/namelist.input": {
+      "bytes": 6295,
+      "sha256": "0184a0ac4af4402a2f6fa7041c9457cc09ea5bd334dd5d666d42e44559261741"
+    },
+    "pr302_phaseB_fortran_rk3_h15/wrf_full_rhs_snapshot.bin": {
+      "bytes": 627340,
+      "sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d"
+    },
+    "pr302_phaseB_fortran_rk3_h15/wrfinput_d01": {
+      "bytes": 1032729,
+      "sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df"
+    },
+    "wrf_ph_rhs_parts.bin": {
+      "bytes": 347292,
+      "sha256": "b4a8953cbc9d1d2aca3ac5fe95b47b3b7e366da208d8fec4b7c5c2bc5513aea7"
+    },
+    "wrf_ph_thm_add_parts.bin": {
+      "bytes": 446208,
+      "sha256": "173ebf7fde75691b852f1ef5b713d27c1025ca039d207f1bae58d40dae3afade"
+    },
+    "wrf_ph_thm_omega.bin": {
+      "bytes": 148824,
+      "sha256": "5164fd7b0e3e7720fc35901db45ab09687991b2700eaa3c022f69bf6c8468eb8"
+    },
+    "wrf_thm_advect_parts.bin": {
+      "bytes": 248148,
+      "sha256": "ab820f96c388318caf52f7c5323317588e1478cf498cdb8ddda2bc24a5eff695"
+    },
+    "wrf_thm_mix_parts.bin": {
+      "bytes": 198376,
+      "sha256": "d8da83d423287e51046090fd03b3c6b3400f7605011df480241b847656b4b58f"
+    }
+  },
+  "cpp_components": {
+    "actual_thm_vertical_flux": {
+      "active_extent": [
+        16,
+        17,
+        16
+      ],
+      "metrics": {
+        "count": 4352,
+        "max_abs": 0.10055606365901976,
+        "mean": -0.0004410432362928136,
+        "rms": 0.04067835289289259
+      },
+      "packet_field": "theta_flux_actual",
+      "units": "Pa K/s"
+    },
+    "full_physical_total": {
+      "ph": {
+        "count": 4096,
+        "max_abs": 0.010845137080796262,
+        "mean": -1.1957753072401584e-05,
+        "rms": 0.0028150673259059317
+      },
+      "thm": {
+        "count": 4096,
+        "max_abs": 0.00010346611439679697,
+        "mean": 2.6127101360393315e-07,
+        "rms": 1.4583848313217092e-05
+      }
+    },
+    "other_raw_is_remainder_by_construction": true,
+    "ph_raw_components_vs_total": {
+      "count": 4096,
+      "max_abs": 1.1368683772161603e-13,
+      "mean": 6.301925127571995e-17,
+      "rms": 2.649266517711478e-14
+    },
+    "physical_linear_component": {
+      "ph": {
+        "ph_adv_x": {
+          "count": 4096,
+          "max_abs": 0.003704170740742417,
+          "mean": 8.452329292506086e-06,
+          "rms": 0.0009679830566069112
+        },
+        "ph_adv_y": {
+          "count": 4096,
+          "max_abs": 6.002742478592134e-06,
+          "mean": 1.6043940556870336e-07,
+          "rms": 8.774748844490979e-07
+        },
+        "ph_adv_z": {
+          "count": 4096,
+          "max_abs": 0.005880751485537775,
+          "mean": -2.6201438630609433e-06,
+          "rms": 0.0024524953971843816
+        },
+        "ph_gw": {
+          "count": 4096,
+          "max_abs": 0.009935011392274484,
+          "mean": -1.7950377907415423e-05,
+          "rms": 0.0023240274924291025
+        },
+        "ph_other_raw": {
+          "count": 4096,
+          "max_abs": 1.914087814788706e-18,
+          "mean": 2.3881521935150105e-21,
+          "rms": 2.8912862866332994e-19
+        }
+      },
+      "thm": {
+        "theta_adv_h": {
+          "count": 4096,
+          "max_abs": 3.2002301058092236e-05,
+          "mean": -6.745650371730481e-12,
+          "rms": 8.06317640007073e-06
+        },
+        "theta_adv_v": {
+          "count": 4096,
+          "max_abs": 2.0779429692846875e-05,
+          "mean": 1.1571286420938436e-08,
+          "rms": 4.015572108349231e-06
+        },
+        "theta_mix_h": {
+          "count": 4096,
+          "max_abs": 2.5256280127518277e-07,
+          "mean": 5.264703232718293e-12,
+          "rms": 3.659174222807379e-08
+        },
+        "theta_mix_v": {
+          "count": 4096,
+          "max_abs": 0.00010046198829558298,
+          "mean": 2.3686480224493193e-07,
+          "rms": 1.437690585101447e-05
+        },
+        "theta_other_raw": {
+          "count": 4096,
+          "max_abs": 1.993850787528439e-20,
+          "mean": -2.2635226545054622e-23,
+          "rms": 1.5009746040932131e-21
+        }
+      }
+    },
+    "thm_product_rule": {
+      "count": 4096,
+      "max_abs": 1.00366484867283e-05,
+      "mean": 1.2836405885201784e-08,
+      "rms": 2.5995310504373473e-06
+    },
+    "thm_raw_components_vs_total": {
+      "count": 4096,
+      "max_abs": 1.7763568394002505e-15,
+      "mean": -9.414771208731548e-19,
+      "rms": 1.343996171291262e-16
+    },
+    "total_reconstruction_error": {
+      "ph": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "thm": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      }
+    }
+  },
+  "cpp_ph_vertical_metric_vs_ft_rdnw": {
+    "count": 17,
+    "max_abs": 0.0,
+    "mean": 0.0,
+    "rms": 0.0
+  },
+  "current_source_full_parser_crosscheck": {
+    "all_28_decoded_arrays_byte_match_reference_parser": true,
+    "authoritative_parser_path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_analysis/analyze_full_six_rhs.py",
+    "field_names": [
+      "u2",
+      "v2",
+      "w2",
+      "ph2",
+      "t2",
+      "mu2",
+      "ru_tend",
+      "rv_tend",
+      "mu_tend",
+      "ru",
+      "rv",
+      "muu",
+      "muv",
+      "mut",
+      "dnw",
+      "c1h",
+      "c2h",
+      "msfux",
+      "msfuy",
+      "msfvx",
+      "msfvy",
+      "msftx",
+      "msfty",
+      "rw_tend",
+      "ph_tend",
+      "t_tend",
+      "c1f",
+      "c2f"
+    ],
+    "fields": 28,
+    "meaning": "same-file serialization parser check, not state-equality gate"
+  },
+  "fortran_components": {
+    "ph_physical_increment": {
+      "add_total_tend_increment": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "gw": {
+        "count": 4096,
+        "max_abs": 0.00993501162092337,
+        "mean": -1.7950378768597683e-05,
+        "rms": 0.0023240274982698657
+      },
+      "horizontal": {
+        "count": 4096,
+        "max_abs": 0.0037040562032829524,
+        "mean": 8.612768615804675e-06,
+        "rms": 0.0009679693323783451
+      },
+      "top_reset": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "vertical": {
+        "count": 4096,
+        "max_abs": 0.005880749920376957,
+        "mean": -2.620137517263456e-06,
+        "rms": 0.002452495415754582
+      }
+    },
+    "ph_raw_increment": {
+      "add_total_tend_increment": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "gw": {
+        "count": 4096,
+        "max_abs": 885.1306762695312,
+        "mean": -1.5992305929539725,
+        "rms": 207.05208183814088
+      },
+      "horizontal": {
+        "count": 4096,
+        "max_abs": 330.0013122558594,
+        "mean": 0.7673281492943715,
+        "rms": 86.23824666795011
+      },
+      "top_reset": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "vertical": {
+        "count": 4096,
+        "max_abs": 523.9258422851562,
+        "mean": -0.2331744338698627,
+        "rms": 218.49752649212755
+      }
+    },
+    "physical_full_total": {
+      "ph": {
+        "count": 4096,
+        "max_abs": 0.010845137839773185,
+        "mean": -1.1957747657347072e-05,
+        "rms": 0.002815067423375373
+      },
+      "thm": {
+        "count": 4096,
+        "max_abs": 0.00010346616114178555,
+        "mean": 2.6127060628906957e-07,
+        "rms": 1.4583847754294425e-05
+      }
+    },
+    "same_call_add_closure": {
+      "add_increment_inclusive_of_tendf_and_heating_not_additive_with_separate_mix_terms": true,
+      "mix_after_horizontal_vs_add_tendf_before": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "mix_after_horizontal_vs_add_tendf_before_units": "raw uncoupled t_tendf basis; conversion to physical K/s divides by c1h*mut+c2h",
+      "ph_add_formula_vs_after": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "ph_after_vs_current_full_v2": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "ph_rhs_after_horizontal_vs_add_before": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "thm_add_formula_vs_after": {
+        "count": 4096,
+        "max_abs": 4.5821070671081543e-07,
+        "mean": 1.3511414209688155e-10,
+        "rms": 3.5253665209580245e-08
+      },
+      "thm_add_formula_vs_after_physical_K_per_s": {
+        "metrics": {
+          "count": 4096,
+          "max_abs": 5.1431328569796355e-12,
+          "mean": 1.5165674025541391e-15,
+          "rms": 3.95700174576536e-13
+        },
+        "units": "K/s after msfty/(c1h*mut+c2h); same state makes product-rule term cancel in this closure"
+      },
+      "thm_add_formula_vs_after_raw_basis": {
+        "metrics": {
+          "count": 4096,
+          "max_abs": 4.5821070671081543e-07,
+          "mean": 1.3511414209688155e-10,
+          "rms": 3.5253665209580245e-08
+        },
+        "units": "raw t_tend basis before Full-THM physical mass conversion; do not read as K/s"
+      },
+      "thm_advection_after_vertical_vs_add_before": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "thm_advection_after_vertical_vs_add_before_units": "raw t_tend basis before physical conversion",
+      "thm_after_vs_current_full_v2": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      }
+    },
+    "thm_physical_increment": {
+      "add_total_tend_increment_inclusive": {
+        "count": 4096,
+        "max_abs": 0.00010071300516559608,
+        "mean": 2.3687009351604807e-07,
+        "rms": 1.4383886156324279e-05
+      },
+      "horizontal_adv": {
+        "count": 4096,
+        "max_abs": 3.200197972673725e-05,
+        "mean": -7.1591946505625504e-12,
+        "rms": 8.063175360524408e-06
+      },
+      "horizontal_mix": {
+        "count": 4096,
+        "max_abs": 2.525624896374475e-07,
+        "mean": 5.252390206197571e-12,
+        "rms": 3.659173738820268e-08
+      },
+      "product_rule": {
+        "count": 4096,
+        "max_abs": 1.0036650899526794e-05,
+        "mean": 1.2836406377043085e-08,
+        "rms": 2.5995309542403504e-06
+      },
+      "vertical_adv": {
+        "count": 4096,
+        "max_abs": 2.0779243369746836e-05,
+        "mean": 1.1571271163668228e-08,
+        "rms": 4.015572834457435e-06
+      },
+      "vertical_mix": {
+        "count": 4096,
+        "max_abs": 0.00010046199749128948,
+        "mean": 2.3686483656315206e-07,
+        "rms": 1.4376904981652538e-05
+      }
+    },
+    "thm_raw_increment": {
+      "add_total_tend_increment": {
+        "count": 4096,
+        "max_abs": 8.972696304321289,
+        "mean": 0.021103195548420217,
+        "rms": 1.2814868972334261
+      },
+      "horizontal_adv": {
+        "count": 4096,
+        "max_abs": 2.851112127304077,
+        "mean": -3.663890013605453e-08,
+        "rms": 0.7183637955498678
+      },
+      "horizontal_mix": {
+        "count": 4096,
+        "max_abs": 0.022501230239868164,
+        "mean": 4.686281371846235e-07,
+        "rms": 0.0032600252732662848
+      },
+      "vertical_adv": {
+        "count": 4096,
+        "max_abs": 1.8512589931488037,
+        "mean": 0.0010307631838823994,
+        "rms": 0.35775510357755624
+      },
+      "vertical_mix": {
+        "count": 4096,
+        "max_abs": 8.950333595275879,
+        "mean": 0.02110272651378432,
+        "rms": 1.2808649331779751
+      }
+    }
+  },
+  "ft_minus_cpp_fieldwise": {
+    "physical_components": {
+      "ph_gw_vs_cpp_gw": {
+        "count": 4096,
+        "max_abs": 7.61899696111179e-10,
+        "mean": -8.611822558324439e-13,
+        "rms": 1.0241503752024017e-10
+      },
+      "ph_horizontal_vs_cpp_adv_xy": {
+        "count": 4096,
+        "max_abs": 1.210230576344229e-09,
+        "mean": -8.227011247243644e-14,
+        "rms": 1.6294213016166644e-10
+      },
+      "ph_vertical_vs_cpp_adv_z": {
+        "count": 4096,
+        "max_abs": 9.134154243567352e-08,
+        "mean": 6.345797489494958e-12,
+        "rms": 1.6801389311987554e-08
+      },
+      "thm_horizontal_adv_vs_cpp_adv_h": {
+        "count": 4096,
+        "max_abs": 1.8677770680568067e-09,
+        "mean": -4.1354427883061593e-13,
+        "rms": 2.0118143824435061e-10
+      },
+      "thm_horizontal_mix_vs_cpp_mix_h": {
+        "count": 4096,
+        "max_abs": 5.2880485761399816e-12,
+        "mean": -1.2313026521021096e-14,
+        "rms": 3.999531751507868e-13
+      },
+      "thm_vertical_adv_vs_cpp_adv_v": {
+        "count": 4096,
+        "max_abs": 6.275746895736655e-10,
+        "mean": -1.5257270206609268e-14,
+        "rms": 7.305926656024698e-11
+      },
+      "thm_vertical_mix_vs_cpp_mix_v": {
+        "count": 4096,
+        "max_abs": 7.397752760851181e-11,
+        "mean": 3.4318220162375794e-14,
+        "rms": 5.760461130520922e-12
+      }
+    },
+    "physical_total": {
+      "ph": {
+        "count": 4096,
+        "max_abs": 9.140527625523619e-08,
+        "mean": -5.415054506592362e-12,
+        "rms": 1.6801460684949928e-08
+      },
+      "thm": {
+        "count": 4096,
+        "max_abs": 1.813833663917363e-09,
+        "mean": 4.0731486360288034e-13,
+        "rms": 1.8586793700500655e-10
+      }
+    },
+    "raw_ph": {
+      "gw_vs_cpp_gw": {
+        "count": 4096,
+        "max_abs": 7.040137757030607e-05,
+        "mean": -8.681203306967406e-08,
+        "rms": 1.004353533810664e-05
+      },
+      "horizontal_vs_cpp_adv_xy": {
+        "count": 4096,
+        "max_abs": 0.00010404302310007552,
+        "mean": -7.144988206268449e-09,
+        "rms": 1.4236801700997396e-05
+      },
+      "vertical_vs_cpp_adv_z": {
+        "count": 4096,
+        "max_abs": 0.008137726413863788,
+        "mean": 6.71438286975728e-07,
+        "rms": 0.001496735968465686
+      }
+    },
+    "raw_thm_advection_only": {
+      "horizontal_adv_vs_cpp_adv_h": {
+        "count": 4096,
+        "max_abs": 0.0001663325123155701,
+        "mean": -3.663890013532065e-08,
+        "rms": 1.7923509859429688e-05
+      },
+      "vertical_adv_vs_cpp_adv_v": {
+        "count": 4096,
+        "max_abs": 5.591904833246453e-05,
+        "mean": -1.4165330844309163e-09,
+        "rms": 6.508794028571727e-06
+      }
+    }
+  },
+  "numerical_closure_status": "computed_without_acceptance_threshold",
+  "omega_precision": {
+    "active_comparison_count": 4352,
+    "active_exact_equal_count_ph": 512,
+    "active_exact_equal_count_theta": 512,
+    "cpp_ph_omega_f64_minus_ft_wwE_f32": {
+      "active_bottom_interface": {
+        "count": 256,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "active_interior_interfaces": {
+        "count": 3840,
+        "max_abs": 4.2057639115008604e-08,
+        "mean": -5.05298024156335e-12,
+        "rms": 7.54929850035913e-09
+      },
+      "active_top_interface": {
+        "count": 256,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "source_active_PH_THM_faces_16x17x16": {
+        "count": 4352,
+        "max_abs": 4.2057639115008604e-08,
+        "mean": -4.458511977850015e-12,
+        "rms": 7.091331152366368e-09
+      }
+    },
+    "cpp_theta_omega_f64_minus_ft_wwE_f32": {
+      "active_bottom_interface": {
+        "count": 256,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "active_interior_interfaces": {
+        "count": 3840,
+        "max_abs": 4.2057639115008604e-08,
+        "mean": -5.05298024156335e-12,
+        "rms": 7.54929850035913e-09
+      },
+      "active_top_interface": {
+        "count": 256,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "source_active_PH_THM_faces_16x17x16": {
+        "count": 4352,
+        "max_abs": 4.2057639115008604e-08,
+        "mean": -4.458511977850015e-12,
+        "rms": 7.091331152366368e-09
+      }
+    },
+    "packed_17x17x17_raw_alias_diagnostic_only": {
+      "count": 4913,
+      "cpp_ph_f64_minus_ft_wwE_f32": {
+        "finite_count": 4913,
+        "max_abs_finite_subset": 4.2057639115008604e-08,
+        "mean_finite_subset": -2.3726638034182007e-11,
+        "nonfinite_count": 0,
+        "rms_finite_subset": 6.959211843160219e-09,
+        "selected_count": 4913
+      },
+      "cpp_theta_f64_minus_ft_wwE_f32": {
+        "finite_count": 4913,
+        "max_abs_finite_subset": 4.2057639115008604e-08,
+        "mean_finite_subset": -2.3726638034182007e-11,
+        "nonfinite_count": 0,
+        "rms_finite_subset": 6.959211843160219e-09,
+        "selected_count": 4913
+      },
+      "interpretation": "extra 17th i/j elements are not assumed semantically equivalent; diagnostic only, not gated or used for primary attribution"
+    },
+    "primary_active_extent": "[j=0:16,k=0:17,i=0:16], source-active FT loops, 16x17x16",
+    "units": "Pa/s; diagnostic only, no cross-precision equality gate"
+  },
+  "phase": "B-native-v2",
+  "phase_a_to_phase_b_full_physical_rates": {
+    "comparisons": {
+      "cpp_mu": {
+        "exact_equal_count": 256,
+        "owner_count": 256,
+        "phase_b_minus_phase_a": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "Pa/s"
+      },
+      "cpp_ph": {
+        "exact_equal_count": 256,
+        "owner_count": 4096,
+        "phase_b_minus_phase_a": {
+          "count": 4096,
+          "max_abs": 9.82736237347126e-05,
+          "mean": 6.3138874432586145e-09,
+          "rms": 3.8066950505280554e-05
+        },
+        "units": "m^2/s^3"
+      },
+      "cpp_thm": {
+        "exact_equal_count": 325,
+        "owner_count": 4096,
+        "phase_b_minus_phase_a": {
+          "count": 4096,
+          "max_abs": 1.3558574210037477e-06,
+          "mean": 3.105830038558839e-10,
+          "rms": 2.509709536403453e-07
+        },
+        "units": "K/s"
+      },
+      "cpp_u": {
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "phase_b_minus_phase_a": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "m/s^2"
+      },
+      "cpp_v": {
+        "exact_equal_count": 3840,
+        "owner_count": 3840,
+        "phase_b_minus_phase_a": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "m/s^2"
+      },
+      "cpp_w": {
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "phase_b_minus_phase_a": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "m/s^2"
+      },
+      "ft_mu": {
+        "exact_equal_count": 256,
+        "owner_count": 256,
+        "phase_b_minus_phase_a": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "Pa/s"
+      },
+      "ft_ph": {
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "phase_b_minus_phase_a": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "m^2/s^3"
+      },
+      "ft_thm": {
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "phase_b_minus_phase_a": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "K/s"
+      },
+      "ft_u": {
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "phase_b_minus_phase_a": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "m/s^2"
+      },
+      "ft_v": {
+        "exact_equal_count": 3840,
+        "owner_count": 3840,
+        "phase_b_minus_phase_a": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "m/s^2"
+      },
+      "ft_w": {
+        "exact_equal_count": 4096,
+        "owner_count": 4096,
+        "phase_b_minus_phase_a": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "units": "m/s^2"
+      }
+    },
+    "phase_a_arrays_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/analysis/phase_a_component_analysis.rates.npz",
+    "phase_a_arrays_sha256": "77fd594ce33b55c23cf10578f29f3a1944fd3375ea24ae2b37e8aae90eed2189"
+  },
+  "physical_full_rate_arrays_npz": {
+    "bytes": 259080,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/analysis/phase_b_component_analysis.rates.npz",
+    "sha256": "7f155a76b0e2b1211536288aebc516f975f7d937580e9fa86baf12240475737e"
+  },
+  "physical_units_and_owners": {
+    "mu_dot": "DMDT + forcing-only mu_tend from paired Full V2 snapshot, Pa/s",
+    "omega": "Pa/s, actual WW_SPLIT wwE (not reconstructed)",
+    "ph_conversion": "msfty*ph_tend/(c1f*mut+c2f), m^2/s^3; no PH*mu_dot product rule",
+    "ph_owner": "bottom interface fixed/excluded, top included iff top_lid=false; 4096 when top_lid=false",
+    "thm_conversion": "FT: linear t_tend uses msfty/(c1h*mut+c2h), captured uncoupled t_tendf diffusion/addition uses 1/(c1h*mut+c2h), then add -t*c1h*mu_dot/(c1h*mut+c2h) once. CPP theta_total_raw already carries msfty, so each CPP component uses 1/theta_mass_denom and the product term is -t*theta_mass_tend/theta_mass_denom. t is perturbation theta.",
+    "thm_owner": "all physical 16x16x16 mass points; 4096"
+  },
+  "run_receipt": {
+    "build_gate": {
+      "build_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_build/pr302_phaseB_targeted_build_receipt.json",
+      "build_receipt_sha256": "cab25a3732fbad0de2b5daa9492286c24b8342cac149a2a79f87802f591a093f",
+      "changed_source_hashes": {
+        "dyn_em/module_implicit_sdirk3.F": "c4f3a332e6c25f7b698f1b7d38dec9a31a9968653eacde2c512a37ef3c35c241",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.h": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h": "52e8ad866af0d79342045434fcc609ea5693b2e5add86a1566ce6e2fc87e6601",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp": "c62ad649672568df16f9a0f4e5af608c8bd1bf8664eb25b9c7da0e72f9d8f94c",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "cb874bf9d1f2a4f48a26fdd36e35931cc15df3ee481656a2c6a6a830b16b618b",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "5c047ec93a852016df5b6f09a72e043e2146adc197f2fcab1d21fb3637958cfe"
+      },
+      "configure_sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289",
+      "cpp_archive_sha256": "20142c079bcb883433a73637a8d1d63da008ed91e1f5292290caefcd825c6912",
+      "cpp_component_schema": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_pressure/phase_b_candidate_schema_v2.json",
+      "cpp_component_schema_sha256": "389720f8210ca611f489131c34c2dc0c8c831e41d1825a06aa51d2d89fb64994",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "exe_sha256": "8c3f4cb140a03e7184548b57e7bcaccd38d3195f74123b7bd73955b70ce20a5c",
+      "fixture_sha256": "c3a9de12c683ce9f6e6a9abb4f23e9c146ff9471399eb609cf4453ce0a357b3c",
+      "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+      "namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+      "phaseA_exe_backup_sha256": "d7c08bd48f31cf434d0034ae4d1b91130a024750af5091a057d1d6f91b277f1d",
+      "post_build_test_only_delta": [
+        "external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp",
+        "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+        "external/libtorch_wrf/sdirk3/tests/test_fnm_fnp_rhs_contract.cpp",
+        "external/libtorch_wrf/sdirk3/tests/test_potential_temperature_contract.cpp"
+      ],
+      "pr_head": "83e2ea85caafb91c56691f957e65dce676a48999",
+      "producer_source_head": "cd6a47e208d5ef97ff675691d97ff65a69b129ae"
+    },
+    "build_preflight_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_build/pr302_phaseA_frozen_build_capture_preflight.json",
+    "build_preflight_sha256": "4dae0940c30c94b0bff38e77912963ab70debaf8337074eb24941056f32928ec",
+    "cpp_schema_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_pressure/phase_b_candidate_schema_v2.json",
+    "cpp_schema_reconciliation": null,
+    "cpp_schema_run_pin_sha256": "389720f8210ca611f489131c34c2dc0c8c831e41d1825a06aa51d2d89fb64994",
+    "cpp_schema_sha256": "389720f8210ca611f489131c34c2dc0c8c831e41d1825a06aa51d2d89fb64994",
+    "cpp_worktree_relation": {
+      "compiled_cpp_sha256": "5c047ec93a852016df5b6f09a72e043e2146adc197f2fcab1d21fb3637958cfe",
+      "current_worktree_cpp_sha256": "5c047ec93a852016df5b6f09a72e043e2146adc197f2fcab1d21fb3637958cfe",
+      "worktree_matches_phase_a_build": true
+    },
+    "executable_rehashed_if_accessible": {
+      "byte_rehashed": false,
+      "note": "pass --phase-executable to hash an exported executable; run rows and hash-checked build receipt bind this call",
+      "sha256_pinned_in_run_and_build_receipts": "8c3f4cb140a03e7184548b57e7bcaccd38d3195f74123b7bd73955b70ce20a5c"
+    },
+    "ft_schema_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_transport/pr302_fortran_component_streams_v1_schema.json",
+    "ft_schema_sha256": "9f9ef051015cdec0718b1645e8028131073b895de56e39984caf41b671514f72",
+    "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "phase_a_build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_build/pr302_phaseA_targeted_build_receipt.json",
+    "phase_a_build_receipt_sha256": "7e9408682b14c676daf559449d65534f325eb0ffe45cc6f3f6acbe538e923582",
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/pr302_phaseB_runs.json",
+    "receipt_sha256": "a87fe7cc8a0bf59477970b0fd168946bfb5a5afde5aba5bb47e983383cc0288d",
+    "runs": {
+      "cpp": {
+        "artifacts": {
+          "port_full_rhs_components_snapshot.bin": {
+            "bytes": 1392672,
+            "expected": true,
+            "present": true,
+            "sha256": "8816c7fd7f3ed67a0ecb5488576ff825c9c04403786347af09ef996ed2d5781b"
+          },
+          "port_full_rhs_snapshot.bin": {
+            "bytes": 196276,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "bytes_expected": 196276,
+              "dimensions": [
+                17,
+                17,
+                16,
+                18,
+                18,
+                17
+              ],
+              "float32_count": 24531,
+              "version": 1
+            },
+            "sha256": "2848b8c5b2974bb832b88e1ba81e9805be49a7bd78091c3b1951c8a2ddb601dc"
+          },
+          "port_hdiff_u_snapshot.bin": {
+            "bytes": 78352,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "blocks_float64": 2,
+              "bytes_expected": 78352,
+              "shape_jki": [
+                17,
+                16,
+                18
+              ],
+              "version": 1
+            },
+            "sha256": "ce8eb987cebae99b46a45af666fd512f5f49c3a66da4c449513f00548860574b"
+          },
+          "port_u_pgf_operands_snapshot.bin": {
+            "bytes": 150300,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "bytes_expected": 150300,
+              "payload_blocks": [
+                "p_prime",
+                "al_prime",
+                "alt",
+                "ph"
+              ],
+              "shape": [
+                17,
+                16,
+                17,
+                17
+              ],
+              "version": 1
+            },
+            "sha256": "1f17ec01cdc14c737c1b65d44851cdd2a761ebe3b9b183b7a7bd68dff5f101c5"
+          },
+          "port_u_pgf_snapshot.bin": {
+            "bytes": 352956,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "bytes_expected": 352956,
+              "dimensions": [
+                17,
+                17,
+                16,
+                18,
+                18,
+                17
+              ],
+              "payload_blocks": [
+                "input_state",
+                "coupled_pgf",
+                "velocity_mass_u",
+                "unscaled_pgf",
+                "alpha_u"
+              ],
+              "state_float64_count": 24531,
+              "version": 2
+            },
+            "sha256": "6a32a0580fb8b5a41c0969106ebfc200bd3a3d82e576914040845d843aef3406"
+          },
+          "port_vdiff_u_snapshot.bin": {
+            "bytes": 78352,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "blocks_float64": 2,
+              "bytes_expected": 78352,
+              "shape_jki": [
+                17,
+                16,
+                18
+              ],
+              "version": 1
+            },
+            "sha256": "8e6f0d4a373625f15300889ea4b64cd15a95254dfda3ee6a85823c132d31621f"
+          }
+        },
+        "build_receipt_sha256": "cab25a3732fbad0de2b5daa9492286c24b8342cac149a2a79f87802f591a093f",
+        "command": [
+          "/usr/bin/time",
+          "-l",
+          "-o",
+          "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/captures/pr302_phaseB_cpp_ark3_h15/time.log",
+          "/opt/homebrew/bin/mpirun",
+          "-np",
+          "1",
+          "--bind-to",
+          "none",
+          "/private/tmp/pr302-ph-thm-flux-20261012/main/wrf.exe"
+        ],
+        "completion_marker": true,
+        "cpp_sha256": "20142c079bcb883433a73637a8d1d63da008ed91e1f5292290caefcd825c6912",
+        "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+        "effective_native_transport_config": [
+          {
+            "native_set": 1,
+            "phi_adv_z": 1,
+            "v_sca_adv_order": 3
+          }
+        ],
+        "effective_use_input_w": {
+          "input_true": true,
+          "namelist_output_sha256": "20c5ffcf1ffefeaea3b2849f6609a2d594f82da93700bf1cf8a5d7bf44754a82",
+          "runtime_true": true
+        },
+        "executable_sha256": "8c3f4cb140a03e7184548b57e7bcaccd38d3195f74123b7bd73955b70ce20a5c",
+        "extra_sidecars": {
+          "port_full_rhs_components_snapshot.bin": {
+            "bytes": 1392672,
+            "bytes_expected": 1392672,
+            "float64_payload_blocks": 43,
+            "float64_payload_values": 149547,
+            "header_bytes": 48,
+            "header_int32": [
+              2,
+              17,
+              17,
+              16,
+              18,
+              18,
+              17,
+              24531,
+              127,
+              1,
+              1,
+              3
+            ],
+            "native_transport": {
+              "native_set": 1,
+              "phi_adv_z": 1,
+              "v_sca_adv_order": 3
+            },
+            "present": true,
+            "sha256": "8816c7fd7f3ed67a0ecb5488576ff825c9c04403786347af09ef996ed2d5781b",
+            "version": 2
+          }
+        },
+        "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+        "label": "pr302_phaseB_cpp_ark3_h15",
+        "method": "ARK3",
+        "namelist_sha256": "fded603d258432131e0b952340f2200b11efce19dd09ac3cdddf176871d729dd",
+        "pr_head": "83e2ea85caafb91c56691f957e65dce676a48999",
+        "producer_source_head": "cd6a47e208d5ef97ff675691d97ff65a69b129ae",
+        "return_code": 0,
+        "rsl_error_sha256": "9bd4cd6f818bb5536e99fa44c27ef2f9ebb09b1ce0ab65502d75a94ad96c6e7e",
+        "rsl_out_sha256": "d1eb783797a31a96723778a0b3fa9ae8c06a90d55f71ccaf457cc89eb2a9e30d",
+        "runtime_route": {
+          "actual_cpp_sdirk_route": true,
+          "config_lines": [
+            "NOTE:  Ideal cases always use hypsometric_opt=1, regardless of namelist setting",
+            "SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   17   -4   22    1   17",
+            "SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   17   -4   22    1   17",
+            "SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   17   -4   22    1   17",
+            "NOTE:  Ideal cases always use hypsometric_opt=1, regardless of namelist setting",
+            "[CONFIG] internal_fp64 = true",
+            "[CONFIG] internal_fp64_state_carry = true",
+            "[CONFIG] enable_ad_halo_exchange = 0",
+            "periodic_x=0, periodic_y=0  (PRE-SETTER defaults)",
+            "periodic_x=0",
+            "symmetric_ys=0",
+            "symmetric_ye=0",
+            "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3",
+            "periodic_x=1, periodic_y=0",
+            "symmetric_ys=1, symmetric_ye=1",
+            "SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   17   -4   22    1   17",
+            "periodic_x: YES",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "[U-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "[V-momentum] Periodic BC (handled by WRF): periodic_x=1, periodic_y=0",
+            "W-diffusion boundary handling: shrink_west=0 shrink_east=0 shrink_south=0 shrink_north=0 (periodic_x=1, periodic_y=0, owns_w/e/s/n=1/1/1/1)",
+            "SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   17   -4   22    1   17",
+            "periodic_x: YES",
+            "SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   17   -4   22    1   17",
+            "periodic_x: YES",
+            "HYPSOMETRIC_OPT=2          ,",
+            "H_MOM_ADV_ORDER= 11*5          ,",
+            "H_SCA_ADV_ORDER= 11*5          ,",
+            "PHI_ADV_Z= 11*1          ,",
+            "MIX_FULL_FIELDS= 11*F,",
+            "SDIRK3_DIFFUSION_OPTION=0          ,",
+            "SDIRK3_ENABLE_AD_HALO_EXCHANGE=F,",
+            "SDIRK3_INTERNAL_FP64=T,",
+            "SDIRK3_INTERNAL_FP64_STATE_CARRY=T,",
+            "PERIODIC_X=T, 10*F,",
+            "SYMMETRIC_YS=T, 10*F,",
+            "SYMMETRIC_YE=T, 10*F,"
+          ],
+          "effective_cpp_flags": {
+            "enable_ad_halo_exchange_zero": true,
+            "internal_fp64_state_carry_true": true,
+            "internal_fp64_true": true
+          },
+          "hypsometric_note_and_namelist_are_both_recorded": true
+        },
+        "status": "completed",
+        "time_log_sha256": "a8c03c15a199f21779b2a5bb7bca964cbf7c851f1265f06ce2df2415c2bb6503",
+        "wall_seconds": 1.20725129195489,
+        "workdir": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/captures/pr302_phaseB_cpp_ark3_h15"
+      },
+      "fortran": {
+        "artifacts": {
+          "wrf_full_rhs_snapshot.bin": {
+            "bytes": 627340,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "array_dtype": "little-endian float32",
+              "bounds": [
+                1,
+                17,
+                1,
+                17,
+                1,
+                17,
+                -4,
+                22,
+                -4,
+                22,
+                1,
+                17
+              ],
+              "bytes_expected": 627340,
+              "memory_shape_jki": [
+                27,
+                17,
+                27
+              ],
+              "rdx": 9.999999747378752e-06,
+              "rdy": 9.999999747378752e-06,
+              "v1_prefix_bytes": 478488,
+              "v2_append": [
+                "rw_tend",
+                "ph_tend",
+                "t_tend",
+                "c1f",
+                "c2f"
+              ],
+              "version": 2
+            },
+            "sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d"
+          },
+          "wrf_ph_rhs_parts.bin": {
+            "bytes": 347292,
+            "expected": true,
+            "present": true,
+            "sha256": "b4a8953cbc9d1d2aca3ac5fe95b47b3b7e366da208d8fec4b7c5c2bc5513aea7"
+          },
+          "wrf_ph_thm_add_parts.bin": {
+            "bytes": 446208,
+            "expected": true,
+            "present": true,
+            "sha256": "173ebf7fde75691b852f1ef5b713d27c1025ca039d207f1bae58d40dae3afade"
+          },
+          "wrf_ph_thm_omega.bin": {
+            "bytes": 148824,
+            "expected": true,
+            "present": true,
+            "sha256": "5164fd7b0e3e7720fc35901db45ab09687991b2700eaa3c022f69bf6c8468eb8"
+          },
+          "wrf_rk_tend_dump.bin": {
+            "bytes": 349944,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "arrays_3d_2d": [
+                7,
+                1
+              ],
+              "bounds_ims_ime_jms_jme_kms_kme": [
+                -4,
+                22,
+                -4,
+                22,
+                1,
+                17
+              ],
+              "bytes_expected": 349944,
+              "payload_dtype": "native-endian float32"
+            },
+            "sha256": "364e842a262e02c65d134ab7b559f48f2c6318007a69b483e8c53b303c9ecbde"
+          },
+          "wrf_thm_advect_parts.bin": {
+            "bytes": 248148,
+            "expected": true,
+            "present": true,
+            "sha256": "ab820f96c388318caf52f7c5323317588e1478cf498cdb8ddda2bc24a5eff695"
+          },
+          "wrf_thm_mix_parts.bin": {
+            "bytes": 198376,
+            "expected": true,
+            "present": true,
+            "sha256": "d8da83d423287e51046090fd03b3c6b3400f7605011df480241b847656b4b58f"
+          },
+          "wrf_u_hdiff_snapshot.bin": {
+            "bytes": 495780,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "bounds": [
+                1,
+                17,
+                1,
+                17,
+                1,
+                17,
+                -4,
+                22,
+                -4,
+                22,
+                1,
+                17
+              ],
+              "bytes_expected": 495780,
+              "fields_float32": 10,
+              "version": 1
+            },
+            "sha256": "df3c7cb0706d033d7a34c108a1bdb57b408bad7069ea169451189bfbab5f9e31"
+          },
+          "wrf_u_pgf_snapshot.bin": {
+            "bytes": 755680,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "bounds": [
+                1,
+                17,
+                1,
+                17,
+                1,
+                17,
+                -4,
+                22,
+                -4,
+                22,
+                1,
+                17
+              ],
+              "bytes_expected": 755680,
+              "dtype": "little-endian float32",
+              "fields_3d_2d_1d": [
+                15,
+                4,
+                5
+              ],
+              "n_moist": 2,
+              "rk_step": 1,
+              "version": 1
+            },
+            "sha256": "cf2460549d7514dc54bb456a7cde13f720efedd91b71a784fd9174b328b7fba6"
+          },
+          "wrf_u_vdiff_before.bin": {
+            "bytes": 247920,
+            "expected": true,
+            "present": true,
+            "schema": {
+              "bounds": [
+                1,
+                17,
+                1,
+                17,
+                1,
+                17,
+                -4,
+                22,
+                -4,
+                22,
+                1,
+                17
+              ],
+              "bytes_expected": 247920,
+              "fields_float32": 5,
+              "version": 1
+            },
+            "sha256": "bd4496f331daec034bd82fda82cc0d9189243b04719b2a95615a9b3586edd64e"
+          }
+        },
+        "build_receipt_sha256": "cab25a3732fbad0de2b5daa9492286c24b8342cac149a2a79f87802f591a093f",
+        "command": [
+          "/usr/bin/time",
+          "-l",
+          "-o",
+          "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/captures/pr302_phaseB_fortran_rk3_h15/time.log",
+          "/opt/homebrew/bin/mpirun",
+          "-np",
+          "1",
+          "--bind-to",
+          "none",
+          "/private/tmp/pr302-ph-thm-flux-20261012/main/wrf.exe"
+        ],
+        "completion_marker": true,
+        "cpp_sha256": "20142c079bcb883433a73637a8d1d63da008ed91e1f5292290caefcd825c6912",
+        "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+        "effective_native_transport_config": [],
+        "effective_use_input_w": {
+          "input_true": true,
+          "namelist_output_sha256": "f9d7844e478cda163fa4b6568da6e02d5095261a83d4a09f24de180a4293516a",
+          "runtime_true": true
+        },
+        "executable_sha256": "8c3f4cb140a03e7184548b57e7bcaccd38d3195f74123b7bd73955b70ce20a5c",
+        "extra_sidecars": {
+          "wrf_ph_rhs_parts.bin": {
+            "bytes": 347292,
+            "present": true,
+            "sha256": "b4a8953cbc9d1d2aca3ac5fe95b47b3b7e366da208d8fec4b7c5c2bc5513aea7"
+          },
+          "wrf_ph_thm_add_parts.bin": {
+            "bytes": 446208,
+            "present": true,
+            "sha256": "173ebf7fde75691b852f1ef5b713d27c1025ca039d207f1bae58d40dae3afade"
+          },
+          "wrf_ph_thm_omega.bin": {
+            "bytes": 148824,
+            "present": true,
+            "sha256": "5164fd7b0e3e7720fc35901db45ab09687991b2700eaa3c022f69bf6c8468eb8"
+          },
+          "wrf_thm_advect_parts.bin": {
+            "bytes": 248148,
+            "present": true,
+            "sha256": "ab820f96c388318caf52f7c5323317588e1478cf498cdb8ddda2bc24a5eff695"
+          },
+          "wrf_thm_mix_parts.bin": {
+            "bytes": 198376,
+            "present": true,
+            "sha256": "d8da83d423287e51046090fd03b3c6b3400f7605011df480241b847656b4b58f"
+          }
+        },
+        "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+        "label": "pr302_phaseB_fortran_rk3_h15",
+        "method": "RK3",
+        "namelist_sha256": "0184a0ac4af4402a2f6fa7041c9457cc09ea5bd334dd5d666d42e44559261741",
+        "pr_head": "83e2ea85caafb91c56691f957e65dce676a48999",
+        "producer_source_head": "cd6a47e208d5ef97ff675691d97ff65a69b129ae",
+        "return_code": 0,
+        "rsl_error_sha256": "4b29fcd4c1f6c42fe0a3a83dbf5100463253e602fc8319345e5a72063e4c6ecc",
+        "rsl_out_sha256": "349244aea4963bda61112fa238af03a15cab956873ead1cc421720bda3d5a06f",
+        "runtime_route": {
+          "actual_cpp_sdirk_route": false,
+          "config_lines": [
+            "NOTE:  Ideal cases always use hypsometric_opt=1, regardless of namelist setting",
+            "NOTE:  Ideal cases always use hypsometric_opt=1, regardless of namelist setting",
+            "HYPSOMETRIC_OPT=2          ,",
+            "H_MOM_ADV_ORDER= 11*5          ,",
+            "H_SCA_ADV_ORDER= 11*5          ,",
+            "PHI_ADV_Z= 11*1          ,",
+            "MIX_FULL_FIELDS= 11*F,",
+            "SDIRK3_DIFFUSION_OPTION=0          ,",
+            "SDIRK3_ENABLE_AD_HALO_EXCHANGE=F,",
+            "SDIRK3_INTERNAL_FP64=T,",
+            "SDIRK3_INTERNAL_FP64_STATE_CARRY=T,",
+            "PERIODIC_X=T, 10*F,",
+            "SYMMETRIC_YS=T, 10*F,",
+            "SYMMETRIC_YE=T, 10*F,"
+          ],
+          "effective_cpp_flags": {
+            "enable_ad_halo_exchange_zero": false,
+            "internal_fp64_state_carry_true": false,
+            "internal_fp64_true": false
+          },
+          "hypsometric_note_and_namelist_are_both_recorded": true
+        },
+        "status": "completed",
+        "time_log_sha256": "de644c0ddf8c8680692a3875c4ba4fd55f75210241330fa3d90b7bd21caadd91",
+        "v1_prefix_parity": {
+          "baseline_sha256": "cca88b3e66a7423977ae837811f6e723d97d51f421f984e5783acf3b483bdbd8",
+          "bytes_compared": 478484,
+          "status": "passed",
+          "v2_sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d"
+        },
+        "wall_seconds": 1.5423757079988718,
+        "workdir": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_execution/phase_b/captures/pr302_phaseB_fortran_rk3_h15"
+      }
+    },
+    "schema": "pr302_phaseB_v2_two_call_capture_v1",
+    "source_export_compiled_pins": {
+      "dyn_em/module_implicit_sdirk3.F": {
+        "sha256": "c4f3a332e6c25f7b698f1b7d38dec9a31a9968653eacde2c512a37ef3c35c241",
+        "verified": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp": {
+        "sha256": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "verified": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.h": {
+        "sha256": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+        "verified": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h": {
+        "sha256": "52e8ad866af0d79342045434fcc609ea5693b2e5add86a1566ce6e2fc87e6601",
+        "verified": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp": {
+        "sha256": "c62ad649672568df16f9a0f4e5af608c8bd1bf8664eb25b9c7da0e72f9d8f94c",
+        "verified": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": {
+        "sha256": "cb874bf9d1f2a4f48a26fdd36e35931cc15df3ee481656a2c6a6a830b16b618b",
+        "verified": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+        "sha256": "5c047ec93a852016df5b6f09a72e043e2146adc197f2fcab1d21fb3637958cfe",
+        "verified": true
+      }
+    },
+    "source_pins_verified": {
+      "dyn_em/Makefile": "ca06b545b4bb7ba701530c9d62ed4e139d17465e057bc6e44bdfcad32127930e",
+      "dyn_em/module_advect_em.F": "9af8f021ba482bd695f9d3ccb974a8cb5fb005a93134b7f57e7ebe6cf1910e0d",
+      "dyn_em/module_big_step_utilities_em.F": "aabb885c142ae3f7b183dc7cd4983f98dda5362caf7ee95928e97e57594c49f1",
+      "dyn_em/module_em.F": "9d8a2b36f7f8420f3de64c57b7e1a58026e3c378f93a181213fafd3ce20a7084",
+      "dyn_em/module_first_rk_step_part2.F": "94f0de1e8e72643ed8d65d374bad3081fa13e9b038122fe5dcdf0f1cc935aa61",
+      "dyn_em/module_sdirk3_advect_u_diag.F": "b90569ab2c5fd675710c8ac91be29b119fe65dc9bdfa583707ace443c4d373f0",
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "5c047ec93a852016df5b6f09a72e043e2146adc197f2fcab1d21fb3637958cfe"
+    },
+    "target_head": null
+  },
+  "same_case_input": {
+    "cpp_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "ft_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "required_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df"
+  },
+  "schema": "pr302-phase-component-analysis-v1",
+  "scope": "One actual first-call Full RK state; offline same-call component accounting only.",
+  "source60_proof": {
+    "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/pr301_portable_verification.json",
+    "sha256": "b73b52861777058039c18ceb66d26d01243ba1d8daa233a2067a850633847ecd",
+    "source60_sha256": "9b657c04aeb278afe9d822f75ee8ced5d668f664f7c3ec201a2249643e79efdb",
+    "status": "verified"
+  },
+  "state_context_gate": {
+    "active_omega_operator_extent": "16x17x16 [j=0:16,k=0:17,i=0:16], from source active loops",
+    "all_five_ft_stream_headers_valid": true,
+    "bounds_spacing_and_rk1_identity_match": true,
+    "cpp_flags": {
+      "buoyancy_use_current_w": true,
+      "canonical_horizontal": true,
+      "effective_wrf_omega": true,
+      "mode_full": true,
+      "nonhydrostatic": true,
+      "ph_use_rdnw_not_rdzw": true,
+      "raw_mask": 127,
+      "wrf_mass_flux": true
+    },
+    "cpp_native_selectors": {
+      "native_phi_adv_z": 1,
+      "native_set": 1,
+      "native_v_sca_adv_order": 3
+    },
+    "cpp_packet_input_equals_cpp_full_physical_state": true,
+    "cpp_packet_version": 2,
+    "cpp_projected_equals_cpp_input_physical_state": true,
+    "ft_ph_ww_and_thm_rom_equal_actual_wwE_on_source_active_extent": true,
+    "ft_runtime_flags": {
+      "dt": 15.0,
+      "h_order": 5,
+      "ieva": 0,
+      "nonhydro": 1,
+      "phi_adv_z": 1,
+      "rk_step": 1,
+      "scalar_adv_opt": 1,
+      "time_step": 15,
+      "top_lid": 0,
+      "v_order": 3,
+      "zadvect_implicit": 0
+    },
+    "packed_17x17x17_edge_values": "raw alias diagnostic only; no semantic equality gate",
+    "phase_a_t_and_physical_ph_match_current_ft_full": true,
+    "physical_six_state_current_ft_cpp_exact": true,
+    "physical_six_state_current_vs_archived_source60_pr301_exact": true,
+    "source60_proof_reports_all_six_ft_cpp_source_states_exact": true
+  },
+  "status": "state_context_gates_passed"
+}

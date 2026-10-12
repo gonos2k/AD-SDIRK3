@@ -384,6 +384,48 @@ torch::Tensor coriolis_w_stage(
     return torch::cat({zero_lvl, term, zero_lvl}, 1);                           // {ny,nz_w,nx}
 }
 
+PhiVerticalAdvection phi_vertical_advection(
+    const torch::Tensor& ph_total, const torch::Tensor& omega,
+    const torch::Tensor& metric, const torch::Tensor& fnm, const torch::Tensor& fnp,
+    int phi_adv_z) {
+    TORCH_CHECK(phi_adv_z == 1 || phi_adv_z == 2,
+                "phi_adv_z must be 1 or 2, got ", phi_adv_z);
+    TORCH_CHECK(ph_total.dim() == 3 && omega.sizes() == ph_total.sizes(),
+                "PH vertical transport expects matching [j,k,i] geopotential and omega");
+    const int64_t nzw = ph_total.size(1);
+    const int64_t nz = nzw - 1;
+    TORCH_CHECK(nz >= 1 && metric.numel() >= nz && fnm.numel() >= nzw && fnp.numel() >= nzw,
+                "PH vertical transport metric/weight extents do not cover the state");
+    auto dphi = ph_total.slice(1, 1, nzw) - ph_total.slice(1, 0, nz);
+    auto scale = metric.slice(0, 0, nz).view({1, nz, 1});
+    auto interval_gradient = scale * dphi;
+    auto upper = torch::zeros_like(ph_total);
+    auto lower = torch::zeros_like(ph_total);
+    if (nz > 1) {
+        upper.slice(1, 1, nz).copy_(interval_gradient.slice(1, 1, nz));
+        lower.slice(1, 1, nz).copy_(interval_gradient.slice(1, 0, nz - 1));
+    }
+    auto tendency = torch::zeros_like(ph_total);
+    if (nz > 1) {
+        const auto fnm_i = fnm.slice(0, 1, nz).view({1, nz - 1, 1});
+        const auto fnp_i = fnp.slice(0, 1, nz).view({1, nz - 1, 1});
+        if (phi_adv_z == 2) {
+            const auto fnm_full = fnm.slice(0, 0, nzw).view({1, nzw, 1});
+            const auto fnp_full = fnp.slice(0, 0, nzw).view({1, nzw, 1});
+            tendency = -omega * (fnm_full * upper + fnp_full * lower);
+        } else {
+            // Preserve Fortran option-1 evaluation order: destagger omega, multiply
+            // by signed metric and dPhi, then restagger the product with fnm/fnp.
+            const auto omega_mass = 0.5f * (omega.slice(1, 1, nzw) + omega.slice(1, 0, nz));
+            const auto mass_product = omega_mass * scale * dphi;
+            tendency.slice(1, 1, nz).copy_(
+                -(fnm_i * mass_product.slice(1, 1, nz) +
+                  fnp_i * mass_product.slice(1, 0, nz - 1)));
+        }
+    }
+    return {tendency, upper, lower};
+}
+
 // WRF rhs_ph — see header.
 torch::Tensor rhs_ph_stage(
     const torch::Tensor& ph, const torch::Tensor& phb,
@@ -393,28 +435,18 @@ torch::Tensor rhs_ph_stage(
     const torch::Tensor& msfty,
     const torch::Tensor& c1f, const torch::Tensor& c2f,
     const torch::Tensor& fnm, const torch::Tensor& fnp, const torch::Tensor& rdnw,
-    float cfn, float cfn1, float rdx, float rdy, float g) {
+    float cfn, float cfn1, float rdx, float rdy, float g, int phi_adv_z) {
     const int ny = mut.size(0), nx = mut.size(1);
     const int nz = u.size(1), nzw = nz + 1;
     auto msf_inv = torch::reciprocal(msfty).unsqueeze(1);                       // {ny,1,nx}
     auto phf = ph + phb;                                                        // {ny,nz_w,nx}
     torch::Tensor pht = torch::zeros({ny, nzw, nx}, ph.options());
 
-    // --- vertical advection (phi_adv_z default ELSE branch :1481-1497):
-    //     wdwn0[m] (m=0..nz-1) == WRF wdwn(m+2): .5*(ww(m+2)+ww(m+1))*rdnw(m+1)*dphf   [1-based]
-    // AUDIT FIX (2026-07-11): row kf (WRF k=kf+1) takes fnm(k)*wdwn(k+1)+fnp(k)*wdwn(k)
-    //   == fnm0[kf]*wdwn0[kf] + fnp0[kf]*wdwn0[kf-1], rows kf=1..nz-1 (WRF k=2..kte-1, kte==kde).
-    //   Previous code paired wdwn0[kf+1]/wdwn0[kf] (one level high) and dropped row nz-1 —
-    //   the same array/pairing advance_w (:443) already had right.
+    // PH option selection is shared with the regular Full-RHS operator.
     {
-        auto dphf = phf.index({SL(), Slice(1, nz + 1), SL()}) - phf.index({SL(), Slice(0, nz), SL()});
-        auto ww_avg = 0.5f * (ww.index({SL(), Slice(1, nz + 1), SL()}) + ww.index({SL(), Slice(0, nz), SL()}));
-        auto wdwn = ww_avg * (-rdnw.view({1, nz, 1})) * dphf;   // wdwn0[m] == WRF wdwn(m+2), {ny,nz,nx}
-        auto wd_k   = wdwn.index({SL(), Slice(1, nz), SL()});                   // wdwn0[kf]   = WRF wdwn(k+1)
-        auto wd_km1 = wdwn.index({SL(), Slice(0, nz - 1), SL()});               // wdwn0[kf-1] = WRF wdwn(k)
-        auto fnm_i = fnm.slice(0, 1, nz).view({1, nz - 1, 1});
-        auto fnp_i = fnp.slice(0, 1, nz).view({1, nz - 1, 1});
-        pht.index_put_({SL(), Slice(1, nz), SL()}, -(fnm_i * wd_k + fnp_i * wd_km1));
+        auto phi_metric = -rdnw;
+        auto phi_adv = phi_vertical_advection(phf, ww, phi_metric, fnm, fnp, phi_adv_z);
+        pht = phi_adv.tendency;
     }
     // --- mu g w (:1500-1516): ph_t(kf=1..nz) += (c1f*mut+c2f)*g*w/msfty
     // AUDIT FIX (2026-07-11): WRF resets ph_tend(kde)=0 then adds k=2..kte with kte==kde, so the

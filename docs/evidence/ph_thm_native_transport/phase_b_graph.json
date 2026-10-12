@@ -1,0 +1,152 @@
+{
+  "timestamp_local": "2026-10-12T22:11:44+09:00",
+  "target_worktree": "/private/tmp/pr302-ph-thm-flux-20261012",
+  "target_head": "cd6a47e208d5ef97ff675691d97ff65a69b129ae",
+  "target_tree": "e3c5735c7a1ef31e622498c7933012cbf2896120",
+  "target_branch": "codex/ph-thm-flux-20261012",
+  "committed_source_binding_count": 75,
+  "phaseA_original_binding_rows": 80,
+  "phaseA_unique_paths": 74,
+  "duplicate_paths": {
+    "dyn_em/start_em.F": 2,
+    "main/ideal_em.F": 2,
+    "main/module_wrf_top.F": 2,
+    "share/input_wrf.F": 2,
+    "share/mediation_wrfmain.F": 2,
+    "share/module_io_domain.F": 2
+  },
+  "all_unique_commit_blob_mirrors_match": true,
+  "pending_test_worktree_paths": [
+    "external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp",
+    "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+    "external/libtorch_wrf/sdirk3/tests/test_fnm_fnp_rhs_contract.cpp",
+    "external/libtorch_wrf/sdirk3/tests/test_potential_temperature_contract.cpp"
+  ],
+  "changed_phaseB_sources": {
+    "dyn_em/module_implicit_sdirk3.F": "c4f3a332e6c25f7b698f1b7d38dec9a31a9968653eacde2c512a37ef3c35c241",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.h": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h": "52e8ad866af0d79342045434fcc609ea5693b2e5add86a1566ce6e2fc87e6601",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp": "c62ad649672568df16f9a0f4e5af608c8bd1bf8664eb25b9c7da0e72f9d8f94c",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "cb874bf9d1f2a4f48a26fdd36e35931cc15df3ee481656a2c6a6a830b16b618b",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "5c047ec93a852016df5b6f09a72e043e2146adc197f2fcab1d21fb3637958cfe"
+  },
+  "archive_manifest": {
+    "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_core_sources.txt",
+    "sha256": "5dca9d97f3799ff231ad079c2c4b70a8057ab98827baedc9029f979df2d34ddf",
+    "member_count": 24,
+    "members": [
+      "wrf_sdirk3_globals.cpp",
+      "wrf_sdirk3_operator_contract.cpp",
+      "wrf_sdirk3_tile_unified_interface.cpp",
+      "wrf_sdirk3_interface_zerocopy.cpp",
+      "wrf_sdirk3_zero_copy_interface.cpp",
+      "wrf_sdirk3_tile_unified.cpp",
+      "wrf_sdirk3_tile_unified_impl.cpp",
+      "wrf_sdirk3_newton_solver.cpp",
+      "wrf_sdirk3_jvp_autograd.cpp",
+      "wrf_hydrostatic_pressure.cpp",
+      "wrf_sdirk3_acoustic_substep.cpp",
+      "wrf_sdirk3_base_state_zerocopy.cpp",
+      "wrf_tile_boundary_optimizer.cpp",
+      "wrf_sdirk3_config.cpp",
+      "wrf_sdirk3_unified_preconditioner.cpp",
+      "wrf_sdirk3_unified_rhs_extended.cpp",
+      "wrf_sdirk3_cache_utils.cpp",
+      "wrf_sdirk3_boundary_ad.cpp",
+      "wrf_sdirk3_rayleigh_damping_ad.cpp",
+      "wrf_sdirk3_mpi_safety_impl.cpp",
+      "wrf_sdirk3_halo_exchange.cpp",
+      "wrf_sdirk3_ad_halo_exchange.cpp",
+      "wrf_sdirk3_rhs_run_close.cpp",
+      "wrf_sdirk3_u_slow_diagnostics.cpp"
+    ]
+  },
+  "abi_header_consumers": {
+    "direct_include_count": 14,
+    "direct_includers": [
+      "tests/raw_principal_factory.cpp",
+      "tests/test_fnm_fnp_geometry_contract.cpp",
+      "tests/test_global_norm_emitter.cpp",
+      "tests/test_native_wave_refinement.cpp",
+      "tests/test_periodic_staggered_advection.cpp",
+      "tests/test_scalar_advection_contract.cpp",
+      "tests/test_scalar_diffusion_contract.cpp",
+      "tests/test_wrf_dynamics_config.cpp",
+      "wrf_sdirk3_base_state_zerocopy.cpp",
+      "wrf_sdirk3_interface_zerocopy.cpp",
+      "wrf_sdirk3_newton_solver.cpp",
+      "wrf_sdirk3_tile_unified.cpp",
+      "wrf_sdirk3_tile_unified_impl.cpp",
+      "wrf_sdirk3_tile_unified_interface.cpp"
+    ],
+    "fixture_test_source_count": 29,
+    "fixture_test_sources": [
+      "raw_principal_factory.cpp",
+      "test_base_state_checked_abi.cpp",
+      "test_consistent_d0_phase2.cpp",
+      "test_coriolis_contract.cpp",
+      "test_curvature_coordinate_contract.cpp",
+      "test_fixed_trajectory_derivative.cpp",
+      "test_fixed_trajectory_lifecycle.cpp",
+      "test_fnm_fnp_rhs_contract.cpp",
+      "test_fp64_carry_adjoint.cpp",
+      "test_fp64_handoff_probe.cpp",
+      "test_full_tile_step.cpp",
+      "test_horizontal_mass_contract.cpp",
+      "test_horizontal_pgf_actual_rhs.cpp",
+      "test_msf_cache_reset_contract.cpp",
+      "test_msf_map_transfer_mps.cpp",
+      "test_msf_pointer_republication.cpp",
+      "test_nh_pressure_coordinate_contract.cpp",
+      "test_packed_boundary_contract.cpp",
+      "test_pgf_coordinate_contract.cpp",
+      "test_pgf_debug_contract.cpp",
+      "test_phi_coordinate_contract.cpp",
+      "test_phi_horizontal_coordinate_contract.cpp",
+      "test_potential_temperature_contract.cpp",
+      "test_rhs_preconditioner_contract.cpp",
+      "test_scalar_diffusion_contract.cpp",
+      "test_two_step_tile_adjoint.cpp",
+      "test_vertical_momentum_contract.cpp",
+      "test_w_damping_coordinate_contract.cpp",
+      "test_w_pgf_coordinate_contract.cpp"
+    ],
+    "raw_principal_actual_tile_oracle.cpp": "fixture-support source not included in the 29 test-source count"
+  },
+  "targeted_affected_subgraph": {
+    "directory": "/private/tmp/pr302-phaseb-abi-graph-20261012",
+    "command": "graphify update /private/tmp/pr302-phaseb-abi-graph-20261012 --no-cluster",
+    "source_count": 7,
+    "graph_sha256": "4b84707db1dfa4d4ab2d388537d973a8271bf9222eb109b663ad51cb635c8be1",
+    "nodes": 368,
+    "edges": 1635
+  },
+  "shared_graph_update_attempt": "graphify update /private/tmp/pr299-pressure-lineage-graph-20261012 --no-cluster refused overwrite because candidate had 2620 nodes versus existing 2646; existing aggregate preserved.",
+  "shared_graph_status": "aggregate graph remains PhaseA snapshot; current PhaseB source graph is the seven-source affected subgraph, merged only in binding inventory, not force-overwritten into aggregate.",
+  "cache_telemetry": "no per-file hit/miss report; no cache hit claimed.",
+  "manual_c_abi_route": [
+    {
+      "from": "module_implicit_sdirk3.F BIND(C) declaration L336/call L711",
+      "to": "sdirk3_tile_set_native_transport_options_checked",
+      "meaning": "called after solver creation/association; passes phi_adv_z and v_sca_adv_order as C_INT VALUE; requires return 1 or aborts initialization."
+    },
+    {
+      "from": "wrf_sdirk3_interface.h L1009",
+      "to": "wrf_sdirk3_interface_zerocopy.cpp L2450",
+      "meaning": "checked pointer lookup/dynamic_cast; calls solver-local setter and translates exceptions to status 0."
+    },
+    {
+      "from": "wrf_sdirk3_tile_unified.h fields/setter",
+      "to": "wrf_sdirk3_tile_unified_impl.cpp setNativeTransportOptions L31870",
+      "meaning": "adds two int fields; validates phi_adv_z 1/2, v_sca_adv_order 3, nz>=4, then stores."
+    },
+    {
+      "from": "computeUnifiedRHS",
+      "to": "acoustic::rhs_ph_stage / phi_vertical_advection; theta vertical flux",
+      "meaning": "PH selector reaches the shared two-order vertical operator in split and Full-RHS paths; scalar selector enables order-3 theta vertical flux."
+    }
+  ],
+  "fortran_gap": "BIND(C), initialization order, config forwarding and module_implicit call are manual authoritative-source edges; Fortran extraction is incomplete. Structural graph is not numerical proof.",
+  "scope": "source graph/ABI navigation only; no build, tests, or model run by graph task"
+}

@@ -1,0 +1,422 @@
+{
+  "active_extent": "PH/THM \u03a9 and raw operator inputs cropped to source-active 16x17x16 faces (mass THM is 16x16x16); packed 17x17x17 aliases are excluded from this audit.",
+  "arrays_npz": {
+    "bytes": 609402,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/analysis/phase_b_actual_vertical_operators.npz",
+    "sha256": "87ecadedc817b4064a1b18d96563d0048de7b88afdcf42056e90312a60594567"
+  },
+  "method": "No model call, no coefficient fit, no synthetic state. Reconstructed primitive formulas use only actual captured call operands and source-defined stencils; predictions are compared to the observed same-call full physical-rate delta fieldwise.",
+  "metrics": {
+    "ph": {
+      "actual_component_cpp_minus_ft_vertical": {
+        "count": 4096,
+        "max_abs": 9.134154243567352e-08,
+        "mean": -6.3457974916023785e-12,
+        "rms": 1.680138931198811e-08,
+        "units": "m^2/s^3"
+      },
+      "captured_ph_component_deltas": {
+        "ph_gw_vs_cpp_gw": {
+          "count": 4096,
+          "max_abs": 7.61899696111179e-10,
+          "mean": -8.611822558324439e-13,
+          "rms": 1.0241503752024017e-10
+        },
+        "ph_horizontal_vs_cpp_adv_xy": {
+          "count": 4096,
+          "max_abs": 1.210230576344229e-09,
+          "mean": -8.227011247243644e-14,
+          "rms": 1.6294213016166644e-10
+        },
+        "ph_vertical_vs_cpp_adv_z": {
+          "count": 4096,
+          "max_abs": 9.134154243567352e-08,
+          "mean": 6.345797489494958e-12,
+          "rms": 1.6801389311987554e-08
+        }
+      },
+      "cpp_phi_total_minus_ft_PH_plus_PHB": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0,
+        "units": "m^2/s^2"
+      },
+      "cpp_selected_option_primitive_vs_captured_vertical": {
+        "count": 4096,
+        "max_abs": 1.2760653548355698e-18,
+        "mean": 7.053999979446048e-21,
+        "rms": 1.9519638447514646e-19,
+        "units": "m^2/s^3"
+      },
+      "formula_cpp_option2_minus_ft_option1": {
+        "count": 4096,
+        "max_abs": 9.13951534475165e-08,
+        "mean": -1.3802660125270365e-11,
+        "rms": 1.6800945891907365e-08,
+        "units": "m^2/s^3"
+      },
+      "formula_prediction_vs_observed_total": {
+        "amplitude_rms_ratio": 0.9999693602208182,
+        "cosine": 0.9996178982161634,
+        "observed_total_delta": {
+          "count": 4096,
+          "max_abs": 9.140527625523619e-08,
+          "mean": -5.41505451170545e-12,
+          "rms": 1.6801460684952684e-08,
+          "units": "m^2/s^3"
+        },
+        "predicted": {
+          "count": 4096,
+          "max_abs": 9.13951534475165e-08,
+          "mean": -1.3802660125270365e-11,
+          "rms": 1.6800945891907365e-08,
+          "units": "m^2/s^3"
+        },
+        "predicted_minus_observed": {
+          "count": 4096,
+          "max_abs": 2.317621857449159e-09,
+          "mean": -8.387605613564916e-12,
+          "rms": 4.6445664828235024e-10,
+          "units": "m^2/s^3"
+        },
+        "unfitted_squared_delta_explained_fraction": 0.9992358189085586,
+        "unfitted_squared_residual_fraction": 0.0007641810914413931
+      },
+      "fortran_option1_primitive_vs_captured_vertical": {
+        "count": 4096,
+        "max_abs": 1.9816549752639207e-09,
+        "mean": 7.456862639439848e-12,
+        "rms": 4.1823260947852214e-10,
+        "units": "m^2/s^3"
+      },
+      "observed_full_total_cpp_minus_ft": {
+        "count": 4096,
+        "max_abs": 9.140527625523619e-08,
+        "mean": -5.41505451170545e-12,
+        "rms": 1.6801460684952684e-08,
+        "units": "m^2/s^3"
+      },
+      "vertical_component_vs_observed_total": {
+        "amplitude_rms_ratio": 0.999995751978598,
+        "cosine": 0.9999352626913968,
+        "observed_total_delta": {
+          "count": 4096,
+          "max_abs": 9.140527625523619e-08,
+          "mean": -5.41505451170545e-12,
+          "rms": 1.6801460684952684e-08,
+          "units": "m^2/s^3"
+        },
+        "predicted": {
+          "count": 4096,
+          "max_abs": 9.134154243567352e-08,
+          "mean": -6.3457974916023785e-12,
+          "rms": 1.680138931198811e-08,
+          "units": "m^2/s^3"
+        },
+        "predicted_minus_observed": {
+          "count": 4096,
+          "max_abs": 1.372832911586408e-09,
+          "mean": -9.307429798969288e-13,
+          "rms": 1.9117824289201615e-10,
+          "units": "m^2/s^3"
+        },
+        "unfitted_squared_delta_explained_fraction": 0.9998705259147586,
+        "unfitted_squared_residual_fraction": 0.0001294740852414167
+      }
+    },
+    "thm": {
+      "actual_component_cpp_minus_ft_vertical": {
+        "count": 4096,
+        "max_abs": 6.275746895745125e-10,
+        "mean": 1.5257270209411258e-14,
+        "rms": 7.305926656024327e-11,
+        "units": "K/s"
+      },
+      "add_closure": {
+        "add_increment_inclusive_of_tendf_and_heating_not_additive_with_separate_mix_terms": true,
+        "mix_after_horizontal_vs_add_tendf_before": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mix_after_horizontal_vs_add_tendf_before_units": "raw uncoupled t_tendf basis; conversion to physical K/s divides by c1h*mut+c2h",
+        "ph_add_formula_vs_after": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "ph_after_vs_current_full_v2": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "ph_rhs_after_horizontal_vs_add_before": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "thm_add_formula_vs_after": {
+          "count": 4096,
+          "max_abs": 4.5821070671081543e-07,
+          "mean": 1.3511414209688155e-10,
+          "rms": 3.5253665209580245e-08
+        },
+        "thm_add_formula_vs_after_physical_K_per_s": {
+          "metrics": {
+            "count": 4096,
+            "max_abs": 5.1431328569796355e-12,
+            "mean": 1.5165674025541391e-15,
+            "rms": 3.95700174576536e-13
+          },
+          "units": "K/s after msfty/(c1h*mut+c2h); same state makes product-rule term cancel in this closure"
+        },
+        "thm_add_formula_vs_after_raw_basis": {
+          "metrics": {
+            "count": 4096,
+            "max_abs": 4.5821070671081543e-07,
+            "mean": 1.3511414209688155e-10,
+            "rms": 3.5253665209580245e-08
+          },
+          "units": "raw t_tend basis before Full-THM physical mass conversion; do not read as K/s"
+        },
+        "thm_advection_after_vertical_vs_add_before": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "thm_advection_after_vertical_vs_add_before_units": "raw t_tend basis before physical conversion",
+        "thm_after_vs_current_full_v2": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        }
+      },
+      "captured_physical_components": {
+        "thm_horizontal_adv_vs_cpp_adv_h": {
+          "count": 4096,
+          "max_abs": 1.8677770680568067e-09,
+          "mean": -4.1354427883061593e-13,
+          "rms": 2.0118143824435061e-10
+        },
+        "thm_horizontal_mix_vs_cpp_mix_h": {
+          "count": 4096,
+          "max_abs": 5.2880485761399816e-12,
+          "mean": -1.2313026521021096e-14,
+          "rms": 3.999531751507868e-13
+        },
+        "thm_vertical_adv_vs_cpp_adv_v": {
+          "count": 4096,
+          "max_abs": 6.275746895736655e-10,
+          "mean": -1.5257270206609268e-14,
+          "rms": 7.305926656024698e-11
+        },
+        "thm_vertical_mix_vs_cpp_mix_v": {
+          "count": 4096,
+          "max_abs": 7.397752760851181e-11,
+          "mean": 3.4318220162375794e-14,
+          "rms": 5.760461130520922e-12
+        }
+      },
+      "captured_same_call_add_closure": {
+        "add_increment_inclusive_of_tendf_and_heating_not_additive_with_separate_mix_terms": true,
+        "mix_after_horizontal_vs_add_tendf_before": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mix_after_horizontal_vs_add_tendf_before_units": "raw uncoupled t_tendf basis; conversion to physical K/s divides by c1h*mut+c2h",
+        "ph_add_formula_vs_after": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "ph_after_vs_current_full_v2": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "ph_rhs_after_horizontal_vs_add_before": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "thm_add_formula_vs_after": {
+          "count": 4096,
+          "max_abs": 4.5821070671081543e-07,
+          "mean": 1.3511414209688155e-10,
+          "rms": 3.5253665209580245e-08
+        },
+        "thm_add_formula_vs_after_physical_K_per_s": {
+          "metrics": {
+            "count": 4096,
+            "max_abs": 5.1431328569796355e-12,
+            "mean": 1.5165674025541391e-15,
+            "rms": 3.95700174576536e-13
+          },
+          "units": "K/s after msfty/(c1h*mut+c2h); same state makes product-rule term cancel in this closure"
+        },
+        "thm_add_formula_vs_after_raw_basis": {
+          "metrics": {
+            "count": 4096,
+            "max_abs": 4.5821070671081543e-07,
+            "mean": 1.3511414209688155e-10,
+            "rms": 3.5253665209580245e-08
+          },
+          "units": "raw t_tend basis before Full-THM physical mass conversion; do not read as K/s"
+        },
+        "thm_advection_after_vertical_vs_add_before": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "thm_advection_after_vertical_vs_add_before_units": "raw t_tend basis before physical conversion",
+        "thm_after_vs_current_full_v2": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        }
+      },
+      "cpp_flux_primitive_vs_captured_flux": {
+        "count": 4352,
+        "max_abs": 9.289270047618814e-10,
+        "mean": -5.027551646271399e-14,
+        "rms": 1.334957965700135e-10,
+        "units": "Pa K/s"
+      },
+      "cpp_theta_flux_rebuild_error": {
+        "count": 4352,
+        "max_abs": 9.289270047618814e-10,
+        "mean": 5.027551646271399e-14,
+        "rms": 1.334957965700135e-10,
+        "units": "Pa K/s"
+      },
+      "cpp_vertical_primitive_kind": "native_same_helper_hard_order3",
+      "cpp_vertical_primitive_vs_captured_vertical": {
+        "count": 4096,
+        "max_abs": 5.003162191182312e-13,
+        "mean": 7.861697261221451e-19,
+        "rms": 9.543459353952655e-14,
+        "units": "K/s"
+      },
+      "formula_cpp_legacy_minus_ft_v3": {
+        "count": 4096,
+        "max_abs": 6.276236454462854e-10,
+        "mean": 1.6287845940681824e-14,
+        "rms": 7.304616069689203e-11,
+        "units": "K/s"
+      },
+      "formula_prediction_vs_observed_total": {
+        "amplitude_rms_ratio": 0.3930003306321927,
+        "cosine": 0.05708549280401984,
+        "observed_total_delta": {
+          "count": 4096,
+          "max_abs": 1.813833663917363e-09,
+          "mean": 4.073148635837631e-13,
+          "rms": 1.8586793700500883e-10,
+          "units": "K/s"
+        },
+        "predicted": {
+          "count": 4096,
+          "max_abs": 6.276236454462854e-10,
+          "mean": 1.6287845940681824e-14,
+          "rms": 7.304616069689203e-11,
+          "units": "K/s"
+        },
+        "predicted_minus_observed": {
+          "count": 4096,
+          "max_abs": 1.8645704830789296e-09,
+          "mean": -3.9102701764308123e-13,
+          "rms": 1.9578697369752575e-10,
+          "units": "K/s"
+        },
+        "unfitted_squared_delta_explained_fraction": -0.10958002478445006,
+        "unfitted_squared_residual_fraction": 1.10958002478445
+      },
+      "fortran_v3_primitive_vs_captured_vertical": {
+        "count": 4096,
+        "max_abs": 8.051631126595293e-12,
+        "mean": -1.0297895547459174e-15,
+        "rms": 1.0783246902280118e-12,
+        "units": "K/s"
+      },
+      "observed_full_total_cpp_minus_ft": {
+        "count": 4096,
+        "max_abs": 1.813833663917363e-09,
+        "mean": 4.073148635837631e-13,
+        "rms": 1.8586793700500883e-10,
+        "units": "K/s"
+      },
+      "vertical_component_vs_observed_total": {
+        "amplitude_rms_ratio": 0.3930708423275524,
+        "cosine": 0.05725425217256202,
+        "observed_total_delta": {
+          "count": 4096,
+          "max_abs": 1.813833663917363e-09,
+          "mean": 4.073148635837631e-13,
+          "rms": 1.8586793700500883e-10,
+          "units": "K/s"
+        },
+        "predicted": {
+          "count": 4096,
+          "max_abs": 6.275746895745125e-10,
+          "mean": 1.5257270209411258e-14,
+          "rms": 7.305926656024327e-11,
+          "units": "K/s"
+        },
+        "predicted_minus_observed": {
+          "count": 4096,
+          "max_abs": 1.8642038701838313e-09,
+          "mean": -3.9205759337435193e-13,
+          "rms": 1.9577944860969993e-10,
+          "units": "K/s"
+        },
+        "unfitted_squared_delta_explained_fraction": -0.10949473283148548,
+        "unfitted_squared_residual_fraction": 1.1094947328314855
+      }
+    }
+  },
+  "phase_a_component_analysis_sha256": "ae341f66c0d8b4ada591f708e833b8baaab03be1371d4f3dee6d79ded50c9568",
+  "provenance": {
+    "cpp_components_sha256": "8816c7fd7f3ed67a0ecb5488576ff825c9c04403786347af09ef996ed2d5781b",
+    "cpp_full_sha256": "2848b8c5b2974bb832b88e1ba81e9805be49a7bd78091c3b1951c8a2ddb601dc",
+    "ft_full_sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d",
+    "ft_omega_stream_sha256": "5164fd7b0e3e7720fc35901db45ab09687991b2700eaa3c022f69bf6c8468eb8",
+    "ft_ph_parts_sha256": "b4a8953cbc9d1d2aca3ac5fe95b47b3b7e366da208d8fec4b7c5c2bc5513aea7",
+    "ft_thm_parts_sha256": "ab820f96c388318caf52f7c5323317588e1478cf498cdb8ddda2bc24a5eff695",
+    "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df"
+  },
+  "run_receipt_sha256": "a87fe7cc8a0bf59477970b0fd168946bfb5a5afde5aba5bb47e983383cc0288d",
+  "schema": "pr302-phase-a-actual-vertical-operator-audit-v1",
+  "source_contract": {
+    "actual_cpp_flags": 127,
+    "actual_ft_phi_adv_z": 1,
+    "actual_ft_v_sca_adv_order": 3,
+    "actual_ft_zadvect_implicit": 0,
+    "cpp_effective_phi_option": 1,
+    "cpp_native_selectors": {
+      "native_phi_adv_z": 1,
+      "native_set": 1,
+      "native_v_sca_adv_order": 3
+    },
+    "cpp_packet_version": 2,
+    "omega_units": "Pa/s",
+    "phi_option1": "Fortran rhs_ph destaggers Omega, then applies RDNW*\u0394(PH+PHB), weighted with FNM/FNP.",
+    "phi_option2": "C++ Full PH vertical source applies \u03a9*(FNM*upper-gradient+FNP*lower-gradient); captured RDNW metric selection is bit 4.",
+    "thm_cpp_full": "Native V2 captures theta_flux_actual returned by the order-3 helper; legacy V1 captures theta_omega*avg_z_to_w(theta_state). Captured tendency then applies positive RDNW magnitude times vertical flux divergence.",
+    "thm_fortran": "advect_scalar v_order=3 uses boundary FZM/FZP interpolation and interior flux3 hard sign, then -RDZW*\u0394flux."
+  },
+  "status": "completed_offline_one_state"
+}
