@@ -2,6 +2,7 @@
 #include "tile_test_fixture.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <vector>
 
@@ -206,5 +207,124 @@ void check_fnm_fnp_rhs() {
         TORCH_CHECK(hevi_exp_norm <= tol && lower_boundary <= tol && upper_boundary <= tol,
                     "HEVI explicit PH or vertical boundary is nonzero: explicit=",
                     hevi_exp_norm, " bottom=", lower_boundary, " top=", upper_boundary);
+
+
+        // Native per-solver PHI_ADV_Z 1/2 on a nonuniform vertical stagger.
+        // Reuse this fixture/omega source; the no-setter path remains the old
+        // standalone PH mode-2 behavior.
+        const std::vector<double> dnw_mag{0.08, 0.17, 0.29, 0.46};
+        std::vector<float> dnw_signed(nz), rdnw_pos(nz), fnm_nz(nz, 0.0f), fnp_nz(nz, 0.0f);
+        fnp_nz[0] = 1.0f;
+        for (int kk = 0; kk < nz; ++kk) {
+            dnw_signed[kk] = static_cast<float>(-dnw_mag[kk]);
+            rdnw_pos[kk] = static_cast<float>(1.0 / dnw_mag[kk]);
+        }
+        for (int kk = 1; kk < nz; ++kk) {
+            const double dnm = 0.5 * (dnw_mag[kk - 1] + dnw_mag[kk]);
+            fnm_nz[kk] = static_cast<float>(0.5 * dnw_mag[kk - 1] / dnm);
+            fnp_nz[kk] = static_cast<float>(0.5 * dnw_mag[kk] / dnm);
+        }
+        auto grid = tile.solver.getGridInfo();
+        TORCH_CHECK(grid, "PH fixture has no GridInfo");
+        grid->rdnw = torch::from_blob(rdnw_pos.data(), {nz}, torch::kFloat32).clone();
+        grid->dnw = torch::from_blob(dnw_signed.data(), {nz}, torch::kFloat32).clone();
+        tile.solver.setVerticalInterpolationCoefficients(fnm_nz.data(), fnp_nz.data(),
+                                                        0.5f, 0.0f, 0.0f);
+        cfg.ph_use_rdnw_not_rdzw = true;
+        std::fill(tile.w.begin(), tile.w.end(), 0.0f);
+        std::fill(tile.ph.begin(), tile.ph.end(), 0.0f);
+        for (int j = 0; j < ny; ++j)
+            for (int kk = 0; kk < nz; ++kk)
+                for (int i = 0; i <= nx; ++i) {
+                    const int ii = i % nx;
+                    tile.u[(j*nz + kk)*nu + i] = static_cast<float>(
+                        0.10 * std::sin(2.0*pi*(ii + 0.31)/nx) * (1.0 + 0.2*kk));
+                }
+        for (int j = 0; j <= ny; ++j)
+            for (int kk = 0; kk < nz; ++kk)
+                for (int i = 0; i < nx; ++i) {
+                    const double wall = (j == 0 || j == ny) ? 0.0 : std::sin(pi*j/ny);
+                    tile.v[(j*nz + kk)*nx + i] = static_cast<float>(
+                        0.07 * wall * std::cos(2.0*pi*(i + 0.23)/nx) * (1.0 + 0.15*kk));
+                }
+        const auto native_base = tile.state().to(torch::kFloat64);
+        auto native_pert = native_base.clone();
+        auto native_ph = native_pert.slice(0, su + sv + sw, su + sv + 2*sw)
+                                    .view({ny, nw, nx});
+        for (int j = 0; j < ny; ++j)
+            for (int kk = 0; kk <= nz; ++kk)
+                for (int i = 0; i < nx; ++i)
+                    native_ph[j][kk][i] = 1000.0 * kk*kk;
+
+        std::vector<double> native_omega(static_cast<size_t>(ny*nw*nx), 0.0);
+        auto nom = [&](int j, int kk, int i) -> double& {
+            return native_omega[(j*nw + kk)*nx + i];
+        };
+        for (int j = 0; j < ny; ++j)
+            for (int i = 0; i < nx; ++i) {
+                std::vector<double> divv_nz(nz, 0.0);
+                double dmdt_nz = 0.0;
+                for (int kk = 0; kk < nz; ++kk) {
+                    const double du = tile.u[(j*nz + kk)*nu + i + 1] -
+                                      tile.u[(j*nz + kk)*nu + i];
+                    const double dv = tile.v[((j + 1)*nz + kk)*nx + i] -
+                                      tile.v[(j*nz + kk)*nx + i];
+                    divv_nz[kk] = dnw_signed[kk] * mu0 * rdx * (du + dv);
+                    dmdt_nz += divv_nz[kk];
+                }
+                nom(j, 0, i) = 0.0;
+                for (int kk = 0; kk < nz - 1; ++kk)
+                    nom(j, kk + 1, i) = nom(j, kk, i) -
+                        dnw_signed[kk]*dmdt_nz - divv_nz[kk];
+                nom(j, nz, i) = 0.0;
+            }
+        const auto native_ph_delta = [&]() {
+            const auto base = ph_block((tile.solver.*access(RhsTag{}))(
+                native_base, wrf::sdirk3::RhsMode::Full));
+            const auto pert = ph_block((tile.solver.*access(RhsTag{}))(
+                native_pert, wrf::sdirk3::RhsMode::Full));
+            return pert - base;
+        };
+        std::array<torch::Tensor, 3> native_expected{
+            torch::zeros({ny,nw,nx}, torch::kFloat64),
+            torch::zeros({ny,nw,nx}, torch::kFloat64),
+            torch::zeros({ny,nw,nx}, torch::kFloat64)};
+        for (int j = 0; j < ny; ++j)
+            for (int kk = 1; kk < nz; ++kk)
+                for (int i = 0; i < nx; ++i) {
+                    const auto grad = [&](int face) {
+                        return -static_cast<double>(rdnw_pos[face - 1]) *
+                            (1000.0*face*face - 1000.0*(face - 1)*(face - 1));
+                    };
+                    const double gu = grad(kk + 1), gl = grad(kk);
+                    const double om0 = nom(j,kk-1,i), om1 = nom(j,kk,i), om2 = nom(j,kk+1,i);
+                    const double wdwn_u = 0.5*(om2+om1)*gu;
+                    const double wdwn_l = 0.5*(om1+om0)*gl;
+                    native_expected[1][j][kk][i] =
+                        -(fnm_nz[kk]*wdwn_u + fnp_nz[kk]*wdwn_l)/mu0;
+                    native_expected[2][j][kk][i] =
+                        -om1*(fnm_nz[kk]*gu + fnp_nz[kk]*gl)/mu0;
+                }
+        const auto legacy_native = native_ph_delta();
+        double native_errors[3] = {0.0, 0.0, 0.0};
+        for (const int phi_mode : {1,2}) {
+            tile.solver.setNativeTransportOptions(phi_mode, 3);
+            const auto actual = native_ph_delta().to(torch::kFloat64);
+            native_errors[phi_mode] =
+                (actual-native_expected[phi_mode]).norm().item<double>() /
+                std::max(native_expected[phi_mode].norm().item<double>(), 1e-30);
+            TORCH_CHECK(std::isfinite(native_errors[phi_mode]) && native_errors[phi_mode] < 2e-10,
+                        "Full native PH mode ",phi_mode," oracle error=",native_errors[phi_mode]);
+            TORCH_CHECK(actual.select(1,0).abs().max().item<double>() == 0.0 &&
+                        actual.select(1,nz).abs().max().item<double>() == 0.0,
+                        "native PH mode has a nonzero vertical boundary response");
+        }
+        const double legacy_native_error =
+            (legacy_native.to(torch::kFloat64)-native_expected[2]).norm().item<double>() /
+            std::max(native_expected[2].norm().item<double>(), 1e-30);
+        TORCH_CHECK(legacy_native_error < 2e-10 &&
+                    (native_expected[1]-native_expected[2]).norm().item<double>() > 1e-6,
+                    "standalone PH default or nonuniform mode separation failed: legacy=",
+                    legacy_native_error);
     }
 }

@@ -325,6 +325,24 @@ int main() {
         7, 5, 7, 1.0f, 1.0f, rdnw.data(), 901, 8, 6, 8);
     check(registered != nullptr, "v2 regression solver handle registered");
     if (registered != nullptr) {
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  nullptr, 1, 3) == 0,
+              "native transport setter rejects null handle");
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  not_registered, 1, 3) == 0,
+              "native transport setter rejects unregistered handle");
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  registered, 0, 3) == 0,
+              "native transport setter rejects phi_adv_z outside 1/2");
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  registered, 2, 4) == 0,
+              "native transport setter rejects unsupported v_sca_adv_order");
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  registered, 1, 3) == 1,
+              "registered native transport setter accepts PHI_ADV_Z=1 and V_SCA_ADV_ORDER=3");
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  registered, 2, 3) == 1,
+              "registered native transport setter accepts PHI_ADV_Z=2 and V_SCA_ADV_ORDER=3");
         check(sdirk3_tile_solver_begin_fixed_trajectory_zerocopy(
                   registered, 1, nullptr, 0) == 1,
               "fixed trajectory request accepted before first publication");
@@ -368,7 +386,7 @@ int main() {
     check(registered_carry_pullback(2),
           "registered C ABI FP64 carry pullback promotes terminal for N=2");
 
-    constexpr int expected_checks = 20;
+    constexpr int expected_checks = 26;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
