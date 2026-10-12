@@ -19402,6 +19402,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto t_at_u = avg_x_to_u(t_full, u.size(2));
         
         torch::Tensor u_tend_pgf;
+        torch::Tensor u_tend_pgf_unscaled;
+        torch::Tensor alpha_u_pgf;
         
         if (p_base_.defined() && p_base_.numel() > 0 &&
             th_base_.defined() && th_base_.numel() > 0 &&
@@ -19930,7 +19932,89 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             const auto c2 = ensureC2hDevCached(u.device(), u.scalar_type())
                 .slice(0, 0, nz_actual).view({1, nz_actual, 1});
             const auto alpha_u = (canonical_horizontal ? level_mass_u : c1 * muu_3d + c2) / msfuy_3d;
+            u_tend_pgf_unscaled = u_tend_pgf;
+            alpha_u_pgf = alpha_u;
             u_tend_pgf = u_tend_pgf * (velocity_mass_u / alpha_u);
+        }
+
+        // Observe the actual Full U pressure-gradient contribution in the
+        // coupled ru_tend basis. The paired velocity mass is the denominator
+        // used by the later physical-rate conversion; this PGF contribution
+        // has no mu_tend/product-rule term of its own. Opt-in only, and does
+        // not evaluate or replace any RHS work.
+        const char* pgf_env = std::getenv("WRF_PARITY_RK_TEND_DUMP");
+        static std::atomic<bool> u_pgf_snapshot_written{false};
+        if (mode == RhsMode::Full && canonical_horizontal &&
+            wrf::sdirk3::g_sdirk3_config.imex_split_mode == 3 &&
+            isPackedPeriodicDomain() && nprocx_ == 1 && nprocy_ == 1 &&
+            pgf_env != nullptr && std::strcmp(pgf_env, "1") == 0 &&
+            !u_pgf_snapshot_written.exchange(true)) {
+            TORCH_CHECK(u_tend_pgf_unscaled.defined() && alpha_u_pgf.defined(),
+                        "Full U PGF snapshot requires the canonical physical PGF and alpha denominator");
+            const auto increment = u_tend_pgf.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+            const auto mass = velocity_mass_u.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+            const auto unscaled = u_tend_pgf_unscaled.detach()
+                .to(torch::kCPU, torch::kFloat64).contiguous();
+            const auto alpha = alpha_u_pgf.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+            const auto input_state = U.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+            const int64_t expected_state_count = ny_ * nz_ * nx_u_ + ny_v_ * nz_ * nx_
+                + ny_ * nz_w_ * nx_ + ny_ * nz_w_ * nx_ + ny_ * nz_ * nx_ + ny_ * nx_;
+            TORCH_CHECK(increment.dim() == 3 && increment.sizes() == mass.sizes() &&
+                        increment.sizes() == unscaled.sizes() && increment.sizes() == alpha.sizes(),
+                        "Full U PGF snapshot requires matching rank-3 PGF, mass, unscaled PGF, and alpha");
+            TORCH_CHECK(input_state.numel() == expected_state_count &&
+                        input_state.numel() <= std::numeric_limits<int32_t>::max(),
+                        "Full U PGF snapshot input state does not match the packed six-field dimensions");
+            const int32_t header[8] = {2, static_cast<int32_t>(nx_), static_cast<int32_t>(ny_),
+                static_cast<int32_t>(nz_), static_cast<int32_t>(nx_u_),
+                static_cast<int32_t>(ny_v_), static_cast<int32_t>(nz_w_),
+                static_cast<int32_t>(input_state.numel())};
+            const int32_t flags[1] = {native_nh ? 1 : 0};
+            std::ofstream out("port_u_pgf_snapshot.bin", std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char*>(header), sizeof(header));
+            out.write(reinterpret_cast<const char*>(flags), sizeof(flags));
+            // Input packing order matches extractStateVariables(): u,v,w,ph,t,mu.
+            out.write(reinterpret_cast<const char*>(input_state.data_ptr<double>()),
+                      static_cast<std::streamsize>(input_state.numel() * sizeof(double)));
+            out.write(reinterpret_cast<const char*>(increment.data_ptr<double>()),
+                      static_cast<std::streamsize>(increment.numel() * sizeof(double)));
+            out.write(reinterpret_cast<const char*>(mass.data_ptr<double>()),
+                      static_cast<std::streamsize>(mass.numel() * sizeof(double)));
+            out.write(reinterpret_cast<const char*>(unscaled.data_ptr<double>()),
+                      static_cast<std::streamsize>(unscaled.numel() * sizeof(double)));
+            out.write(reinterpret_cast<const char*>(alpha.data_ptr<double>()),
+                      static_cast<std::streamsize>(alpha.numel() * sizeof(double)));
+            out.close();
+            TORCH_CHECK(out, "failed writing port_u_pgf_snapshot.bin");
+
+            // These same-call RK-stage operands are small on the qualification
+            // grid and let the external oracle distinguish pressure/EOS input
+            // differences from a PGF stencil difference. The Full PGF above
+            // remains the primary capture; this file is an operand sidecar.
+            if (p_pert_mass.defined() && al_pert_mass_fs.defined() &&
+                alt_mass_fs.defined() && ph.defined()) {
+                const auto p_cpu = p_pert_mass.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+                const auto al_cpu = al_pert_mass_fs.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+                const auto alt_cpu = alt_mass_fs.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+                const auto ph_cpu = ph.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+                TORCH_CHECK(p_cpu.dim() == 3 && al_cpu.sizes() == p_cpu.sizes() &&
+                            alt_cpu.sizes() == p_cpu.sizes() && ph_cpu.dim() == 3 &&
+                            ph_cpu.size(0) == p_cpu.size(0) && ph_cpu.size(2) == p_cpu.size(2) &&
+                            ph_cpu.size(1) == p_cpu.size(1) + 1,
+                            "Full U PGF operand snapshot has inconsistent p/al/alt/ph shapes");
+                const int32_t operand_header[5] = {1, static_cast<int32_t>(p_cpu.size(0)),
+                    static_cast<int32_t>(p_cpu.size(1)), static_cast<int32_t>(p_cpu.size(2)),
+                    static_cast<int32_t>(ph_cpu.size(1))};
+                std::ofstream operands("port_u_pgf_operands_snapshot.bin",
+                                       std::ios::binary | std::ios::trunc);
+                operands.write(reinterpret_cast<const char*>(operand_header), sizeof(operand_header));
+                for (const auto* tensor : {&p_cpu, &al_cpu, &alt_cpu, &ph_cpu}) {
+                    operands.write(reinterpret_cast<const char*>(tensor->data_ptr<double>()),
+                                   static_cast<std::streamsize>(tensor->numel() * sizeof(double)));
+                }
+                operands.close();
+                TORCH_CHECK(operands, "failed writing port_u_pgf_operands_snapshot.bin");
+            }
         }
 
         ru_tend = ru_tend + u_tend_pgf;    }

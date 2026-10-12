@@ -714,17 +714,88 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
      
    ENDIF  ! IEVA
 
-   CALL horizontal_pressure_gradient( ru_tend,rv_tend,                 &
-                                       ph,alt,p,pb,al,php,cqu,cqv,     &
-                                       muu,muv,mu,c1h,c2h,fnm,fnp,rdnw,&
-                                       cf1,cf2,cf3,cfn,cfn1,           &
-                                       rdx,rdy,msfux,msfuy,            &
-                                       msfvx,msfvy,msftx,msfty,        &
-                                       config_flags, non_hydrostatic,  &
-                                       top_lid,                        &
-                                       ids, ide, jds, jde, kds, kde,   &
-                                       ims, ime, jms, jme, kms, kme,   &
-                                       its, ite, jts, jte, kts, kte   )
+   ! Opt-in actual U-PGF operand/tendency capture.  The file contains a v1
+   ! little-endian header (12 bounds, call scalars/flags), pre-call
+   ! ru_tend/rv_tend and all U-PGF operands, then post-call ru_tend/rv_tend.
+   ! Arrays are raw Fortran memory order (i,k,j); no operator is re-evaluated.
+   BLOCK
+     CHARACTER(LEN=8) :: pgf_dump_env
+     INTEGER :: pgf_dump_status, pgf_dump_unit, pgf_dump_ios, pgf_dump_close
+     INTEGER(KIND=4) :: pgf_dump_version, pgf_dump_rk_step, pgf_dump_n_moist
+     INTEGER(KIND=4) :: pgf_dump_nonhydro, pgf_dump_toplid
+     REAL(KIND=4) :: pgf_dump_rdx, pgf_dump_rdy, pgf_dump_cf1, pgf_dump_cf2, pgf_dump_cf3
+     REAL(KIND=4) :: pgf_dump_cfn, pgf_dump_cfn1
+     LOGICAL :: pgf_dump_rankok, pgf_dump_active
+     LOGICAL, SAVE :: pgf_dump_written = .FALSE.
+
+     pgf_dump_active = .FALSE.
+     pgf_dump_version = 1
+     pgf_dump_rk_step = rk_step
+     pgf_dump_n_moist = n_moist
+     pgf_dump_rdx = rdx
+     pgf_dump_rdy = rdy
+     pgf_dump_cf1 = cf1
+     pgf_dump_cf2 = cf2
+     pgf_dump_cf3 = cf3
+     pgf_dump_cfn = cfn
+     pgf_dump_cfn1 = cfn1
+     pgf_dump_nonhydro = MERGE(1,0,non_hydrostatic)
+     pgf_dump_toplid = MERGE(1,0,top_lid)
+     CALL get_environment_variable("WRF_PARITY_RK_TEND_DUMP", pgf_dump_env, STATUS=pgf_dump_status)
+     pgf_dump_rankok = .TRUE.
+#ifdef DM_PARALLEL
+     pgf_dump_rankok = ntasks == 1 .AND. ntasks_x == 1 .AND. ntasks_y == 1
+#endif
+     IF ( pgf_dump_status == 0 .AND. TRIM(pgf_dump_env) == "1" .AND. &
+          rk_step == 1 .AND. .NOT. pgf_dump_written .AND. pgf_dump_rankok .AND. &
+          its <= ids .AND. ite >= ide-1 .AND. jts <= jds .AND. jte >= jde-1 .AND. &
+          kts <= kds .AND. kte >= kde-1 .AND. &
+          config_flags%mp_physics == 0 .AND. &
+          config_flags%periodic_x .AND. .NOT. config_flags%periodic_y .AND. &
+          config_flags%symmetric_ys .AND. config_flags%symmetric_ye .AND. &
+          .NOT. config_flags%open_xs .AND. .NOT. config_flags%open_xe .AND. &
+          .NOT. config_flags%open_ys .AND. .NOT. config_flags%open_ye .AND. &
+          .NOT. config_flags%specified .AND. .NOT. config_flags%nested .AND. &
+          .NOT. config_flags%polar ) THEN
+       OPEN(NEWUNIT=pgf_dump_unit, FILE="wrf_u_pgf_snapshot.bin", FORM="unformatted", &
+            ACCESS="stream", STATUS="replace", CONVERT="little_endian", IOSTAT=pgf_dump_ios)
+       IF ( pgf_dump_ios /= 0 ) CALL wrf_error_fatal("failed opening wrf_u_pgf_snapshot.bin")
+       WRITE(pgf_dump_unit, IOSTAT=pgf_dump_ios) pgf_dump_version, &
+            ids, ide, jds, jde, kds, kde, ims, ime, jms, jme, kms, kme, &
+            pgf_dump_rk_step, pgf_dump_n_moist, &
+            pgf_dump_rdx, pgf_dump_rdy, pgf_dump_cf1, pgf_dump_cf2, pgf_dump_cf3, &
+            pgf_dump_cfn, pgf_dump_cfn1, pgf_dump_nonhydro, pgf_dump_toplid
+       IF ( pgf_dump_ios == 0 ) WRITE(pgf_dump_unit, IOSTAT=pgf_dump_ios) &
+            ru_tend, rv_tend, u, v, w, t, ph, mu, p, pb, al, alt, php, cqu, muu, c1h, c2h, &
+            msfux, msfuy, rdnw, fnm, fnp
+       IF ( pgf_dump_ios /= 0 ) THEN
+         CLOSE(pgf_dump_unit)
+         CALL wrf_error_fatal("failed writing pre-call wrf_u_pgf_snapshot.bin")
+       END IF
+       pgf_dump_active = .TRUE.
+     END IF
+
+     CALL horizontal_pressure_gradient( ru_tend,rv_tend,                 &
+                                         ph,alt,p,pb,al,php,cqu,cqv,     &
+                                         muu,muv,mu,c1h,c2h,fnm,fnp,rdnw,&
+                                         cf1,cf2,cf3,cfn,cfn1,           &
+                                         rdx,rdy,msfux,msfuy,            &
+                                         msfvx,msfvy,msftx,msfty,        &
+                                         config_flags, non_hydrostatic,  &
+                                         top_lid,                        &
+                                         ids, ide, jds, jde, kds, kde,   &
+                                         ims, ime, jms, jme, kms, kme,   &
+                                         its, ite, jts, jte, kts, kte   )
+
+     IF ( pgf_dump_active ) THEN
+       WRITE(pgf_dump_unit, IOSTAT=pgf_dump_ios) ru_tend, rv_tend
+       CLOSE(pgf_dump_unit, IOSTAT=pgf_dump_close)
+       IF ( pgf_dump_ios /= 0 .OR. pgf_dump_close /= 0 ) &
+         CALL wrf_error_fatal("failed writing post-call wrf_u_pgf_snapshot.bin")
+       pgf_dump_written = .TRUE.
+       CALL wrf_message("[PARITY PGF] wrote wrf_u_pgf_snapshot.bin (first eligible rk_step=1 call)")
+     END IF
+   END BLOCK
 
    ! [PARITY rw] TEMP: rw_tend decomposition points
    IF (config_flags%sdirk3_debug_level >= 2 .AND. rk_step == 1) THEN

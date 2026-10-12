@@ -1,0 +1,157 @@
+{
+  "all_manifest_payloads_valid": true,
+  "payload_count": 155,
+  "native_runs_added": 0,
+  "p2_tests": 3,
+  "cases": {
+    "initial": {
+      "actual_state_gate": true,
+      "all_arrays_equal": true,
+      "array_count": 16,
+      "owner_metrics": {
+        "count": 4096,
+        "cpp_scaled_over_mass_vs_unscaled_over_alpha": {
+          "count": 4352,
+          "l2_norm": 2.030597534924258e-18,
+          "max_abs": 1.0842021724855044e-19,
+          "rms": 3.078076514563075e-20
+        },
+        "ft_actual_minus_f64_oracle": {
+          "count": 4096,
+          "l2_norm": 1.72984193887946e-09,
+          "max_abs": 6.14330327765051e-10,
+          "rms": 2.702878029499157e-11
+        },
+        "new_R_old_minus_deltaPGF": {
+          "count": 4096,
+          "l2_norm": 8.550514894959862e-10,
+          "max_abs": 6.78543801010397e-11,
+          "rms": 1.3360179523374781e-11
+        },
+        "old_R": {
+          "count": 4096,
+          "l2_norm": 4.150129357042091e-06,
+          "max_abs": 2.3284785435544935e-07,
+          "rms": 6.484577120378267e-08
+        },
+        "oracle_pressure_delta": {
+          "count": 4096,
+          "l2_norm": 4.150059943945746e-06,
+          "max_abs": 2.3284883803593288e-07,
+          "rms": 6.484468662415225e-08
+        },
+        "pgf_component_delta": {
+          "count": 4096,
+          "l2_norm": 4.150123219687659e-06,
+          "max_abs": 2.3284705548645593e-07,
+          "rms": 6.484567530761968e-08
+        },
+        "projection": {
+          "cosine_similarity": 0.9999999787768646,
+          "inner_product_oldR_dot_deltaPGF": 1.7223547843830103e-11,
+          "new_remainder_old_minus_delta_pgf": {
+            "count": 4096,
+            "l2_norm": 8.550514894959862e-10,
+            "max_abs": 6.78543801010397e-11,
+            "rms": 1.3360179523374781e-11
+          },
+          "new_remainder_squared_norm": 7.311130496893043e-19,
+          "old_remainder": {
+            "count": 4096,
+            "l2_norm": 4.150129357042091e-06,
+            "max_abs": 2.3284785435544935e-07,
+            "rms": 6.484577120378267e-08
+          },
+          "old_remainder_squared_norm": 1.7223573680182596e-11,
+          "old_rms_minus_pressure_rms_is_not_used": true,
+          "pressure_component_delta_cpp_minus_ft": {
+            "count": 4096,
+            "l2_norm": 4.150123219687659e-06,
+            "max_abs": 2.3284705548645593e-07,
+            "rms": 6.484567530761968e-08
+          },
+          "pressure_delta_energy_share_of_old_R_pct": 99.9997042333207,
+          "signed_projection_share_of_old_R_pct": 99.9998499942406,
+          "squared_norm_identity_residual": -8.518642366777403e-27,
+          "squared_residual_reduction_pct": 99.99999575516055
+        }
+      }
+    },
+    "stored": {
+      "actual_state_gate": true,
+      "all_arrays_equal": true,
+      "array_count": 16,
+      "owner_metrics": {
+        "count": 4096,
+        "cpp_scaled_over_mass_vs_unscaled_over_alpha": {
+          "count": 4352,
+          "l2_norm": 1.9819668337339223e-18,
+          "max_abs": 1.0842021724855044e-19,
+          "rms": 3.0043597801308667e-20
+        },
+        "ft_actual_minus_f64_oracle": {
+          "count": 4096,
+          "l2_norm": 1.7904507013981786e-09,
+          "max_abs": 6.129212379402484e-10,
+          "rms": 2.797579220934653e-11
+        },
+        "new_R_old_minus_deltaPGF": {
+          "count": 4096,
+          "l2_norm": 1.9641631265444206e-07,
+          "max_abs": 3.437758503187633e-08,
+          "rms": 3.069004885225657e-09
+        },
+        "old_R": {
+          "count": 4096,
+          "l2_norm": 4.794831146057198e-06,
+          "max_abs": 2.651386506867557e-07,
+          "rms": 7.49192366571437e-08
+        },
+        "oracle_pressure_delta": {
+          "count": 4096,
+          "l2_norm": 4.79089052500355e-06,
+          "max_abs": 2.651232157181343e-07,
+          "rms": 7.485766445318047e-08
+        },
+        "pgf_component_delta": {
+          "count": 4096,
+          "l2_norm": 4.790894017663911e-06,
+          "max_abs": 2.651238116172815e-07,
+          "rms": 7.485771902599861e-08
+        },
+        "projection": {
+          "cosine_similarity": 0.9991606159776794,
+          "inner_product_oldR_dot_deltaPGF": 2.2952245919905626e-11,
+          "new_remainder_old_minus_delta_pgf": {
+            "count": 4096,
+            "l2_norm": 1.9641631265444206e-07,
+            "max_abs": 3.437758503187633e-08,
+            "rms": 3.069004885225657e-09
+          },
+          "new_remainder_squared_norm": 3.8579367876767537e-14,
+          "old_remainder": {
+            "count": 4096,
+            "l2_norm": 4.794831146057198e-06,
+            "max_abs": 2.651386506867557e-07,
+            "rms": 7.49192366571437e-08
+          },
+          "old_remainder_squared_norm": 2.2990405719200178e-11,
+          "old_rms_minus_pressure_rms_is_not_used": true,
+          "pressure_component_delta_cpp_minus_ft": {
+            "count": 4096,
+            "l2_norm": 4.790894017663911e-06,
+            "max_abs": 2.651238116172815e-07,
+            "rms": 7.485771902599861e-08
+          },
+          "pressure_delta_energy_share_of_old_R_pct": 99.8358435637314,
+          "signed_projection_share_of_old_R_pct": 99.8340185912305,
+          "squared_norm_identity_residual": -4.2472271137099276e-27,
+          "squared_residual_reduction_pct": 99.83219361872962
+        }
+      }
+    }
+  },
+  "zip_sha256": "7f883c89899a978dbf7c7175be805597b8ce19d2107394ec47dde9b0ec07cc0b",
+  "zip_crc_all_members_passed": true,
+  "verification_method": "Fresh delivered ZIP extraction /private/tmp/pr298-delivered-portable-extracted-20261012; verifier exited0; explicit availability/state assertions and equality of every array;3 tests."
+}
