@@ -15,6 +15,7 @@ TIMES = [f'0001-01-01_00:{m//60:02d}:{m%60:02d}' for m in (0, 60, 120, 180, 240)
 FIELDS = ('U', 'V', 'W', 'PH', 'T', 'MU')
 RAW_FIELDS = ('U', 'V', 'W', 'PH', 'PHB', 'T', 'MU', 'MUB')
 REQUIRED_LABELS = ('coarse_h3p75', 'middle_h1p875', 'fine_h0p9375')
+EXPECTED_H_SECONDS = {'coarse_h3p75': 3.75, 'middle_h1p875': 1.875, 'fine_h0p9375': 0.9375}
 
 
 def sha(path: Path) -> str:
@@ -112,6 +113,12 @@ def analyze(plan_path: Path, contract_path: Path, out_path: Path) -> dict:
     if not contract['contract_id'].startswith('dry-em-b-wave-16cubed-240s-'):
         raise ValueError('unexpected frozen contract/case')
     loaded = {label: benchmark._load_run(by_label[label], plan_path.parent) for label in REQUIRED_LABELS}
+    for label, expected_h in EXPECTED_H_SECONDS.items():
+        run = loaded[label]
+        if run['h_seconds'] != expected_h:
+            raise ValueError(f"{label}: expected h_seconds={expected_h}, got {run['h_seconds']!r}")
+        if run['method'] != 'RK3':
+            raise ValueError(f"{label}: expected method='RK3', got {run['method']!r}")
     expected_times = set(TIMES)
     for label, run in loaded.items():
         if set(run['timestamps']) != expected_times:
