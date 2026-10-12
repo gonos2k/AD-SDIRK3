@@ -1,0 +1,43 @@
+{
+  "producer_commit": "05137f9c62ef01c3e9532dda918e8fc2c66d51c8",
+  "run_recorded_base": "51527694a3cb139ae43c20532b138e4a65dd6153",
+  "all_run_sources_equal_committed_blobs": true,
+  "sources": {
+    "dyn_em/solve_em.F": {
+      "run_sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c",
+      "committed_blob_sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c",
+      "equal": true
+    },
+    "dyn_em/module_em.F": {
+      "run_sha256": "790b09734aba5db1f2fe12401e634382e3c89ef0879604a2d4cceffc6caffab6",
+      "committed_blob_sha256": "790b09734aba5db1f2fe12401e634382e3c89ef0879604a2d4cceffc6caffab6",
+      "equal": true
+    },
+    "dyn_em/module_small_step_em.F": {
+      "run_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "committed_blob_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "equal": true
+    },
+    "dyn_em/module_big_step_utilities_em.F": {
+      "run_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "committed_blob_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "equal": true
+    },
+    "dyn_em/module_implicit_sdirk3.F": {
+      "run_sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "committed_blob_sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "equal": true
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "run_sha256": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8",
+      "committed_blob_sha256": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8",
+      "equal": true
+    },
+    "dyn_em/module_first_rk_step_part2.F": {
+      "run_sha256": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c",
+      "committed_blob_sha256": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c",
+      "equal": true
+    }
+  },
+  "note": "Runs recorded the base plus exact changed-source hashes; this later code commit binds those same bytes. Documentation packaging is separate; no equation/source change after native build."
+}
