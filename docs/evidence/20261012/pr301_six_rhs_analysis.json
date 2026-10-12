@@ -1,0 +1,351 @@
+{
+  "comparison_available": true,
+  "comparisons": {
+    "mu": {
+      "absolute_rms": 3.369322404401852e-08,
+      "count": 256,
+      "max_abs": 1.2515823744085365e-07,
+      "relative_rms": 8.93155007377673e-06,
+      "relative_rms_status": "defined",
+      "signal_rms": 0.003772382594925233,
+      "units": "Pa/s"
+    },
+    "ph": {
+      "absolute_rms": 3.80669119326213e-05,
+      "count": 4096,
+      "max_abs": 9.826486934140966e-05,
+      "relative_rms": 0.0135225577961389,
+      "relative_rms_status": "defined",
+      "signal_rms": 0.002815067423375373,
+      "units": "m^2/s^3"
+    },
+    "thm": {
+      "absolute_rms": 2.5097208177313685e-07,
+      "count": 4096,
+      "max_abs": 1.3559981251785004e-06,
+      "relative_rms": 0.017208907141754444,
+      "relative_rms_status": "defined",
+      "signal_rms": 1.4583847754294425e-05,
+      "units": "K/s"
+    },
+    "u": {
+      "absolute_rms": 8.399722196386991e-08,
+      "count": 4096,
+      "max_abs": 3.7425265555570597e-07,
+      "relative_rms": 0.00022818993187724497,
+      "relative_rms_status": "defined",
+      "signal_rms": 0.00036810222639032254,
+      "units": "m/s^2"
+    },
+    "v": {
+      "absolute_rms": 8.489343691952197e-08,
+      "count": 3840,
+      "max_abs": 3.338228314677602e-07,
+      "relative_rms": 0.0014833017586003143,
+      "relative_rms_status": "defined",
+      "signal_rms": 5.723274878311331e-05,
+      "units": "m/s^2"
+    },
+    "w": {
+      "absolute_rms": 1.2009458686783969e-05,
+      "count": 4096,
+      "max_abs": 4.012320451816834e-05,
+      "relative_rms": 0.44849789234428106,
+      "relative_rms_status": "defined",
+      "signal_rms": 2.677706828010048e-05,
+      "units": "m/s^2"
+    }
+  },
+  "continuity": {
+    "dmdt_flux_basis": "raw captured coupled RU/RV, not mass-inverted velocity",
+    "dmdt_rms": 0.003772382594925233,
+    "mu_dot_rms": 0.003772382594925233,
+    "mu_dot_units": "Pa/s",
+    "mu_tend_rms": 0.0,
+    "owner_cells": 256,
+    "physical_nx_ny_nz": [
+      16,
+      16,
+      16
+    ]
+  },
+  "conversion_contract": {
+    "cpp": "C++ Full RHS U/V/W/PH/THM/MU outputs are compared as physical state rates",
+    "mu_dot": "DMDT from signed flux divergence of raw RU/RV plus captured forcing-only mu_tend",
+    "ph": "msfty*ph_tend/(c1f*mut+c2f); no PH*mu_dot product; bottom excluded, dynamic top included for top_lid=false",
+    "thm": "(msfty*t_tend - t2*c1h*mu_dot)/(c1h*mut+c2h); t2 is perturbation theta, no 300*mu_dot",
+    "units": {
+      "mu": "Pa/s",
+      "ph": "m^2/s^3",
+      "thm": "K/s",
+      "u": "m/s^2",
+      "v": "m/s^2",
+      "w": "m/s^2"
+    },
+    "w": "(msfty*rw_tend - w*c1f*mu_dot)/(c1f*mut+c2f); bottom excluded, top included for top_lid=false"
+  },
+  "cpp_snapshot": {
+    "array_order": "contiguous C [j,k,i]; mu [j,1,i]",
+    "block_shapes_jki": {
+      "mu": [
+        17,
+        1,
+        17
+      ],
+      "ph": [
+        17,
+        17,
+        17
+      ],
+      "t": [
+        17,
+        16,
+        17
+      ],
+      "u": [
+        17,
+        16,
+        18
+      ],
+      "v": [
+        18,
+        16,
+        17
+      ],
+      "w": [
+        17,
+        17,
+        17
+      ]
+    },
+    "byte_count": 196276,
+    "dims_nx_ny_nz_nxu_nyv_nzw": [
+      17,
+      17,
+      16,
+      18,
+      18,
+      17
+    ],
+    "dtype": "little-endian float32",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_cpp_ark3_h15/port_full_rhs_snapshot.bin",
+    "sha256": "10040610be1dd44c38d88cf29a0566b47166b98d05dbfe4dd6f11d1c9b69abc2",
+    "version": 1
+  },
+  "flux_identity": {
+    "u": {
+      "count": 4352,
+      "max_abs_residual": 0.015528259798884392,
+      "max_scaled_residual": 5.8150095640138236e-08,
+      "within_8_float32_eps": true
+    },
+    "v": {
+      "count": 4352,
+      "max_abs_residual": 3.069624654017389e-05,
+      "max_scaled_residual": 5.7764107139817225e-08,
+      "within_8_float32_eps": true
+    }
+  },
+  "fortran_snapshot": {
+    "array_order": "Fortran i-fastest/k/j; parsed as C [j,k,i] or [j,i]",
+    "bounds": {
+      "ide": 17,
+      "ids": 1,
+      "ime": 22,
+      "ims": -4,
+      "jde": 17,
+      "jds": 1,
+      "jme": 22,
+      "jms": -4,
+      "kde": 17,
+      "kds": 1,
+      "kme": 17,
+      "kms": 1
+    },
+    "byte_count": 627340,
+    "dtype": "little-endian float32",
+    "memory_shape_jki": [
+      27,
+      17,
+      27
+    ],
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_fortran_rk3_h15/wrf_full_rhs_snapshot.bin",
+    "scalars": {
+      "rdx": 9.999999747378752e-06,
+      "rdy": 9.999999747378752e-06
+    },
+    "sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d",
+    "v2_appended_fields": [
+      "rw_tend",
+      "ph_tend",
+      "t_tend",
+      "c1f",
+      "c2f"
+    ],
+    "version": 2
+  },
+  "method": {
+    "claim_scope": "first-stage six-component Full RHS comparison; not forecast, accuracy, or integrated AD closure",
+    "full_state_parser_source": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_analysis/analyze_full_six_rhs.py"
+  },
+  "npz": {
+    "byte_count": 414831,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_analysis/pr301_six_rhs_physical_arrays.npz",
+    "sha256": "18dabe7ae98bb2bba8a2211270e8c998259d839ecf7f490abcd849fb01886c77"
+  },
+  "owner_counts": {
+    "mu": 256,
+    "ph": 4096,
+    "thm": 4096,
+    "u": 4096,
+    "v": 3840,
+    "w": 4096
+  },
+  "owner_masks": {
+    "mu": "all physical mass cells",
+    "ph": "physical j,x; exclude bottom; top ownership follows top_lid because advance_w evolves top PH when top_lid=false",
+    "thm": "all physical mass-level cells",
+    "u": "physical j,k; unique periodic X faces i=0..15, exclude closing face i=16",
+    "v": "physical x,k and interior symmetric-Y faces j=1..15; exclude fixed walls j=0,16",
+    "w": "physical j,x; exclude fixed bottom k=0; include top k=16 only when top_lid=false"
+  },
+  "ph_vertical_regions": {
+    "bottom_fixed_k0": {
+      "cpp_minus_fortran_delta": {
+        "count": 256,
+        "max_abs": 0.0,
+        "signed_mean": 0.0,
+        "signed_rms": 0.0,
+        "units": "m^2/s^3"
+      },
+      "cpp_rate": {
+        "count": 256,
+        "max_abs": 0.0,
+        "signed_mean": 0.0,
+        "signed_rms": 0.0,
+        "units": "m^2/s^3"
+      },
+      "fortran_rate": {
+        "count": 256,
+        "max_abs": 0.0,
+        "signed_mean": 0.0,
+        "signed_rms": 0.0,
+        "units": "m^2/s^3"
+      }
+    },
+    "interior_k1_to15": {
+      "cpp_minus_fortran_delta": {
+        "count": 3840,
+        "max_abs": 9.826486934140966e-05,
+        "signed_mean": -6.74169016758907e-09,
+        "signed_rms": 3.9315337588206134e-05,
+        "units": "m^2/s^3"
+      },
+      "cpp_rate": {
+        "count": 3840,
+        "max_abs": 0.009269780479371548,
+        "signed_mean": -5.23449102889854e-05,
+        "signed_rms": 0.0026539671819632515,
+        "units": "m^2/s^3"
+      },
+      "fortran_rate": {
+        "count": 3840,
+        "max_abs": 0.009211959408605074,
+        "signed_mean": -5.233816859881781e-05,
+        "signed_rms": 0.0026206531011522274,
+        "units": "m^2/s^3"
+      }
+    },
+    "top_k16_dynamic_when_top_lid_false": {
+      "cpp_minus_fortran_delta": {
+        "count": 256,
+        "max_abs": 1.3851991029906197e-09,
+        "signed_mean": 5.349886759990526e-12,
+        "signed_rms": 5.058884407675826e-10,
+        "units": "m^2/s^3"
+      },
+      "cpp_rate": {
+        "count": 256,
+        "max_abs": 0.01084513682872057,
+        "signed_mean": 0.0005937485718146007,
+        "signed_rms": 0.004876098113622629,
+        "units": "m^2/s^3"
+      },
+      "fortran_rate": {
+        "count": 256,
+        "max_abs": 0.010845137839773185,
+        "signed_mean": 0.000593748566464714,
+        "signed_rms": 0.004876098175970859,
+        "units": "m^2/s^3"
+      }
+    }
+  },
+  "physical_grid": {
+    "fortran_v2_appended_fields": [
+      "rw_tend",
+      "ph_tend",
+      "t_tend",
+      "c1f",
+      "c2f"
+    ],
+    "nx_ny_nz": [
+      16,
+      16,
+      16
+    ]
+  },
+  "runtime_boundary_context": {
+    "source_of_value": "explicit CLI value copied from effective runtime namelist/log receipt",
+    "top_lid": false
+  },
+  "schema": "wrf-cpp-full-rhs-six-physical-components-v1",
+  "source_locations": {
+    "cpp_physical_conversions": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:25134-25230,25300-25308",
+    "fortran_mass_rate": "dyn_em/module_small_step_em.F:1090-1175",
+    "fortran_ph_equation": "dyn_em/module_big_step_utilities_em.F:1369-1511,1546-1555",
+    "fortran_thm_mass_coupling": "dyn_em/module_em.F:1158-1177",
+    "fortran_w_coupling": "dyn_em/module_big_step_utilities_em.F:329-397",
+    "project_physical_w_ph_owner_mask": "tools/benchmark_wrf_accuracy_cost.py:70-76,290-291"
+  },
+  "source_revision": {
+    "head": "2f32859d545bf5dc3e287653d8ebb1cb504df32c",
+    "working_tree_dirty": true
+  },
+  "source_sha256": {
+    "dyn_em/module_big_step_utilities_em.F": {
+      "present": true,
+      "sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71"
+    },
+    "dyn_em/module_em.F": {
+      "present": true,
+      "sha256": "790b09734aba5db1f2fe12401e634382e3c89ef0879604a2d4cceffc6caffab6"
+    },
+    "dyn_em/module_implicit_sdirk3.F": {
+      "present": true,
+      "sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a"
+    },
+    "dyn_em/module_small_step_em.F": {
+      "present": true,
+      "sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634"
+    },
+    "dyn_em/solve_em.F": {
+      "present": true,
+      "sha256": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "present": true,
+      "sha256": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8"
+    },
+    "tools/benchmark_wrf_accuracy_cost.py": {
+      "present": true,
+      "sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8"
+    }
+  },
+  "state_gate": {
+    "full_storage_exact": true,
+    "full_storage_is_audit_only": true,
+    "passed": true,
+    "periodic_u_closing_face_exact": true,
+    "physical_owned_six_field_exact": true
+  }
+}

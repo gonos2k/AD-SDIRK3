@@ -1,0 +1,11 @@
+{
+  "status": "verified",
+  "archive_sha256": "e5ca3633a90d3aaae172d376f1377179e5ebc2063f2b9e108e3c2e5acadaf6e3",
+  "fresh_unpack_root": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/pr301-fresh-unpack-4mltsyi6",
+  "portable_state_schema_verifier_returncode": 0,
+  "rate_reanalysis_24_arrays_bitwise_equal": 24,
+  "pressure_reanalysis_arrays_bitwise_equal": 13,
+  "verification_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/pr301_portable_verification.json",
+  "verification_receipt_sha256": "b73b52861777058039c18ceb66d26d01243ba1d8daa233a2067a850633847ecd",
+  "scope": "fresh relocation on recorded Python stack; no WRF integration"
+}

@@ -1,0 +1,243 @@
+{
+  "analysis_script": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_w_pressure/analyze_pressure_induced_w.py",
+    "sha256": "4e8c2df0286d456feb58985ef673153dbedac10cc3c68f9e6c5f273cf1abf20a"
+  },
+  "comparison": {
+    "cosine_full_vs_pressure": 0.9999999999935703,
+    "full_delta_cpp_minus_fortran": {
+      "count": 4096,
+      "finite": true,
+      "max_abs": 4.012320451816834e-05,
+      "mean": -1.2165966980394177e-07,
+      "rms": 1.2009458686783969e-05
+    },
+    "interior_k2_to_kde_minus1": {
+      "full_delta": {
+        "count": 3840,
+        "finite": true,
+        "max_abs": 4.012320451816834e-05,
+        "mean": -4.051071625335248e-07,
+        "rms": 1.2127118425217955e-05
+      },
+      "pressure_delta": {
+        "count": 3840,
+        "finite": true,
+        "max_abs": 4.012317709004888e-05,
+        "mean": -4.0511065439624704e-07,
+        "rms": 1.2127118192351723e-05
+      }
+    },
+    "least_squares_projection_full_onto_pressure": 1.0000000175467307,
+    "max_abs_residual_index_jki": [
+      15,
+      11,
+      15
+    ],
+    "owner_count": 4096,
+    "owner_mask": "physical unique W columns; exclude bottom fixed interface, include dynamic top (top_lid=false)",
+    "pressure_induced_delta_cpp_minus_fortran": {
+      "count": 4096,
+      "finite": true,
+      "max_abs": 4.012317709004888e-05,
+      "mean": -1.2166284955460184e-07,
+      "rms": 1.2009458475980013e-05
+    },
+    "remaining_full_minus_pressure": {
+      "count": 4096,
+      "finite": true,
+      "max_abs": 4.5563208440283897e-10,
+      "mean": 3.179750660085896e-12,
+      "rms": 4.306676610593559e-11
+    },
+    "residual_fraction_rms": 3.5860705489856263e-06,
+    "top_dynamic_kde": {
+      "full_delta": {
+        "count": 256,
+        "finite": true,
+        "max_abs": 3.098852980697373e-05,
+        "mean": 4.130052721139804e-06,
+        "rms": 1.0081098536579367e-05
+      },
+      "pressure_delta": {
+        "count": 256,
+        "finite": true,
+        "max_abs": 3.098853975623886e-05,
+        "mean": 4.130054223070077e-06,
+        "rms": 1.0081098720456479e-05
+      }
+    }
+  },
+  "inputs": {
+    "captured_mut_minus_input_mu_plus_mub": {
+      "count": 256,
+      "finite": true,
+      "max_abs": 0.0038137435913085938,
+      "mean": -0.00015259720385074615,
+      "rms": 0.0019861126094302384
+    },
+    "cpp_p_prime": {
+      "field": "p_prime",
+      "sha256": "1f17ec01cdc14c737c1b65d44851cdd2a761ebe3b9b183b7a7bd68dff5f101c5",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "stats": {
+        "count": 4096,
+        "finite": true,
+        "max_abs": 7.698960362729849,
+        "mean": 2.7527113417098956,
+        "rms": 3.546400745389959
+      }
+    },
+    "fortran_p": {
+      "field": "p",
+      "sha256": "cf2460549d7514dc54bb456a7cde13f720efedd91b71a784fd9174b328b7fba6",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "stats": {
+        "count": 4096,
+        "finite": true,
+        "max_abs": 7.702056884765625,
+        "mean": 2.753201251034625,
+        "rms": 3.547116152827705
+      }
+    },
+    "mut_c1f_c2f_msfty": "same FT Full observer capture; c1f/c2f exactly equal corrected input",
+    "p_operand_delta_cpp_minus_fortran": {
+      "count": 4096,
+      "finite": true,
+      "max_abs": 0.029657615610631183,
+      "mean": -0.0004899093247292541,
+      "rms": 0.0055443625274043664
+    },
+    "rdn": {
+      "sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+      "shape": [
+        16
+      ],
+      "source": "corrected same-call wrfinput_d01",
+      "stats": {
+        "count": 16,
+        "finite": true,
+        "max_abs": 44.989322662353516,
+        "mean": -20.260098814964294,
+        "rms": 23.631423598331814
+      }
+    },
+    "rdnw": {
+      "sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+      "shape": [
+        16
+      ],
+      "source": "corrected same-call wrfinput_d01",
+      "stats": {
+        "count": 16,
+        "finite": true,
+        "max_abs": 47.984439849853516,
+        "mean": -22.06881445646286,
+        "rms": 25.271714511209666
+      }
+    }
+  },
+  "operator": {
+    "delta_sign": "CPP minus Fortran",
+    "g": 9.81,
+    "interior": "rw_pg=(g/msfty)*rdn(k)*(p(k)-p(k-1)), Fortran k=2..kde-1",
+    "physical_conversion": "wdot_pg=msfty*rw_pg/(c1f*mut+c2f); msfty cancels",
+    "source": "dyn_em/module_big_step_utilities_em.F:2423-2503 pg_buoy_w; dry cqw=0",
+    "top": "rw_pg=(g/msfty)*(-2*rdnw(kde-1)*p(kde-1)), Fortran k=kde",
+    "units": "m/s^2"
+  },
+  "pair": {
+    "QVAPOR_all_zero": true,
+    "cqw_zero_source": "module_big_step_utilities_em.F:787-906 calc_cq sums QVAPOR species; QVAPOR input is identically zero",
+    "executable_sha256": "78b3c01abcfc3b3e8286930e62198855891ff50c3bd1dd4026cd6fef10fd43d7",
+    "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "nonhydrostatic": 1,
+    "rk_step": 1,
+    "runs_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/pr301_v2_runs.json",
+    "runs_receipt_sha256": "af28c404ba38aa0ee5072275c5fc38147a6ed97733f62f956074e1044bc05242",
+    "same_corrected_input_ft_cpp": true,
+    "target_head": "2f32859d545bf5dc3e287653d8ebb1cb504df32c",
+    "top_lid": 0
+  },
+  "receipts": {
+    "cpp_full": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_cpp_ark3_h15/port_full_rhs_snapshot.bin",
+      "sha256": "10040610be1dd44c38d88cf29a0566b47166b98d05dbfe4dd6f11d1c9b69abc2"
+    },
+    "cpp_pgf_operands": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_cpp_ark3_h15/port_u_pgf_operands_snapshot.bin",
+      "sha256": "1f17ec01cdc14c737c1b65d44851cdd2a761ebe3b9b183b7a7bd68dff5f101c5"
+    },
+    "fortran_full": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_fortran_rk3_h15/wrf_full_rhs_snapshot.bin",
+      "sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d"
+    },
+    "fortran_pgf": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_fortran_rk3_h15/wrf_u_pgf_snapshot.bin",
+      "sha256": "cf2460549d7514dc54bb456a7cde13f720efedd91b71a784fd9174b328b7fba6"
+    },
+    "full_analysis_json": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_analysis/pr301_six_rhs_analysis.json",
+      "sha256": "0b412a10e17346c905d669008ad58466232f8396cdf184bf03fca7450bbfccf4"
+    },
+    "input": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_fortran_rk3_h15/wrfinput_d01",
+      "sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df"
+    },
+    "physical_rhs_npz": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_analysis/pr301_six_rhs_physical_arrays.npz",
+      "sha256": "18dabe7ae98bb2bba8a2211270e8c998259d839ecf7f490abcd849fb01886c77"
+    }
+  },
+  "schema": "pr301-native-pressure-induced-w-delta-v1",
+  "scope": "Offline pressure-only attribution using native Fortran pg_buoy_w formula on paired captured p fields. Does not rerun either RHS and does not infer EOS/pressure-generation cause.",
+  "source_pins": {
+    "dyn_em/module_big_step_utilities_em.F": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+    "dyn_em/solve_em.F": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+    "share/module_model_constants.f90": "16ac764733b665d6fc84a7e8a603b3d482d9a1d07d364ba1bfee881e0079dae6"
+  },
+  "state_gate": {
+    "all_six_fields_pgfcalls_equal_full_within_each_solver_and_ft_cpp": true,
+    "fields": {
+      "mu": {
+        "cpp_pgf_equals_cpp_full": true,
+        "ft_pgf_equals_cpp_pgf": true,
+        "ft_pgf_equals_ft_full": true
+      },
+      "ph": {
+        "cpp_pgf_equals_cpp_full": true,
+        "ft_pgf_equals_cpp_pgf": true,
+        "ft_pgf_equals_ft_full": true
+      },
+      "t": {
+        "cpp_pgf_equals_cpp_full": true,
+        "ft_pgf_equals_cpp_pgf": true,
+        "ft_pgf_equals_ft_full": true
+      },
+      "u": {
+        "cpp_pgf_equals_cpp_full": true,
+        "ft_pgf_equals_cpp_pgf": true,
+        "ft_pgf_equals_ft_full": true
+      },
+      "v": {
+        "cpp_pgf_equals_cpp_full": true,
+        "ft_pgf_equals_cpp_pgf": true,
+        "ft_pgf_equals_ft_full": true
+      },
+      "w": {
+        "cpp_pgf_equals_cpp_full": true,
+        "ft_pgf_equals_cpp_pgf": true,
+        "ft_pgf_equals_ft_full": true
+      }
+    }
+  },
+  "status": "passed"
+}

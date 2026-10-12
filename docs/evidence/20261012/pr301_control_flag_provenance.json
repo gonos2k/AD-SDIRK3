@@ -1,0 +1,91 @@
+{
+  "schema": "pr301-cpp-control-flag-provenance-v1",
+  "target": {
+    "worktree": "/private/tmp/pr301-full-six-rhs-20261012",
+    "head": "2f32859d545bf5dc3e287653d8ebb1cb504df32c",
+    "source_hashes": {
+      "dyn_em/module_implicit_sdirk3.F": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8"
+    }
+  },
+  "run": {
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/pr301_v2_runs.json",
+    "receipt_sha256": "af28c404ba38aa0ee5072275c5fc38147a6ed97733f62f956074e1044bc05242",
+    "native_calls": 2,
+    "calls_returned_zero": true,
+    "executable_sha256": "78b3c01abcfc3b3e8286930e62198855891ff50c3bd1dd4026cd6fef10fd43d7",
+    "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df"
+  },
+  "source_order": [
+    {
+      "source": "dyn_em/module_implicit_sdirk3.F:607-615",
+      "fact": "SDIRK3 namelist configuration and wrf_sdirk3_load_env_once occur before the dedicated WRF dynamics-flag forwarding calls."
+    },
+    {
+      "source": "dyn_em/module_implicit_sdirk3.F:626-632",
+      "fact": "The Fortran config_flags%non_hydrostatic and config_flags%do_curvature values are explicitly forwarded after environment loading and before tile solver construction."
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp:4332-4339",
+      "fact": "The bool setter writes those exact names into g_sdirk3_config and emits [CONFIG] values."
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:3350-3352",
+      "fact": "Each tile solver snapshots non_hydrostatic_ from g_sdirk3_config after the Fortran setter path."
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:14500-14506,19392,19467-19490,19804-19808,20204-20209",
+      "fact": "computeUnifiedRHS defines native_nh = non_hydrostatic_ && canonical_horizontal and guards native nonhydrostatic pressure additions with it."
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:19968-19975",
+      "fact": "The U-PGF observation serializes the actual per-call native_nh boolean in the capture header."
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:22841-22847,23606-23610",
+      "fact": "Curvature branches read g_sdirk3_config.do_curvature directly during computeUnifiedRHS."
+    },
+    {
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp:4014-4017",
+      "fact": "The config setter refuses changes after workers are started."
+    }
+  ],
+  "runtime_log": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_cpp_ark3_h15/rsl.error.0000",
+    "sha256": "20a02f7296f4c8b4abb721fc7b022da2bbfbc44f601563233f9fd6788489e0cd",
+    "early_authority_lines_295_296": [
+      "[CONFIG AUTHORITY] non_hydrostatic compiled_default=false effective=false",
+      "[CONFIG AUTHORITY] do_curvature compiled_default=false effective=false"
+    ],
+    "early_effective_line_300": "[CONFIG EFFECTIVE] non_hydrostatic=off, do_curvature=off, top_lid=off",
+    "later_forwarding_lines_307_308": [
+      "[CONFIG] non_hydrostatic = true",
+      "[CONFIG] do_curvature = true"
+    ],
+    "interpretation": "Lines 295-300 are emitted during load_env_once before the explicit WRF setter calls at module_implicit_sdirk3.F:629-632. The later lines are setter echoes, consistent with source order; they are not evidence of a false setting at Full evaluation."
+  },
+  "actual_capture": {
+    "cpp_workdir": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_cpp_ark3_h15",
+    "pgf_snapshot": {
+      "path": "port_u_pgf_snapshot.bin",
+      "sha256": "6a32a0580fb8b5a41c0969106ebfc200bd3a3d82e576914040845d843aef3406",
+      "version_dims_state_count": [2,17,17,16,18,18,17,24531],
+      "native_nh_flag_int32_le_at_byte_offset_32": 1,
+      "source_writes": "impl.cpp:19968-19975"
+    },
+    "full_rhs_snapshot": {
+      "path": "port_full_rhs_snapshot.bin",
+      "sha256": "10040610be1dd44c38d88cf29a0566b47166b98d05dbfe4dd6f11d1c9b69abc2",
+      "version_dims": [1,17,17,16,18,18,17]
+    },
+    "capture_run_receipt_sha256": "af28c404ba38aa0ee5072275c5fc38147a6ed97733f62f956074e1044bc05242",
+    "same_call_six_state_gate_passed": true
+  },
+  "conclusions": {
+    "native_nonhydrostatic_u_pgf": "directly confirmed active by captured native_nh=1; source formula requires the instance flag and canonical horizontal geometry",
+    "curvature_control": "source/log chronology supports g_sdirk3_config.do_curvature=true at computeUnifiedRHS; no per-call curvature bit is serialized, so this is control-path provenance rather than an observed nonzero curvature contribution",
+    "cross_language_equation_parity": "not established by this audit",
+    "numerical_mismatch_attribution": "none"
+  }
+}
