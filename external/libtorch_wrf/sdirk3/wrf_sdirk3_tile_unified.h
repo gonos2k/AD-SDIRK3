@@ -434,7 +434,7 @@ public:
     
     ~TileSDIRK3UnifiedSolver();
 
-    // Set checked WRF-native transport selectors before the first RHS evaluation.
+    // Set checked native selectors outside a frozen trajectory; WRF sets them at creation.
     void setNativeTransportOptions(int phi_adv_z, int v_sca_adv_order);
 
     // OPT Pass33+: Explicit non-copyable/non-movable due to std::atomic and std::mutex members

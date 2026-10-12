@@ -1,0 +1,49 @@
+{
+  "schema": "pr302_phase_b_focused_tests_v1",
+  "worktree": "/private/tmp/pr302-ph-thm-flux-20261012",
+  "worktree_head_before_final_test_only_edits": "83e2ea85caafb91c56691f957e65dce676a48999",
+  "production_archive": {
+    "path": "external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+    "sha256": "20142c079bcb883433a73637a8d1d63da008ed91e1f5292290caefcd825c6912",
+    "production_source_revision": "cd6a47e208d5ef97ff675691d97ff65a69b129ae"
+  },
+  "compiler": "AppleClang 21.0.0",
+  "torch": "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/share/cmake/Torch",
+  "mpi": "Open MPI 5.0.9",
+  "wrapper_cmake": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_thm_flux/green_tests/CMakeLists.txt",
+    "sha256": "4cb9fd8903cb274191f87b926a58b98cf1059cf20c66ee5943b48bf456573017",
+    "role": "test-only targets linking the frozen native archive as IMPORTED; no production library rebuild"
+  },
+  "test_sources": {
+    "external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp": "e2449406058449d9c2b6678f5736b324eeebc1bbc476e66bb347a6bc738018bc",
+    "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp": "e60cc83986fe86c87a34f1f675e3eb3b396c70d7b517c7ed2eeb77b7fa66d59b",
+    "external/libtorch_wrf/sdirk3/tests/test_fnm_fnp_rhs_contract.cpp": "123ca923261a2aafc58259c797521f0addca956815bd601c773de21eff47d9c5",
+    "external/libtorch_wrf/sdirk3/tests/test_potential_temperature_contract.cpp": "00bc8714125fe5e968889b261c2585d2108d836179d902c97956bdda64b3bd6d"
+  },
+  "test_binaries": {
+    "test_fnm_fnp_geometry_contract": "8a1861c807c010f2aaac1a32389174e59768fc6fae0f51a59e9134b2fee65949",
+    "test_potential_temperature_contract": "449b74ce49b77bb8fd35218d4d5770c926cdb20b5ab7235ab950d57bda19f739",
+    "test_fixed_trajectory_lifecycle": "da1c70ee35171e7c1f870ba30cfbb9487eaf5e4471e8a0774f3784a7184d8bc2",
+    "test_base_state_checked_abi": "0bcfba29ab9f54b6b569ae54b260e8f70927e3b19ce6f5402f9752fcb4334f94"
+  },
+  "command": "ctest --test-dir /Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_thm_flux/green_tests/build --output-on-failure -R '^(FNM_FNP_Geometry_Contract|Potential_Temperature_Contract|Fixed_Trajectory_Lifecycle|Base_State_Checked_ABI)$'",
+  "result": {
+    "passed": 4,
+    "failed": 0,
+    "total_seconds": 36.64,
+    "log": "/Users/yhlee/AD-SDIRK3-review-evidence/ph-thm-flux-20261012/green_thm_flux/green_tests/ctest_four.log",
+    "log_sha256": "75ee0507a2dcc2d8017aeda7eeaabe1441bbf166a40a1a0299d0904145e29efd"
+  },
+  "numerical_checks": {
+    "native_ph_modes_1_and_2": "passed independent nonuniform-stagger Full-RHS oracle",
+    "native_thm_hard_v3": "passed same-state legacy-minus-hard Full-RHS delta oracle; relative error 1.94205e-14",
+    "mixed_full_rhs_ad": "passed PH and THM fieldwise JVP/VJP and full-owner-vector central-FD checks; JVP fallback false",
+    "thm_fd_levels": [
+      {"epsilon": 0.0003125, "relative_vector_error": 1.20259e-7},
+      {"epsilon": 0.00015625, "relative_vector_error": 6.03342e-8}
+    ],
+    "phase_b_model_run": false
+  },
+  "test_design_correction": "Initial randomized scalar THM cotangent canceled the field pairing, leaving no adjacent valid scalar-FD levels. Kept the 2e-7 threshold; switched to separate owner-masked full-field JVP cotangents and vector FD comparisons, with the epsilon cap derived from the measured Omega sign margin. No production code changed during this correction."
+}
