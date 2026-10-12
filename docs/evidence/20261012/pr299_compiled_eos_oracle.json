@@ -1,0 +1,65 @@
+{
+  "cases": {
+    "initial": {
+      "bitwise_equal_elements": 4096,
+      "comparison_oracle_minus_captured_FT_P": {
+        "count": 4096,
+        "max_abs_pa": 0.0,
+        "nonzero_mismatch_count": 0,
+        "rms_pa": 0.0
+      },
+      "input_sha256": "2739f22d7e6a729c528cdaf0cc8988b1f942645cd8f7af4c956dbd100b6879ea",
+      "oracle_output_sha256": "fa29a3f735929942ce55e5d6911eea8e35741c4d45b541fb8a4223dcfd098c53",
+      "run_label": "initial_fortran_rk3_h15",
+      "shape_jki": [
+        16,
+        16,
+        16
+      ],
+      "source_state": {
+        "ALT_sha256": "1c4769288eba79406558285f6ae2404b0e7c354f9277347cace7f0280651dc09",
+        "PB_sha256": "657dca1d043120c38a25a549a03931c6d13da9c0c222d065af9a29b8c313a2b0",
+        "T_sha256": "e3a980f468724e94982e35f171f4fe42b78acf086b700d8e529f3350e3cec617"
+      },
+      "target_pressure_sha256": "fa29a3f735929942ce55e5d6911eea8e35741c4d45b541fb8a4223dcfd098c53"
+    },
+    "stored": {
+      "bitwise_equal_elements": 4096,
+      "comparison_oracle_minus_captured_FT_P": {
+        "count": 4096,
+        "max_abs_pa": 0.0,
+        "nonzero_mismatch_count": 0,
+        "rms_pa": 0.0
+      },
+      "input_sha256": "78fc9f3e5bad49756d6f5c87e863a25b6ee8f0644b7a13a7a51687baa77b7355",
+      "oracle_output_sha256": "8d55edec394216aac690fd87399d36819e019beb694aae522f146c17352d0e1c",
+      "run_label": "stored_fortran_rk3_h15",
+      "shape_jki": [
+        16,
+        16,
+        16
+      ],
+      "source_state": {
+        "ALT_sha256": "86091dae6d82ab98f4729430bca2457a5f47a7c98c05f08a3ac345253b3d77b4",
+        "PB_sha256": "657dca1d043120c38a25a549a03931c6d13da9c0c222d065af9a29b8c313a2b0",
+        "T_sha256": "e3a980f468724e94982e35f171f4fe42b78acf086b700d8e529f3350e3cec617"
+      },
+      "target_pressure_sha256": "8d55edec394216aac690fd87399d36819e019beb694aae522f146c17352d0e1c"
+    }
+  },
+  "compile_command": "/opt/homebrew/bin/gfortran -O2 -ftree-vectorize -funroll-loops -Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk start_em_scalar_eos_oracle.f90 -o start_em_scalar_eos_oracle",
+  "compiler": "GNU Fortran 15.2.0 (/opt/homebrew/bin/gfortran)",
+  "compiler_binary_sha256": "0019c2383f399c1ba6aed1dc060191e793caf963c1066d254194883581098bb2",
+  "executable_sha256": "91b7a2a7468480fd25af4eb6a9b1e9d246d6b19843fb146462a3b6d3703e9ae8",
+  "flags": [
+    "-O2",
+    "-ftree-vectorize",
+    "-funroll-loops"
+  ],
+  "floating_point_flags_sha256": "f5536e53a43018b6a3653c259a6981d0341f9278be199de1109d06a44bdf43e4",
+  "formula": "p0*((rd*(t0+t)*qvf)/(p0*ALT))**cpovcv-PB with qvf=1 and source grouping; all operands/default REAL are REAL32",
+  "linker_environment_note": "The installed gfortran specs referenced missing CLT MacOSX15.sdk; explicit current Xcode SDK linker sysroot was used. This is link-only and does not alter floating-point options.",
+  "schema": "standalone-start-em-scalar-eos-oracle-v1",
+  "source_file": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-lineage-20261012/red_precision/start_em_scalar_eos_oracle.f90",
+  "source_sha256": "b53c37435be9dd34c58675e471bc0b2ce6a2404aa9f041715016054a94eee360"
+}
