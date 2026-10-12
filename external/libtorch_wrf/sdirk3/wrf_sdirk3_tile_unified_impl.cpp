@@ -189,6 +189,20 @@ inline bool adv_split_blocks_enabled() {
     return on;
 }
 
+// PR302: arm one component packet around the already-existing first Full
+// diagnostic evaluation. This file-local scope adds no RHS call or public API.
+thread_local bool pr302_full_rhs_component_capture_armed = false;
+struct Pr302FullRhsComponentCaptureScope {
+    bool previous;
+    explicit Pr302FullRhsComponentCaptureScope(bool armed)
+        : previous(pr302_full_rhs_component_capture_armed) {
+        pr302_full_rhs_component_capture_armed = armed;
+    }
+    ~Pr302FullRhsComponentCaptureScope() {
+        pr302_full_rhs_component_capture_armed = previous;
+    }
+};
+
 // 9F.D115: ARMING, so a probe reports the evaluation we are asking about.
 //
 // D113's mu trace was one-shot per RhsMode. That is strictly better than one-shot globally,
@@ -306,6 +320,7 @@ inline const char* rhs_mode_name(wrf::sdirk3::RhsMode m) {
 #include <cstdint>
 #include <limits>
 #include <vector>
+#include <utility>
 #include <algorithm>  // PARITY FIX 2025-12-25: For std::copy, std::min
 #include <atomic>     // IMEX 2026-02-01: For imex_split_check_count
 #include <mutex>      // v20.14r19: For std::call_once (periodic BC init)
@@ -6943,7 +6958,12 @@ vertical_coefficients:
                 // The stage loop will set U_ref_stage_ properly before any real RHS call.
                 U_ref_stage_ = U_n.detach().clone();
                 try {
-                    auto F_full = computeUnifiedRHS(U_n, RhsMode::Full).detach().to(torch::kCPU);
+                    torch::Tensor F_full;
+                    {
+                        Pr302FullRhsComponentCaptureScope component_capture_scope(
+                            write_full_rhs_snapshot);
+                        F_full = computeUnifiedRHS(U_n, RhsMode::Full).detach().to(torch::kCPU);
+                    }
                     if (write_full_rhs_snapshot) {
                         bool no_external_forcing = false;
                         if (F_phys.defined() && F_phys.numel() > 0) {
@@ -14501,6 +14521,34 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     const bool canonical_horizontal = use_wrf_mass_flux &&
         wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
         wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
+    // PR302's bounded same-call PH/THM component packet. The fixed V1 wire
+    // order is documented in the evidence schema; tensors are only copied
+    // when the existing first-Full diagnostic call arms this local packet.
+    struct Pr302FullRhsComponentPacket {
+        bool active = false;
+        int32_t flag_mask = 0;
+        torch::Tensor state_f32, projected_state_f32;
+        torch::Tensor ph_base, ph_total, ph_omega, ph_vert_scale;
+        torch::Tensor ph_upper, ph_lower, ph_x, ph_y, ph_z, ph_gw, ph_w_for_gw, ph_gravity;
+        torch::Tensor ph_total_raw, ph_other_raw;
+        torch::Tensor ph_physical, ph_conversion, ph_mass_w, ph_mut, ph_msfty, ph_c1f, ph_c2f;
+        torch::Tensor ph_fnm, ph_fnp;
+        torch::Tensor theta_state, theta_omega, theta_at_w, theta_flux_w;
+        torch::Tensor theta_adv_x, theta_adv_y, theta_adv_h, theta_adv_v;
+        torch::Tensor theta_mix_h, theta_mix_v, theta_total_raw, theta_other_raw;
+        torch::Tensor theta_physical, theta_mass, theta_mass_tend, theta_mass_denom;
+        torch::Tensor theta_mu_dot, theta_msfty, theta_c1h, theta_c2h, theta_rdnw;
+    } pr302_components;
+    pr302_components.active = pr302_full_rhs_component_capture_armed &&
+        mode == RhsMode::Full && canonical_horizontal && !g_export_coupled_slow;
+    if (pr302_components.active) {
+        pr302_components.state_f32 = U.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+        pr302_components.flag_mask = 1 | (use_wrf_mass_flux ? 2 : 0) |
+            (canonical_horizontal ? 4 : 0) | (non_hydrostatic_ ? 8 : 0) |
+            (wrf::sdirk3::g_sdirk3_config.ph_use_rdnw_not_rdzw ? 16 : 0) |
+            (wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp() ? 32 : 0) |
+            (wrf::sdirk3::g_sdirk3_config.buoyancy_use_current_w ? 64 : 0);
+    }
     // Native NH term 4 requires the ordinary ARK face geometry and the
     // pressure/EOS branch. Reject missing prerequisites before RHS arithmetic.
     if (non_hydrostatic_) {
@@ -14664,6 +14712,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     const auto constrained_state = projectStateBoundaries(U);
     auto [u, v, w, ph, t, mu] = extractStateVariables(constrained_state);
     PROFILE_END(rhs_unpack);
+    if (pr302_components.active) {
+        pr302_components.projected_state_f32 =
+            constrained_state.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+        pr302_components.theta_state = t.detach();
+        pr302_components.theta_mix_h = torch::zeros_like(t);
+        pr302_components.theta_mix_v = torch::zeros_like(t);
+    }
 
     // CRITICAL FIX: Extract w_ref from reference state for BOTH:
     // 1. W-momentum advection (avoid Newton feedback loop)
@@ -17613,11 +17668,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // AUTOGRAD FIX: Build t_adv_z functionally instead of mutating zeros_like tensor
         torch::Tensor t_adv_z;
+        torch::Tensor theta_omega_actual, theta_at_w_actual, theta_flux_w_actual;
 
         // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_.empty() check.
         // rdnw_ may be empty while grid_info_->rdnw is valid.
         torch::Tensor rdnw_for_t_adv = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
         bool have_rdnw_t = rdnw_for_t_adv.defined() && rdnw_for_t_adv.numel() >= nz_ - 1;
+        TORCH_CHECK(!pr302_components.active || have_rdnw_t,
+                    "PR302 Full RHS component capture requires the vertical metric used by theta advection");
         if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_t && nz_ > 3) {
             // SPLIT PATH (2026-07-11): full WRF vertical order-3 (wrf_vert_adv3) — stretch
             // fzm/fzp weights (legacy avg_z_to_w is 0.5), flux3 upwind dissipation
@@ -17628,7 +17686,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                     wrf::sdirk3::g_sdirk3_config.sign_smooth_delta);
             t_adv_z_work_ = t_adv_z;
         } else if (use_wrf_mass_flux && have_rdnw_t) {
-            const auto flux_w = wrf_ww_cp() * avg_z_to_w(t);
+            theta_omega_actual = wrf_ww_cp();
+            theta_at_w_actual = avg_z_to_w(t);
+            const auto flux_w = theta_omega_actual * theta_at_w_actual;
+            theta_flux_w_actual = flux_w;
             if (capture_theta_faces_now_) {
                 torch::NoGradGuard no_grad;
                 rhs_theta_faces_.adv_z = flux_w.detach().clone();
@@ -17701,6 +17762,16 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
             if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_H")) {
                 t_ah = torch::zeros_like(t_ah);
+            }
+            if (pr302_components.active) {
+                pr302_components.theta_adv_x = t_adv_x.detach();
+                pr302_components.theta_adv_y = t_adv_y.detach();
+                pr302_components.theta_adv_h = t_ah.detach();
+                pr302_components.theta_adv_v = t_az.detach();
+                pr302_components.theta_omega = theta_omega_actual.detach();
+                pr302_components.theta_at_w = theta_at_w_actual.detach();
+                pr302_components.theta_flux_w = theta_flux_w_actual.detach();
+                pr302_components.theta_rdnw = rdnw_for_t_adv.detach();
             }
             t_tend = t_tend + t_ah + t_az;
             if (adv_split_blocks_enabled()) {
@@ -19339,6 +19410,31 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
 
         ph_tend = ph_tend + buoyancy_term;
+
+        if (pr302_components.active) {
+            pr302_components.ph_base = ph_base_local.detach();
+            pr302_components.ph_total = ph_total.detach();
+            pr302_components.ph_omega = omega.detach();
+            pr302_components.ph_vert_scale = vert_deriv_scale.detach();
+            pr302_components.ph_upper = wdwn_upper.detach();
+            pr302_components.ph_lower = wdwn_lower.detach();
+            pr302_components.ph_x = ph_tend_x_adv.detach();
+            pr302_components.ph_y = ph_tend_y_adv.detach();
+            pr302_components.ph_z = ph_tend_z_adv.detach();
+            pr302_components.ph_gw = buoyancy_term.detach();
+            pr302_components.ph_w_for_gw = w_for_buoyancy.detach();
+            pr302_components.ph_gravity = torch::full({1}, g_val_buoy, ph.options());
+            pr302_components.ph_total_raw = ph_tend.detach();
+            pr302_components.ph_other_raw = (ph_tend - ph_tend_x_adv - ph_tend_y_adv -
+                                              ph_tend_z_adv - buoyancy_term).detach();
+            pr302_components.ph_mass_w = level_mass_w.detach();
+            pr302_components.ph_mut = mut_at_w.detach();
+            pr302_components.ph_msfty = msfty_.detach();
+            pr302_components.ph_c1f = c1f_.to(ph.device(), ph.scalar_type()).slice(0, 0, ph_nz_w).detach();
+            pr302_components.ph_c2f = c2f_.to(ph.device(), ph.scalar_type()).slice(0, 0, ph_nz_w).detach();
+            pr302_components.ph_fnm = fnm_.to(ph.device(), ph.scalar_type()).slice(0, 0, ph_nz_w).detach();
+            pr302_components.ph_fnp = fnp_.to(ph.device(), ph.scalar_type()).slice(0, 0, ph_nz_w).detach();
+        }
 
         // 9F.D117: per-term decomposition of the ph channel, on the ARMED evaluation.
         //
@@ -24092,6 +24188,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         scalar_option1 ? msfvy_ : torch::Tensor());
                 }
                 t_tend = t_tend + t_diff_h;
+                if (pr302_components.active)
+                    pr302_components.theta_mix_h = t_diff_h.detach();
             }  // end if (apply_h_diffusion)
         }  // end Step 9: HORIZONTAL DIFFUSION inner block
     }  // end Step 9: HORIZONTAL DIFFUSION
@@ -24375,9 +24473,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                 auto t_diff_v = compute_vertical_mixing_scalar(theta_for_mixing, Kv_scalar, rdnw_tensor,
                                                                    rho, t_full, mu_full, scalar_stage_rdz);
-                if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
+                const bool add_theta_diff_v =
+                    !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V");
+                if (add_theta_diff_v) {
                     t_tend = t_tend + t_diff_v;
                 }
+                if (pr302_components.active)
+                    pr302_components.theta_mix_v = add_theta_diff_v ? t_diff_v.detach() : torch::zeros_like(t_diff_v);
 
                 // PARITY FIX 2025-12-13: Add vertical diffusion for ALL moist species like WRF's vertical_diffusion_s
                 // WRF loops over all moist scalars (qv, qc, qr, qi, qs, qg, etc.)
@@ -24710,9 +24812,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                 auto t_diff_v = compute_vertical_mixing_scalar(theta_for_mixing, Kv_scalar, rdnw_tensor,
                                                                    rho, t_full, mu_full, scalar_stage_rdz);
-                if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
+                const bool add_theta_diff_v =
+                    !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V");
+                if (add_theta_diff_v) {
                     t_tend = t_tend + t_diff_v;
                 }
+                if (pr302_components.active)
+                    pr302_components.theta_mix_v = add_theta_diff_v ? t_diff_v.detach() : torch::zeros_like(t_diff_v);
 
                 // PARITY FIX 2025-12-13: Add QV vertical diffusion with mix_full_fields/qv_base handling
                 // WRF's vertical_diffusion_s uses var_mix = qv - qv_base when mix_full_fields=false
@@ -25212,6 +25318,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     auto theta_tend = g_export_coupled_slow
         ? t_tend
         : (t_tend - t * theta_mass_tend) / (theta_mass + eps_theta);
+    if (pr302_components.active) {
+        pr302_components.theta_total_raw = t_tend.detach();
+        pr302_components.theta_other_raw = (t_tend - pr302_components.theta_adv_h -
+            pr302_components.theta_adv_v - pr302_components.theta_mix_h -
+            pr302_components.theta_mix_v).detach();
+        pr302_components.theta_mass = theta_mass.detach();
+        pr302_components.theta_mass_tend = theta_mass_tend.detach();
+        pr302_components.theta_mass_denom = (theta_mass + eps_theta).detach();
+        pr302_components.theta_mu_dot = mu_tend_for_conversion.detach();
+        pr302_components.theta_msfty = msfty_.detach();
+        pr302_components.theta_c1h = c1h_.to(t.device(), t.scalar_type()).slice(0, 0, nz_).detach();
+        pr302_components.theta_c2h = c2h_.to(t.device(), t.scalar_type()).slice(0, 0, nz_).detach();
+    }
     
     // ph is geopotential, not coupled with mu, so keep as is
     // mu_tend stays as is
@@ -25257,6 +25376,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         ph_tend = check_tend(ph_tend, "ph_tend");
         theta_tend = check_tend(theta_tend, "theta_tend");
         mu_tend = check_tend(mu_tend, "mu_tend");
+    }
+    if (pr302_components.active) {
+        pr302_components.theta_physical = theta_tend.detach();
     }
     if (wrf::sdirk3::rw_term_capture_slot().armed &&
         wrf::sdirk3::rw_term_capture_slot().capture_final_w) {
@@ -25306,6 +25428,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         ? msfty_.to(ph_tend.device(), ph_tend.scalar_type()).unsqueeze(1) / level_mass_w
         : msfty_3d_ph / (mut_at_w + mut_safe_eps);
     ph_tend = ph_tend * ph_conversion;
+    if (pr302_components.active) {
+        pr302_components.ph_conversion = ph_conversion.detach();
+        pr302_components.ph_physical = ph_tend.detach();
+    }
 
     // DIAGNOSTIC: Convert each contribution to physical units for comparison
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -25370,6 +25496,94 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     t_tend_ = theta_tend;
     // PARITY FIX 2025-12-13: Save accumulated QV tendency (moisture vertical diffusion)
     qv_tend_ = qv_tend;
+
+    if (pr302_components.active) {
+        TORCH_CHECK(pr302_components.state_f32.defined() &&
+                    pr302_components.ph_total_raw.defined() &&
+                    pr302_components.ph_physical.defined() &&
+                    pr302_components.theta_omega.defined() &&
+                    pr302_components.theta_adv_h.defined() &&
+                    pr302_components.theta_adv_v.defined() &&
+                    pr302_components.theta_mix_h.defined() &&
+                    pr302_components.theta_mix_v.defined() &&
+                    pr302_components.theta_total_raw.defined() &&
+                    pr302_components.theta_physical.defined(),
+                    "PR302 Full RHS component packet is missing a required same-call term");
+        const auto theta_other_raw = pr302_components.theta_other_raw;
+        const int32_t header[9] = {
+            1, static_cast<int32_t>(nx_), static_cast<int32_t>(ny_),
+            static_cast<int32_t>(nz_), static_cast<int32_t>(nx_u_),
+            static_cast<int32_t>(ny_v_), static_cast<int32_t>(nz_w_),
+            static_cast<int32_t>(pr302_components.state_f32.numel()),
+            pr302_components.flag_mask};
+        std::ofstream out("port_full_rhs_components_snapshot.bin",
+                          std::ios::binary | std::ios::trunc);
+        TORCH_CHECK(out, "failed opening port_full_rhs_components_snapshot.bin");
+        out.write(reinterpret_cast<const char*>(header), sizeof(header));
+        out.write(reinterpret_cast<const char*>(pr302_components.state_f32.data_ptr<float>()),
+                  static_cast<std::streamsize>(pr302_components.state_f32.numel() * sizeof(float)));
+        TORCH_CHECK(pr302_components.projected_state_f32.defined() &&
+                    pr302_components.projected_state_f32.numel() == pr302_components.state_f32.numel(),
+                    "PR302 component packet projected state does not match its input state shape");
+        out.write(reinterpret_cast<const char*>(pr302_components.projected_state_f32.data_ptr<float>()),
+                  static_cast<std::streamsize>(pr302_components.projected_state_f32.numel() * sizeof(float)));
+        auto write_f64 = [&](const torch::Tensor& value, const char* name) {
+            TORCH_CHECK(value.defined(), "PR302 component packet missing ", name);
+            const auto cpu = value.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+            out.write(reinterpret_cast<const char*>(cpu.data_ptr<double>()),
+                      static_cast<std::streamsize>(cpu.numel() * sizeof(double)));
+        };
+        // Fixed V1 payload order; see the evidence schema for each shape.
+        for (const auto& item : std::array<std::pair<const char*, const torch::Tensor*>, 43>{
+                 {{"ph_base", &pr302_components.ph_base},
+                  {"ph_total", &pr302_components.ph_total},
+                  {"ph_omega", &pr302_components.ph_omega},
+                  {"ph_vert_scale", &pr302_components.ph_vert_scale},
+                  {"ph_grad_upper", &pr302_components.ph_upper},
+                  {"ph_grad_lower", &pr302_components.ph_lower},
+                  {"ph_adv_x", &pr302_components.ph_x},
+                  {"ph_adv_y", &pr302_components.ph_y},
+                  {"ph_adv_z", &pr302_components.ph_z},
+                  {"ph_gw", &pr302_components.ph_gw},
+                  {"ph_w_for_gw", &pr302_components.ph_w_for_gw},
+                  {"ph_gravity", &pr302_components.ph_gravity},
+                  {"ph_other_raw", &pr302_components.ph_other_raw},
+                  {"ph_total_raw", &pr302_components.ph_total_raw},
+                  {"ph_physical", &pr302_components.ph_physical},
+                  {"ph_conversion", &pr302_components.ph_conversion},
+                  {"ph_mass_w", &pr302_components.ph_mass_w},
+                  {"ph_mut", &pr302_components.ph_mut},
+                  {"ph_msfty", &pr302_components.ph_msfty},
+                  {"ph_c1f", &pr302_components.ph_c1f},
+                  {"ph_c2f", &pr302_components.ph_c2f},
+                  {"ph_fnm", &pr302_components.ph_fnm},
+                  {"ph_fnp", &pr302_components.ph_fnp},
+                  {"theta_state", &pr302_components.theta_state},
+                  {"theta_omega", &pr302_components.theta_omega},
+                  {"theta_at_w", &pr302_components.theta_at_w},
+                  {"theta_flux_w", &pr302_components.theta_flux_w},
+                  {"theta_adv_x", &pr302_components.theta_adv_x},
+                  {"theta_adv_y", &pr302_components.theta_adv_y},
+                  {"theta_adv_h", &pr302_components.theta_adv_h},
+                  {"theta_adv_v", &pr302_components.theta_adv_v},
+                  {"theta_mix_h", &pr302_components.theta_mix_h},
+                  {"theta_mix_v", &pr302_components.theta_mix_v},
+                  {"theta_other_raw", &theta_other_raw},
+                  {"theta_total_raw", &pr302_components.theta_total_raw},
+                  {"theta_physical", &pr302_components.theta_physical},
+                  {"theta_mass", &pr302_components.theta_mass},
+                  {"theta_mass_tend", &pr302_components.theta_mass_tend},
+                  {"theta_mass_denom", &pr302_components.theta_mass_denom},
+                  {"theta_mu_dot", &pr302_components.theta_mu_dot},
+                  {"theta_msfty", &pr302_components.theta_msfty},
+                  {"theta_c1h", &pr302_components.theta_c1h},
+                  {"theta_c2h", &pr302_components.theta_c2h}}}) {
+            write_f64(*item.second, item.first);
+        }
+        write_f64(pr302_components.theta_rdnw, "theta_rdnw");
+        out.close();
+        TORCH_CHECK(out, "failed writing port_full_rhs_components_snapshot.bin");
+    }
 
     PROFILE_START(rhs_pack);
     auto RHS = combineStateVariables(u_tend, v_tend, w_tend, ph_tend, theta_tend, mu_tend_scaled);

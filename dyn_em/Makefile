@@ -96,5 +96,8 @@ module_initialize_ideal.o: bwave_pert_scale_parse.inc
 # file", or worse, succeed against a stale .mod. make unions dependencies from all
 # sources, so declaring it here is additive and survives regeneration.
 module_advect_em.o: module_sdirk3_advect_u_diag.o
+module_big_step_utilities_em.o: module_sdirk3_advect_u_diag.o
+module_em.o: module_sdirk3_advect_u_diag.o
+module_first_rk_step_part2.o: module_sdirk3_advect_u_diag.o
 
 # DO NOT DELETE

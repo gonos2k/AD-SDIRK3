@@ -61,6 +61,7 @@ CONTAINS
 
     USE module_sfs_driver !JDM
     USE module_stoch, ONLY : update_stoch_ten, perturb_physics_tend, RAND_PERT_UPDATE, contiguize_2d
+    USE module_sdirk3_advect_u_diag, ONLY : write_thm_mix_parts
 
 
     IMPLICIT NONE
@@ -140,6 +141,9 @@ CONTAINS
     INTEGER  rk_step 
     INTEGER  n
     LOGICAL :: stepsp_test
+    LOGICAL :: thm_mix_capture
+    REAL, ALLOCATABLE, DIMENSION(:,:,:) :: thm_tendf_before_v, thm_tendf_after_v
+    REAL, ALLOCATABLE, DIMENSION(:,:,:) :: thm_tendf_before_h, thm_tendf_after_h
 
 #if ( WRF_DFI_RADAR == 1 )
     INTEGER  i_start,i_end,j_start,j_end,i,j,k
@@ -151,6 +155,7 @@ CONTAINS
  ! tendencies first (separate from dry dynamics).
 
    rk_step = 1
+   thm_mix_capture = .FALSE.
 
       IF ((grid%skebs_on==1).and.(grid%id .EQ. 1 )) then
           ! update and backtransform T
@@ -1080,6 +1085,9 @@ BENCH_START(vert_diff_tim)
                      config_flags%periodic_x .AND. .NOT. config_flags%periodic_y .AND. &
                      config_flags%symmetric_ys .AND. config_flags%symmetric_ye .AND. &
                      MAXVAL(ABS(grid%ht(ims:ime,jms:jme))) == 0. ) THEN
+                   thm_mix_capture = .TRUE.
+                   ALLOCATE(thm_tendf_before_v(ims:ime,kms:kme,jms:jme))
+                   thm_tendf_before_v = t_tendf
                    OPEN(NEWUNIT=vdiff_unit, FILE="wrf_u_vdiff_before.bin", FORM="unformatted", &
                         ACCESS="stream", STATUS="replace", CONVERT="little_endian", IOSTAT=vdiff_iostat)
                    IF (vdiff_iostat == 0) THEN
@@ -1116,6 +1124,10 @@ BENCH_START(vert_diff_tim)
                                       grid%i_start(ij), grid%i_end(ij),          &
                                       grid%j_start(ij), grid%j_end(ij),          &
                                       k_start, k_end                             )
+             IF (thm_mix_capture) THEN
+               ALLOCATE(thm_tendf_after_v(ims:ime,kms:kme,jms:jme))
+               thm_tendf_after_v = t_tendf
+             END IF
 
            ENDDO
            !$OMP END PARALLEL DO
@@ -1157,6 +1169,10 @@ BENCH_START(hor_diff_tim)
                    MAXVAL(ABS(grid%ht(ims:ime,jms:jme))) == 0. ) capture_hdiff = .TRUE.
              END IF
              IF (capture_hdiff) THEN
+               IF (thm_mix_capture) THEN
+                 ALLOCATE(thm_tendf_before_h(ims:ime,kms:kme,jms:jme))
+                 thm_tendf_before_h = t_tendf
+               END IF
                OPEN(NEWUNIT=hdiff_unit, FILE="wrf_u_hdiff_snapshot.bin", FORM="unformatted", &
                     ACCESS="stream", STATUS="replace", CONVERT="little_endian", IOSTAT=hdiff_iostat)
                IF (hdiff_iostat /= 0) CALL wrf_error_fatal("failed opening wrf_u_hdiff_snapshot.bin")
@@ -1195,6 +1211,17 @@ BENCH_START(hor_diff_tim)
                CLOSE(hdiff_unit, IOSTAT=hdiff_close)
                IF (hdiff_iostat /= 0 .OR. hdiff_close /= 0) &
                     CALL wrf_error_fatal("failed writing wrf_u_hdiff_snapshot.bin payload")
+               IF (thm_mix_capture) THEN
+                 ALLOCATE(thm_tendf_after_h(ims:ime,kms:kme,jms:jme))
+                 thm_tendf_after_h = t_tendf
+                 CALL write_thm_mix_parts( thm_tendf_before_v,thm_tendf_after_v, &
+                      thm_tendf_before_h,thm_tendf_after_h, ids,ide,jds,jde,kds,kde, &
+                      ims,ime,jms,jme,kms,kme,grid%rdx,grid%rdy,grid%itimestep,rk_step,config_flags%diff_opt, &
+                      config_flags%km_opt,config_flags%bl_pbl_physics, &
+                      config_flags%use_theta_m,config_flags%mix_full_fields )
+                 DEALLOCATE(thm_tendf_before_v,thm_tendf_after_v, &
+                            thm_tendf_before_h,thm_tendf_after_h)
+               END IF
              END IF
            END BLOCK
          ENDDO

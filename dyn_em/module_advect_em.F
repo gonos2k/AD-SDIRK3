@@ -122,7 +122,11 @@ MODULE module_advect_em
   USE module_sdirk3_advect_u_diag, ONLY : advect_u_diag_type,           &
                                           advect_u_diag_begin,          &
                                           advect_u_diag_horizontal_done,&
-                                          advect_u_diag_finish
+                                          advect_u_diag_finish,          &
+                                          thm_advect_diag_type,          &
+                                          thm_advect_diag_begin,         &
+                                          thm_advect_diag_horizontal_done,&
+                                          thm_advect_diag_finish
 
 CONTAINS
 
@@ -3175,6 +3179,7 @@ SUBROUTINE advect_scalar   ( field, field_old, tendency,    &
    LOGICAL :: degrade_xe, degrade_ye
 
    INTEGER :: jp1, jp0, jtmp
+   TYPE(thm_advect_diag_type) :: thm_diag
 
 
 ! definition of flux operators, 3rd, 4th, 5th or 6th order
@@ -3209,6 +3214,7 @@ SUBROUTINE advect_scalar   ( field, field_old, tendency,    &
   ktf=MIN(kte,kde-1)
   horz_order = config_flags%h_sca_adv_order
   vert_order = config_flags%v_sca_adv_order
+  CALL thm_advect_diag_begin( thm_diag, field, tendency, rom )
 
 !  begin with horizontal flux divergence
 !  here is the choice of flux operators
@@ -4256,6 +4262,7 @@ SUBROUTINE advect_scalar   ( field, field_old, tendency,    &
 
    ENDIF
 
+      CALL thm_advect_diag_horizontal_done( thm_diag, tendency )
 
 !-------------------- vertical advection
 !     Scalar equation has 3rd term on RHS = - partial d/dz (q rho w /my)
@@ -4435,6 +4442,11 @@ SUBROUTINE advect_scalar   ( field, field_old, tendency,    &
       CALL wrf_error_fatal ( wrf_err_message )
 
    ENDIF vert_order_test
+
+   CALL thm_advect_diag_finish( thm_diag, tendency, &
+                                ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
+                                rdx,rdy,time_step,horz_order,vert_order,config_flags%scalar_adv_opt, &
+                                fzm,fzp,rdzw )
 
 END SUBROUTINE advect_scalar
 #ifndef ADVECT_KERNEL

@@ -18,6 +18,8 @@ MODULE module_big_step_utilities_em
        g3scheme, gfscheme,p_qv, param_first_scalar, p_qr, p_qc, DFI_FWD
    USE module_configure, ONLY : grid_config_rec_type
    USE module_wrf_error
+   USE module_sdirk3_advect_u_diag, ONLY : ph_rhs_diag_type, ph_rhs_diag_begin, &
+       ph_rhs_diag_vertical_done, ph_rhs_diag_top_reset, ph_rhs_diag_gw_done, ph_rhs_diag_finish
 
 CONTAINS
 
@@ -1419,6 +1421,7 @@ SUBROUTINE rhs_ph( ph_tend, u, v, ww,               &
    INTEGER :: i, j, k, itf, jtf, ktf, kz, i_start, j_start
    REAL    :: ur, ul, ub, vr, vl, vb
    REAL, DIMENSION(its:ite,kts:kte) :: wdwn
+   TYPE(ph_rhs_diag_type) :: ph_diag
 
    INTEGER :: advective_order
 
@@ -1441,6 +1444,7 @@ SUBROUTINE rhs_ph( ph_tend, u, v, ww,               &
    itf=MIN(ite,ide-1)
    jtf=MIN(jte,jde-1)
    ktf=MIN(kte,kde-1)
+   CALL ph_rhs_diag_begin( ph_diag, ph, ww, ph_tend )
 
 !  Notes on map scale factors (WCS, 2 march 2008)
 !  phi equation is:   mu/my d/dt(phi) = -(1/my) mx mu u  d/dx(phi)
@@ -1497,12 +1501,15 @@ SUBROUTINE rhs_ph( ph_tend, u, v, ww,               &
 
    ENDDO
 
+   CALL ph_rhs_diag_vertical_done( ph_diag, ph_tend )
+
    IF (non_hydrostatic) THEN  ! add in "gw" term.
    DO j = jts, jtf            ! in hydrostatic mode, "gw" will be diagnosed
                               ! after the timestep to give us "w"
      DO i = its, itf
         ph_tend(i,kde,j) = 0.
      ENDDO
+     CALL ph_rhs_diag_top_reset( ph_diag, ph_tend, j, kde, jms, kms )
 
      DO k = 2, kte
      DO i = its, itf
@@ -1514,6 +1521,8 @@ SUBROUTINE rhs_ph( ph_tend, u, v, ww,               &
    ENDDO
 
    END IF
+
+   CALL ph_rhs_diag_gw_done( ph_diag, ph_tend )
 
 !  Notes on map scale factors:
 !  RHS terms 1 and 2 are: -(1/my) mx u mu partial d/dx(phi)
@@ -2178,6 +2187,10 @@ SUBROUTINE rhs_ph( ph_tend, u, v, ww,               &
      ENDDO
 
    END IF
+
+   CALL ph_rhs_diag_finish( ph_diag, ph_tend, &
+       ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme,rdx,rdy, &
+       advective_order,config_flags%phi_adv_z,non_hydrostatic,config_flags%top_lid,fnm,fnp,rdnw )
 
   END SUBROUTINE rhs_ph
 
