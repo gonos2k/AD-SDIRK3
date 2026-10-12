@@ -1361,11 +1361,16 @@ BENCH_START(relax_bdy_dry_tim)
      !$OMP END PARALLEL DO
 BENCH_END(relax_bdy_dry_tim)
 
-! [PARITY full RHS] Same-input state, combined tendencies, and native flux operands.
-! Layout: little-endian int32 version=1, 12 int32 domain/memory bounds, float32
-! rdx/rdy, then
-! float32 arrays in this order: u2,v2,w2,ph2,t2,mu2,ru_tend,rv_tend,mu_tend,
-! ru,rv,muu,muv,mut,dnw,c1h,c2h,msfux,msfuy,msfvx,msfvy,msftx,msfty.
+! [PARITY full RHS] Same-input state, assembled tendencies, and native flux operands.
+! Capture is after rk_addtend_dry and the conditional specified/perturbation
+! tendency blocks, before later physical-boundary updates and the acoustic step.
+! Layout: little-endian int32 version=2, 12 int32 domain/memory bounds, float32
+! rdx/rdy, then the unchanged v1 float32 prefix:
+! u2,v2,w2,ph2,t2,mu2,ru_tend,rv_tend,mu_tend,ru,rv,muu,muv,mut,dnw,
+! c1h,c2h,msfux,msfuy,msfvx,msfvy,msftx,msfty.
+! V2 appends float32 arrays rw_tend,ph_tend,t_tend (each ims:ime,kms:kme,
+! jms:jme), then c1f,c2f (each kms:kme). These are the assembled coupled
+! tendencies and coefficients required for offline physical-rate conversion.
    IF ( grid%itimestep == 1 .AND. rk_step == 1 ) THEN
      BLOCK
        CHARACTER(LEN=8) :: full_rhs_env
@@ -1373,7 +1378,7 @@ BENCH_END(relax_bdy_dry_tim)
        INTEGER(KIND=4) :: full_rhs_version
        REAL(KIND=4) :: full_rhs_rdx, full_rhs_rdy
        LOGICAL :: full_rhs_single_rank
-       full_rhs_version = 1
+       full_rhs_version = 2
        full_rhs_rdx = grid%rdx
        full_rhs_rdy = grid%rdy
        CALL get_environment_variable("WRF_PARITY_RK_TEND_DUMP", full_rhs_env, STATUS=full_rhs_status)
@@ -1399,7 +1404,8 @@ BENCH_END(relax_bdy_dry_tim)
              WRITE(full_rhs_unit, IOSTAT=full_rhs_iostat) grid%u_2, grid%v_2, grid%w_2, &
                   grid%ph_2, grid%t_2, grid%mu_2, grid%ru_tend, grid%rv_tend, mu_tend, &
                   grid%ru, grid%rv, grid%muu, grid%muv, grid%mut, grid%dnw, grid%c1h, grid%c2h, &
-                  grid%msfux, grid%msfuy, grid%msfvx, grid%msfvy, grid%msftx, grid%msfty
+                  grid%msfux, grid%msfuy, grid%msfvx, grid%msfvy, grid%msftx, grid%msfty, &
+                  rw_tend, ph_tend, t_tend, grid%c1f, grid%c2f
            END IF
            CLOSE(full_rhs_unit, IOSTAT=full_rhs_close)
            IF (full_rhs_iostat /= 0 .OR. full_rhs_close /= 0) &
