@@ -1,0 +1,238 @@
+{
+  "schema": "pr301_v2_build_and_two_call_red_readiness_audit_v1",
+  "scope": "Independent read-only audit of frozen source/build bindings and the exactly-two-call first-step snapshots. No build or model execution performed.",
+  "target_head": "2f32859d545bf5dc3e287653d8ebb1cb504df32c",
+  "target_head_matches_build": true,
+  "frozen_source_sha256": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+  "source_pins": {
+    "Registry/Registry.EM_COMMON": {
+      "expected": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+      "actual": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+      "match": true
+    },
+    "dyn_em/module_bc_em.F": {
+      "expected": "6cfb52b849e3dd0b24769709cf502faa75886da454d9b668af725cccdc56d47f",
+      "actual": "6cfb52b849e3dd0b24769709cf502faa75886da454d9b668af725cccdc56d47f",
+      "match": true
+    },
+    "dyn_em/module_big_step_utilities_em.F": {
+      "expected": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "actual": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+      "match": true
+    },
+    "dyn_em/module_em.F": {
+      "expected": "790b09734aba5db1f2fe12401e634382e3c89ef0879604a2d4cceffc6caffab6",
+      "actual": "790b09734aba5db1f2fe12401e634382e3c89ef0879604a2d4cceffc6caffab6",
+      "match": true
+    },
+    "dyn_em/module_first_rk_step_part1.F": {
+      "expected": "8c666fe88c46b04e297fe7b7289f55ec74fa133287b234a02f10e05cbbd11841",
+      "actual": "8c666fe88c46b04e297fe7b7289f55ec74fa133287b234a02f10e05cbbd11841",
+      "match": true
+    },
+    "dyn_em/module_first_rk_step_part2.F": {
+      "expected": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c",
+      "actual": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c",
+      "match": true
+    },
+    "dyn_em/module_implicit_sdirk3.F": {
+      "expected": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "actual": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+      "match": true
+    },
+    "dyn_em/module_small_step_em.F": {
+      "expected": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "actual": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "match": true
+    },
+    "dyn_em/solve_em.F": {
+      "expected": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "actual": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "match": true
+    },
+    "dyn_em/start_em.F": {
+      "expected": "f3cf233cb8223601629a5779625a421bdd92cad639d9f7f7eef2502fdc5d8fd6",
+      "actual": "f3cf233cb8223601629a5779625a421bdd92cad639d9f7f7eef2502fdc5d8fd6",
+      "match": true
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "expected": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8",
+      "actual": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8",
+      "match": true
+    },
+    "share/input_wrf.F": {
+      "expected": "54f646fb6a36c919db3d6869c14943b2cc32e9d360628092dff81f1721981f12",
+      "actual": "54f646fb6a36c919db3d6869c14943b2cc32e9d360628092dff81f1721981f12",
+      "match": true
+    },
+    "share/mediation_wrfmain.F": {
+      "expected": "91b92d4c21536c3f9df8ac175c2e5410d31e3b7b5af66f7d00b9bd56872dce25",
+      "actual": "91b92d4c21536c3f9df8ac175c2e5410d31e3b7b5af66f7d00b9bd56872dce25",
+      "match": true
+    },
+    "share/module_bc.F": {
+      "expected": "61b9235004b2a7799faabaa928276af8a7ef2e4672619c8ad120c857461301ad",
+      "actual": "61b9235004b2a7799faabaa928276af8a7ef2e4672619c8ad120c857461301ad",
+      "match": true
+    }
+  },
+  "all_14_pins_match_committed_blobs": true,
+  "build": {
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_build/pr301_solve_em_build_receipt.json",
+    "receipt_sha256": "01ed79bba70c59f5ce830d87b490fea8d59b062d5f1c0ead235c06e0b68e8de7",
+    "command_gate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_build/pr301_exact_build_command_gate.json",
+    "command_gate_sha256": "73dd57aedba42e2a2a72d7e88d1cd368891bb88bf40a62e39b18f0b72375dd5b",
+    "build_log": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_build/pr301_solve_em_exact_build_success.log",
+    "build_log_sha256": "eafc19b20193f37a3ceec335a25f1d8863ea5a173453be423ccccab5a1d258dd",
+    "exe_sha256_receipt": "78b3c01abcfc3b3e8286930e62198855891ff50c3bd1dd4026cd6fef10fd43d7",
+    "exe_sha256_actual": "78b3c01abcfc3b3e8286930e62198855891ff50c3bd1dd4026cd6fef10fd43d7",
+    "cpp_archive_sha256_actual": "21f7bc79a131f4608f506259b7c0434f2350749486774f14aea260cc69910565",
+    "cpp_archive_unchanged": true,
+    "compile_command_tokens_match_gate": true,
+    "macros": [
+      "-DNMM_CORE=0",
+      "-DDA_CORE=0",
+      "-DWRFPLUS=0",
+      "-DNMM_NEST=0"
+    ],
+    "successful_preprocess_target_tool": true,
+    "fresh_startup_module_sha": "b199e682a940fee7de7e5ba76837ccf15227d3bb26384b9aa95ff6a414c2de4e",
+    "archive_member_count": 1,
+    "archive_member_matches_object": true,
+    "freshness_checks": {
+      "solve_em_object_newer_than_source": true,
+      "solve_em_object_newer_than_generated_f90": true,
+      "wrf_exe_newer_than_libwrflib": true
+    },
+    "preserved_earlier_failure": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_build/pr301_solve_em_make_preprocess_failure.log",
+      "sha256": "051d00ebd5d25d0dca5139aa7cd9e75e903e0874df2b40b5c8739ae2d7934c8a",
+      "classification": "first compile attempt failed at preprocessing before mpif90 because blank WRFPLUS/NMM macros; distinct preserved failed log, not the successful frozen-source build"
+    }
+  },
+  "runs": {
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/pr301_v2_runs.json",
+    "receipt_sha256": "af28c404ba38aa0ee5072275c5fc38147a6ed97733f62f956074e1044bc05242",
+    "status": "completed",
+    "native_calls_authorized": 2,
+    "native_calls_completed": 2,
+    "per_run": [
+      {
+        "label": "pr301_v2_fortran_rk3_h15",
+        "method": "RK3",
+        "status": "completed",
+        "return_code": 0,
+        "success_marker": true,
+        "input": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+        "namelist": "0184a0ac4af4402a2f6fa7041c9457cc09ea5bd334dd5d666d42e44559261741",
+        "namelist_output_sha256": "f9d7844e478cda163fa4b6568da6e02d5095261a83d4a09f24de180a4293516a",
+        "diagnostics": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+        "exe": "78b3c01abcfc3b3e8286930e62198855891ff50c3bd1dd4026cd6fef10fd43d7",
+        "effective_use_input_w": true,
+        "actual_cpp_sdirk_route": false
+      },
+      {
+        "label": "pr301_v2_cpp_ark3_h15",
+        "method": "ARK3",
+        "status": "completed",
+        "return_code": 0,
+        "success_marker": true,
+        "input": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+        "namelist": "fded603d258432131e0b952340f2200b11efce19dd09ac3cdddf176871d729dd",
+        "namelist_output_sha256": "20c5ffcf1ffefeaea3b2849f6609a2d594f82da93700bf1cf8a5d7bf44754a82",
+        "diagnostics": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+        "exe": "78b3c01abcfc3b3e8286930e62198855891ff50c3bd1dd4026cd6fef10fd43d7",
+        "effective_use_input_w": true,
+        "actual_cpp_sdirk_route": true
+      }
+    ],
+    "all_completed_rc0_and_success_marker": true,
+    "common_input": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "same_input_namelists_as_pr300_preserve_w": true,
+    "use_input_w_true_both": true,
+    "only_two_calls": true
+  },
+  "fortran_v2_snapshot": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_execution/pr301_v2/captures/pr301_v2_fortran_rk3_h15/wrf_full_rhs_snapshot.bin",
+    "sha256": "353cf04acfc9f85ff123de4b3b86ab938802a0ddb47e1d7ef6bd107dc5bebf1d",
+    "size_bytes": 627340,
+    "version": 2,
+    "bounds": [
+      1,
+      17,
+      1,
+      17,
+      1,
+      17,
+      -4,
+      22,
+      -4,
+      22,
+      1,
+      17
+    ],
+    "rdx": 9.999999747378752e-06,
+    "rdy": 9.999999747378752e-06,
+    "v1_payload_remainder_matches_previous_pr300_v1": true,
+    "compared_remainder_bytes": 478484,
+    "compared_remainder_sha256": "18f74ba974ffba747ac14d21c1ef5bd8cbdcf5214fa371bcf68fa2c158e2c9cf",
+    "previous_v1_remainder_sha256": "18f74ba974ffba747ac14d21c1ef5bd8cbdcf5214fa371bcf68fa2c158e2c9cf",
+    "note": "Version integer changes from 1 to 2; bytes [4:478488] (all prior header bounds/scalars and v1 arrays) match exactly.",
+    "appended_bytes": 148852,
+    "appended_float32_count": 37213,
+    "expected_appended_float32_count": 37213,
+    "append_count_matches_schema": true,
+    "append_all_finite": true
+  },
+  "shared_prior_snapshot_comparisons": [
+    {
+      "method": "Fortran",
+      "name": "wrf_rk_tend_dump.bin",
+      "old_sha256": "364e842a262e02c65d134ab7b559f48f2c6318007a69b483e8c53b303c9ecbde",
+      "new_sha256": "364e842a262e02c65d134ab7b559f48f2c6318007a69b483e8c53b303c9ecbde",
+      "byte_identical": true
+    },
+    {
+      "method": "Fortran",
+      "name": "wrf_u_pgf_snapshot.bin",
+      "old_sha256": "cf2460549d7514dc54bb456a7cde13f720efedd91b71a784fd9174b328b7fba6",
+      "new_sha256": "cf2460549d7514dc54bb456a7cde13f720efedd91b71a784fd9174b328b7fba6",
+      "byte_identical": true
+    },
+    {
+      "method": "CPP",
+      "name": "port_full_rhs_snapshot.bin",
+      "old_sha256": "10040610be1dd44c38d88cf29a0566b47166b98d05dbfe4dd6f11d1c9b69abc2",
+      "new_sha256": "10040610be1dd44c38d88cf29a0566b47166b98d05dbfe4dd6f11d1c9b69abc2",
+      "byte_identical": true
+    },
+    {
+      "method": "CPP",
+      "name": "port_hdiff_u_snapshot.bin",
+      "old_sha256": "ce8eb987cebae99b46a45af666fd512f5f49c3a66da4c449513f00548860574b",
+      "new_sha256": "ce8eb987cebae99b46a45af666fd512f5f49c3a66da4c449513f00548860574b",
+      "byte_identical": true
+    },
+    {
+      "method": "CPP",
+      "name": "port_u_pgf_operands_snapshot.bin",
+      "old_sha256": "1f17ec01cdc14c737c1b65d44851cdd2a761ebe3b9b183b7a7bd68dff5f101c5",
+      "new_sha256": "1f17ec01cdc14c737c1b65d44851cdd2a761ebe3b9b183b7a7bd68dff5f101c5",
+      "byte_identical": true
+    },
+    {
+      "method": "CPP",
+      "name": "port_u_pgf_snapshot.bin",
+      "old_sha256": "6a32a0580fb8b5a41c0969106ebfc200bd3a3d82e576914040845d843aef3406",
+      "new_sha256": "6a32a0580fb8b5a41c0969106ebfc200bd3a3d82e576914040845d843aef3406",
+      "byte_identical": true
+    }
+  ],
+  "all_shared_prior_comparisons_exact": true,
+  "claim_limits": [
+    "This establishes first-call observer noninterference relative to PR300 preserve-W artifacts for the shared raw snapshots and exact v1 payload. It is not a trajectory/RHS accuracy result.",
+    "The new v2 append records assembled Fortran tendencies before later physical-boundary updates/acoustic step as described by schema; it is not post-final-boundary state.",
+    "No comparison exists here for new CPP vdiff snapshot against PR300 preserve-W because that artifact was not in the old pair."
+  ],
+  "verdict": "Source, build, and run pins are coherent. Successful build uses the frozen solve_em source and expected compiler flags/includes, with a distinct preserved preprocessing failure from an earlier bad macro invocation. Exactly two one-step calls completed, using the same input, namelists, and diagnostics as PR300 preserve-W. V2 preserves the full prior v1 payload excluding the intentionally changed version word; all common CPP observer snapshots and FT RK dump/PGF snapshot are byte-identical."
+}
