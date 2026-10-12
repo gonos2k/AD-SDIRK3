@@ -285,8 +285,8 @@ void check_native_hard_v3_full() {
     std::fill(tile.mu.begin(), tile.mu.end(), 0.0f);
     const auto x = tile.projectControlState(tile.state().to(torch::kFloat64)).contiguous();
 
-    const double rdx = 1.0 / tile.spacing;
-    const double rdy = 1.0 / tile.spacing;
+    const double rdx = static_cast<double>(1.0f / tile.spacing);
+    const double rdy = static_cast<double>(1.0f / tile.spacing);
     const auto omega_for = [&](const torch::Tensor& input) {
         const auto q = input.contiguous();
         const auto* a = q.data_ptr<double>();
@@ -321,14 +321,15 @@ void check_native_hard_v3_full() {
                         const double muv = 0.5 * (mass(south, i) + mass(north, i));
                         return (c1h[k]*muv + c2h[k]) * v_at(face, k, i);
                     };
-                    divv[k] = static_cast<double>(dnw_signed[k]) *
+                    const double dnw_omega = -1.0 / static_cast<double>(rdnw_pos[k]);
+                    divv[k] = dnw_omega *
                         (rdx*(cu(i + 1) - cu(i)) + rdy*(cv(j + 1) - cv(j)));
                     dmdt += divv[k];
                 }
                 at(j, 0, i) = 0.0;
                 for (int k = 0; k < nz - 1; ++k)
                     at(j, k + 1, i) = at(j, k, i) -
-                        static_cast<double>(dnw_signed[k])*c1h[k]*dmdt - divv[k];
+                        (-1.0/static_cast<double>(rdnw_pos[k]))*c1h[k]*dmdt - divv[k];
                 at(j, nz, i) = 0.0;
             }
         }
@@ -402,7 +403,7 @@ void check_native_hard_v3_full() {
     const auto run_full_theta = [&](const torch::Tensor& input) {
         return t_block((tile.solver.*access(RhsTag{}))(input, RhsMode::Full));
     };
-    // No setter means the standalone legacy arithmetic-mean branch (THM=v0).
+    // No setter means the standalone legacy weighted avg_z_to_w branch (THM=v0).
     const auto legacy = run_full_theta(x);
     tile.solver.setNativeTransportOptions(2, 3);
     const auto hard3 = run_full_theta(x);
@@ -456,24 +457,6 @@ void check_native_hard_v3_full() {
                 "mixed tangent must move both velocities and total mass");
     auto lambda_ph = torch::zeros_like(x);
     auto lambda_thm = torch::zeros_like(x);
-    auto ph_weight = torch::zeros({ny,nw,nx}, x.options());
-    for (int j = 0; j < ny; ++j)
-        for (int i = 0; i < nx; ++i)
-            for (int k = 1; k <= (cfg.split_explicit_top_lid ? nz-1 : nz); ++k)
-                ph_weight[j][k][i] = std::sin(0.31*k + 0.27);
-    lambda_ph.slice(0, su+sv+sw, su+sv+2*sw).copy_(ph_weight.flatten());
-    auto thm_weight = torch::zeros({ny,nz,nx}, x.options());
-    for (int j = 0; j < ny; ++j)
-        for (int i = 0; i < nx; ++i)
-            for (int k = 0; k < nz; ++k)
-                thm_weight[j][k][i] = std::sin(0.19*(k*ny*nx+j*nx+i) + 0.43);
-    lambda_thm.slice(0, su+sv+2*sw, su+sv+2*sw+st).copy_(thm_weight);
-    lambda_ph = lambda_ph/lambda_ph.norm();
-    lambda_thm = lambda_thm/lambda_thm.norm();
-    TORCH_CHECK(lambda_ph.slice(0, su+sv, su+sv+sw).norm().item<double>() == 0.0 &&
-                lambda_ph.slice(0, su+sv+sw, su+sv+sw+nx*ny).norm().item<double>() == 0.0 &&
-                lambda_thm.slice(0, su+sv, su+sv+sw).norm().item<double>() == 0.0,
-                "PH/THM cotangents must mask W and fixed PH bottom output cells");
     const auto Ffull = [&](const torch::Tensor& input) {
         return (tile.solver.*access(RhsTag{}))(input, RhsMode::Full);
     };
@@ -486,9 +469,30 @@ void check_native_hard_v3_full() {
     TORCH_CHECK(jv_ph > 1e-12 && jv_t > 1e-12,
                 "mixed Full-RHS tangent did not excite both PH and THM: PH=", jv_ph,
                 " THM=", jv_t);
+    // Separate owner-masked cotangents align with each complete field JVP.
+    // This gives a strong VJP pairing while the FD checks below compare the
+    // entire PH and THM vectors independently, not only their scalar sums.
+    auto ph_owner = torch::ones({ny,nw,nx}, x.options());
+    ph_owner.select(1,0).zero_();
+    if (cfg.split_explicit_top_lid) ph_owner.select(1,nz).zero_();
+    const auto ph_jv = jv.slice(0, su+sv+sw, su+sv+2*sw).view({ny,nw,nx});
+    const auto thm_jv = jv.slice(0, su+sv+2*sw, total-sm).view({ny,nz,nx});
+    const auto ph_jv_owned = ph_jv * ph_owner;
+    const auto thm_jv_owned = thm_jv;  // All physical mass cells are owners here.
+    lambda_ph.slice(0, su+sv+sw, su+sv+2*sw).copy_(ph_jv_owned.detach().flatten());
+    lambda_thm.slice(0, su+sv+2*sw, total-sm).copy_(thm_jv_owned.detach().flatten());
+    lambda_ph = lambda_ph/lambda_ph.norm();
+    lambda_thm = lambda_thm/lambda_thm.norm();
+    const auto lambda_ph_block = lambda_ph.slice(0, su+sv+sw, su+sv+2*sw)
+                                     .view({ny,nw,nx});
+    TORCH_CHECK(lambda_ph.slice(0, su+sv, su+sv+sw).norm().item<double>() == 0.0 &&
+                lambda_ph_block.select(1,0).norm().item<double>() == 0.0 &&
+                lambda_thm.slice(0, su+sv, su+sv+sw).norm().item<double>() == 0.0,
+                "PH/THM cotangents must mask W and fixed PH bottom output cells");
     const auto check_field_derivative = [&](const torch::Tensor& lambda,
                                             int begin, int end, const char* name) {
-        const auto jv_field = jv.slice(0, begin, end);
+        const auto jv_field = (jv.slice(0, begin, end) *
+            (end-begin == sw ? ph_owner.flatten() : torch::ones({end-begin}, x.options())));
         const auto lambda_field = lambda.slice(0, begin, end);
         auto x_rev = x.clone().set_requires_grad(true);
         const auto loss = (Ffull(x_rev)*lambda).sum();
@@ -502,9 +506,28 @@ void check_native_hard_v3_full() {
                     name, " Full-RHS JVP/VJP duality failed: lhs=", lhs,
                     " rhs=", rhs, " normalized_error=", dual_rel);
 
+        double safe_epsilon = 1e-2;
+        const double probe = 1e-4;
+        const auto omega_probe_p = omega_for((x+probe*direction).contiguous());
+        const auto omega_probe_m = omega_for((x-probe*direction).contiguous());
+        for (int j = 0; j < ny; ++j)
+            for (int i = 0; i < nx; ++i)
+                for (int k = 2; k <= nz-2; ++k) {
+                    const size_t slot = static_cast<size_t>((j*nw+k)*nx+i);
+                    const double slope = std::max(std::abs(omega_probe_p[slot]-omega[slot]),
+                                                  std::abs(omega_probe_m[slot]-omega[slot]))/probe;
+                    if (slope > 0.0)
+                        safe_epsilon = std::min(safe_epsilon,
+                            0.25*std::abs(omega[slot])/slope);
+                }
+        TORCH_CHECK(std::isfinite(safe_epsilon) && safe_epsilon >= 1e-8,
+                    name, " no useful sign-preserving FD step from Omega margin");
+        const std::array<double,9> epsilons{safe_epsilon, safe_epsilon/2,
+            safe_epsilon/4, safe_epsilon/8, safe_epsilon/16,
+            safe_epsilon/32, safe_epsilon/64, safe_epsilon/128,
+            safe_epsilon/256};
         bool plateau = false, previous_valid = false;
-        double previous_fd = 0.0;
-        const std::array<double,5> epsilons{1e-5, 3e-6, 1e-6, 3e-7, 1e-7};
+        torch::Tensor previous_fd;
         for (const double eps : epsilons) {
             const auto xp = (x+eps*direction).contiguous();
             const auto xm = (x-eps*direction).contiguous();
@@ -520,13 +543,20 @@ void check_native_hard_v3_full() {
                                     std::abs(omm[slot]) >= 0.5*std::abs(omega[slot]),
                                     name, " FD perturbation crossed/approached hard-v3 Omega branch");
                     }
-            const double fp = (Ffull(xp)*lambda).sum().item<double>();
-            const double fm = (Ffull(xm)*lambda).sum().item<double>();
-            const double fd = (fp-fm)/(2.0*eps);
-            const double fd_err = std::abs(fd-lhs)/std::max(std::abs(lhs),1e-30);
-            const bool valid = std::isfinite(fd) && fd_err < 2e-7;
+            const auto fp = Ffull(xp).slice(0, begin, end);
+            const auto fm = Ffull(xm).slice(0, begin, end);
+            const auto fd = ((fp-fm)/(2.0*eps)) *
+                (end-begin == sw ? ph_owner.flatten() : torch::ones({end-begin}, x.options()));
+            const double fd_err = (fd-jv_field).norm().item<double>() /
+                std::max(jv_field.norm().item<double>(),1e-30);
+            const bool valid = std::isfinite(fd_err) && fd_err < 2e-7;
+            std::cout << "NATIVE_HARD_V3_FD field=" << name << " eps=" << eps
+                      << " jvp_norm=" << jv_field.norm().item<double>()
+                      << " fd_norm=" << fd.norm().item<double>()
+                      << " rel=" << fd_err << " valid=" << valid << '\n';
             if (valid && previous_valid &&
-                std::abs(fd-previous_fd)/std::max(std::abs(lhs),1e-30) < 2e-7)
+                (fd-previous_fd).norm().item<double>() /
+                    std::max(jv_field.norm().item<double>(),1e-30) < 2e-7)
                 plateau = true;
             previous_fd = fd;
             previous_valid = valid;

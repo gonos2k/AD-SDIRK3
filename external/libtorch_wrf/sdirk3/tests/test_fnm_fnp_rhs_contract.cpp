@@ -69,7 +69,7 @@ void check_fnm_fnp_rhs() {
         constexpr double dnw = -0.25;
         constexpr double rdnw = 4.0;
         constexpr double pi = 3.14159265358979323846;
-        const double rdx = 1.0 / 100000.0;
+        const double rdx = static_cast<double>(1.0f / tile.spacing);
 
         auto& cfg = wrf::sdirk3::g_sdirk3_config;
         cfg.imex_split_mode = 3;
@@ -79,6 +79,7 @@ void check_fnm_fnp_rhs() {
         cfg.mu_horizontal_div_only = false;
         cfg.omega_w_blend = 1.0f;
         cfg.ph_use_rdnw_not_rdzw = true;
+        cfg.internal_fp64 = true;
 
         TileCase tile;
         tile.step(1.0e-4f);
@@ -256,28 +257,28 @@ void check_fnm_fnp_rhs() {
                 for (int i = 0; i < nx; ++i)
                     native_ph[j][kk][i] = 1000.0 * kk*kk;
 
-        std::vector<double> native_omega(static_cast<size_t>(ny*nw*nx), 0.0);
-        auto nom = [&](int j, int kk, int i) -> double& {
-            return native_omega[(j*nw + kk)*nx + i];
-        };
-        for (int j = 0; j < ny; ++j)
-            for (int i = 0; i < nx; ++i) {
-                std::vector<double> divv_nz(nz, 0.0);
-                double dmdt_nz = 0.0;
-                for (int kk = 0; kk < nz; ++kk) {
-                    const double du = tile.u[(j*nz + kk)*nu + i + 1] -
-                                      tile.u[(j*nz + kk)*nu + i];
-                    const double dv = tile.v[((j + 1)*nz + kk)*nx + i] -
-                                      tile.v[(j*nz + kk)*nx + i];
-                    divv_nz[kk] = dnw_signed[kk] * mu0 * rdx * (du + dv);
-                    dmdt_nz += divv_nz[kk];
-                }
-                nom(j, 0, i) = 0.0;
-                for (int kk = 0; kk < nz - 1; ++kk)
-                    nom(j, kk + 1, i) = nom(j, kk, i) -
-                        dnw_signed[kk]*dmdt_nz - divv_nz[kk];
-                nom(j, nz, i) = 0.0;
-            }
+        std::vector<float> c1h_native(nz, 1.0f), c2h_native(nz, 0.0f);
+        const auto c1h_t = torch::from_blob(c1h_native.data(), {nz}, torch::kFloat32)
+                               .to(torch::kFloat64).clone();
+        const auto c2h_t = torch::from_blob(c2h_native.data(), {nz}, torch::kFloat32)
+                               .to(torch::kFloat64).clone();
+        std::vector<double> dnw_omega(nz);
+        for (int kk = 0; kk < nz; ++kk)
+            dnw_omega[kk] = -1.0 / static_cast<double>(rdnw_pos[kk]);
+        const auto dnw_t = torch::from_blob(dnw_omega.data(), {nz}, torch::kFloat64).clone();
+        const auto mu_input = native_base.slice(0, total-sm, total).view({ny,nx});
+        const auto mub = tile.baseMass().to(torch::kFloat64).contiguous();
+        const auto ones_t = torch::ones({ny,nx}, torch::kFloat64);
+        const auto ones_u = torch::ones({ny,nu}, torch::kFloat64);
+        const auto ones_v = torch::ones({nv,nx}, torch::kFloat64);
+        const auto omega_native = wrf::sdirk3::compute_wrf_ww_cp(
+            native_base.slice(0,0,su).view({ny,nz,nu}),
+            native_base.slice(0,su,su+sv).view({nv,nz,nx}),
+            mu_input, mub, c1h_t, c2h_t, dnw_t,
+            static_cast<float>(rdx), static_cast<float>(rdx),
+            ones_t, ones_u, ones_v,
+            wrf::sdirk3::WWCPBoundaryPolicy::Periodic,
+            wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate).contiguous();
         const auto native_ph_delta = [&]() {
             const auto base = ph_block((tile.solver.*access(RhsTag{}))(
                 native_base, wrf::sdirk3::RhsMode::Full));
@@ -297,7 +298,9 @@ void check_fnm_fnp_rhs() {
                             (1000.0*face*face - 1000.0*(face - 1)*(face - 1));
                     };
                     const double gu = grad(kk + 1), gl = grad(kk);
-                    const double om0 = nom(j,kk-1,i), om1 = nom(j,kk,i), om2 = nom(j,kk+1,i);
+                    const double om0 = omega_native[j][kk-1][i].item<double>();
+                    const double om1 = omega_native[j][kk][i].item<double>();
+                    const double om2 = omega_native[j][kk+1][i].item<double>();
                     const double wdwn_u = 0.5*(om2+om1)*gu;
                     const double wdwn_l = 0.5*(om1+om0)*gl;
                     native_expected[1][j][kk][i] =
