@@ -332,6 +332,15 @@ MODULE module_implicit_sdirk3
          INTEGER(C_INT), VALUE :: specified, nested
       END SUBROUTINE sdirk3_tile_set_boundary_conditions_v2
       
+      ! Checked solver-local native transport selectors (phi_adv_z=1/2, v_sca_adv_order=3).
+      INTEGER(C_INT) FUNCTION sdirk3_tile_set_native_transport_options_checked( &
+           solver_ptr, phi_adv_z, v_sca_adv_order) &
+         BIND(C, name="sdirk3_tile_set_native_transport_options_checked")
+         USE, INTRINSIC :: ISO_C_BINDING
+         TYPE(C_PTR), VALUE :: solver_ptr
+         INTEGER(C_INT), VALUE :: phi_adv_z, v_sca_adv_order
+      END FUNCTION sdirk3_tile_set_native_transport_options_checked
+
       ! Map projection setter for idealized case detection
       SUBROUTINE sdirk3_tile_set_map_projection(solver_ptr, map_proj) &
          BIND(C, name="sdirk3_tile_set_map_projection")
@@ -550,6 +559,7 @@ CONTAINS
       INTEGER :: nx, ny, nz, tile_id
       INTEGER :: nx_u, ny_v, nz_w  ! Staggered dimensions
       INTEGER(C_INT) :: carry_config_rc
+      INTEGER(C_INT) :: native_transport_rc
       REAL(C_FLOAT) :: dx, dy
       CHARACTER(LEN=256) :: message
       CHARACTER(LEN=256) :: config_name
@@ -698,6 +708,15 @@ CONTAINS
             CALL wrf_error_fatal(message)
          ELSE
             solver_valid(ij) = .TRUE.
+            native_transport_rc = sdirk3_tile_set_native_transport_options_checked( &
+                 tile_solvers(ij), config_flags%phi_adv_z, config_flags%v_sca_adv_order)
+            IF (native_transport_rc /= 1_C_INT) THEN
+               WRITE(message, '(A,I0,A,I0,A,I0)') &
+                    "SDIRK3: unsupported native transport settings for tile ", tile_id, &
+                    " (phi_adv_z=", config_flags%phi_adv_z, ", v_sca_adv_order=", &
+                    config_flags%v_sca_adv_order
+               CALL wrf_error_fatal(TRIM(message)//")")
+            END IF
             ! Initialize solver state tracking
             solver_states(ij)%solver_ptr = tile_solvers(ij)
             solver_states(ij)%is_initialized = .TRUE.
