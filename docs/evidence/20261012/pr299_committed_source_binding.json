@@ -1,0 +1,315 @@
+{
+  "commit": "ed1089bd78c880ae2357149fc4809136cd18b4b1",
+  "base": "583e2a64c1879372c2e0a1b9f4770298a05ffd75",
+  "all_76_graph_sources_equal_committed_blobs": true,
+  "sources": [
+    {
+      "path": ".github/workflows/sdirk3-ci.yml",
+      "sha256": "391e95f7819cce1fa3eab585df7db63fecec7c6c91d4eac7e9b72a4dbde71ac1"
+    },
+    {
+      "path": "dyn_em/module_big_step_utilities_em.F",
+      "sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71"
+    },
+    {
+      "path": "dyn_em/module_diffusion_em.F",
+      "sha256": "c044c533e5e1e9d168418f2b72feba62964bee6a0f55e211c2522ffceaa6b7ea"
+    },
+    {
+      "path": "dyn_em/module_em.F",
+      "sha256": "790b09734aba5db1f2fe12401e634382e3c89ef0879604a2d4cceffc6caffab6"
+    },
+    {
+      "path": "dyn_em/module_first_rk_step_part2.F",
+      "sha256": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c"
+    },
+    {
+      "path": "dyn_em/module_implicit_sdirk3.F",
+      "sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a"
+    },
+    {
+      "path": "dyn_em/module_initialize_ideal.F",
+      "sha256": "7499596c6ab104eac5510236345bde3ff69e5a76b5579597bcf78549917a16c0"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/CMakeLists.txt",
+      "sha256": "ee29302fc8ee7981c742a72ce3e88e9e0318825476c60fa79ffbd5d0246929a6"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/stable_wave_reference.h",
+      "sha256": "715af522d8aeebde671131192714569757b2c6b12a2fa8a7124189c3606d423c"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp",
+      "sha256": "683ebb0a4d56f8ab1120685c256cd92a52832c0a323439a930b601dc9c41cbf7"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_coriolis_coefficients.cpp",
+      "sha256": "50700956dc09793c897c9f2f48251476d45b6ff7a08705635cf327006c71e796"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_coriolis_contract.cpp",
+      "sha256": "efb03884fa5d474456a87031d98d470c1800b65538bc74e3ba70c686d660d526"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_fp64_carry_adjoint.cpp",
+      "sha256": "66acedad1984a97901a122de180b63ee9c57b61dc3ed161f791cdee7bd2b9829"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_fp64_handoff_probe.cpp",
+      "sha256": "975d4664dc0739156c3e81609a6d7c51f7d6e71f4dfce2aa55321523a946d22f"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_native_wave_refinement.cpp",
+      "sha256": "8a9cb7875984304340a9e4e60940d1ff8e86484bf2d2ac434daf2f4f4fc7ef10"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_probe_noninterference.cpp",
+      "sha256": "5c026b8ec8c70338817e05289868f7e9cac6fa316865686a2c35c0d7ef3869d9"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_scalar_diffusion_contract.cpp",
+      "sha256": "15d5fcd7cf7f6813630d8d6c21d345be9723cb64cb936725ee02501b43cc9050"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/tile_test_fixture.h",
+      "sha256": "2ceb3e2e3d55a8892faf7ff46d28a53e6752d7482255cec24e4c72e091dfe9e8"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp",
+      "sha256": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+      "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_coriolis.h",
+      "sha256": "59753c2e567051a3ad1621125dacbe9d6997f568f91245e06cfeecb143a15918"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_implicit_autograd.h",
+      "sha256": "fa9d052b93de4952cd5e032569116889a8a18e4e25af87eb3127b120b9e9c15e"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h",
+      "sha256": "46e5975d7e1f409373ac00b6452dd29a3b53e923d26edcc0a2a6a01d89a70556"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "8a7d5f072ab7c5419cb1c95cd495cd55584a0b8cd9bade9a69ffe7eed4e278e3"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+      "sha256": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h",
+      "sha256": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "4163cb9f1b28eff469aac4373eacaf5dc74c3ccf349a0f2bc53088e19dc5f3d7"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8"
+    },
+    {
+      "path": "tools/benchmark_wrf_accuracy_cost.py",
+      "sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8"
+    },
+    {
+      "path": "tools/probe_accepted_analysis_forecast.py",
+      "sha256": "e814bb2f64fad92a3c5b6b9ac70e3551f824b783b8e2fa12becfc8b0011bbf28"
+    },
+    {
+      "path": "tools/probe_accepted_analysis_time.py",
+      "sha256": "c6a5c7b8bbe4c1898f564d6a7805c9e5b18fb522404a78bbd1c5d0fcbb3a0364"
+    },
+    {
+      "path": "tools/probe_analysis_restart.py",
+      "sha256": "a03e7a639681504b6f952a908da2e6dc8fbaba21220583d29a0b61d6e7b690e5"
+    },
+    {
+      "path": "tools/probe_fine_gradient_components.py",
+      "sha256": "64d6e80b3086a69b644cf8f8f1493152bd77e58dc961f7bc78a463808ad9ca3e"
+    },
+    {
+      "path": "tools/probe_fine_returned_accuracy.py",
+      "sha256": "839ba54c58c8e70291e2525ab96e75bd4e6403d8c2b09538c06de8c8c8692535"
+    },
+    {
+      "path": "tools/probe_fine_split_pullbacks.py",
+      "sha256": "210a2cd4d33c395ffdc9daeff0a89aa973790edba6a6d9ba000c499393674ce9"
+    },
+    {
+      "path": "tools/probe_retained_memory_smoke.py",
+      "sha256": "fef37dd2079102a193f7263aceda89037a0a4215280f7736ddf1358771137f12"
+    },
+    {
+      "path": "tools/probe_small_step_inverse.py",
+      "sha256": "bac0c35866e3dd3bd04a3825cb7322d1dfb6d1faaf258438a4288b806ac4ac63"
+    },
+    {
+      "path": "tools/probe_terminal_gradient_accuracy.py",
+      "sha256": "b8997786c3095a1126a806176ef1d13e2118dcba4638f9f2c97d6b5f390dbc23"
+    },
+    {
+      "path": "tools/test_fine_wave_inverse.py",
+      "sha256": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+    },
+    {
+      "path": "tools/test_native_wave_refinement.py",
+      "sha256": "0df01b267e12ff212906dff63a5265ce09a1562273565e191beb70ccd199f022"
+    },
+    {
+      "path": "tools/test_rotating_energy_metric.py",
+      "sha256": "1f937f8f66b81e59c2eefc18cef07baf4c9c1519bdf72b9a26f745b92612e9f3"
+    },
+    {
+      "path": "tools/test_rotating_wave_inverse.py",
+      "sha256": "4f8d53e9ac0ae19ea2f324918349d8b96e5a6a1d2ca6bd870e759291277e1072"
+    },
+    {
+      "path": "tools/test_stable_wave_reference_rows.py",
+      "sha256": "f62a259d01ded169133edba9bffb146141f48c8343b758ff53ad9fb4f2458a4e"
+    },
+    {
+      "path": "tools/test_wave_energy_budget.py",
+      "sha256": "0de67788f59a93b91558c3174de973ed179a7cda4e9b96e2974b943ec52b4da7"
+    },
+    {
+      "path": "tools/test_wave_quadratic_forcing.py",
+      "sha256": "86049d3d9650c61eceac5d3534c02392c724e7c56042ea8b2f9a402991762aea"
+    },
+    {
+      "path": "tools/test_wave_spatial_convergence.py",
+      "sha256": "29d4d412e43f0daae6efc42242c661511b6e60bddf36c4ce39f076d575e19c76"
+    },
+    {
+      "path": "tools/test_y_wave_forecast.py",
+      "sha256": "d61419cb9a378c656ef9a32e7170311504db9caad18f2e1367c404a406e7a116"
+    },
+    {
+      "path": "tools/test_y_wave_inverse.py",
+      "sha256": "294a2347e9f90283211495a66841a79f660264a71d592171dcf021069e157a24"
+    },
+    {
+      "path": "tools/wave_energy_spatial_reference.py",
+      "sha256": "47614a9bdc042e484a62ab5e25ecc69afc31e905318bac2767306958ac309ca2"
+    },
+    {
+      "path": "tools/wave_quadratic_reference.py",
+      "sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431"
+    },
+    {
+      "path": "tools/wave_quadratic_transport.py",
+      "sha256": "526923f41be9a8225b10a6fa022d11b60d0c60ba071d625cbe6d06dc750fc86f"
+    },
+    {
+      "path": "tools/wave_rotating_reference.py",
+      "sha256": "e2fa436f1278fa30d86161739f5621e11672d26f6623b2d2f77fc01b20834010"
+    },
+    {
+      "path": "tools/wave_y_reference.py",
+      "sha256": "2cbd1350be103d988b8baa373b1e7645eee5ac211b7ccd69fef35fc5ea2053fe"
+    },
+    {
+      "path": "dyn_em/solve_em.F",
+      "sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c"
+    },
+    {
+      "path": "dyn_em/module_small_step_em.F",
+      "sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634"
+    },
+    {
+      "path": "dyn_em/module_first_rk_step_part1.F",
+      "sha256": "8c666fe88c46b04e297fe7b7289f55ec74fa133287b234a02f10e05cbbd11841"
+    },
+    {
+      "path": "tools/analyze_wrf_reference_refinement.py",
+      "sha256": "ed317cd19d7d7134d923a822493002e1f292124624c8032e0cda4cd5c80089b8"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.h",
+      "sha256": "ce8bd2d69a5df565c03747a94902638b08c424ef85ed5665f7d40c1bcbf13e40"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp",
+      "sha256": "8b5ce856a2ff6b200b94f8aafe2c968afdaedb5f001e274648d2dac9c240efe0"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/test_horizontal_pgf_actual_rhs.cpp",
+      "sha256": "c5ee2f733069f32ed6161eb4cf2aeaf251712c8ffa6965de422d75c7cb35f8f5"
+    },
+    {
+      "path": "tools/test_reference_plan_contract.py",
+      "sha256": "f5e1e96b2469cd59af97a5fbd8c80de183a21b83b6529a834b6651661af01a52"
+    },
+    {
+      "path": "main/ideal_em.F",
+      "sha256": "eab01173b2712953a128becf0f7e5cdb990ec9c61cb2ea292b7c66b458a6918b"
+    },
+    {
+      "path": "main/module_wrf_top.F",
+      "sha256": "3a6645ae7e4c64b8757987924c9fe661344c307c6de447cdc6fd063d09b1683c"
+    },
+    {
+      "path": "dyn_em/start_em.F",
+      "sha256": "8c25bb4836118932b8a8b244c1b687afa3ab32bda2bcba2f3370ff67d0c22e99"
+    },
+    {
+      "path": "share/mediation_wrfmain.F",
+      "sha256": "91b92d4c21536c3f9df8ac175c2e5410d31e3b7b5af66f7d00b9bd56872dce25"
+    },
+    {
+      "path": "share/module_io_domain.F",
+      "sha256": "1dde269826435be2935883a0a477e9aa30cb852b67bc5b6b931c98e080dbe5ad"
+    },
+    {
+      "path": "share/input_wrf.F",
+      "sha256": "54f646fb6a36c919db3d6869c14943b2cc32e9d360628092dff81f1721981f12"
+    },
+    {
+      "path": "main/ideal_em.F",
+      "sha256": "eab01173b2712953a128becf0f7e5cdb990ec9c61cb2ea292b7c66b458a6918b"
+    },
+    {
+      "path": "main/module_wrf_top.F",
+      "sha256": "3a6645ae7e4c64b8757987924c9fe661344c307c6de447cdc6fd063d09b1683c"
+    },
+    {
+      "path": "dyn_em/start_em.F",
+      "sha256": "8c25bb4836118932b8a8b244c1b687afa3ab32bda2bcba2f3370ff67d0c22e99"
+    },
+    {
+      "path": "share/mediation_wrfmain.F",
+      "sha256": "91b92d4c21536c3f9df8ac175c2e5410d31e3b7b5af66f7d00b9bd56872dce25"
+    },
+    {
+      "path": "share/module_io_domain.F",
+      "sha256": "1dde269826435be2935883a0a477e9aa30cb852b67bc5b6b931c98e080dbe5ad"
+    },
+    {
+      "path": "share/input_wrf.F",
+      "sha256": "54f646fb6a36c919db3d6869c14943b2cc32e9d360628092dff81f1721981f12"
+    },
+    {
+      "path": "Registry/Registry.EM_COMMON",
+      "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+    },
+    {
+      "path": "tools/make_wrf_common_state_input.py",
+      "sha256": "81a4215a1a08712b6a3b162e7cbf0e85703c3659f253a30c5acd9638a18ddf6f"
+    },
+    {
+      "path": "tools/test_make_wrf_common_state_input.py",
+      "sha256": "931d290587a516825f56381d88dbf68658fb8be58409d014b42b28952eb6c83a"
+    }
+  ],
+  "new_tools_only": [
+    "tools/make_wrf_common_state_input.py",
+    "tools/test_make_wrf_common_state_input.py"
+  ]
+}

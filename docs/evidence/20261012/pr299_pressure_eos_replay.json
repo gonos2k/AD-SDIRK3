@@ -1,0 +1,1196 @@
+{
+  "schema": "pressure-lineage-offline-eos-replay-v1",
+  "worktree_base": "583e2a64c1879372c2e0a1b9f4770298a05ffd75",
+  "scope": "Two existing initial/stored same-state captures only; no model run, WRF build, source edit, or new compiler microkernel. NumPy/host-powf are labeled emulations; an already archived standalone gfortran scalar oracle compiled at the same recorded flags matches the 8192 captured FT P values bitwise.",
+  "analysis_script": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-lineage-20261012/green_metric/replay_pressure_eos.py",
+    "sha256": "86adcc88d48eeb5ee7f248eb43c581de7bbf6bccbd17ecb3d8a1d112bf0a8ca4"
+  },
+  "capture_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/u-pgf-same-state-20261012/green_build/captures/pgf_runs.json",
+    "sha256": "1aa3941d591dbcd6f8f18858c83b6b2b1eaf1a04e97ee25cf9d68d5e8c00606a",
+    "captured_producer_head": "51527694a3cb139ae43c20532b138e4a65dd6153",
+    "producer_source_binding": "/Users/yhlee/AD-SDIRK3-review-evidence/u-pgf-same-state-20261012/producer_source_binding.json",
+    "producer_source_binding_sha256": "5a2dfcc106903d86daca31526c76ff6d51af1a5aac2b79e6e132ab63ac9eabe6"
+  },
+  "source_hash_binding": {
+    "captured_producer_commit": "05137f9c62ef01c3e9532dda918e8fc2c66d51c8",
+    "current_analysis_worktree": "/private/tmp/pr299-pressure-lineage-20261012",
+    "files": {
+      "dyn_em/start_em.F": {
+        "captured_run_commit_sha256": "8c25bb4836118932b8a8b244c1b687afa3ab32bda2bcba2f3370ff67d0c22e99",
+        "current_pr299_base_sha256": "8c25bb4836118932b8a8b244c1b687afa3ab32bda2bcba2f3370ff67d0c22e99",
+        "byte_identical": true
+      },
+      "dyn_em/module_big_step_utilities_em.F": {
+        "captured_run_commit_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+        "current_pr299_base_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+        "byte_identical": true
+      },
+      "share/input_wrf.F": {
+        "captured_run_commit_sha256": "54f646fb6a36c919db3d6869c14943b2cc32e9d360628092dff81f1721981f12",
+        "current_pr299_base_sha256": "54f646fb6a36c919db3d6869c14943b2cc32e9d360628092dff81f1721981f12",
+        "byte_identical": true
+      },
+      "share/module_model_constants.F": {
+        "captured_run_commit_sha256": "5b80377fecdc18a5f0ad38d3b6c15cfc86ad5d76701adbbbb08a08698d0f7062",
+        "current_pr299_base_sha256": "5b80377fecdc18a5f0ad38d3b6c15cfc86ad5d76701adbbbb08a08698d0f7062",
+        "byte_identical": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+        "captured_run_commit_sha256": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8",
+        "current_pr299_base_sha256": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8",
+        "byte_identical": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp": {
+        "captured_run_commit_sha256": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "current_pr299_base_sha256": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "byte_identical": true
+      }
+    },
+    "all_files_match_producer_commit": true
+  },
+  "constants": {
+    "rd_f32": 287.0,
+    "cp_f32": 1004.5,
+    "cv_f32": 717.5,
+    "p0_f32": 100000.0,
+    "t0_f32": 300.0,
+    "cvpm_f32": -0.7142857313156128,
+    "cpovcv_f32": 1.399999976158142,
+    "cvpm_cpp64": -0.7142857142857143,
+    "coefficient_f32": 0.0028699999675154686,
+    "coefficient_cpp64": 0.00287
+  },
+  "actual_route_evidence": {
+    "effective_hypsometric_opt": 1,
+    "source": "share/input_wrf.F:1033-1038 ideal-run override and archived initial RSL note; start_em.F:814-862 option-1 AL and scalar pressure initialization. The archived standalone gfortran scalar oracle exactly matches captured FT P using the same captured T/ALT/PB arrays for both states.",
+    "start_em_alb_route": "start_em.F:690-703 for max_dom=1 reconstructs PB and ALB from T_INIT/PB before the option-1 AL and pressure assignment.",
+    "cpp_runtime_precision": {
+      "internal_fp64_true": true,
+      "internal_fp64_state_carry_true": true,
+      "enable_ad_halo_exchange_zero": true
+    },
+    "cpp_runtime_precision_note": "Captured C++ route logs internal_fp64=true and internal_fp64_state_carry=true; the C++ base-alpha and pressure captures match their FP64 replays to numerical precision."
+  },
+  "interpretation_limits": [
+    "NumPy float32 and host libm powf rows are software emulations; the separately archived gfortran scalar oracle provides compiler-observable expression output and matches the captured FT P bitwise, but does not expose a full-WRF internal pre-subtraction Pfull intermediate.",
+    "The F64 replay uses the same captured FP32 operands and source algebra; it is a precision contrast, not an exact-solution estimate.",
+    "The C++-versus-FT ALT decomposition distinguishes captured AL-prime and effective ALB call inputs. Differences between effective CPP ALB and raw WRFINPUT ALB are compared against the source-derived base-state replay; any remaining torch/system-power implementation detail is not attributed.",
+    "No full forecast or WRF build was performed; this EOS replay does not claim total PGF/RHS closure."
+  ],
+  "cases": {
+    "initial": {
+      "label": "initial",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "owned_count": 4096,
+      "input_and_call_operand_checks": {
+        "wrfinput_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+        "input_base_PB_equals_capture_PB": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "FT_captured_ALT_equals_F32_AL_plus_WRFINPUT_ALB": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "same_call_CPP_T_equals_FT_T": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "WRFINPUT_PB_rebuilt_from_C3H_MUB_C4H_PTOP_F32": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "WRFINPUT_ALB_rebuilt_from_T_INIT_PB_F32": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "WRFINPUT_ALB_rebuilt_by_host_powf_F32": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "QVAPOR_all_zero": true,
+        "n_moist_capture_header": 2,
+        "use_theta_m_namelist_output": 1,
+        "nonhydrostatic_capture_header": 1,
+        "top_lid_capture_header": 0
+      },
+      "fortran_eos_source_order_f32_emulation": {
+        "numpy_float32_operator": {
+          "actual_capture_vs_emulation": {
+            "rms": 0.0012246667038724676,
+            "max_abs": 0.00389862060546875,
+            "mean": 0.00013350049266591668
+          },
+          "exact_reproduction": {
+            "exact_count": 18,
+            "count": 4096,
+            "fraction": 0.00439453125,
+            "mismatch_count": 4078
+          },
+          "ulp": {
+            "median": 4712.0,
+            "p95": 15936.0,
+            "max": 58240,
+            "exact_fraction": 0.00439453125
+          }
+        },
+        "host_libm_powf_emulation": {
+          "actual_capture_vs_emulation": {
+            "rms": 0.0012246667038724676,
+            "max_abs": 0.00389862060546875,
+            "mean": 0.00013350049266591668
+          },
+          "exact_reproduction": {
+            "exact_count": 18,
+            "count": 4096,
+            "fraction": 0.00439453125,
+            "mismatch_count": 4078
+          },
+          "ulp": {
+            "median": 4712.0,
+            "p95": 15936.0,
+            "max": 58240,
+            "exact_fraction": 0.00439453125
+          },
+          "note": "host libm powf emulation; not the compiler-observable result"
+        },
+        "standalone_gfortran_start_em_scalar_oracle": {
+          "source": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-lineage-20261012/red_precision/start_em_scalar_eos_oracle.f90",
+          "source_sha256": "b53c37435be9dd34c58675e471bc0b2ce6a2404aa9f041715016054a94eee360",
+          "oracle_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-lineage-20261012/red_precision/oracle_comparison.json",
+          "oracle_receipt_sha256": "97871da1c5c5ef5b056c5a574e220eb8cec0c6deb263646afaaed23654cbbb53",
+          "inputs_exact_to_captured_FT": {
+            "T": {
+              "exact_count": 4096,
+              "count": 4096,
+              "fraction": 1.0,
+              "mismatch_count": 0
+            },
+            "ALT": {
+              "exact_count": 4096,
+              "count": 4096,
+              "fraction": 1.0,
+              "mismatch_count": 0
+            },
+            "PB": {
+              "exact_count": 4096,
+              "count": 4096,
+              "fraction": 1.0,
+              "mismatch_count": 0
+            }
+          },
+          "output_exact_to_captured_FT_P": {
+            "exact_count": 4096,
+            "count": 4096,
+            "fraction": 1.0,
+            "mismatch_count": 0
+          },
+          "compiler": "GNU Fortran 15.2.0",
+          "flags": [
+            "-O2",
+            "-ftree-vectorize",
+            "-funroll-loops"
+          ]
+        },
+        "same_formula_f64_from_actual_FT_inputs": {
+          "actual_capture_minus_replay": {
+            "rms": 0.0031015147900175064,
+            "max_abs": 0.013394598558079451,
+            "mean": -6.401991703652854e-05
+          },
+          "f64_minus_f32_source_emulation": {
+            "rms": 0.0034265325703702098,
+            "max_abs": 0.01664017784059979,
+            "mean": -6.948057562938814e-05
+          },
+          "units": "Pa"
+        },
+        "operation_sequence": "start_em.F: p=p0*((rd*(t0+T)*qvf)/(p0*ALT))**cpovcv-PB, with qvf=1 and default REAL32. The separate gfortran scalar oracle uses this source grouping and matches actual captured pressure bitwise."
+      },
+      "base_state_ALB_replay": {
+        "Fortran_start_em_numpy_pow_f32_vs_WRFINPUT_ALB": {
+          "difference": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          },
+          "exact_reproduction": {
+            "exact_count": 4096,
+            "count": 4096,
+            "fraction": 1.0,
+            "mismatch_count": 0
+          },
+          "ulp": {
+            "median": 0.0,
+            "p95": 0.0,
+            "max": 0,
+            "exact_fraction": 1.0
+          }
+        },
+        "Fortran_start_em_host_powf_vs_WRFINPUT_ALB": {
+          "difference": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          },
+          "exact_reproduction": {
+            "exact_count": 4096,
+            "count": 4096,
+            "fraction": 1.0,
+            "mismatch_count": 0
+          },
+          "ulp": {
+            "median": 0.0,
+            "p95": 0.0,
+            "max": 0,
+            "exact_fraction": 1.0
+          }
+        },
+        "C++_tensor_f32_replay_vs_effective_captured_ALB": {
+          "difference": {
+            "rms": 1.4681186721643592e-07,
+            "max_abs": 3.154498173785214e-07,
+            "mean": 6.3694427634986e-08
+          },
+          "exact_reproduction": {
+            "exact_count": 0,
+            "count": 4096,
+            "fraction": 0.0,
+            "mismatch_count": 4096
+          },
+          "ulp": {
+            "median": 1.0,
+            "p95": 1.0,
+            "max": 1,
+            "exact_fraction": 0.4375
+          }
+        },
+        "C++_effective_ALB_minus_WRFINPUT_ALB": {
+          "rms": 1.4681186721643592e-07,
+          "max_abs": 3.154498173785214e-07,
+          "mean": -6.3694427634986e-08
+        },
+        "C++_effective_ALB_minus_FT_effective_ALT_minus_AL": {
+          "rms": 1.501801151852979e-07,
+          "max_abs": 4.272743527877765e-07,
+          "mean": -6.266716846836662e-08
+        },
+        "F64_formula_from_same_WRFINPUT_operands_vs_FT_ALB": {
+          "rms": 9.76371790213497e-08,
+          "max_abs": 1.9019033992151435e-07,
+          "mean": -4.020917945823932e-09
+        },
+        "C++_F64_base_formula_from_WRFINPUT_vs_effective_capture": {
+          "rms": 4.788590961896884e-17,
+          "max_abs": 8.881784197001252e-16,
+          "mean": 0.0
+        },
+        "Fortran_actual_ALT_minus_AL_plus_base_ALB": {
+          "rms": 3.873714826092033e-08,
+          "max_abs": 1.30385160446167e-07,
+          "mean": -1.0272591666193875e-09
+        },
+        "CPP_minus_FT_call_operand_decomposition": {
+          "AL_prime_difference_CPP_minus_FT": {
+            "rms": 2.776010926845219e-09,
+            "max_abs": 1.0905967420815621e-08,
+            "mean": -3.06891606499336e-11
+          },
+          "effective_ALB_difference_CPP_minus_FT": {
+            "rms": 1.4681186721643592e-07,
+            "max_abs": 3.154498173785214e-07,
+            "mean": -6.3694427634986e-08
+          },
+          "ALT_difference_CPP_minus_FT": {
+            "rms": 1.5020001413353356e-07,
+            "max_abs": 4.27124639656995e-07,
+            "mean": -6.269785762981093e-08
+          },
+          "ALT_difference_identity_residual": {
+            "rms": 3.873714826366805e-08,
+            "max_abs": 1.3038516052422955e-07,
+            "mean": 1.027259165825008e-09
+          }
+        }
+      },
+      "same_state_CPP_vs_FT_pressure_decomposition_f64": {
+        "CPP_actual_minus_FT_actual": {
+          "rms": 0.004808738713267984,
+          "max_abs": 0.01926255774742458,
+          "mean": -0.00028770397811817006
+        },
+        "T_only_CPP_minus_FT_on_FT_ALT": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "ALT_only_CPP_minus_FT_on_FT_T": {
+          "rms": 0.0036288541089669053,
+          "max_abs": 0.00925469798676204,
+          "mean": 0.0001459340214129412
+        },
+        "T_ALT_interaction": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "replay_total_on_actual_operands": {
+          "rms": 0.0036288541089669053,
+          "max_abs": 0.00925469798676204,
+          "mean": 0.0001459340214129412
+        },
+        "CPP_actual_minus_own_source_replay": {
+          "rms": 1.2280678277231971e-12,
+          "max_abs": 1.4551915228366852e-11,
+          "mean": 3.1530333899354446e-14
+        },
+        "FT_actual_minus_own_f64_replay": {
+          "rms": 0.0031015147900175064,
+          "max_abs": 0.013394598558079451,
+          "mean": -6.401991703652854e-05
+        }
+      },
+      "exact_cross_pressure_telescope": {
+        "sum_of_components": {
+          "rms": 0.004808738713267984,
+          "max_abs": 0.01926255774742458,
+          "mean": -0.00028770397811817006
+        },
+        "actual_CPP_minus_FT": {
+          "rms": 0.004808738713267984,
+          "max_abs": 0.01926255774742458,
+          "mean": -0.00028770397811817006
+        },
+        "identity_residual": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "components": {
+          "CPP_actual_minus_own_F64_replay": {
+            "rms": 1.2280678277231971e-12,
+            "max_abs": 1.4551915228366852e-11,
+            "mean": 3.1530333899354446e-14
+          },
+          "captured_operand_path_CPP_replay_minus_FT_operands_on_CPP_formula": {
+            "rms": 0.0036288541089669053,
+            "max_abs": 0.00925469798676204,
+            "mean": 0.0001459340214129412
+          },
+          "CPP_scalar_exponent_minus_Fortran_F32_exponent_on_same_FT_operands": {
+            "rms": 0.0005168027140751949,
+            "max_abs": 0.0006264240873861127,
+            "mean": -0.0004976579165991701
+          },
+          "same_FT_operands_F64_minus_compiled_FT32_oracle": {
+            "rms": 0.0031015147900175064,
+            "max_abs": 0.013394598558079451,
+            "mean": 6.401991703652854e-05
+          },
+          "compiled_FT32_oracle_minus_captured_FT_pressure": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          }
+        },
+        "note": "Exact pointwise telescope; components depend on the stated replacement order."
+      },
+      "AL_and_ALT_input_effects_at_fixed_FT_T_PB": {
+        "base_ALB_change_only_CPP_minus_FT_call_effective": {
+          "rms": 0.0036250691219788405,
+          "max_abs": 0.009176056468277238,
+          "mean": 0.00014294767709754908
+        },
+        "perturbation_AL_change_only_CPP_minus_FT": {
+          "rms": 0.00019142190506899436,
+          "max_abs": 0.0010540360817685723,
+          "mean": 2.9863436630250817e-06
+        },
+        "combined_base_and_perturbation_interaction": {
+          "rms": 2.763345918678875e-11,
+          "max_abs": 1.6007106751203537e-10,
+          "mean": 1.0893508317622036e-12
+        },
+        "full_ALT_change_CPP_minus_FT_at_FT_T": {
+          "rms": 0.0036288541089669053,
+          "max_abs": 0.00925469798676204,
+          "mean": 0.0001459340214129412
+        },
+        "full_T_and_ALT_change_CPP_minus_FT_on_common_F64_formula": {
+          "rms": 0.0036288541089669053,
+          "max_abs": 0.00925469798676204,
+          "mean": 0.0001459340214129412
+        },
+        "units": "Pa; counterfactual EOS evaluations on captured operands, not fitted shifts"
+      },
+      "spatial_gradient_effect": {
+        "pressure_prime_CPP_minus_FT_gradient": {
+          "rms": 0.0042859541600978315,
+          "max_abs": 0.02140683538164012,
+          "mean": 0.0
+        },
+        "units_gradient": "Pa per x-face difference",
+        "ALT_deltaP_physical_U_accel_CPP_minus_FT_with_FT_ALT_fixed": {
+          "rms": 6.484738185631173e-08,
+          "max_abs": 2.3288629974721775e-07,
+          "mean": -4.826427822488931e-14
+        },
+        "units": "m/s^2",
+        "NumPy_F32_emulation_pressure_error_gradient": {
+          "rms": 0.001477049096157174,
+          "max_abs": 0.00740814208984375,
+          "mean": 0.0
+        },
+        "NumPy_F32_emulation_pressure_error_U_accel_with_FT_ALT_fixed": {
+          "rms": 2.1118471569351442e-08,
+          "max_abs": 6.726494985664313e-08,
+          "mean": -4.350544398039654e-15
+        },
+        "compiled_start_em_oracle_pressure_error_gradient": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "compiled_start_em_oracle_pressure_error_U_accel": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "exact_telescope_component_gradients_and_U_accelerations": {
+          "cpp_replay_residual": {
+            "pressure_gradient": {
+              "rms": 1.6567687045823813e-12,
+              "max_abs": 1.4551915228366852e-11,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 2.5310872755714583e-17,
+              "max_abs": 2.028399792681311e-16,
+              "mean": 0.0
+            }
+          },
+          "captured_operand_path": {
+            "pressure_gradient": {
+              "rms": 0.0007484227327709796,
+              "max_abs": 0.0027217600363655947,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 1.6036851206549774e-08,
+              "max_abs": 4.681478973378195e-08,
+              "mean": 3.185536775281093e-15
+            }
+          },
+          "cpp_exponent_vs_fortran_exponent": {
+            "pressure_gradient": {
+              "rms": 3.627556647646305e-11,
+              "max_abs": 2.473825588822365e-10,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 5.339199707843228e-16,
+              "max_abs": 2.504315840691826e-15,
+              "mean": 7.23217887919382e-23
+            }
+          },
+          "f64_vs_compiled_ft32": {
+            "pressure_gradient": {
+              "rms": 0.004207853384300119,
+              "max_abs": 0.021879107487620786,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 6.299667813779572e-08,
+              "max_abs": 2.4145647793518814e-07,
+              "mean": -5.1449815072627874e-14
+            }
+          },
+          "compiled_ft32_oracle_residual": {
+            "pressure_gradient": {
+              "rms": 0.0,
+              "max_abs": 0.0,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 0.0,
+              "max_abs": 0.0,
+              "mean": 0.0
+            }
+          }
+        },
+        "telescope_gradient_identity": {
+          "component_pressure_sum_minus_total": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          },
+          "component_pressure_gradient_sum_minus_total_gradient": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          },
+          "component_U_acceleration_sum_minus_full": {
+            "rms": 5.3078570099011936e-24,
+            "max_abs": 2.6469779601696886e-23,
+            "mean": 6.664296927307108e-27
+          },
+          "sum_component_U_acceleration": {
+            "rms": 6.484738185631173e-08,
+            "max_abs": 2.3288629974721775e-07,
+            "mean": -4.826427822487962e-14
+          },
+          "full_CPP_minus_FT_U_acceleration": {
+            "rms": 6.484738185631173e-08,
+            "max_abs": 2.3288629974721775e-07,
+            "mean": -4.826427822488931e-14
+          }
+        },
+        "AL_ALT_input_change_gradients_and_U_accelerations": {
+          "base_ALB": {
+            "pressure_gradient": {
+              "rms": 0.0007641301266475999,
+              "max_abs": 0.0025931516065611504,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 1.6167509241793355e-08,
+              "max_abs": 4.6747172474255504e-08,
+              "mean": 2.975063696979249e-15
+            }
+          },
+          "perturbation_AL_prime": {
+            "pressure_gradient": {
+              "rms": 0.00019451994407597526,
+              "max_abs": 0.0010855551954591647,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 2.2689728690939957e-09,
+              "max_abs": 1.0981625089837845e-08,
+              "mean": 2.1047302633499473e-16
+            }
+          },
+          "ALxALB_interaction": {
+            "pressure_gradient": {
+              "rms": 2.947535447683315e-11,
+              "max_abs": 1.7462298274040222e-10,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 3.6829992307091466e-16,
+              "max_abs": 1.9643037741424018e-15,
+              "mean": 5.194429417814669e-23
+            }
+          }
+        },
+        "rdx_m_inv": 9.999999747378752e-06,
+        "owner_policy": "16x16x16 unique physical U owners; periodic x-gradient uses roll, retaining west face 0 and excluding duplicated close face"
+      },
+      "provenance": {
+        "fortran_run": {
+          "label": "initial_fortran_rk3_h15",
+          "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+          "files": {
+            "wrf_u_pgf_snapshot.bin": "39ddb92b20c95ed42f901331828d9a37191af1a43f4d74a493708562aed8edc1",
+            "wrf_full_rhs_snapshot.bin": "778b2919c0ebf7fb470e85fa4843975fb7f9e4a9f248758391e07844e8afc24f",
+            "wrf_rk_tend_dump.bin": "a1d0c76f37821effbc6ea5d0dbd667ed338956812802acdf68e8b74e0d9b3f15",
+            "wrfinput_d01": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+          }
+        },
+        "cpp_run": {
+          "label": "initial_cpp_ark3_h15",
+          "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+          "files": {
+            "port_u_pgf_snapshot.bin": "10a5ff242ba33acd4eb5df5cb54491da1ce15e581565280af3403b05a2faedee",
+            "port_u_pgf_operands_snapshot.bin": "af37bae317c7f4228f5d40d2031d72e80b78ffe5d72c337cf8b104e673dc5fdd",
+            "port_full_rhs_snapshot.bin": "9d31552a87659f0e40b3dbfc80c68606f06a57ee22f69b00b30e59a640c0878d"
+          }
+        },
+        "source_lineage": {
+          "fortran_actual_pressure": "dyn_em/start_em.F:814-862; archived ideal startup uses hypsometric option 1 and scalar REAL32 pressure assignment at :856, qvf=1. Separate gfortran oracle reproduces captured FT P bitwise on the exact call operands.",
+          "fortran_base_alpha": "dyn_em/start_em.F:690-703 (max_dom=1: PB from C3H*MUB+C4H+PTOP, then ALB from T_INIT/PB);",
+          "input_wrf_option": "share/input_wrf.F:1033-1038 forces hypsometric_opt=1 for ideal runs; archived RSL notes the effective option.",
+          "cpp_base_alpha": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:30090-30112 and 19431-19432; external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp:205-227",
+          "constants": "share/module_model_constants.F:19-41; p0=100000, t0=300, rd=287, cp=1004.5, cv=717.5, cvpm=-cv/cp;"
+        }
+      }
+    },
+    "stored": {
+      "label": "stored",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "owned_count": 4096,
+      "input_and_call_operand_checks": {
+        "wrfinput_sha256": "90bec3e95b2b98c9281d5b0ffbd7a16124e9611273b8a7318056ef8337b8aea4",
+        "input_base_PB_equals_capture_PB": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "FT_captured_ALT_equals_F32_AL_plus_WRFINPUT_ALB": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "same_call_CPP_T_equals_FT_T": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "WRFINPUT_PB_rebuilt_from_C3H_MUB_C4H_PTOP_F32": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "WRFINPUT_ALB_rebuilt_from_T_INIT_PB_F32": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "WRFINPUT_ALB_rebuilt_by_host_powf_F32": {
+          "exact_count": 4096,
+          "count": 4096,
+          "fraction": 1.0,
+          "mismatch_count": 0
+        },
+        "QVAPOR_all_zero": true,
+        "n_moist_capture_header": 2,
+        "use_theta_m_namelist_output": 1,
+        "nonhydrostatic_capture_header": 1,
+        "top_lid_capture_header": 0
+      },
+      "fortran_eos_source_order_f32_emulation": {
+        "numpy_float32_operator": {
+          "actual_capture_vs_emulation": {
+            "rms": 0.0012018990445502224,
+            "max_abs": 0.00389862060546875,
+            "mean": 3.688631113618612e-05
+          },
+          "exact_reproduction": {
+            "exact_count": 8,
+            "count": 4096,
+            "fraction": 0.001953125,
+            "mismatch_count": 4088
+          },
+          "ulp": {
+            "median": 4512.0,
+            "p95": 19712.0,
+            "max": 61088,
+            "exact_fraction": 0.001953125
+          }
+        },
+        "host_libm_powf_emulation": {
+          "actual_capture_vs_emulation": {
+            "rms": 0.0012018990445502224,
+            "max_abs": 0.00389862060546875,
+            "mean": 3.688631113618612e-05
+          },
+          "exact_reproduction": {
+            "exact_count": 8,
+            "count": 4096,
+            "fraction": 0.001953125,
+            "mismatch_count": 4088
+          },
+          "ulp": {
+            "median": 4512.0,
+            "p95": 19712.0,
+            "max": 61088,
+            "exact_fraction": 0.001953125
+          },
+          "note": "host libm powf emulation; not the compiler-observable result"
+        },
+        "standalone_gfortran_start_em_scalar_oracle": {
+          "source": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-lineage-20261012/red_precision/start_em_scalar_eos_oracle.f90",
+          "source_sha256": "b53c37435be9dd34c58675e471bc0b2ce6a2404aa9f041715016054a94eee360",
+          "oracle_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-lineage-20261012/red_precision/oracle_comparison.json",
+          "oracle_receipt_sha256": "97871da1c5c5ef5b056c5a574e220eb8cec0c6deb263646afaaed23654cbbb53",
+          "inputs_exact_to_captured_FT": {
+            "T": {
+              "exact_count": 4096,
+              "count": 4096,
+              "fraction": 1.0,
+              "mismatch_count": 0
+            },
+            "ALT": {
+              "exact_count": 4096,
+              "count": 4096,
+              "fraction": 1.0,
+              "mismatch_count": 0
+            },
+            "PB": {
+              "exact_count": 4096,
+              "count": 4096,
+              "fraction": 1.0,
+              "mismatch_count": 0
+            }
+          },
+          "output_exact_to_captured_FT_P": {
+            "exact_count": 4096,
+            "count": 4096,
+            "fraction": 1.0,
+            "mismatch_count": 0
+          },
+          "compiler": "GNU Fortran 15.2.0",
+          "flags": [
+            "-O2",
+            "-ftree-vectorize",
+            "-funroll-loops"
+          ]
+        },
+        "same_formula_f64_from_actual_FT_inputs": {
+          "actual_capture_minus_replay": {
+            "rms": 0.0030405546845876934,
+            "max_abs": 0.01427910196071025,
+            "mean": 2.026704300206461e-05
+          },
+          "f64_minus_f32_source_emulation": {
+            "rms": 0.0032882367839845994,
+            "max_abs": 0.015112613313249312,
+            "mean": -5.7153354138250734e-05
+          },
+          "units": "Pa"
+        },
+        "operation_sequence": "start_em.F: p=p0*((rd*(t0+T)*qvf)/(p0*ALT))**cpovcv-PB, with qvf=1 and default REAL32. The separate gfortran scalar oracle uses this source grouping and matches actual captured pressure bitwise."
+      },
+      "base_state_ALB_replay": {
+        "Fortran_start_em_numpy_pow_f32_vs_WRFINPUT_ALB": {
+          "difference": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          },
+          "exact_reproduction": {
+            "exact_count": 4096,
+            "count": 4096,
+            "fraction": 1.0,
+            "mismatch_count": 0
+          },
+          "ulp": {
+            "median": 0.0,
+            "p95": 0.0,
+            "max": 0,
+            "exact_fraction": 1.0
+          }
+        },
+        "Fortran_start_em_host_powf_vs_WRFINPUT_ALB": {
+          "difference": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          },
+          "exact_reproduction": {
+            "exact_count": 4096,
+            "count": 4096,
+            "fraction": 1.0,
+            "mismatch_count": 0
+          },
+          "ulp": {
+            "median": 0.0,
+            "p95": 0.0,
+            "max": 0,
+            "exact_fraction": 1.0
+          }
+        },
+        "C++_tensor_f32_replay_vs_effective_captured_ALB": {
+          "difference": {
+            "rms": 1.4681186721521394e-07,
+            "max_abs": 3.154498173785214e-07,
+            "mean": 6.369442763471496e-08
+          },
+          "exact_reproduction": {
+            "exact_count": 0,
+            "count": 4096,
+            "fraction": 0.0,
+            "mismatch_count": 4096
+          },
+          "ulp": {
+            "median": 1.0,
+            "p95": 1.0,
+            "max": 1,
+            "exact_fraction": 0.4375
+          }
+        },
+        "C++_effective_ALB_minus_WRFINPUT_ALB": {
+          "rms": 1.4681186721521394e-07,
+          "max_abs": 3.154498173785214e-07,
+          "mean": -6.369442763471496e-08
+        },
+        "C++_effective_ALB_minus_FT_effective_ALT_minus_AL": {
+          "rms": 1.6448947318645824e-07,
+          "max_abs": 5.538683955919055e-07,
+          "mean": -6.282483967751757e-08
+        },
+        "F64_formula_from_same_WRFINPUT_operands_vs_FT_ALB": {
+          "rms": 9.76371790213497e-08,
+          "max_abs": 1.9019033992151435e-07,
+          "mean": -4.020917945823932e-09
+        },
+        "C++_F64_base_formula_from_WRFINPUT_vs_effective_capture": {
+          "rms": 4.220764384040162e-17,
+          "max_abs": 8.881784197001252e-16,
+          "mean": -2.710505431213761e-19
+        },
+        "Fortran_actual_ALT_minus_AL_plus_base_ALB": {
+          "rms": 7.455281838071497e-08,
+          "max_abs": 2.384185791015625e-07,
+          "mean": -8.695879571973819e-10
+        },
+        "CPP_minus_FT_call_operand_decomposition": {
+          "AL_prime_difference_CPP_minus_FT": {
+            "rms": 2.8597450515973907e-09,
+            "max_abs": 1.238778200851609e-08,
+            "mean": -1.1688827283982844e-10
+          },
+          "effective_ALB_difference_CPP_minus_FT": {
+            "rms": 1.4681186721521394e-07,
+            "max_abs": 3.154498173785214e-07,
+            "mean": -6.369442763471496e-08
+          },
+          "ALT_difference_CPP_minus_FT": {
+            "rms": 1.6451315738464452e-07,
+            "max_abs": 5.547601462652096e-07,
+            "mean": -6.294172795120881e-08
+          },
+          "ALT_difference_identity_residual": {
+            "rms": 7.455281837630984e-08,
+            "max_abs": 2.3841857954218226e-07,
+            "mean": 8.695879563459715e-10
+          }
+        }
+      },
+      "same_state_CPP_vs_FT_pressure_decomposition_f64": {
+        "CPP_actual_minus_FT_actual": {
+          "rms": 0.005146036152262572,
+          "max_abs": 0.024231122835772112,
+          "mean": -0.0003404116214857922
+        },
+        "T_only_CPP_minus_FT_on_FT_ALT": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "ALT_only_CPP_minus_FT_on_FT_T": {
+          "rms": 0.004044315893005455,
+          "max_abs": 0.014311295250081457,
+          "mean": 0.00017751338432026031
+        },
+        "T_ALT_interaction": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "replay_total_on_actual_operands": {
+          "rms": 0.004044315893005455,
+          "max_abs": 0.014311295250081457,
+          "mean": 0.00017751338432026031
+        },
+        "CPP_actual_minus_own_source_replay": {
+          "rms": 1.1763291971973829e-12,
+          "max_abs": 1.4551915228366852e-11,
+          "mean": 5.1958437552457326e-14
+        },
+        "FT_actual_minus_own_f64_replay": {
+          "rms": 0.0030405546845876934,
+          "max_abs": 0.01427910196071025,
+          "mean": 2.026704300206461e-05
+        }
+      },
+      "exact_cross_pressure_telescope": {
+        "sum_of_components": {
+          "rms": 0.005146036152262572,
+          "max_abs": 0.024231122835772112,
+          "mean": -0.0003404116214857922
+        },
+        "actual_CPP_minus_FT": {
+          "rms": 0.005146036152262572,
+          "max_abs": 0.024231122835772112,
+          "mean": -0.0003404116214857922
+        },
+        "identity_residual": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "components": {
+          "CPP_actual_minus_own_F64_replay": {
+            "rms": 1.1763291971973829e-12,
+            "max_abs": 1.4551915228366852e-11,
+            "mean": 5.1958437552457326e-14
+          },
+          "captured_operand_path_CPP_replay_minus_FT_operands_on_CPP_formula": {
+            "rms": 0.004044315893005455,
+            "max_abs": 0.014311295250081457,
+            "mean": 0.00017751338432026031
+          },
+          "CPP_scalar_exponent_minus_Fortran_F32_exponent_on_same_FT_operands": {
+            "rms": 0.0005168027098202893,
+            "max_abs": 0.0006264240873861127,
+            "mean": -0.0004976579628559463
+          },
+          "same_FT_operands_F64_minus_compiled_FT32_oracle": {
+            "rms": 0.0030405546845876934,
+            "max_abs": 0.01427910196071025,
+            "mean": -2.026704300206461e-05
+          },
+          "compiled_FT32_oracle_minus_captured_FT_pressure": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          }
+        },
+        "note": "Exact pointwise telescope; components depend on the stated replacement order."
+      },
+      "AL_and_ALT_input_effects_at_fixed_FT_T_PB": {
+        "base_ALB_change_only_CPP_minus_FT_call_effective": {
+          "rms": 0.004039299423202969,
+          "max_abs": 0.013900333666242659,
+          "mean": 0.00017097184004644106
+        },
+        "perturbation_AL_change_only_CPP_minus_FT": {
+          "rms": 0.00020379181811470954,
+          "max_abs": 0.0011537156387930736,
+          "mean": 6.541543173366193e-06
+        },
+        "combined_base_and_perturbation_interaction": {
+          "rms": 3.114796328525304e-11,
+          "max_abs": 2.473825588822365e-10,
+          "mean": 1.4024337247064977e-12
+        },
+        "full_ALT_change_CPP_minus_FT_at_FT_T": {
+          "rms": 0.004044315893005455,
+          "max_abs": 0.014311295250081457,
+          "mean": 0.00017751338432026031
+        },
+        "full_T_and_ALT_change_CPP_minus_FT_on_common_F64_formula": {
+          "rms": 0.004044315893005455,
+          "max_abs": 0.014311295250081457,
+          "mean": 0.00017751338432026031
+        },
+        "units": "Pa; counterfactual EOS evaluations on captured operands, not fitted shifts"
+      },
+      "spatial_gradient_effect": {
+        "pressure_prime_CPP_minus_FT_gradient": {
+          "rms": 0.005012093572655703,
+          "max_abs": 0.02359383057046216,
+          "mean": 0.0
+        },
+        "units_gradient": "Pa per x-face difference",
+        "ALT_deltaP_physical_U_accel_CPP_minus_FT_with_FT_ALT_fixed": {
+          "rms": 7.485617403529887e-08,
+          "max_abs": 2.651251103235203e-07,
+          "mean": -5.644325082735046e-13
+        },
+        "units": "m/s^2",
+        "NumPy_F32_emulation_pressure_error_gradient": {
+          "rms": 0.00167305394310778,
+          "max_abs": 0.0075778961181640625,
+          "mean": 0.0
+        },
+        "NumPy_F32_emulation_pressure_error_U_accel_with_FT_ALT_fixed": {
+          "rms": 2.457408358916531e-08,
+          "max_abs": 8.334278420085936e-08,
+          "mean": -1.0846132578957265e-13
+        },
+        "compiled_start_em_oracle_pressure_error_gradient": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "compiled_start_em_oracle_pressure_error_U_accel": {
+          "rms": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0
+        },
+        "exact_telescope_component_gradients_and_U_accelerations": {
+          "cpp_replay_residual": {
+            "pressure_gradient": {
+              "rms": 1.6635807044919939e-12,
+              "max_abs": 1.4551915228366852e-11,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 2.3305339696792154e-17,
+              "max_abs": 2.027008631224895e-16,
+              "mean": -1.953681443487898e-23
+            }
+          },
+          "captured_operand_path": {
+            "pressure_gradient": {
+              "rms": 0.0025724990267102107,
+              "max_abs": 0.012898629531264305,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 3.817801219143361e-08,
+              "max_abs": 1.3028757069505415e-07,
+              "mean": -1.2642080054898038e-13
+            }
+          },
+          "cpp_exponent_vs_fortran_exponent": {
+            "pressure_gradient": {
+              "rms": 3.0527448107560696e-10,
+              "max_abs": 1.877197064459324e-09,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 3.937044263028051e-15,
+              "max_abs": 1.705247223231104e-14,
+              "mean": 9.464873074337832e-20
+            }
+          },
+          "f64_vs_compiled_ft32": {
+            "pressure_gradient": {
+              "rms": 0.004247017059299019,
+              "max_abs": 0.022510211492772214,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 6.401895920815803e-08,
+              "max_abs": 2.3643496407140193e-07,
+              "mean": -4.3801180235354846e-13
+            }
+          },
+          "compiled_ft32_oracle_residual": {
+            "pressure_gradient": {
+              "rms": 0.0,
+              "max_abs": 0.0,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 0.0,
+              "max_abs": 0.0,
+              "mean": 0.0
+            }
+          }
+        },
+        "telescope_gradient_identity": {
+          "component_pressure_sum_minus_total": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          },
+          "component_pressure_gradient_sum_minus_total_gradient": {
+            "rms": 0.0,
+            "max_abs": 0.0,
+            "mean": 0.0
+          },
+          "component_U_acceleration_sum_minus_full": {
+            "rms": 6.354909456422809e-24,
+            "max_abs": 5.293955920339377e-23,
+            "mean": 2.0976600330731925e-26
+          },
+          "sum_component_U_acceleration": {
+            "rms": 7.485617403529887e-08,
+            "max_abs": 2.651251103235203e-07,
+            "mean": -5.644325082735595e-13
+          },
+          "full_CPP_minus_FT_U_acceleration": {
+            "rms": 7.485617403529887e-08,
+            "max_abs": 2.651251103235203e-07,
+            "mean": -5.644325082735046e-13
+          }
+        },
+        "AL_ALT_input_change_gradients_and_U_accelerations": {
+          "base_ALB": {
+            "pressure_gradient": {
+              "rms": 0.0025553971056030494,
+              "max_abs": 0.012779880984453484,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 3.802492154026578e-08,
+              "max_abs": 1.2909307036808057e-07,
+              "mean": -1.52567860633679e-13
+            }
+          },
+          "perturbation_AL_prime": {
+            "pressure_gradient": {
+              "rms": 0.00029102628697437395,
+              "max_abs": 0.0016201641265070066,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 3.3254966629773913e-09,
+              "max_abs": 1.610455362277372e-08,
+              "mean": 2.6147062456474962e-14
+            }
+          },
+          "ALxALB_interaction": {
+            "pressure_gradient": {
+              "rms": 4.396519680599981e-11,
+              "max_abs": 4.220055416226387e-10,
+              "mean": 0.0
+            },
+            "FT_ALT_fixed_U_acceleration": {
+              "rms": 5.261657475669154e-16,
+              "max_abs": 4.270635959119943e-15,
+              "mean": -2.4347400294430226e-21
+            }
+          }
+        },
+        "rdx_m_inv": 9.999999747378752e-06,
+        "owner_policy": "16x16x16 unique physical U owners; periodic x-gradient uses roll, retaining west face 0 and excluding duplicated close face"
+      },
+      "provenance": {
+        "fortran_run": {
+          "label": "stored_fortran_rk3_h15",
+          "input_sha256": "90bec3e95b2b98c9281d5b0ffbd7a16124e9611273b8a7318056ef8337b8aea4",
+          "files": {
+            "wrf_u_pgf_snapshot.bin": "63217ebe2b3b7a8fb3b21ada662fdfb3bcaee1b5dc831c7ffa3769825a9f8ad6",
+            "wrf_full_rhs_snapshot.bin": "142630875dae55678d8f7c852ddc83effe22eed8ca226151127e1c62456d97c6",
+            "wrf_rk_tend_dump.bin": "901d521c2ebe9eb83aba96dae426ecacad611adb71ae816e8af756d734f7b617",
+            "wrfinput_d01": "90bec3e95b2b98c9281d5b0ffbd7a16124e9611273b8a7318056ef8337b8aea4"
+          }
+        },
+        "cpp_run": {
+          "label": "stored_cpp_ark3_h15",
+          "input_sha256": "90bec3e95b2b98c9281d5b0ffbd7a16124e9611273b8a7318056ef8337b8aea4",
+          "files": {
+            "port_u_pgf_snapshot.bin": "e9f74d3e1cdd7feffc4704b31909e47998cc99ded01f2adb4f6c426362da3664",
+            "port_u_pgf_operands_snapshot.bin": "e02f06a7a31e30fa680d3b69c454bcef6bc6f7c79eb39f928a6357dcf9b313eb",
+            "port_full_rhs_snapshot.bin": "02df8443249569adde8db8aacf3e6c3a64816b7fceb77e99bc897c45fcb43c1a"
+          }
+        },
+        "source_lineage": {
+          "fortran_actual_pressure": "dyn_em/start_em.F:814-862; archived ideal startup uses hypsometric option 1 and scalar REAL32 pressure assignment at :856, qvf=1. Separate gfortran oracle reproduces captured FT P bitwise on the exact call operands.",
+          "fortran_base_alpha": "dyn_em/start_em.F:690-703 (max_dom=1: PB from C3H*MUB+C4H+PTOP, then ALB from T_INIT/PB);",
+          "input_wrf_option": "share/input_wrf.F:1033-1038 forces hypsometric_opt=1 for ideal runs; archived RSL notes the effective option.",
+          "cpp_base_alpha": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:30090-30112 and 19431-19432; external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp:205-227",
+          "constants": "share/module_model_constants.F:19-41; p0=100000, t0=300, rd=287, cp=1004.5, cv=717.5, cvpm=-cv/cp;"
+        }
+      }
+    }
+  },
+  "arrays": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-lineage-20261012/green_metric/pressure_eos_replay_arrays.npz",
+    "sha256": "934f12d87b42f7f86ed2ada15c0637220ba8f92fcdfc4458a531dda55165a147",
+    "count": 34,
+    "dtype": "float32/float64 as labeled by variable name"
+  }
+}

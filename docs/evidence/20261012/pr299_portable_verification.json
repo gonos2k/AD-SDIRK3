@@ -1,0 +1,32 @@
+{
+  "payload_hashes_valid": 172,
+  "no_new_compiler_or_model_execution": true,
+  "cases": {
+    "initial": {
+      "recorded_oracle_pressure_bits_equal": 4096,
+      "input_THM_equals_call_t": true,
+      "pressure_telescope_identity_max_pa": 0.0
+    },
+    "stored": {
+      "recorded_oracle_pressure_bits_equal": 4096,
+      "input_THM_equals_call_t": true,
+      "pressure_telescope_identity_max_pa": 0.0
+    }
+  },
+  "corrected_input_same_bytes": true,
+  "copied_fields": [
+    "U",
+    "V",
+    "W",
+    "PH",
+    "T",
+    "THM",
+    "MU",
+    "P"
+  ],
+  "preserved_variables": 169,
+  "focused_tests": 6,
+  "zip_sha256": "7fa5885c986e185b4d7dc045ca60fe1574b4b90611fa9dfdf35a1fc27d538175",
+  "zip_crc_all_members_passed": true,
+  "verification_method": "Fresh final ZIP extraction /private/tmp/pr299-pressure-final-extracted-20261012; no compile/WRF run; explicit pressure-bits/THM/telescope assertions, corrected-input byte equality, six tests."
+}
