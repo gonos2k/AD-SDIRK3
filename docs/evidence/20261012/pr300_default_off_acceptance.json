@@ -1,0 +1,66 @@
+{
+  "schema": "pr300_default_off_physical_acceptance_append_v1",
+  "recorded_local_time": "2026-10-12T15:56:04+09:00",
+  "append_only": true,
+  "original_run_manifest": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_execution/preserve_w/off_regression_runs.json",
+  "original_run_manifest_sha256": "d595b46764d4e2ebc3aa0f1c903798859332212ab179913ce3010811585270f8",
+  "original_manifest_status": "failed",
+  "original_per_run_status": "running",
+  "execution_status": "completed",
+  "return_code": 0,
+  "completion_marker": true,
+  "runtime_effective_use_input_w": "F",
+  "method": "Fortran RK3, one rank, dt=15 s, 15 s duration",
+  "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+  "namelist_sha256": "61623977473e9967afacbcbf732231b7f89b15456117991ce29a82fc12db1205",
+  "baseline_executable_sha256": "4201790d363fb9bdc1e49bf9a83fd3a506b91147c1b34b8a8fbbc0ff77e22ec3",
+  "new_executable_sha256": "5589c1a02f491bfc4e14c9e0f9bef32dea562e8e99bf59132bf22fa13b557338",
+  "default_off_physical_owner_regression": "PASS",
+  "independent_reviews": {
+    "red_off_regression_audit": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/red_off_regression_audit.json",
+      "sha256": "1d575c26487392bdbe7f36fc6be045ae2f4fab7074fe4cf499170b580c1bf334"
+    },
+    "red_raw_ghost_mu_tend_audit": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/red_provenance/pr300_default_off_ghost_mu_tend_audit.json",
+      "sha256": "9e8450a4817a05c8ad1a5db35363102eafd6ccc5d945e80c16c8d6fbb7c33594",
+      "verdict": "Default-off physical owner data and captured PGF/H/V observers are bitwise regression-neutral in this one RK3 15-second case. Raw whole-snapshot parity is not achieved due solely to tiny non-owner ghost mu_tend values. The guarded plan correctly stopped before opt-in calls; do not claim full parity or infer a cause without the separate stencil audit."
+    }
+  },
+  "physical_scope": {
+    "captured_physical_state_and_rhs_fields": "bitwise identical; owned physical mu_tend and all six state fields exact",
+    "PGF_Hdiff_Vdiff_observers": "bitwise identical",
+    "changed_full_rhs_values": "109 off-owner mu_tend values only; subnormal-scale; not read by physical mass-point loops in this configured case",
+    "mu_tend_owned_mass_cells_differing": 0,
+    "maximum_off_owner_mu_tend_absolute_difference": 1.5653624885279667e-40
+  },
+  "strict_raw_artifact_parity": "FAIL preserved as recorded; wrf_rk_tend_dump.bin and wrf_full_rhs_snapshot.bin differ by off-owner mu_tend ghost values",
+  "artifact_comparison": {
+    "wrf_rk_tend_dump.bin": {
+      "baseline_sha256": "8fa3ad6a5ceeb9371d0850653a55854331879790bb90ee037610e6e1539387e1",
+      "new_sha256": "0afda4c99fed62896e154a117a409684ce77b328e9f8cbeb795fae6aa22d3fb8",
+      "byte_identical": false
+    },
+    "wrf_full_rhs_snapshot.bin": {
+      "baseline_sha256": "f099c91eb92ffcfc486cd0306756daef7dbb7d3d2b70b78a766b139109d134dd",
+      "new_sha256": "fa23c1444589cdb5928a8a1f1c421fc3778dc908287bd5705bd9785d44aca989",
+      "byte_identical": false
+    },
+    "wrf_u_pgf_snapshot.bin": {
+      "baseline_sha256": "4afc5031f0a6929c3966c4808f668de4204de3e4e58310de6d99fa59a6649ef0",
+      "new_sha256": "4afc5031f0a6929c3966c4808f668de4204de3e4e58310de6d99fa59a6649ef0",
+      "byte_identical": true
+    },
+    "wrf_u_hdiff_snapshot.bin": {
+      "baseline_sha256": "aef83700917a892614022480ed60a85bc9ef5f797b1c2564f51cea4d813d4779",
+      "new_sha256": "aef83700917a892614022480ed60a85bc9ef5f797b1c2564f51cea4d813d4779",
+      "byte_identical": true
+    },
+    "wrf_u_vdiff_before.bin": {
+      "baseline_sha256": "e9bfc23a1820d4ccaef32abfcecc284e0bd826cccbc50c573a3991e95bb3fe3e",
+      "new_sha256": "e9bfc23a1820d4ccaef32abfcecc284e0bd826cccbc50c573a3991e95bb3fe3e",
+      "byte_identical": true
+    }
+  },
+  "interpretation_limit": "This appendix records completed execution and independently reviewed physical-owner parity for this one default-off case. It does not overwrite or convert the original strict byte-parity failure record."
+}

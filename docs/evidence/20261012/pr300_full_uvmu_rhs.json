@@ -1,0 +1,121 @@
+{
+  "analysis_script": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_metric/preserve_w/derive_full_rhs_arrays.py",
+    "sha256": "8761d8bae4ff60c0620c73d4ffa734f0918baab0e6c03bd16aa55ebb4c72ab35"
+  },
+  "analyzer_source": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/seam-cause-acceptance-20261012/analyze_snapshots.py",
+    "sha256": "a5bcc861e60fbef831e8f84b0d7b2811f7b5d2659cad92a27ef97b545fc401cd"
+  },
+  "arrays_npz": {
+    "keys": [
+      "cpp_mu_pa_s",
+      "cpp_u_m_s2",
+      "cpp_v_m_s2",
+      "delta_mu_cpp_minus_fortran_pa_s",
+      "delta_u_cpp_minus_fortran_m_s2",
+      "delta_v_cpp_minus_fortran_m_s2",
+      "fortran_mu_pa_s",
+      "fortran_u_m_s2",
+      "fortran_v_m_s2"
+    ],
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_metric/preserve_w/physical_rhs_arrays.npz",
+    "sha256": "63fd672dc4f874713546f8c9bab609dbe6eadc8bb48e375366f448951764d511"
+  },
+  "metric_relationship": "RMS and max absolute values are computed from elementwise CPP-minus-Fortran delta arrays; no difference of norms is used.",
+  "metrics_delta_cpp_minus_fortran": {
+    "mu": {
+      "count": 256,
+      "finite": true,
+      "max_abs": 1.2515823744085365e-07,
+      "rms": 3.369322404401852e-08
+    },
+    "u": {
+      "count": 4096,
+      "finite": true,
+      "max_abs": 3.7425265555570597e-07,
+      "rms": 8.399722196386991e-08
+    },
+    "v": {
+      "count": 3840,
+      "finite": true,
+      "max_abs": 3.338228314677602e-07,
+      "rms": 8.489343691952197e-08
+    }
+  },
+  "physical_grid": {
+    "mu_shape": [
+      16,
+      16
+    ],
+    "nx": 16,
+    "ny": 16,
+    "nz": 16,
+    "owner_masks": "U y<ny,x<nx (periodic closing x duplicate excluded); V 1<=y<ny,x<nx (symmetric boundary rows excluded); MU all physical cells",
+    "u_shape": [
+      16,
+      16,
+      16
+    ],
+    "v_shape": [
+      15,
+      16,
+      16
+    ]
+  },
+  "run_receipt": {
+    "executable_sha256": "5589c1a02f491bfc4e14c9e0f9bef32dea562e8e99bf59132bf22fa13b557338",
+    "input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "labels": [
+      "preserve_w_fortran_rk3_h15",
+      "preserve_w_cpp_ark3_h15"
+    ],
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_execution/preserve_w/preserve_w_runs.json",
+    "sha256": "9e94ac9270421803a3d8819d83ca77b33261a4651206fbfd9780263cd4a4567c",
+    "status": "completed"
+  },
+  "same_call_context_gate": {
+    "passed": true,
+    "status": "paired full-RHS exact physical six-state and periodic U seam checked by reused analyzer"
+  },
+  "schema": "pr300-physical-full-rhs-arrays-v1",
+  "scope": "same-state assembled U/V/MU physical RHS only; W/PH/T RHS not compared; no isolated V-PGF claim",
+  "snapshots": {
+    "cpp": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_execution/preserve_w/captures/preserve_w/preserve_w_cpp_ark3_h15/port_full_rhs_snapshot.bin",
+      "sha256": "10040610be1dd44c38d88cf29a0566b47166b98d05dbfe4dd6f11d1c9b69abc2"
+    },
+    "fortran": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_execution/preserve_w/captures/preserve_w/preserve_w_fortran_rk3_h15/wrf_full_rhs_snapshot.bin",
+      "sha256": "cca88b3e66a7423977ae837811f6e723d97d51f421f984e5783acf3b483bdbd8"
+    }
+  },
+  "source60_gate": {
+    "corrected_input_sha256": "fc37c8c0c8be8053a16e0d3424609d496f4a023c6c17ee3a06371970639d14df",
+    "full_six_field_source60_exact": true,
+    "input_use_w": true,
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/green_execution/preserve_w/preserve_w_state_gate.json",
+    "receipt_sha256": "33882386a3b5df7b6b01fc1d0adac9138430aade9eb66d12477dbe31b3e548f6",
+    "same_call_state_gates_passed": true,
+    "source_WRFOUT_sha256": "9b657c04aeb278afe9d822f75ee8ced5d668f664f7c3ec201a2249643e79efdb",
+    "source_timestamp": "0001-01-01_00:01:00",
+    "status": "all six actual call fields are bitwise equal to the archived source-60 state; paired Fortran/C++ same-call gate passes"
+  },
+  "source_revision": {
+    "head": "303fd8e22dc6908a0493ca87b49b2b6b2b3e9456",
+    "working_tree_dirty": true
+  },
+  "state_gate": {
+    "full_storage_exact": true,
+    "full_storage_is_audit_only": true,
+    "passed": true,
+    "periodic_u_closing_face_exact": true,
+    "physical_owned_six_field_exact": true
+  },
+  "status": "preserve-W Full U/V/MU comparison gated by exact physical six-state and periodic U seam checks",
+  "units": {
+    "mu": "Pa/s",
+    "u": "m/s^2",
+    "v": "m/s^2"
+  }
+}

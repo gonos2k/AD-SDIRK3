@@ -1,0 +1,209 @@
+{
+  "schema": "pr300_final_build_source_binding_red_review_v1",
+  "review_scope": "Read-only binding of final build receipt and source pins to committed PR300 HEAD; no build, tests, or native calls.",
+  "target": {
+    "worktree": "/private/tmp/pr300-corrected-state-20261012",
+    "head": "c26a0f9a86d4ca83642d2cf82326399f8c79fe8a",
+    "tree": "8bfeabc6f26f904100fb931f614e8e5dd7498074",
+    "expected_head": "c26a0f9a86d4ca83642d2cf82326399f8c79fe8a",
+    "head_matches_expected": true,
+    "parent": "303fd8e22dc6908a0493ca87b49b2b6b2b3e9456"
+  },
+  "native_source_pins": {
+    "source_pin_count": 14,
+    "all_match_final_committed_blobs": true,
+    "pins": {
+      "Registry/Registry.EM_COMMON": {
+        "recorded_sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+        "committed_blob_sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+        "matches": true
+      },
+      "dyn_em/module_bc_em.F": {
+        "recorded_sha256": "6cfb52b849e3dd0b24769709cf502faa75886da454d9b668af725cccdc56d47f",
+        "committed_blob_sha256": "6cfb52b849e3dd0b24769709cf502faa75886da454d9b668af725cccdc56d47f",
+        "matches": true
+      },
+      "dyn_em/module_big_step_utilities_em.F": {
+        "recorded_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+        "committed_blob_sha256": "0c18cf55d444de1dff1b7b45a88156934718525df483ae516e916708c939bf71",
+        "matches": true
+      },
+      "dyn_em/module_em.F": {
+        "recorded_sha256": "790b09734aba5db1f2fe12401e634382e3c89ef0879604a2d4cceffc6caffab6",
+        "committed_blob_sha256": "790b09734aba5db1f2fe12401e634382e3c89ef0879604a2d4cceffc6caffab6",
+        "matches": true
+      },
+      "dyn_em/module_first_rk_step_part1.F": {
+        "recorded_sha256": "8c666fe88c46b04e297fe7b7289f55ec74fa133287b234a02f10e05cbbd11841",
+        "committed_blob_sha256": "8c666fe88c46b04e297fe7b7289f55ec74fa133287b234a02f10e05cbbd11841",
+        "matches": true
+      },
+      "dyn_em/module_first_rk_step_part2.F": {
+        "recorded_sha256": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c",
+        "committed_blob_sha256": "f7b8dc143d1621d55508828fb1adc81ad056980cc2f5768bfea1707c49f9646c",
+        "matches": true
+      },
+      "dyn_em/module_implicit_sdirk3.F": {
+        "recorded_sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+        "committed_blob_sha256": "041c49f0e03b6f998fd120cdd0dbe6e7068aa68f39af9c027967324b88ddb11a",
+        "matches": true
+      },
+      "dyn_em/module_small_step_em.F": {
+        "recorded_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+        "committed_blob_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+        "matches": true
+      },
+      "dyn_em/solve_em.F": {
+        "recorded_sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c",
+        "committed_blob_sha256": "859883043a3af98a05ac682afec63a680cc3e0b7a17623dddd7f4e126260ba8c",
+        "matches": true
+      },
+      "dyn_em/start_em.F": {
+        "recorded_sha256": "f3cf233cb8223601629a5779625a421bdd92cad639d9f7f7eef2502fdc5d8fd6",
+        "committed_blob_sha256": "f3cf233cb8223601629a5779625a421bdd92cad639d9f7f7eef2502fdc5d8fd6",
+        "matches": true
+      },
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+        "recorded_sha256": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8",
+        "committed_blob_sha256": "473a9b5affe2e1251a85fa113bb4beb9087dce81a6860a594276ece0a347d3e8",
+        "matches": true
+      },
+      "share/input_wrf.F": {
+        "recorded_sha256": "54f646fb6a36c919db3d6869c14943b2cc32e9d360628092dff81f1721981f12",
+        "committed_blob_sha256": "54f646fb6a36c919db3d6869c14943b2cc32e9d360628092dff81f1721981f12",
+        "matches": true
+      },
+      "share/mediation_wrfmain.F": {
+        "recorded_sha256": "91b92d4c21536c3f9df8ac175c2e5410d31e3b7b5af66f7d00b9bd56872dce25",
+        "committed_blob_sha256": "91b92d4c21536c3f9df8ac175c2e5410d31e3b7b5af66f7d00b9bd56872dce25",
+        "matches": true
+      },
+      "share/module_bc.F": {
+        "recorded_sha256": "61b9235004b2a7799faabaa928276af8a7ef2e4672619c8ad120c857461301ad",
+        "committed_blob_sha256": "61b9235004b2a7799faabaa928276af8a7ef2e4672619c8ad120c857461301ad",
+        "matches": true
+      }
+    },
+    "build_receipt_commit_caveat": "The build receipt identifies source_head 303fd8e... from before the source fix was committed. The recorded start_em.F source SHA f3cf23... exactly matches the later final commit c26a0f9..., but the build was not performed from that commit ID; binding is by exact source bytes."
+  },
+  "manual_graph_only_sources": {
+    "graph_sha256": "6ac0649af173999996678af6f69c30409e411eac95099ff2441dc163c80bfe72",
+    "graph_source_count": 76,
+    "manual_edge_sources": {
+      "dyn_em/module_bc_em.F": {
+        "graph_receipt_sha256": "6cfb52b849e3dd0b24769709cf502faa75886da454d9b668af725cccdc56d47f",
+        "committed_blob_sha256": "6cfb52b849e3dd0b24769709cf502faa75886da454d9b668af725cccdc56d47f",
+        "matches": true
+      },
+      "Registry/Registry.EM_COMMON": {
+        "graph_receipt_sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+        "committed_blob_sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+        "matches": true
+      },
+      "frame/module_configure.f90": {
+        "graph_receipt_sha256": "8da29312c2916dbb7f3d0c9ed9e11dc08defa0fa7b0de25658f69f501da1745e",
+        "committed_blob_sha256": "8da29312c2916dbb7f3d0c9ed9e11dc08defa0fa7b0de25658f69f501da1745e",
+        "matches": true
+      }
+    },
+    "all_manual_hashes_match_final_commit": true,
+    "extraction_gap": "Graphify source detector/extractor does not create AST for WRF .F/Registry sources; caller and set_w_surface edges are manual navigation from source inspection, not graph-extracted proof.",
+    "scope_caveat": "Graph relationships remain manual navigation, not extracted AST proof. The graph JSON was not regenerated; receipt documents exact source revision binding and manual edges."
+  },
+  "build_artifacts": {
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/corrected-state-rhs-20261012/start_em_rebuild_receipt.json",
+    "receipt_sha256": "2080fcc90672201afc402bd5dfe4b8995dd33dd9cd7711e09bdbb24b3f5a6e3b",
+    "compile_return_code": 0,
+    "built_files": {
+      "dyn_em/start_em.F": {
+        "receipt_sha256": "f3cf233cb8223601629a5779625a421bdd92cad639d9f7f7eef2502fdc5d8fd6",
+        "current_file_sha256": "f3cf233cb8223601629a5779625a421bdd92cad639d9f7f7eef2502fdc5d8fd6",
+        "matches": true,
+        "kind": "authoritative source"
+      },
+      "dyn_em/start_em.f90": {
+        "receipt_sha256": "8ad50e5ef79ae78e3cf616ec2542524a20527eabe15477b07d02936afc1cfb33",
+        "current_file_sha256": "8ad50e5ef79ae78e3cf616ec2542524a20527eabe15477b07d02936afc1cfb33",
+        "matches": true,
+        "kind": "generated source"
+      },
+      "dyn_em/start_em.o": {
+        "receipt_sha256": "e64583d69ab57f212998101689ea4dc8d930b23dac75254ce7d08e81a2b0bf00",
+        "current_file_sha256": "e64583d69ab57f212998101689ea4dc8d930b23dac75254ce7d08e81a2b0bf00",
+        "matches": true,
+        "kind": "build/configuration artifact"
+      },
+      "main/libwrflib.a": {
+        "receipt_sha256": "11ed76b9d2c122b7f8bf49f0f3ac5dfb803a005156d0b373320c57858f0e7ac7",
+        "current_file_sha256": "11ed76b9d2c122b7f8bf49f0f3ac5dfb803a005156d0b373320c57858f0e7ac7",
+        "matches": true,
+        "kind": "build/configuration artifact"
+      },
+      "main/wrf.exe": {
+        "receipt_sha256": "5589c1a02f491bfc4e14c9e0f9bef32dea562e8e99bf59132bf22fa13b557338",
+        "current_file_sha256": "5589c1a02f491bfc4e14c9e0f9bef32dea562e8e99bf59132bf22fa13b557338",
+        "matches": true,
+        "kind": "build/configuration artifact"
+      },
+      "configure.wrf": {
+        "receipt_sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289",
+        "current_file_sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289",
+        "matches": true,
+        "kind": "build/configuration artifact"
+      },
+      "external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a": {
+        "receipt_sha256": "21f7bc79a131f4608f506259b7c0434f2350749486774f14aea260cc69910565",
+        "current_file_sha256": "21f7bc79a131f4608f506259b7c0434f2350749486774f14aea260cc69910565",
+        "matches": true,
+        "kind": "build/configuration artifact"
+      },
+      "dyn_em/module_em.mod": {
+        "receipt_sha256": "b199e682a940fee7de7e5ba76837ccf15227d3bb26384b9aa95ff6a414c2de4e",
+        "current_file_sha256": "b199e682a940fee7de7e5ba76837ccf15227d3bb26384b9aa95ff6a414c2de4e",
+        "matches": true,
+        "kind": "build/configuration artifact"
+      }
+    },
+    "cpp_archive_unchanged": true,
+    "module_em_interface_unchanged": true,
+    "freshness_checks_passed": true,
+    "main_executable_sha256": "5589c1a02f491bfc4e14c9e0f9bef32dea562e8e99bf59132bf22fa13b557338",
+    "cpp_archive_sha256": "21f7bc79a131f4608f506259b7c0434f2350749486774f14aea260cc69910565"
+  },
+  "generated_or_optional_files": {
+    "tracked_start_em_f90_is_not_the_build_generated_source": {
+      "committed_blob_sha256": "7377f42f9ddcfed0cbf69f12f592b8d3d57debfb7362b9afa4a23032b2251964",
+      "build_generated_sha256": "8ad50e5ef79ae78e3cf616ec2542524a20527eabe15477b07d02936afc1cfb33",
+      "matches": false,
+      "interpretation": "Generated .f90 used in the build is receipt-hashed but is not represented by the repository committed blob; it is not treated as an authoritative source pin."
+    },
+    "compiled_objects_archives_executable_and_configure": "Hashed in the build receipt; these are build artifacts/configuration, not committed source blobs. No optional or absent files are implied to match."
+  },
+  "worktree_state": {
+    "short_status": [
+      " M dyn_em/module_advect_em.f90",
+      " M dyn_em/module_big_step_utilities_em.f90",
+      " M dyn_em/module_diffusion_em.f90",
+      " M dyn_em/module_em.f90",
+      " M dyn_em/module_first_rk_step_part2.f90",
+      " M dyn_em/module_implicit_sdirk3.f90",
+      " M dyn_em/module_initialize_ideal.f90",
+      " M dyn_em/solve_em.f90",
+      " M dyn_em/start_em.f90",
+      " M frame/module_configure.f90",
+      " M frame/module_dm.f90",
+      " M frame/module_domain_type.f90",
+      " M frame/module_io_quilt.f90",
+      " M main/ideal_em.f90",
+      " M main/module_wrf_top.f90",
+      " M phys/module_madwrf.f90",
+      " M share/mediation_wrfmain.f90",
+      " M share/output_wrf.f90",
+      " M share/set_timekeeping.f90",
+      " M share/wrf_tsin.f90",
+      "?? dyn_em/module_sdirk3_advect_u_diag.f90"
+    ],
+    "interpretation": "Build worktree contains modified/untracked generated Fortran intermediates; this review binds authoritative committed source blobs and build artifacts by their separate hashes, not worktree cleanliness."
+  },
+  "verdict": "All 14 recorded authoritative source pins and all three manual graph-source hashes match committed final HEAD c26a0f9. The rebuilt executable/archive and startup source/object hashes match the build receipt; the CPP archive and module interface remained unchanged. Preserve the pre-commit source_head caveat and Graphify Fortran extraction gap. Generated F90/optional artifacts are explicitly not counted as committed-source matches."
+}
