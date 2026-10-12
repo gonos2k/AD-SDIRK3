@@ -2448,14 +2448,16 @@ void sdirk3_debug_step(void* solver_ptr, int tile_id, int itimestep) {
  * Called during initialization to identify idealized cases (map_proj = 0)
  */
 int sdirk3_tile_set_native_transport_options_checked(
-    void* solver_ptr, int phi_adv_z, int v_sca_adv_order) {
+    void* solver_ptr, int phi_adv_z, int v_sca_adv_order,
+    float cf1, float cf2, float cf3) {
     try {
         std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
         auto it = g_tile_solvers.find(solver_ptr);
         if (it == g_tile_solvers.end()) return 0;
         auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(it->second.get());
         if (!unified_solver) return 0;
-        unified_solver->setNativeTransportOptions(phi_adv_z, v_sca_adv_order);
+        unified_solver->setNativeTransportOptions(phi_adv_z, v_sca_adv_order,
+                                                  cf1, cf2, cf3);
         return 1;
     } catch (const std::exception& e) {
         std::cerr << "SDIRK3_NATIVE_TRANSPORT_CONFIG_REJECTED: " << e.what() << std::endl;

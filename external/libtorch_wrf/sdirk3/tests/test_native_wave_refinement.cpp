@@ -28,6 +28,22 @@ struct RhsTag { using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(const to
 struct PhiTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*; friend type access(PhiTag); };
 struct DtTag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(DtTag); };
 struct RefTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*; friend type access(RefTag); };
+struct ProjectTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(const torch::Tensor&);
+    friend type access(ProjectTag);
+};
+struct WdampContractTag {
+    using type = wrf::sdirk3::WdampRuntimeContract TileSDIRK3UnifiedSolver::*;
+    friend type access(WdampContractTag);
+};
+struct VcoordTag {
+    using type = void (TileSDIRK3UnifiedSolver::*)(const float*,const float*,const float*,const float*);
+    friend type access(VcoordTag);
+};
+struct RefreshGridMetricEpochsTag {
+    using type = void (TileSDIRK3UnifiedSolver::*)() const;
+    friend type access(RefreshGridMetricEpochsTag);
+};
 struct NewtonSolverTag {
     using type = std::unique_ptr<wrf::sdirk3::WRFNewtonKrylovSolver>
         TileSDIRK3UnifiedSolver::*;
@@ -38,6 +54,11 @@ template struct Accessor<RhsTag, &TileSDIRK3UnifiedSolver::computeUnifiedRHS>;
 template struct Accessor<PhiTag, &TileSDIRK3UnifiedSolver::ph_base_>;
 template struct Accessor<DtTag, &TileSDIRK3UnifiedSolver::dt_stage_>;
 template struct Accessor<RefTag, &TileSDIRK3UnifiedSolver::U_ref_stage_>;
+template struct Accessor<ProjectTag, &TileSDIRK3UnifiedSolver::projectStateBoundaries>;
+template struct Accessor<WdampContractTag, &TileSDIRK3UnifiedSolver::wdamp_contract_>;
+template struct Accessor<VcoordTag, &TileSDIRK3UnifiedSolver::setVerticalCoordinateCoefficients>;
+template struct Accessor<RefreshGridMetricEpochsTag,
+                         &TileSDIRK3UnifiedSolver::refreshGridMetricEpochs>;
 template struct Accessor<NewtonSolverTag, &TileSDIRK3UnifiedSolver::newton_solver_>;
 
 constexpr double pi = 3.1415926535897932384626433832795;
@@ -60,24 +81,38 @@ struct Grid {
     double lx=40000.0, ly=30000.0;
     float dx,dy;
     std::vector<float> u,v,w,ph,th,mu, ru,rv,rw,rph,rth,rmu;
-    std::vector<float> pbase, thbase, phbase, mubase, rho, metric, one, zero, half;
+    std::vector<float> pbase, thbase, phbase, mubase, rho, metric, rdnw, rdn, dnw, fnm, fnp, one, zero, half;
     std::vector<float> c1f,c2f,c1h,c2h;
     std::vector<float> maps, f, e, setup_state, setup_density;
+    std::vector<float> setup_u,setup_v,setup_w,setup_ph,setup_t,setup_p,setup_mu,setup_al;
+    std::vector<float> maps_u, maps_v, sina, cosa;
     TileSDIRK3UnifiedSolver solver;
 
-    Grid(int x, int y, int z,bool enable_coriolis_fplane_test=false)
+    Grid(int x, int y, int z,bool enable_coriolis_fplane_test=false,
+         float source_dx=0.0f,float source_dy=0.0f,
+         const std::vector<float>& source_rdnw={})
       : nx(x),ny(y),nz(z),nu(x+1),nv(y+1),nw(z+1),
         coriolis_fplane_test(enable_coriolis_fplane_test),
-        dx(static_cast<float>(lx/x)),dy(static_cast<float>(ly/y)),
+        dx(source_dx>0.0f?source_dx:static_cast<float>(lx/x)),
+        dy(source_dy>0.0f?source_dy:static_cast<float>(ly/y)),
         u(ny*nz*nu),v(nv*nz*nx),w(ny*nw*nx),ph(ny*nw*nx),
         th(ny*nz*nx),mu(ny*nx),ru(u.size()),rv(v.size()),rw(w.size()),
         rph(ph.size()),rth(th.size()),rmu(mu.size()),pbase(ny*nz*nx),
         thbase(pbase.size()),phbase(ph.size()),mubase(mu.size(),80000.0f),
-        rho(nv*nw*nu,1.0f),metric(nw,-static_cast<float>(z)),
+        rho(nv*nw*nu,1.0f),
+        metric(source_rdnw.size()==static_cast<size_t>(nw) ? source_rdnw :
+               std::vector<float>(nw,-static_cast<float>(z))),
+        rdnw(metric),rdn(z,-static_cast<float>(z)),dnw(z,-1.0f/static_cast<float>(z)),
+        fnm(nw,0.5f),fnp(nw,0.5f),
         one(nw,1.0f),zero(nw,0.0f),half(nw,0.5f),c1f(nw,1.0f),c2f(nw,0.0f),
         c1h(nw,1.0f),c2h(nw,0.0f),maps((nv+1)*(nu+1),1.0f),
         f(maps.size(),0.0f),e(maps.size(),0.0f),
         setup_state(nv*nw*nu,0.0f),setup_density(nv*nw*nu,1.0f),
+        setup_u(nv*nw*nu,0.0f),setup_v(nv*nw*nu,0.0f),setup_w(nv*nw*nu,0.0f),
+        setup_ph(nv*nw*nu,0.0f),setup_t(nv*nw*nu,0.0f),setup_p(nv*nw*nu,0.0f),
+        setup_mu(nv*nu,0.0f),setup_al(nv*nw*nu,0.0f),
+        maps_u((nv+1)*(nu+1),1.0f),maps_v((nv+1)*(nu+1),1.0f),
+        sina(maps.size(),0.0f),cosa(maps.size(),1.0f),
         solver(x,y,z,dx,dy,{1.0f/dx},{1.0f/dy},metric,0) {
         if(coriolis_fplane_test)
             std::fill(f.begin(),f.end(),1.0e-4f);
@@ -135,6 +170,137 @@ struct Grid {
         solver.setTerrainSlopes(torch::zeros({ny,nw,nx},torch::kFloat32),
                                 torch::zeros({ny,nw,nx},torch::kFloat32));
     }
+    void loadSourceProfile(const std::string& path) {
+        std::ifstream in(path,std::ios::binary);
+        TORCH_CHECK(in,"cannot open actual source profile bundle: ",path);
+        std::array<int32_t,12> h{};
+        std::array<float,16> control{};
+        in.read(reinterpret_cast<char*>(h.data()),sizeof(h));
+        in.read(reinterpret_cast<char*>(control.data()),sizeof(control));
+        TORCH_CHECK(in && h[0]==1 && h[1]==17 && h[2]==17 && h[3]==16 &&
+                    h[4]==18 && h[5]==18 && h[6]==17 && h[7]==24531 &&
+                    h[9]==1 && h[10]==1 && h[11]==3,
+                    "actual source profile has unsupported header/configuration");
+        const int64_t state_count=h[7];
+        const std::vector<int64_t> counts={state_count,17*16*17,17*16*17,17*16*17,
+            17*17*17,17*17,17*16*17,17*16*17,17,16,16,16,17,17,17,17,16,16,
+            18*18,18*18,18*18,18*18,18*18,18*18,18*18,16,16,16};
+        std::vector<std::vector<float>> b;
+        b.reserve(counts.size());
+        for(const auto n:counts) {
+            b.emplace_back(static_cast<size_t>(n));
+            in.read(reinterpret_cast<char*>(b.back().data()),n*sizeof(float));
+            TORCH_CHECK(in,"truncated actual source profile block");
+            TORCH_CHECK(std::all_of(b.back().begin(),b.back().end(),
+                        [](float x){return std::isfinite(x);}),
+                        "actual source profile contains nonfinite values");
+        }
+        char extra=0; in.read(&extra,1);
+        TORCH_CHECK(in.eof(),"extra bytes after actual source profile blocks");
+        const float dx0=control[0],dy0=control[1];
+        TORCH_CHECK(dx0>0.0f && dy0>0.0f && control[4]==1000.0f && control[5]==10.0f &&
+                    std::abs(dx-dx0)<1.0e-6f && std::abs(dy-dy0)<1.0e-6f,
+                    "source profile lacks the pinned WRF spacing or option-2 K context");
+        auto assign=[&](std::vector<float>& dst,const std::vector<float>& src) {
+            TORCH_CHECK(dst.size()>=src.size(),"source profile destination is too small");
+            std::copy(src.begin(),src.end(),dst.begin());
+        };
+        const auto sizes0=sizes();
+        // `state` is the exact packed Phase-B input vector in U,V,W,PH,T,MU order.
+        int64_t off=0;
+        auto set_block=[&](std::vector<float>& dst,int n) {
+            std::copy_n(b[0].begin()+off,n,dst.begin()); off+=n;
+        };
+        set_block(u,sizes0[0]); set_block(v,sizes0[1]); set_block(w,sizes0[2]);
+        set_block(ph,sizes0[3]); set_block(th,sizes0[4]); set_block(mu,sizes0[5]);
+        assign(pbase,b[1]); assign(thbase,b[3]); assign(phbase,b[4]); assign(mubase,b[5]);
+        // Each zero-copy pointer gets its own memory-sized buffer. The source
+        // blocks are packed [j,k,i]; native bounds below are [18,17,18].
+        auto expand3=[&](std::vector<float>& dst,const std::vector<float>& src,
+                         int sj,int sk,int si) {
+            std::fill(dst.begin(),dst.end(),0.0f);
+            for(int j=0;j<sj;++j) for(int k=0;k<sk;++k) for(int i=0;i<si;++i)
+                dst[(j*nw+k)*nu+i]=src[(j*sk+k)*si+i];
+            for(int j=0;j<sj;++j) for(int k=0;k<sk;++k) if(si<nu)
+                dst[(j*nw+k)*nu+si]=src[(j*sk+k)*si+std::min(1,si-1)];
+            for(int k=0;k<sk;++k) for(int i=0;i<nu;++i) if(sj<nv)
+                dst[(sj*nw+k)*nu+i]=dst[((sj>1?sj-2:0)*nw+k)*nu+i];
+            for(int j=0;j<nv;++j) for(int i=0;i<nu;++i) if(sk<nw)
+                dst[(j*nw+sk)*nu+i]=dst[(j*nw+std::max(0,sk-1))*nu+i];
+        };
+        expand3(setup_u,u,ny,nz,nu); expand3(setup_v,v,nv,nz,nx);
+        expand3(setup_w,w,ny,nw,nx); expand3(setup_ph,ph,ny,nw,nx);
+        expand3(setup_t,th,ny,nz,nx); expand3(setup_p,b[2],ny,nz,nx);
+        expand3(setup_al,b[6],ny,nz,nx);
+        std::fill(setup_mu.begin(),setup_mu.end(),0.0f);
+        for(int j=0;j<ny;++j) for(int i=0;i<nx;++i)
+            setup_mu[j*nu+i]=mu[j*nx+i];
+        for(int i=0;i<nx;++i) setup_mu[(ny-1)*nu+i]=setup_mu[(ny-2)*nu+i];
+        for(int j=0;j<nv;++j) setup_mu[j*nu+nx]=setup_mu[j*nu];
+        assign(metric,b[8]);
+        for(size_t k=0;k<b[8].size();++k) rdnw[k]=std::abs(b[8][k]);
+        for(size_t k=0;k<b[9].size();++k) rdn[k]=std::abs(b[9][k]);
+        assign(dnw,b[10]);
+        assign(fnm,b[12]); assign(fnp,b[13]);
+        assign(c1f,b[14]); assign(c2f,b[15]); assign(c1h,b[16]); assign(c2h,b[17]);
+        assign(maps,b[18]); assign(maps_u,b[19]); assign(maps_v,b[20]);
+        assign(f,b[21]); assign(e,b[22]); assign(sina,b[23]); assign(cosa,b[24]);
+        std::fill(one.begin(),one.end(),1.0f); std::fill(zero.begin(),zero.end(),0.0f);
+        solver.setWRFIndices(1,17,1,17,1,16, 1,17,1,17,1,17,
+                             1,18,1,18,1,17);
+        solver.setBoundaryConditions(true,false,false,false,true,true,
+                                     false,false,false,false);
+        const bool wdamp_on=g_sdirk3_config.wrf_w_damping==1 &&
+                            g_sdirk3_config.implicit_wdamp;
+        const bool wwcp_on=g_sdirk3_config.effective_wrf_omega_ww_cp();
+        (solver.*access(WdampContractTag{}))=wrf::sdirk3::resolve_wdamp_runtime_contract(
+            wdamp_on || wwcp_on,1,1,true,true,false,false,false,false,
+            false,true,true,false,false,false,false,false,
+            wdamp_on ? (wwcp_on ? "W-damping + calc_ww_cp Omega" : "W-damping")
+                     : "calc_ww_cp Omega (sdirk3_wrf_omega_ww_cp)");
+        solver.setBaseState(pbase.data(),thbase.data(),phbase.data(),mubase.data());
+        solver.setThetaMixingBase(b[25].data(),nz,false);
+        solver.setOption2WindMixingBase(b[26].data(),b[27].data(),nz,false);
+        ZeroCopyConfig setup{};
+        setup.nx=nx; setup.ny=ny; setup.nz=nz; setup.nx_u=nu; setup.ny_v=nv; setup.nz_w=nw;
+        setup.ids=setup.its=setup.ims=1; setup.ide=setup.ite=17; setup.ime=18;
+        setup.jds=setup.jts=setup.jms=1; setup.jde=setup.jte=17; setup.jme=18;
+        setup.kds=setup.kts=setup.kms=1; setup.kde=setup.kte=16; setup.kme=17;
+        setup.u_ptr=setup_u.data(); setup.v_ptr=setup_v.data(); setup.w_ptr=setup_w.data();
+        setup.ph_ptr=setup_ph.data(); setup.t_ptr=setup_t.data(); setup.p_ptr=setup_p.data();
+        setup.mu_ptr=setup_mu.data(); setup.al_ptr=setup_al.data();
+        setup.kdamp=control[9]; setup.rdx=1.0f/dx; setup.rdy=1.0f/dy;
+        setup.rdnw_ptr=rdnw.data(); setup.rdn_ptr=rdn.data();
+        setup.msftx_ptr=maps.data(); setup.msfty_ptr=maps.data();
+        setup.msfux_ptr=maps_u.data(); setup.msfuy_ptr=maps_u.data();
+        setup.msfvx_ptr=maps_v.data(); setup.msfvy_ptr=maps_v.data();
+        setup.c1f_ptr=c1f.data(); setup.c2f_ptr=c2f.data();
+        setup.c1h_ptr=c1h.data(); setup.c2h_ptr=c2h.data();
+        setup.fnm_ptr=fnm.data(); setup.fnp_ptr=fnp.data();
+        setup.f_ptr=f.data(); setup.e_ptr=e.data(); setup.sina_ptr=sina.data(); setup.cosa_ptr=cosa.data();
+        solver.advanceZeroCopy(setup,2,15.0f);
+        auto info=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
+        TORCH_CHECK(info,"source profile did not initialize the WRF grid context");
+        info->rdnw=torch::from_blob(rdnw.data(),{nw},torch::kFloat32).clone();
+        info->rdn=torch::from_blob(rdn.data(),{nz},torch::kFloat32).clone();
+        (solver.*access(RefreshGridMetricEpochsTag{}))();
+        info->smagorinsky_opt=1; info->c_s=control[2]; info->g=9.81f;
+        info->fzm=torch::from_blob(fnm.data(),{nw},torch::kFloat32).clone();
+        info->fzp=torch::from_blob(fnp.data(),{nw},torch::kFloat32).clone();
+        (solver.*access(VcoordTag{}))(c1f.data(),c2f.data(),c1h.data(),c2h.data());
+        solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),control[6],control[7],control[8]);
+        solver.setTerrainSlopes(torch::zeros({ny,nw,nx},torch::kFloat32),
+                                torch::zeros({ny,nw,nx},torch::kFloat32));
+        solver.setNativeTransportOptions(1,3);
+        g_sdirk3_config.advection_order=5;
+        g_sdirk3_config.diffusion_option=static_cast<int>(control[15]);
+        g_sdirk3_config.kdamp=control[9]; g_sdirk3_config.khdif=control[4]; g_sdirk3_config.kvdif=control[5];
+        g_sdirk3_config.newton_tol=control[10]; g_sdirk3_config.krylov_tol=control[11];
+        g_sdirk3_config.max_newton_iter=static_cast<int>(control[12]);
+        g_sdirk3_config.max_krylov_iter=static_cast<int>(control[13]);
+        g_sdirk3_config.gmres_restart=static_cast<int>(control[14]);
+        g_sdirk3_config.precond_type=2;
+    }
     std::array<int,6> sizes() const { return {ny*nz*nu,nv*nz*nx,ny*nw*nx,ny*nw*nx,ny*nz*nx,ny*nx}; }
     std::vector<float*> fields() { return {&u[0],&v[0],&w[0],&ph[0],&th[0],&mu[0]}; }
     torch::Tensor state() {
@@ -162,9 +328,9 @@ struct Grid {
         int host=i+1; sdirk3_set_timestep_i4(&host);
         solver.unifiedStep(u.data(),v.data(),w.data(),ph.data(),th.data(),mu.data(),
             ru.data(),rv.data(),rw.data(),rph.data(),rth.data(),rmu.data(),
-            1.0f/dx,1.0f/dy,metric.data(),metric.data(),maps.data(),maps.data(),
-            maps.data(),maps.data(),maps.data(),maps.data(),
-            c1f.data(),c2f.data(),c1h.data(),c2h.data(),half.data(),half.data(),
+            1.0f/dx,1.0f/dy,rdnw.data(),rdn.data(),maps.data(),maps.data(),
+            maps_u.data(),maps_u.data(),maps_v.data(),maps_v.data(),
+            c1f.data(),c2f.data(),c1h.data(),c2h.data(),fnm.data(),fnp.data(),
             1,dt,nx,ny,nz,nu,nv,nw);
     }
 };
@@ -173,6 +339,45 @@ wrf::sdirk3::WRFNewtonKrylovSolver& newton_solver(Grid& g) {
     auto& solver = g.solver.*access(NewtonSolverTag{});
     TORCH_CHECK(solver,"replay-smoke grid has no Newton solver");
     return *solver;
+}
+
+bool tensor_bitwise_equal(const torch::Tensor& left,const torch::Tensor& right) {
+    if(!left.defined() || !right.defined() || left.sizes()!=right.sizes() ||
+       left.scalar_type()!=right.scalar_type()) return false;
+    const auto a=left.detach().to(torch::kCPU).contiguous();
+    const auto b=right.detach().to(torch::kCPU).contiguous();
+    return a.nbytes()==b.nbytes() &&
+        std::memcmp(a.const_data_ptr(),b.const_data_ptr(),static_cast<size_t>(a.nbytes()))==0;
+}
+
+torch::Tensor source_profile_omega(Grid& g,const torch::Tensor& packed_state) {
+    const int64_t su=g.ny*g.nz*g.nu,sv=g.nv*g.nz*g.nx;
+    const int64_t sw=g.ny*g.nw*g.nx,sm=g.ny*g.nx;
+    TORCH_CHECK(packed_state.numel()==su+sv+2*sw+g.ny*g.nz*g.nx+sm,
+                "stage state has an unexpected packed size for calc_ww_cp");
+    const auto state=packed_state.to(torch::kCPU).contiguous();
+    const auto opts=state.options();
+    const auto u=state.slice(0,0,su).view({g.ny,g.nz,g.nu});
+    const auto v=state.slice(0,su,su+sv).view({g.nv,g.nz,g.nx});
+    const int64_t mu0=su+sv+2*sw+g.ny*g.nz*g.nx;
+    const auto mup=state.slice(0,mu0,mu0+sm).view({g.ny,g.nx});
+    const auto mub=torch::from_blob(g.mubase.data(),{g.ny,g.nx},torch::kFloat32).clone().to(opts);
+    const auto c1h=torch::from_blob(g.c1h.data(),{g.nz},torch::kFloat32).clone().to(opts);
+    const auto c2h=torch::from_blob(g.c2h.data(),{g.nz},torch::kFloat32).clone().to(opts);
+    const auto dnw=torch::from_blob(g.dnw.data(),{g.nz},torch::kFloat32).clone().to(opts);
+    const auto msftx_mem=torch::from_blob(g.maps.data(),{18,18},torch::kFloat32)
+        .clone().to(opts);
+    const auto msfuy_mem=torch::from_blob(g.maps_u.data(),{18,18},torch::kFloat32)
+        .clone().to(opts);
+    const auto msfvx_mem=torch::from_blob(g.maps_v.data(),{18,18},torch::kFloat32)
+        .clone().to(opts);
+    const auto msftx=msftx_mem.slice(0,0,g.ny).slice(1,0,g.nx);
+    const auto msfuy=msfuy_mem.slice(0,0,g.ny).slice(1,0,g.nu);
+    const auto msfvx_inv=1.0f/msfvx_mem.slice(0,0,g.nv).slice(1,0,g.nx);
+    return wrf::sdirk3::compute_wrf_ww_cp(u,v,mup,mub,c1h,c2h,dnw,
+        1.0f/g.dx,1.0f/g.dy,msftx,msfuy,msfvx_inv,
+        wrf::sdirk3::WWCPBoundaryPolicy::Periodic,
+        wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate);
 }
 
 void validate_replay_carried_state(
@@ -352,6 +557,25 @@ torch::Tensor read_fp64_vector(const std::string& path,int64_t expected,const ch
     TORCH_CHECK(input.eof(),"extra data in ",name," file: ",path);
     auto result=torch::from_blob(values.data(),{count},torch::kFloat64).clone();
     TORCH_CHECK(torch::isfinite(result).all().item<bool>(),name," contains nonfinite values");
+    return result;
+}
+std::vector<float> read_source_profile_rdnw(const std::string& path) {
+    std::ifstream in(path,std::ios::binary);
+    TORCH_CHECK(in,"cannot open actual source profile bundle: ",path);
+    std::array<int32_t,12> header{};
+    std::array<float,16> controls{};
+    in.read(reinterpret_cast<char*>(header.data()),sizeof(header));
+    in.read(reinterpret_cast<char*>(controls.data()),sizeof(controls));
+    TORCH_CHECK(in && header[0]==1 && header[1]==17 && header[2]==17 &&
+                header[3]==16 && header[7]==24531,
+                "invalid source profile header while loading constructor RDNW");
+    constexpr int64_t prior_f32_values=24531+5*17*16*17+17*17*17+17*17;
+    in.seekg(static_cast<std::streamoff>(48+64+prior_f32_values*sizeof(float)),std::ios::beg);
+    std::vector<float> result(17);
+    in.read(reinterpret_cast<char*>(result.data()),result.size()*sizeof(float));
+    TORCH_CHECK(in && std::all_of(result.begin(),result.end(),
+                [](float x){return std::isfinite(x);}),
+                "source profile constructor RDNW block is missing or nonfinite");
     return result;
 }
 struct PhysicalWObservation {
@@ -664,6 +888,8 @@ int main(int argc,char** argv) {
     const bool upwind_trajectory=argc==9 && std::string(argv[5])=="--upwind-trajectory";
     const bool physical_wave_inverse=argc>=10 &&
         std::string(argv[5])=="--physical-wave-inverse";
+    const bool source_profile_probe=(argc==9 || argc==10) &&
+        std::string(argv[5])=="--source-profile";
     bool physical_wave_forward_only=false;
     bool physical_wave_bounded_tape_forward_only=false;
     bool physical_wave_bounded_replay_pullback=false;
@@ -674,8 +900,16 @@ int main(int argc,char** argv) {
     float physical_wave_krylov_tol=1.0e-8f;
     const bool quadratic_trajectory_mode=quadratic_forward || quadratic_trajectory || upwind_trajectory;
     TORCH_CHECK(argc==5 || argc==6 || damping_probe || quadratic_probe || quadratic_trajectory_mode ||
-                physical_wave_inverse,
-        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --descriptor-only | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [--newton-tol 1e-12|1e-13|1e-14] [--krylov-tol 1e-8|1e-10|1e-12] [--forward-only | --bounded-tape-forward-only | --bounded-replay-pullback | --split-observation-pullbacks | --replay-smoke | --restart-smoke]] [--rotating-wave (test-only; descriptor/quadratic-probe/physical-wave-inverse only)]");
+                physical_wave_inverse || source_profile_probe,
+        "usage: test_native_wave_refinement nx ny nz output.csv [initial_state.txt | --descriptor-only | --damping-probe <U|V> | --quadratic-probe direction.txt | --quadratic-forward direction.txt steps dt | --quadratic-trajectory direction.txt steps dt | --upwind-trajectory direction.txt steps dt | --physical-wave-inverse initial_state.txt observations.txt steps dt [options] | --source-profile bundle.bin 2 15]");
+    float source_dx=0.0f,source_dy=0.0f;
+    std::vector<float> source_rdnw;
+    if(source_profile_probe) {
+        TORCH_CHECK(std::stoi(argv[1])==17 && std::stoi(argv[2])==17 && std::stoi(argv[3])==16 &&
+                    (std::stoi(argv[7])==0 || std::stoi(argv[7])==1 || std::stoi(argv[7])==2) &&
+                    std::stof(argv[8])==15.0f && (argc==9 || std::stoi(argv[7])>0),
+                    "actual source-profile probe is pinned to packed 17x17x16 and 0/1/2 15-second modes");
+    }
     TORCH_CHECK(!coriolis_fplane_test || descriptor_only || quadratic_probe || physical_wave_inverse,
                 "--rotating-wave is test-only and allowed only with --descriptor-only, "
                 "--quadratic-probe, or --physical-wave-inverse");
@@ -816,9 +1050,49 @@ int main(int argc,char** argv) {
                     g_sdirk3_config.stage3_max_krylov_restarts==0,
                     "replay-smoke requires the fixed inactive GMRES/INN/Stage-3/adaptive profile");
     }
-    Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]),coriolis_fplane_test);
-    auto base=background_state(g);
-    const auto eos_errors=validate_eos_target(g,base);
+    if(source_profile_probe) {
+        std::ifstream profile(argv[6],std::ios::binary);
+        std::array<int32_t,12> header{}; std::array<float,16> controls{};
+        TORCH_CHECK(profile,"cannot open actual source profile bundle: ",argv[6]);
+        profile.read(reinterpret_cast<char*>(header.data()),sizeof(header));
+        profile.read(reinterpret_cast<char*>(controls.data()),sizeof(controls));
+        TORCH_CHECK(profile && header[0]==1 && header[9]==1 && header[10]==1 && header[11]==3,
+                    "actual source profile transport header is invalid");
+        source_dx=controls[0]; source_dy=controls[1];
+        source_rdnw=read_source_profile_rdnw(argv[6]);
+        g_sdirk3_config.advection_order=5;
+        g_sdirk3_config.kdamp=controls[9];
+        g_sdirk3_config.khdif=controls[4]; g_sdirk3_config.kvdif=controls[5];
+        g_sdirk3_config.diffusion_option=static_cast<int>(controls[15]);
+        g_sdirk3_config.newton_tol=controls[10]; g_sdirk3_config.krylov_tol=controls[11];
+        g_sdirk3_config.max_newton_iter=static_cast<int>(controls[12]);
+        g_sdirk3_config.max_krylov_iter=static_cast<int>(controls[13]);
+        g_sdirk3_config.gmres_restart=static_cast<int>(controls[14]);
+        g_sdirk3_config.precond_type=2;
+    }
+    Grid g(std::stoi(argv[1]),std::stoi(argv[2]),std::stoi(argv[3]),
+           coriolis_fplane_test,source_dx,source_dy,source_rdnw);
+    if(source_profile_probe) {
+        g.loadSourceProfile(argv[6]);
+        g_sdirk3_config.retain_graph_for_adjoint=true;
+        g_sdirk3_config.internal_fp64=true;
+        g_sdirk3_config.internal_fp64_state_carry=true;
+        g_sdirk3_config.imex_slow_in_tangent=true;
+    }
+    const auto source_state_fp32=source_profile_probe ? g.state() : torch::Tensor();
+    const auto source_state_raw64=source_profile_probe ? source_state_fp32.to(torch::kFloat64) : torch::Tensor();
+    auto base=source_profile_probe
+        ? (g.solver.*access(ProjectTag{}))(source_state_raw64)
+        : background_state(g);
+    torch::Tensor source_profile_initial_override;
+    if(source_profile_probe && argc==10) {
+        source_profile_initial_override=read_fp64_vector(argv[9],base.numel(),
+            "actual source-profile FP64 initial override");
+        source_profile_initial_override=(g.solver.*access(ProjectTag{}))(
+            source_profile_initial_override);
+    }
+    const std::array<double,3> eos_errors=source_profile_probe ? std::array<double,3>{0.0,0.0,0.0} :
+        validate_eos_target(g,base);
     const int sizes[]={g.ny*g.nz*g.nu,g.nv*g.nz*g.nx,g.ny*g.nw*g.nx,g.ny*g.nw*g.nx,g.ny*g.nz*g.nx,g.ny*g.nx};
     auto d=torch::zeros_like(base);
     int off=0;
@@ -827,7 +1101,15 @@ int main(int argc,char** argv) {
     }
     if(quadratic_probe || quadratic_trajectory_mode)
         d=read_fp64_vector(argv[6],base.numel(),"perturbation direction");
-    auto rb=initialize_physical_wave_equilibrium(g,base);
+    torch::Tensor rb;
+    if(source_profile_probe && std::stoi(argv[7])==0) {
+        torch::NoGradGuard no_grad;
+        rb=g.rhs(base);
+    } else if(source_profile_probe) {
+        rb=g.rhs(base);
+    } else {
+        rb=initialize_physical_wave_equilibrium(g,base);
+    }
     const auto phb=(g.solver.*access(PhiTag{})).detach().clone().to(torch::kFloat64);
     std::ofstream out(argv[4]); TORCH_CHECK(out,"cannot open output file");
     out<<"M,nx,"<<g.nx<<"\nM,ny,"<<g.ny<<"\nM,nz,"<<g.nz<<"\n";
@@ -903,6 +1185,171 @@ int main(int argc,char** argv) {
     put(out,"thbase_perturb",torch::from_blob(g.thbase.data(),{static_cast<int64_t>(g.thbase.size())},torch::kFloat32).clone());
     put(out,"mubase",torch::from_blob(g.mubase.data(),{static_cast<int64_t>(g.mubase.size())},torch::kFloat32).clone());
     put(out,"base",base); put(out,"direction",d); put(out,"rhs_base",rb);
+    if(source_profile_probe) {
+        put(out,"source_profile_raw_input_state",source_state_raw64);
+        put(out,"source_profile_projected_input_state",base);
+        if(std::stoi(argv[7])==0) {
+            out<<"M,source_profile_probe,1\nM,source_profile_steps,0\nM,source_profile_dt,15\n";
+            out<<"T,source_profile_status,ingested\n";
+            out.flush();
+            return 0;
+        }
+        const int64_t su=g.ny*g.nz*g.nu, sv=g.nv*g.nz*g.nx;
+        const int64_t sw=g.ny*g.nw*g.nx, st=g.ny*g.nz*g.nx;
+        const int64_t ph0=su+sv+sw, th0=ph0+sw;
+        auto terminal_ph=torch::zeros_like(base);
+        auto terminal_thm=torch::zeros_like(base);
+        auto ph_terminal=torch::sin(torch::arange(sw,torch::kFloat64)*0.009+0.3)
+            .reshape({g.ny,g.nw,g.nx});
+        auto ph_owned=torch::zeros_like(ph_terminal);
+        ph_owned.slice(0,0,g.ny-1).slice(1,1,g.nw).slice(2,0,g.nx-1).copy_(
+            ph_terminal.slice(0,0,g.ny-1).slice(1,1,g.nw).slice(2,0,g.nx-1));
+        auto th_terminal=torch::cos(torch::arange(st,torch::kFloat64)*0.011-0.2)
+            .reshape({g.ny,g.nz,g.nx});
+        auto th_owned=torch::zeros_like(th_terminal);
+        th_owned.slice(0,0,g.ny-1).slice(2,0,g.nx-1).copy_(
+            th_terminal.slice(0,0,g.ny-1).slice(2,0,g.nx-1));
+        terminal_ph.slice(0,ph0,ph0+sw).copy_(ph_owned.reshape({sw})/torch::norm(ph_owned));
+        terminal_thm.slice(0,th0,th0+st).copy_(th_owned.reshape({st})/torch::norm(th_owned));
+        const auto initial=source_profile_initial_override.defined()
+            ? source_profile_initial_override : base;
+        validate_physical_handoff_state(g,initial);
+        const bool branch_mode=std::stoi(argv[7])==1;
+        auto& baseline_newton=newton_solver(g);
+        const auto carried0=baseline_newton.capture_carried_state();
+        const auto digest0=baseline_newton.carried_state_digest();
+        wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState carried1;
+        std::uint64_t digest1=0;
+        std::vector<torch::Tensor> stage_states,stage_omega;
+        g.solver.captureArkBudgetTraceForTest(true);
+        g.set(initial);
+        g.solver.requestFixedTrajectory(2,{15.0f,15.0f},initial);
+        for(int step=0;step<2;++step) {
+            g.step(15.0f,step);
+            TORCH_CHECK(g.solver.getLastStepOutcomeCode()==0,
+                        "actual source profile fixed-trajectory step was rejected at ",step+1);
+            const auto checkpoints=g.solver.getFixedTrajectoryFp64Checkpoints();
+            TORCH_CHECK(checkpoints.size()==static_cast<size_t>(step+1),
+                        "source-profile accepted step lacks an FP64 checkpoint");
+            validate_physical_handoff_state(g,checkpoints.back());
+            TORCH_CHECK(tensor_bitwise_equal(g.state(),checkpoints.back().to(torch::kFloat32)),
+                        "source-profile published state differs from its retained checkpoint at step ",step+1);
+            const auto& trace=g.solver.getLastArkBudgetTrace();
+            TORCH_CHECK(trace.stage_state.size()==4,
+                        "source-profile accepted ARK stage trace does not have four states at step ",step+1);
+            for(const auto& state:trace.stage_state) {
+                stage_states.push_back(state.detach().clone().to(torch::kFloat64));
+                stage_omega.push_back(source_profile_omega(g,state));
+            }
+            if(step==0) {
+                carried1=baseline_newton.capture_carried_state();
+                digest1=baseline_newton.carried_state_digest();
+                out<<"M,source_profile_carried_state_1_digest,"<<digest1<<"\n";
+            }
+        }
+        const auto endpoint=g.solver.getFixedTrajectoryFp64Checkpoints();
+        TORCH_CHECK(endpoint.size()==2,"actual source profile did not retain both FP64 endpoints");
+        torch::Tensor gradient_ph,gradient_thm;
+        if(!branch_mode) {
+            gradient_ph=g.solver.pullbackFixedTrajectory(terminal_ph);
+            gradient_thm=g.solver.pullbackFixedTrajectory(terminal_thm);
+            TORCH_CHECK(gradient_ph.scalar_type()==torch::kFloat64 &&
+                        gradient_thm.scalar_type()==torch::kFloat64 &&
+                        torch::isfinite(gradient_ph).all().item<bool>() &&
+                        torch::isfinite(gradient_thm).all().item<bool>(),
+                        "actual source profile separated VJP is invalid");
+        }
+        bool replay_exact=false;
+        torch::Tensor replay_gradient_ph,replay_gradient_thm,replay_endpoint_2;
+        if(!branch_mode) {
+            Grid replay_g(g.nx,g.ny,g.nz,false,g.dx,g.dy,source_rdnw);
+            replay_g.loadSourceProfile(argv[6]);
+            replay_g.solver.resetInternalFp64Carry();
+            auto& replay_newton=newton_solver(replay_g);
+            replay_newton.restore_carried_state(carried0);
+            TORCH_CHECK(replay_newton.carried_state_digest()==digest0,
+                        "source-profile initial carried-state restore differs");
+            replay_g.solver.captureArkBudgetTraceForTest(false);
+            replay_g.set(initial);
+            replay_g.solver.requestFixedTrajectory(2,{15.0f,15.0f},initial);
+            for(int step=0;step<2;++step) {
+                replay_g.step(15.0f,step);
+                TORCH_CHECK(replay_g.solver.getLastStepOutcomeCode()==0,
+                            "source-profile replay step was rejected at ",step+1);
+                const auto replay_checkpoints=replay_g.solver.getFixedTrajectoryFp64Checkpoints();
+                TORCH_CHECK(replay_checkpoints.size()==static_cast<size_t>(step+1),
+                            "source-profile replay step lacks an FP64 checkpoint");
+                validate_physical_handoff_state(replay_g,replay_checkpoints.back());
+                TORCH_CHECK(tensor_bitwise_equal(replay_g.state(),
+                                replay_checkpoints.back().to(torch::kFloat32)),
+                            "source-profile replay publication differs from its checkpoint at step ",step+1);
+                if(step==0)
+                    TORCH_CHECK(replay_newton.carried_state_digest()==digest1,
+                                "source-profile carried state after step 1 differs in replay");
+            }
+            const auto replay_endpoints=replay_g.solver.getFixedTrajectoryFp64Checkpoints();
+            TORCH_CHECK(replay_endpoints.size()==2,"source-profile replay endpoint count differs");
+            replay_endpoint_2=replay_endpoints.back();
+            replay_gradient_ph=replay_g.solver.pullbackFixedTrajectory(terminal_ph);
+            replay_gradient_thm=replay_g.solver.pullbackFixedTrajectory(terminal_thm);
+            replay_exact=tensor_bitwise_equal(replay_endpoints[0],endpoint[0]) &&
+                tensor_bitwise_equal(replay_endpoints[1],endpoint[1]) &&
+                tensor_bitwise_equal(replay_endpoint_2,endpoint.back()) &&
+                tensor_bitwise_equal(replay_gradient_ph,gradient_ph) &&
+                tensor_bitwise_equal(replay_gradient_thm,gradient_thm);
+            replay_g.solver.closeFixedTrajectory();
+            replay_g.solver.resetInternalFp64Carry();
+            replay_newton.restore_carried_state(carried1);
+            TORCH_CHECK(replay_newton.carried_state_digest()==digest1,
+                        "source-profile step-1 carried-state restore differs");
+            replay_g.set(endpoint[0]);
+            replay_g.solver.captureArkBudgetTraceForTest(false);
+            replay_g.solver.requestFixedTrajectory(1,{15.0f},endpoint[0]);
+            replay_g.step(15.0f,1);
+            TORCH_CHECK(replay_g.solver.getLastStepOutcomeCode()==0,
+                        "source-profile step-1 snapshot replay was rejected");
+            const auto second_step_replay=replay_g.solver.getFixedTrajectoryFp64Checkpoints();
+            TORCH_CHECK(second_step_replay.size()==1,
+                        "source-profile step-1 snapshot replay did not retain its endpoint");
+            validate_physical_handoff_state(replay_g,second_step_replay.back());
+            TORCH_CHECK(tensor_bitwise_equal(replay_g.state(),
+                            second_step_replay.back().to(torch::kFloat32)),
+                        "source-profile step-1 snapshot replay publication differs from its checkpoint");
+            const bool snapshot1_endpoint_exact=tensor_bitwise_equal(second_step_replay.back(),endpoint.back());
+            replay_exact=replay_exact && snapshot1_endpoint_exact;
+            TORCH_CHECK(replay_exact,
+                        "source-profile retained/replay endpoints, step-1 snapshot replay, or separated pullbacks differ");
+            put(out,"source_profile_replay_endpoint_2",replay_endpoint_2);
+            put(out,"source_profile_step1_snapshot_replay_endpoint_2",second_step_replay.back());
+            put(out,"source_profile_replay_vjp_ph",replay_gradient_ph);
+            put(out,"source_profile_replay_vjp_thm",replay_gradient_thm);
+            replay_g.solver.closeFixedTrajectory();
+        }
+        if(!branch_mode) {
+            put(out,"source_profile_terminal_cotangent_ph",terminal_ph);
+            put(out,"source_profile_terminal_cotangent_thm",terminal_thm);
+            put(out,"source_profile_vjp_ph",gradient_ph);
+            put(out,"source_profile_vjp_thm",gradient_thm);
+        }
+        put(out,"source_profile_endpoint_1",endpoint[0]);
+        put(out,"source_profile_endpoint_2",endpoint[1]);
+        put(out,"source_profile_initial",initial);
+        for(size_t n=0;n<stage_states.size();++n) {
+            put(out,"source_profile_stage_state_"+std::to_string(n+1),stage_states[n]);
+            put(out,"source_profile_stage_omega_"+std::to_string(n+1),stage_omega[n]);
+        }
+        out<<"M,source_profile_probe,1\nM,source_profile_steps,2\nM,source_profile_dt,15\n";
+        out<<"T,source_profile_status,"<<(branch_mode?"accepted_branch_fd_endpoint":"accepted_with_retained_and_replay_vjp")<<"\n";
+        if(!branch_mode) out<<"T,source_profile_vjp_fields,PH_owner;THM_physical_mass_separate\n";
+        out<<"M,source_profile_stage_count,"<<stage_states.size()<<"\n";
+        out<<"M,source_profile_carried_state_0_digest,"<<digest0<<"\n";
+        out<<"M,source_profile_carried_state_1_digest,"<<digest1<<"\n";
+        out<<"M,source_profile_replay_exact,"<<(replay_exact?1:0)<<"\n";
+        out<<"M,source_profile_initial_override,"<<(source_profile_initial_override.defined()?1:0)<<"\n";
+        out<<"T,source_profile_mode,"<<(branch_mode?"branch_fd":"retained_replay")<<"\n";
+        out.flush(); g.solver.closeFixedTrajectory();
+        return 0;
+    }
     if(descriptor_only) { put(out,"initial",base); return 0; }
     if(physical_wave_inverse) {
         const auto observations=read_physical_w_observations(argv[7]);

@@ -350,6 +350,16 @@ inline bool env_flag_true(const char* name) {
     return false;
 }
 
+// One predicate defines when the native option-2 branch is declared. Keep the
+// test-only ARK face observer and the RHS guard on the same decision so tracing
+// cannot disable the operator it is meant to observe.
+inline bool native_option2_declared(
+    int diffusion_option, bool canonical_horizontal,
+    const wrf::sdirk3::WRFGridInfoExtended* grid) {
+    return diffusion_option == 2 && canonical_horizontal && grid &&
+           grid->smagorinsky_opt > 0;
+}
+
 }  // namespace
 
 // Ensure M_PI is defined (not always available on all compilers)
@@ -10112,13 +10122,26 @@ vertical_coefficients:
                 }
             }
 
+            const auto trace_option2_grid_ext =
+                std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(grid_info_);
+            const auto& trace_config = wrf::sdirk3::g_sdirk3_config;
+            const bool trace_canonical_horizontal = !g_export_coupled_slow &&
+                trace_config.effective_wrf_omega_ww_cp() &&
+                wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
+                wdamp_contract_.y_policy ==
+                    wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
+            const bool capture_ark_theta_faces = capture_ark_budget_trace_ &&
+                !native_option2_declared(trace_config.diffusion_option,
+                                         trace_canonical_horizontal,
+                                         trace_option2_grid_ext.get());
+
             for (int i = 0; i < Ark::stages; ++i) {
                 if (ark_stage_aborted) {
                     break;
                 }
 
                 const int stage_id = i + 1;
-                capture_theta_faces_now_ = capture_ark_budget_trace_ && i == 0;
+                capture_theta_faces_now_ = capture_ark_theta_faces && i == 0;
                 const double aii = Ark::a_implicit[i][i];
                 torch::Tensor U_stage = compute_stage_rhs(i);
                 probe_firsthit_nonfinite(stage_id, false, "U_stage_pre", U_stage);
@@ -10601,7 +10624,7 @@ vertical_coefficients:
                 TORCH_CHECK(!capture_ark_budget_trace_ || !U_full_exch_conv.defined(),
                             "theta producer-face trace requires the single-tile"
                             " ordinary RHS; full-halo flux ownership is not captured");
-                capture_theta_faces_now_ = capture_ark_budget_trace_;
+                capture_theta_faces_now_ = capture_ark_theta_faces;
                 k_slow[i] = compute_k_slow(U_conv, U_full_exch_conv);
                 if (capture_theta_faces_now_) {
                     last_ark_budget_trace_.slow_faces[i] = rhs_theta_faces_;
@@ -22005,9 +22028,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         (!Kv_mom_.defined() || Kv_mom_.numel() == 0) &&
         (!Kv_scalar_.defined() || Kv_scalar_.numel() == 0) &&
         !capture_theta_faces_now_;
-    const bool option2_native_declared =
-        wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
-        canonical_horizontal && option2_grid_ext && option2_grid_ext->smagorinsky_opt > 0;
+    const bool option2_native_declared = native_option2_declared(
+        wrf::sdirk3::g_sdirk3_config.diffusion_option, canonical_horizontal,
+        option2_grid_ext.get());
     option2_stage_snapshot_required = option2_native_declared;
     TORCH_CHECK(!option2_native_declared || option2_isotropic_dry,
                 "option-2 metric diffusion requires dry isotropic km_opt=1, "
@@ -31868,6 +31891,11 @@ void TileSDIRK3UnifiedSolver::syncHaloStateAfterInit() {
 // The values come from WRF's domain decomposition (module_dm.F: ntasks_x, ntasks_y, mytask).
 // If not called, defaults to serial mode (nprocx=nprocy=1, mypx=mypy=0).
 void TileSDIRK3UnifiedSolver::setNativeTransportOptions(int phi_adv_z, int v_sca_adv_order) {
+    setNativeTransportOptions(phi_adv_z, v_sca_adv_order, cf1_, cf2_, cf3_);
+}
+
+void TileSDIRK3UnifiedSolver::setNativeTransportOptions(
+    int phi_adv_z, int v_sca_adv_order, float cf1, float cf2, float cf3) {
     TORCH_CHECK(!fixed_trajectory_open_ && !fixed_trajectory_requested_,
                 "native transport options cannot change after a fixed trajectory is requested");
     TORCH_CHECK(phi_adv_z == 1 || phi_adv_z == 2,
@@ -31876,11 +31904,20 @@ void TileSDIRK3UnifiedSolver::setNativeTransportOptions(int phi_adv_z, int v_sca
                 "native v_sca_adv_order currently supports only 3, got ", v_sca_adv_order);
     TORCH_CHECK(nz_ >= 4,
                 "native v_sca_adv_order=3 requires at least four mass levels, got nz=", nz_);
+    TORCH_CHECK(std::isfinite(cf1) && std::isfinite(cf2) && std::isfinite(cf3),
+                "native transport bottom coefficients must be finite");
     native_phi_adv_z_ = phi_adv_z;
     native_v_sca_adv_order_ = v_sca_adv_order;
-    std::cerr << "[NATIVE TRANSPORT CONFIG] tile=" << tile_id_
-              << " native_set=1 phi_adv_z=" << native_phi_adv_z_
-              << " v_sca_adv_order=" << native_v_sca_adv_order_ << std::endl;
+    cf1_ = cf1;
+    cf2_ = cf2;
+    cf3_ = cf3;
+    std::ostringstream effective_config;
+    effective_config << std::setprecision(std::numeric_limits<float>::max_digits10)
+                     << "[NATIVE TRANSPORT CONFIG] tile=" << tile_id_
+                     << " native_set=1 phi_adv_z=" << native_phi_adv_z_
+                     << " v_sca_adv_order=" << native_v_sca_adv_order_
+                     << " cf1=" << cf1_ << " cf2=" << cf2_ << " cf3=" << cf3_;
+    std::cerr << effective_config.str() << std::endl;
 }
 
 void TileSDIRK3UnifiedSolver::setMPIProcessInfo(int nprocx, int nprocy, int mypx, int mypy) {

@@ -27,8 +27,10 @@
 #include "tile_test_fixture.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -38,6 +40,21 @@ namespace {
 
 int failures = 0;
 int check_count = 0;
+
+using ::TileSDIRK3UnifiedSolver;
+struct Cf1Tag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(Cf1Tag); };
+struct Cf2Tag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(Cf2Tag); };
+struct Cf3Tag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(Cf3Tag); };
+struct NativePhiTag { using type = int TileSDIRK3UnifiedSolver::*; friend type access(NativePhiTag); };
+struct NativeVOrderTag { using type = int TileSDIRK3UnifiedSolver::*; friend type access(NativeVOrderTag); };
+template<class Tag, typename Tag::type Member> struct Accessor {
+    friend typename Tag::type access(Tag) { return Member; }
+};
+template struct Accessor<Cf1Tag, &TileSDIRK3UnifiedSolver::cf1_>;
+template struct Accessor<Cf2Tag, &TileSDIRK3UnifiedSolver::cf2_>;
+template struct Accessor<Cf3Tag, &TileSDIRK3UnifiedSolver::cf3_>;
+template struct Accessor<NativePhiTag, &TileSDIRK3UnifiedSolver::native_phi_adv_z_>;
+template struct Accessor<NativeVOrderTag, &TileSDIRK3UnifiedSolver::native_v_sca_adv_order_>;
 
 void check(bool ok, const std::string& what) {
     ++check_count;
@@ -326,26 +343,68 @@ int main() {
     check(registered != nullptr, "v2 regression solver handle registered");
     if (registered != nullptr) {
         check(sdirk3_tile_set_native_transport_options_checked(
-                  nullptr, 1, 3) == 0,
+                  nullptr, 1, 3, 0.5f, 0.0f, 0.0f) == 0,
               "native transport setter rejects null handle");
         check(sdirk3_tile_set_native_transport_options_checked(
-                  not_registered, 1, 3) == 0,
+                  not_registered, 1, 3, 0.5f, 0.0f, 0.0f) == 0,
               "native transport setter rejects unregistered handle");
         check(sdirk3_tile_set_native_transport_options_checked(
-                  registered, 0, 3) == 0,
+                  registered, 0, 3, 0.5f, 0.0f, 0.0f) == 0,
               "native transport setter rejects phi_adv_z outside 1/2");
         check(sdirk3_tile_set_native_transport_options_checked(
-                  registered, 2, 4) == 0,
+                  registered, 2, 4, 0.5f, 0.0f, 0.0f) == 0,
               "native transport setter rejects unsupported v_sca_adv_order");
         check(sdirk3_tile_set_native_transport_options_checked(
-                  registered, 1, 3) == 1,
-              "registered native transport setter accepts PHI_ADV_Z=1 and V_SCA_ADV_ORDER=3");
+                  registered, 1, 3, 0.5f, 0.0f, 0.0f) == 1,
+              "registered native transport setter accepts legacy CF1/CF2/CF3");
         check(sdirk3_tile_set_native_transport_options_checked(
-                  registered, 2, 3) == 1,
+                  registered, 2, 3, 0.5f, 0.0f, 0.0f) == 1,
               "registered native transport setter accepts PHI_ADV_Z=2 and V_SCA_ADV_ORDER=3");
+        auto& native_solver = *static_cast<TileSDIRK3UnifiedSolver*>(registered);
+        constexpr float actual_cf1 = 2.0955763f;
+        constexpr float actual_cf2 = -1.7350880f;
+        constexpr float actual_cf3 = 0.6395117f;
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  registered, 1, 3, actual_cf1, actual_cf2, actual_cf3) == 1,
+              "checked native setter accepts the captured WRF bottom coefficients");
+        check(native_solver.*access(Cf1Tag{}) == actual_cf1 &&
+                  native_solver.*access(Cf2Tag{}) == actual_cf2 &&
+                  native_solver.*access(Cf3Tag{}) == actual_cf3,
+              "checked native setter stores all three WRF bottom coefficients");
+        check(std::abs(actual_cf1 + actual_cf2 + actual_cf3 - 1.0f) < 2.0e-7f,
+              "captured WRF bottom CF profile preserves a constant pressure field");
+        native_solver.setNativeTransportOptions(2, 3);
+        check(native_solver.*access(Cf1Tag{}) == actual_cf1 &&
+                  native_solver.*access(Cf2Tag{}) == actual_cf2 &&
+                  native_solver.*access(Cf3Tag{}) == actual_cf3,
+              "legacy two-selector setter preserves the current CF profile");
+        const auto before_bad_cf = std::array<float, 3>{
+            native_solver.*access(Cf1Tag{}), native_solver.*access(Cf2Tag{}),
+            native_solver.*access(Cf3Tag{})};
+        const int phi_before_bad_cf = native_solver.*access(NativePhiTag{});
+        const int order_before_bad_cf = native_solver.*access(NativeVOrderTag{});
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  registered, 1, 3, actual_cf1,
+                  std::numeric_limits<float>::quiet_NaN(), actual_cf3) == 0,
+              "checked native setter rejects nonfinite bottom coefficient");
+        check(native_solver.*access(Cf1Tag{}) == before_bad_cf[0] &&
+                  native_solver.*access(Cf2Tag{}) == before_bad_cf[1] &&
+                  native_solver.*access(Cf3Tag{}) == before_bad_cf[2] &&
+                  native_solver.*access(NativePhiTag{}) == phi_before_bad_cf &&
+                  native_solver.*access(NativeVOrderTag{}) == order_before_bad_cf,
+              "nonfinite coefficient rejection leaves CFs and selectors unchanged");
         check(sdirk3_tile_solver_begin_fixed_trajectory_zerocopy(
                   registered, 1, nullptr, 0) == 1,
               "fixed trajectory request accepted before first publication");
+        check(sdirk3_tile_set_native_transport_options_checked(
+                  registered, 2, 3, 0.5f, 0.0f, 0.0f) == 0,
+              "checked native setter rejects changes after trajectory request");
+        check(native_solver.*access(Cf1Tag{}) == before_bad_cf[0] &&
+                  native_solver.*access(Cf2Tag{}) == before_bad_cf[1] &&
+                  native_solver.*access(Cf3Tag{}) == before_bad_cf[2] &&
+                  native_solver.*access(NativePhiTag{}) == phi_before_bad_cf &&
+                  native_solver.*access(NativeVOrderTag{}) == order_before_bad_cf,
+              "frozen setter rejection leaves CFs and selectors unchanged");
         const int trajectory_size = sdirk3_tile_solver_get_state_vector_size_zerocopy(registered);
         bool sentinel_preserved = false;
         if (trajectory_size > 0) {
@@ -386,7 +445,7 @@ int main() {
     check(registered_carry_pullback(2),
           "registered C ABI FP64 carry pullback promotes terminal for N=2");
 
-    constexpr int expected_checks = 26;
+    constexpr int expected_checks = 34;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

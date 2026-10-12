@@ -1005,9 +1005,10 @@ void sdirk3_tile_set_boundary_conditions_v2(void* solver_ptr,
  */
 void sdirk3_tile_set_map_projection(void* solver_ptr, int map_proj);
 
-/** Set validated native WRF PH/THM vertical transport selectors on one solver. */
+/** Set native WRF PH/THM selectors and the WRF-computed bottom interpolation coefficients. */
 int sdirk3_tile_set_native_transport_options_checked(
-    void* solver_ptr, int phi_adv_z, int v_sca_adv_order);
+    void* solver_ptr, int phi_adv_z, int v_sca_adv_order,
+    float cf1, float cf2, float cf3);
 
 /**
  * Set solver-local MPI process grid information.
