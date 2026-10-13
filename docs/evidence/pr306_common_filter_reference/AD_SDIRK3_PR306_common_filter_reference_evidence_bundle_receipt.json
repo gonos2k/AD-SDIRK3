@@ -1,0 +1,140 @@
+{
+  "schema": "pr306_common_filter_reference_bundle_verification_receipt_v1",
+  "created_local_time": "2026-10-14T07:14:33+09:00",
+  "archive": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/AD-SDIRK3_PR306_common_filter_reference_evidence.zip",
+  "archive_bytes": 59698325,
+  "archive_sha256": "a8af3926c0d34e1c20c01bd9004e784a675d763f9affdf57a43917ecfa78a47e",
+  "archive_member_count_including_manifest": 265,
+  "zip_crc_test": "passed",
+  "embedded_manifest": {
+    "path": "pr306_common_filter_reference_evidence/bundle_manifest.json",
+    "sha256": "d7aceda841de9ea66beeb39df4fda718241b1d606d76c13b19c4610fdbd503fb",
+    "payload_member_count": 264,
+    "all_member_sha256_verified": true
+  },
+  "fresh_unpack": {
+    "path": "/private/tmp/pr306_bundle_fresh_unpack_final/pr306_common_filter_reference_evidence",
+    "verification_receipt": "/private/tmp/pr306_bundle_fresh_unpack_final/pr306_common_filter_reference_evidence/bundle_verification.json",
+    "verification_receipt_sha256": "312ecca7ee17d077c7510127eaa252cf7bd5b52e96fbc1f52972ba111b7e8b92",
+    "all_gates_pass": true,
+    "verification": {
+      "schema": "pr306_fresh_unpack_verification_v1",
+      "root": "/private/tmp/pr306_bundle_fresh_unpack_final/pr306_common_filter_reference_evidence",
+      "manifest": {
+        "manifest_sha256": "d7aceda841de9ea66beeb39df4fda718241b1d606d76c13b19c4610fdbd503fb",
+        "payload_count": 264,
+        "all_payload_sha256_pass": true,
+        "zip_crc": "passed"
+      },
+      "native_runs": {
+        "six_native_runs_pass": true,
+        "cases": [
+          {
+            "label": "h15_current_a5_parity_control",
+            "dt": 15.0,
+            "model_steps": 16,
+            "solver_steps": 48,
+            "return_code": null,
+            "receipt_sha256": "a42ca4dabf1fce10e04bf87caf4edb8ff6b953c103a3dfdcf746a20de74138ca"
+          },
+          {
+            "label": "h7p5",
+            "dt": 7.5,
+            "model_steps": 32,
+            "solver_steps": 96,
+            "return_code": 0,
+            "receipt_sha256": "386976d7301ff47e960e942c50a7249cce1fdc20d4ed7acf659ec4149f0a87ce"
+          },
+          {
+            "label": "h3p75",
+            "dt": 3.75,
+            "model_steps": 64,
+            "solver_steps": 192,
+            "return_code": null,
+            "receipt_sha256": "7253c91ca9b89cb8437152e305d47ceaa0247da5772ba1f8db5cae8e9599c6e1"
+          },
+          {
+            "label": "h1p875_targeted",
+            "dt": 1.875,
+            "model_steps": 128,
+            "solver_steps": 384,
+            "return_code": 0,
+            "receipt_sha256": "6d9433306abbb099e6abc7955a5b10c593b8c9a0ff21982c8fe296b81b2fd47a"
+          },
+          {
+            "label": "h0p9375_targeted",
+            "dt": 0.9375,
+            "model_steps": 256,
+            "solver_steps": 768,
+            "return_code": 0,
+            "receipt_sha256": "1b501c734f833afcb545bef440b8086da5622ece335ca3e244904716315c4140"
+          },
+          {
+            "label": "h0p46875_targeted",
+            "dt": 0.46875,
+            "model_steps": 512,
+            "solver_steps": 1536,
+            "return_code": 0,
+            "receipt_sha256": "17922c3aaf331fcbdbabcd4300f36c91b266cf87c4c38d7c180e345c9e5e094b"
+          }
+        ],
+        "h15_vs_archive_bitwise_arrays": 40,
+        "final_reference_pair_recorded_pass": false,
+        "final_reference_pair_pass_count": 20,
+        "final_reference_pair_row_count": 24,
+        "red_reference_audit_present": true
+      },
+      "initial_rhs": {
+        "three_initial_rhs_runs_pass": true,
+        "pairwise_array_comparisons": 48,
+        "arrays_per_pair": 16,
+        "initial_w_max_abs": {
+          "A_debug1_off": 0.0,
+          "B_debug2_off": 0.0,
+          "C_debug2_trace": 0.0
+        },
+        "observer_sidecars": [
+          "port_full_rhs_snapshot.bin",
+          "port_full_rhs_components_snapshot.bin",
+          "port_u_pgf_snapshot.bin",
+          "port_u_pgf_operands_snapshot.bin"
+        ],
+        "legacy_fortran_full_snapshot_absent_expected": true
+      },
+      "source_snapshot": {
+        "source_snapshot_files_pass": 14,
+        "selected_source_bindings_pass": 6
+      },
+      "portable_pressure_analysis": {
+        "portable_pressure_analysis_pass": true,
+        "output_sha256": "d94631a233ccb2d31dcd88b38cb76fb4b75fe2cc792b3772c224ad3642c89d89",
+        "same_call_state_gates": 6,
+        "path": "/private/tmp/pr306_bundle_fresh_unpack_final/pr306_common_filter_reference_evidence/portable_pressure_analysis_fresh_unpack.json"
+      }
+    }
+  },
+  "verified_scope": {
+    "six_native_ark_runs": true,
+    "h15_vs_archived_bitwise_raw_arrays": 40,
+    "initial_probe_cases": 3,
+    "initial_pairwise_array_checks": 48,
+    "original_t0_input_field_checks": 8,
+    "C_cpp_sidecars_verified": 4,
+    "pressure_analysis_portable_rerun": true,
+    "no_new_model_runs_during_packaging": true
+  },
+  "interpretation": {
+    "h09375_h046875_reference_pair_qualified": false,
+    "accuracy_cost_claim": false,
+    "note": "The bundle preserves the nonpassing fixed-reference screen and all raw data; packaging checks are integrity/replay checks only."
+  },
+  "included_final_reviewcopy": {
+    "report_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/final_reviewcopy/docs/(202610140710)_common_filter_reference_and_initial_w.md",
+    "report_sha256": "366adb0beb66e463fb6edcfdedf473b73cf3cd7ec3d45b41775752a8965f7406",
+    "problem_definition_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/final_reviewcopy/docs/PROBLEM_DEFINITION.md",
+    "problem_definition_sha256": "c03c033488ef9a7f18f08fd14df4b8069988fe491be4f1d8d349a87c6ad44b12",
+    "committed_evidence_manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/final_reviewcopy/docs/evidence/pr306_common_filter_reference/committed_analysis_manifest.json",
+    "committed_evidence_manifest_sha256": "27dfd12c6d21a9058984680b564e2605c79f05caa6a869e8210b83f8b51105b6",
+    "committed_file_count": 16
+  }
+}

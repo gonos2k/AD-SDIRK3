@@ -1,0 +1,1073 @@
+{
+  "call_context": {
+    "MU_equals_input_after_float32_projection": true,
+    "W_initial_max_abs": 0.0,
+    "W_owner": "physical j<16,i<16,k=1..16; fixed bottom k=0 excluded, dynamic top included",
+    "W_rhs_physical_owner_shape_jki": [
+      16,
+      16,
+      16
+    ],
+    "dimensions_nx_ny_nz_nxu_nyv_nzw": [
+      17,
+      17,
+      16,
+      18,
+      18,
+      17
+    ],
+    "full_snapshot_version": 1,
+    "g_val_wpgf_f32": 9.8100004196167,
+    "native_wrf_omega_ww_cp": false,
+    "operand_pressure_name": "p_pert_mass from calc_p_rho_wrf (actual C++ Full call), serialized as float64",
+    "pgf_snapshot_native_nh": 1,
+    "same_call_full_vs_pgf_state_gates": {
+      "mu": {
+        "full_shape": [
+          17,
+          1,
+          17
+        ],
+        "pgf_shape": [
+          17,
+          1,
+          17
+        ],
+        "same_shape": true,
+        "value_exact_after_float32_projection": true
+      },
+      "ph": {
+        "full_shape": [
+          17,
+          17,
+          17
+        ],
+        "pgf_shape": [
+          17,
+          17,
+          17
+        ],
+        "same_shape": true,
+        "value_exact_after_float32_projection": true
+      },
+      "t": {
+        "full_shape": [
+          17,
+          16,
+          17
+        ],
+        "pgf_shape": [
+          17,
+          16,
+          17
+        ],
+        "same_shape": true,
+        "value_exact_after_float32_projection": true
+      },
+      "u": {
+        "full_shape": [
+          17,
+          16,
+          18
+        ],
+        "pgf_shape": [
+          17,
+          16,
+          18
+        ],
+        "same_shape": true,
+        "value_exact_after_float32_projection": true
+      },
+      "v": {
+        "full_shape": [
+          18,
+          16,
+          17
+        ],
+        "pgf_shape": [
+          18,
+          16,
+          17
+        ],
+        "same_shape": true,
+        "value_exact_after_float32_projection": true
+      },
+      "w": {
+        "full_shape": [
+          17,
+          17,
+          17
+        ],
+        "pgf_shape": [
+          17,
+          17,
+          17
+        ],
+        "same_shape": true,
+        "value_exact_after_float32_projection": true
+      }
+    }
+  },
+  "capture_dir": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_C_debug2_trace",
+  "contrast_using_raw_input_netcdf_P": {
+    "actual_full_w_physical_m_s2": {
+      "max_abs": 3.513093906803988e-05,
+      "rms": 1.0977233437460507e-05
+    },
+    "cosine_actual_vs_predicted": -0.036533233537135626,
+    "dynamic_top_k16": {
+      "actual": {
+        "max_abs": 1.8777620425680652e-05,
+        "rms": 8.03085642569039e-06
+      },
+      "predicted": {
+        "max_abs": 3.6684532712030074e-11,
+        "rms": 2.0450328386357132e-11
+      },
+      "residual": {
+        "max_abs": 1.8777616590285577e-05,
+        "rms": 8.030852942517421e-06
+      }
+    },
+    "full_minus_pressure_buoyancy_residual_m_s2": {
+      "max_abs": 3.513114583819741e-05,
+      "rms": 1.0977237759428988e-05
+    },
+    "interior_k1_to_k15": {
+      "actual": {
+        "max_abs": 3.513093906803988e-05,
+        "rms": 1.1146000203714225e-05
+      },
+      "predicted": {
+        "max_abs": 3.2769983869887155e-10,
+        "rms": 1.220500142691566e-10
+      },
+      "residual": {
+        "max_abs": 3.513114583819741e-05,
+        "rms": 1.1146004911321954e-05
+      }
+    },
+    "predicted_pressure_buoyancy_w_physical_m_s2": {
+      "max_abs": 3.2769983869887155e-10,
+      "rms": 1.1828495933487006e-10
+    },
+    "terms": {
+      "internal_levels": [
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.1994375815276798e-10,
+            "rms": 1.2991349372072698e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195313912562597,
+            "rms": 8.010302837739278
+          },
+          "w_face_index_zero_based": 1
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.2199813737348708e-10,
+            "rms": 1.3477682133273668e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.19531068300057,
+            "rms": 8.010302824573673
+          },
+          "w_face_index_zero_based": 2
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.855887554453875e-10,
+            "rms": 1.4784200089921827e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.19531256909795,
+            "rms": 8.010302722385541
+          },
+          "w_face_index_zero_based": 3
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 3.2769983869887155e-10,
+            "rms": 1.6933084641597278e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195312580794052,
+            "rms": 8.01030252354337
+          },
+          "w_face_index_zero_based": 4
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 3.137751152100375e-10,
+            "rms": 1.8519259451932851e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195314384894118,
+            "rms": 8.010302963439198
+          },
+          "w_face_index_zero_based": 5
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.340106035059839e-10,
+            "rms": 1.4779243531762924e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195311010174919,
+            "rms": 8.010303447040775
+          },
+          "w_face_index_zero_based": 6
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.0689675504116472e-10,
+            "rms": 1.3240006076590528e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195314025840617,
+            "rms": 8.010302947815875
+          },
+          "w_face_index_zero_based": 7
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.3454082653693467e-10,
+            "rms": 1.3690793123286287e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195312397736416,
+            "rms": 8.010303213680288
+          },
+          "w_face_index_zero_based": 8
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 1.3661691058340537e-10,
+            "rms": 8.86421356585439e-11
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195311486284481,
+            "rms": 8.010302815573286
+          },
+          "w_face_index_zero_based": 9
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 1.7684362794313612e-10,
+            "rms": 1.1190208536497802e-10
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195311171525645,
+            "rms": 8.010303151714792
+          },
+          "w_face_index_zero_based": 10
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 1.8949728026374155e-10,
+            "rms": 9.429078677389065e-11
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195313238228891,
+            "rms": 8.010303113848401
+          },
+          "w_face_index_zero_based": 11
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 1.3698796915600427e-10,
+            "rms": 7.44198081529417e-11
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195313534388333,
+            "rms": 8.01030310433165
+          },
+          "w_face_index_zero_based": 12
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 1.2682948122026584e-10,
+            "rms": 6.168128649077385e-11
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195312572890543,
+            "rms": 8.010303060040972
+          },
+          "w_face_index_zero_based": 13
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 9.377762586917e-11,
+            "rms": 4.6273015699280635e-11
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195311840156364,
+            "rms": 8.01030297354666
+          },
+          "w_face_index_zero_based": 14
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 1.0948748753647005e-10,
+            "rms": 6.858420006130418e-11
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.195311888145824,
+            "rms": 8.010303059947898
+          },
+          "w_face_index_zero_based": 15
+        }
+      ],
+      "top": {
+        "W_Lf_Pa": {
+          "max_abs": 89092.1171875,
+          "rms": 89091.93164067331
+        },
+        "buoyancy_mu1_before_g": {
+          "max_abs": 8.1953125,
+          "rms": 8.010303061630076
+        },
+        "buoyancy_mu2_before_g": {
+          "max_abs": 0.0,
+          "rms": 0.0
+        },
+        "physical_acceleration_m_s2": {
+          "max_abs": 3.6684532712030074e-11,
+          "rms": 2.0450328386357132e-11
+        },
+        "pressure_term_before_g": {
+          "max_abs": 8.195312617599996,
+          "rms": 8.01030305783337
+        }
+      }
+    }
+  },
+  "debug_observer_noninterference": {
+    "A_t0_all_fields_bitwise_exact_to_original_input": true,
+    "all_A_B_C_output_fields_bitwise_exact_at_t0_t15": true,
+    "analysis_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_three_run_analysis.json",
+    "analysis_sha256": "97151c1b8e2fe931134a47f6398671dcf72c9e72fcf8168645ae0327ba42a00a",
+    "initial_W_max_abs_by_case": {
+      "A_debug1_off": 0.0,
+      "B_debug2_off": 0.0,
+      "C_debug2_trace": 0.0
+    }
+  },
+  "input": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_C_debug2_trace/wrfinput_d01",
+    "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "input_state_context": {
+    "C1F": {
+      "max_abs": 1.0,
+      "rms": 1.0
+    },
+    "C2F": {
+      "max_abs": 0.0,
+      "rms": 0.0
+    },
+    "MAPFAC_M_min_max": [
+      1.0,
+      1.0
+    ],
+    "QVAPOR_max_abs": 0.0,
+    "RDN": {
+      "max_abs": 44.989322662353516,
+      "rms": 23.631423598331814
+    },
+    "RDNW": {
+      "max_abs": 47.984439849853516,
+      "rms": 25.271714511209666
+    },
+    "input_MU": {
+      "max_abs": 8.1953125,
+      "rms": 8.010303061630076
+    },
+    "input_MUB": {
+      "max_abs": 89083.921875,
+      "rms": 89083.921875
+    },
+    "input_P": {
+      "max_abs": 7.638463973999023,
+      "rms": 3.550494107835179
+    },
+    "p_cpp_diag": {
+      "max_abs": 7.632745047027129,
+      "rms": 3.5507483635276222
+    },
+    "p_cpp_diag_minus_input_P": {
+      "max_abs": 0.023233216677908786,
+      "rms": 0.005037238919979537
+    }
+  },
+  "interpretation_limits": [
+    "This is an offline calculation from the first Full call, not a newly evaluated RHS.",
+    "The source pressure term uses the same-call C++ p_pert_mass sidecar; raw NetCDF P is only a contrast and is not substituted into the actual RHS.",
+    "Full-minus-prediction is an unassigned residual; it can include vertical advection, mixing/cross-stress, or other actual W contributions.",
+    "Input balance is not evidence that C++'s re-diagnosed p_pert_mass is balanced; the two predictions are reported separately."
+  ],
+  "no_new_model_or_build": true,
+  "pressure_rediagnosis_effect_on_predicted_physical_w": {
+    "cosine_with_actual_full_w": 0.9980567127557585,
+    "max_abs": 3.5105485465803764e-05,
+    "rms": 1.093620064955068e-05
+  },
+  "reader_pins": {
+    "actual_cpp_pgf_operand_reader": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/portable_dependencies/analyze_pgf_capture_context.py",
+      "sha256": "9a6254c6a105a4348e17bb1952b797282831e775ea8d7685b2fad8ad4053dcaf"
+    },
+    "native_full_reader": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/full-six-rhs-20261012/green_analysis/analyze_full_six_rhs.py",
+      "sha256": "8e9f08e62b197c1b1bd438f1714cbcec50a043e606881f507b4b5475aa34141c"
+    }
+  },
+  "reconstruction_using_actual_cpp_diagnostic_pressure": {
+    "actual_full_w_physical_m_s2": {
+      "max_abs": 3.513093906803988e-05,
+      "rms": 1.0977233437460507e-05
+    },
+    "cosine_actual_vs_predicted": 0.9980566947817922,
+    "dynamic_top_k16": {
+      "actual": {
+        "max_abs": 1.8777620425680652e-05,
+        "rms": 8.03085642569039e-06
+      },
+      "predicted": {
+        "max_abs": 1.8777620607011334e-05,
+        "rms": 8.03085632652705e-06
+      },
+      "residual": {
+        "max_abs": 9.044433936869229e-13,
+        "rms": 2.647964073510631e-13
+      }
+    },
+    "full_minus_pressure_buoyancy_residual_m_s2": {
+      "max_abs": 2.904571752903099e-06,
+      "rms": 6.843014195701858e-07
+    },
+    "interior_k1_to_k15": {
+      "actual": {
+        "max_abs": 3.513093906803988e-05,
+        "rms": 1.1146000203714225e-05
+      },
+      "predicted": {
+        "max_abs": 3.5105278695646236e-05,
+        "rms": 1.1102887476423318e-05
+      },
+      "residual": {
+        "max_abs": 2.904571752903099e-06,
+        "rms": 7.067434671417096e-07
+      }
+    },
+    "predicted_pressure_buoyancy_w_physical_m_s2": {
+      "max_abs": 3.5105278695646236e-05,
+      "rms": 1.0936196516754255e-05
+    },
+    "terms": {
+      "internal_levels": [
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.7530685528376557e-05,
+            "rms": 1.1490678597619246e-05
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.11594584585529,
+            "rms": 7.925517841341582
+          },
+          "w_face_index_zero_based": 1
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 3.5105278695646236e-05,
+            "rms": 1.847312149139318e-05
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.489235027484112,
+            "rms": 8.161309578709396
+          },
+          "w_face_index_zero_based": 2
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 3.384503445613734e-05,
+            "rms": 1.9198628481100632e-05
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.122987954008915,
+            "rms": 7.8470057701882485
+          },
+          "w_face_index_zero_based": 3
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.5824856701115273e-05,
+            "rms": 1.4428780642079307e-05
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.367826576293337,
+            "rms": 8.128277733257198
+          },
+          "w_face_index_zero_based": 4
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.1125840553163235e-05,
+            "rms": 6.601973188059457e-06
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.387172416589117,
+            "rms": 8.039850951449433
+          },
+          "w_face_index_zero_based": 5
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.154990627997908e-05,
+            "rms": 1.0499649845351718e-05
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.148433033257405,
+            "rms": 7.929721880017029
+          },
+          "w_face_index_zero_based": 6
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.3728515931347253e-05,
+            "rms": 7.77920371701459e-06
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.270848182423995,
+            "rms": 8.054119995679711
+          },
+          "w_face_index_zero_based": 7
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.1214023589825237e-05,
+            "rms": 7.916204622989077e-06
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.225204227445674,
+            "rms": 7.97172082012222
+          },
+          "w_face_index_zero_based": 8
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.5224077084755907e-05,
+            "rms": 1.0306019498291227e-05
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.424391637151496,
+            "rms": 8.07400268946413
+          },
+          "w_face_index_zero_based": 9
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.2160528920441592e-05,
+            "rms": 1.0859695252507611e-05
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.177064722968911,
+            "rms": 7.930971618134617
+          },
+          "w_face_index_zero_based": 10
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.4537406093283454e-05,
+            "rms": 6.994476363822304e-06
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.237288954610554,
+            "rms": 7.9871095623451716
+          },
+          "w_face_index_zero_based": 11
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.268521611180517e-05,
+            "rms": 9.658241240990422e-06
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.372213463548265,
+            "rms": 8.05100301069107
+          },
+          "w_face_index_zero_based": 12
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.1970666950789045e-05,
+            "rms": 7.671023805636185e-06
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.21908145896637,
+            "rms": 7.975196758745733
+          },
+          "w_face_index_zero_based": 13
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 2.1658305175461743e-05,
+            "rms": 7.746719225227765e-06
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.299535068986323,
+            "rms": 8.054533502044974
+          },
+          "w_face_index_zero_based": 14
+        },
+        {
+          "W_Lf_Pa": {
+            "max_abs": 89092.1171875,
+            "rms": 89091.93164067331
+          },
+          "buoyancy_mu1_before_g": {
+            "max_abs": 8.1953125,
+            "rms": 8.010303061630076
+          },
+          "buoyancy_mu2_before_g": {
+            "max_abs": 0.0,
+            "rms": 0.0
+          },
+          "physical_acceleration_m_s2": {
+            "max_abs": 1.4041895016915028e-05,
+            "rms": 6.068285242476445e-06
+          },
+          "pressure_term_before_g": {
+            "max_abs": 8.252288519470856,
+            "rms": 8.017968873242186
+          },
+          "w_face_index_zero_based": 15
+        }
+      ],
+      "top": {
+        "W_Lf_Pa": {
+          "max_abs": 89092.1171875,
+          "rms": 89091.93164067331
+        },
+        "buoyancy_mu1_before_g": {
+          "max_abs": 8.1953125,
+          "rms": 8.010303061630076
+        },
+        "buoyancy_mu2_before_g": {
+          "max_abs": 0.0,
+          "rms": 0.0
+        },
+        "physical_acceleration_m_s2": {
+          "max_abs": 1.8777620607011334e-05,
+          "rms": 8.03085632652705e-06
+        },
+        "pressure_term_before_g": {
+          "max_abs": 8.23222984830136,
+          "rms": 8.025421031530295
+        }
+      }
+    }
+  },
+  "schema": "pr306_initial_cpp_w_pressure_force_analysis_v1",
+  "scope": "One first Full diagnostic call at t=0. Reconstructs only the source pressure+column-mass W term from actual C++ diagnostic p' and compares it to the packed Full physical W RHS. The residual is retained as all other W RHS terms; no transport/cross-stress zero assumption.",
+  "snapshots": {
+    "port_full_rhs_snapshot.bin": {
+      "bytes": 196276,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_C_debug2_trace/port_full_rhs_snapshot.bin",
+      "sha256": "b55f45376d96b48593b8943d99019c3b5b7bc0436094962e463e0ba7c9c3ce07"
+    },
+    "port_u_pgf_operands_snapshot.bin": {
+      "bytes": 150300,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_C_debug2_trace/port_u_pgf_operands_snapshot.bin",
+      "sha256": "af37bae317c7f4228f5d40d2031d72e80b78ffe5d72c337cf8b104e673dc5fdd"
+    },
+    "port_u_pgf_snapshot.bin": {
+      "bytes": 352956,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_C_debug2_trace/port_u_pgf_snapshot.bin",
+      "sha256": "6a6086da7ef8fd46c6afd5d8bcf789b518793dfa3814f72f2a7fd3d97d777ac1"
+    }
+  },
+  "source_formula": {
+    "dry_case_specialization": "QVAPOR=0 => cq1=1,cq2=0; MAPFAC_M=1; C1F=1,C2F=0",
+    "interior_coupled_increment": "(1/msfty)*g_val_wpgf*(cq1*(-abs(rdn[k]))*(p[k]-p[k-1])-c1f[k]*muf-cq2*(c1f[k]*mubf+c2f[k]))",
+    "physical_conversion_for_w0": "coupled increment / Lf, Lf=c1f*(MU+MUB)+c2f; -w*mass_rate term is zero because W(t0)=0",
+    "source_citations": {
+      "cpp_actual_pressure_writer": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:19538-19552",
+      "cpp_coupled_to_physical_w": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:25260-25280",
+      "cpp_gravity": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:20904-20907; constructor grid_info_->g=9.81f at :3764",
+      "cpp_p_sidecar": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:20104-20123",
+      "cpp_w_pressure_formula": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:21208-21221,21604-21616",
+      "fortran_pg_buoy_w": "dyn_em/module_big_step_utilities_em.F:2491-2510"
+    },
+    "top_coupled_increment": "(1/msfty)*g_val_wpgf*(cq1*2*abs(rdnw[-1])*p[-1]-c1f[-1]*muf-cq2*(c1f[-1]*mubf+c2f[-1]))"
+  },
+  "source_head": "5dc69a35823a5af8f6d5e24978933a25ee2b7081",
+  "status": "same_call_pressure_term_reconstruction_complete",
+  "three_control_case_receipt": {
+    "debug_level": 2,
+    "executable_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "label": "C_debug2_trace",
+    "observer_enabled": true,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_C_debug2_trace/run_receipt.json",
+    "return_code": 0,
+    "selected_source_hashes": {
+      "dyn_em/module_small_step_em.F": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+      "dyn_em/solve_em.F": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h": "6121e11e76007d6434a8ac894deb23dd5122d825a0b75b4d09650d4436bf321b",
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "76a40d51e93a1602c02f3c9407d220ca99a58876355f977072525acd973070ad",
+      "tools/test_native_wave_refinement.py": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+      "tools/test_native_wave_refinement_cf_selector_test.py": "9785448374c09d119cfeedc062f93693ff50772b4a99fd7b0f8c05394c155470"
+    },
+    "sha256": "df2147ebf6aeb7d6ab45253bfd11e898e0d61a9a38aa0a6ffe5bafe836f09e5b"
+  }
+}

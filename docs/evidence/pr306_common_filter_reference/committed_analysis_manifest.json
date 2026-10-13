@@ -1,0 +1,103 @@
+{
+  "schema": "pr306_committed_analysis_manifest_v1",
+  "executed_source_base": "5dc69a35823a5af8f6d5e24978933a25ee2b7081",
+  "evidence_root": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014",
+  "files": [
+    {
+      "source_relative_path": "green_metric/native_ark_final_reference_pair_analysis.json",
+      "committed_file": "native_ark_final_reference_pair_analysis.json",
+      "sha256": "9232cf23dbbc232467351a64434a0c39ef40756d64e38b778d2f4682cf057253"
+    },
+    {
+      "source_relative_path": "green_metric/native_ark_v3_fixed_budget_analysis.json",
+      "committed_file": "native_ark_v3_fixed_budget_analysis.json",
+      "sha256": "f1d03774f6b231d49c4f090f3a105835eff6e98755af3c9715bf90a5c7ad2f9c"
+    },
+    {
+      "source_relative_path": "green_metric/native_ark_h1875_reference_analysis.json",
+      "committed_file": "native_ark_h1875_reference_analysis.json",
+      "sha256": "436d62bd34f4d5e07bab2075e9b95f54882528b4ad1a946da893f1ad7befa711"
+    },
+    {
+      "source_relative_path": "green_execution/ark3_native_runs_and_h15_parity.json",
+      "committed_file": "ark3_native_runs_and_h15_parity.json",
+      "sha256": "faf0e61304a4d426f4f74ec2d9706ec464357c99952ebd5a7ce1fc7a98b34760"
+    },
+    {
+      "source_relative_path": "green_execution/ark3_native_run_receipt_consistency_v2.json",
+      "committed_file": "ark3_native_run_receipt_consistency_v2.json",
+      "sha256": "493650894ceb9bf4ff31062e9cbe64d54130cb8de588d526f5aea5efb38612c9"
+    },
+    {
+      "source_relative_path": "green_execution/ark3_native_run_receipts_index.json",
+      "committed_file": "ark3_native_run_receipts_index.json",
+      "sha256": "e794ea755d92fcddcab90f6b25b56411f2358ed89fc65227536ba7325c31082d"
+    },
+    {
+      "source_relative_path": "green_execution/initial_rhs_probe_three_run_analysis.json",
+      "committed_file": "initial_rhs_probe_three_run_analysis.json",
+      "sha256": "97151c1b8e2fe931134a47f6398671dcf72c9e72fcf8168645ae0327ba42a00a"
+    },
+    {
+      "source_relative_path": "green_pressure/initial_cpp_w_pressure_force_analysis.json",
+      "committed_file": "initial_cpp_w_pressure_force_analysis.json",
+      "sha256": "93a44ee1d3862799495bff42f2ac42dd1fb5126a4439e6c15dc8da5c7d476fd9"
+    },
+    {
+      "source_relative_path": "red_provenance/native_ark_h09375_h046875_gate_red.json",
+      "committed_file": "native_ark_h09375_h046875_gate_red.json",
+      "sha256": "163be68511e084a6964ea4f2d5e254ae1dc56750218357d1e3c31dda19c39f79"
+    },
+    {
+      "source_relative_path": "preflight/ark3_mode3_effective_context_audit.json",
+      "committed_file": "ark3_mode3_effective_context_audit.json",
+      "sha256": "58bf16e43eae600514d7be134873aafe8dad00a78f54d97d692f91f8a0c82c5d"
+    },
+    {
+      "source_relative_path": "preflight/source_tree_match_audit.json",
+      "committed_file": "source_tree_match_audit.json",
+      "sha256": "d75f6c939b397b035850dccb455551b454e906e0024d352448c40e445e1dc91b"
+    },
+    {
+      "source_relative_path": "green_graph/pr306_preedit_graph_binding_receipt.json",
+      "committed_file": "pr306_preedit_graph_binding_receipt.json",
+      "sha256": "87a4b7881599447d2b9592051b3e4d33e5c3dbbafa7864fdad196e38dbd13f3e"
+    },
+    {
+      "source_relative_path": "green_graph/pr306_final_source_graph_binding.json",
+      "committed_file": "pr306_final_source_graph_binding.json",
+      "sha256": "700755dd94443f8f1e00db89613ec318d4254f52e8c31d8a2e841edd69930e3a"
+    },
+    {
+      "source_relative_path": "red_precision_initial_pressure_audit_ko.md",
+      "committed_file": "red_precision_initial_pressure_audit_ko.md",
+      "sha256": "ef44ad5c5eaaef32bdf5b026e57193837aa350dc61614825464a87836cd7dee3",
+      "archived_source_sha256": "387d85d1705188aac1737f67a33b20908c4ebaaddfdebad94780ed92348c1bb5",
+      "copy_format_note": "Trailing Markdown line-break spaces removed in committed copy; archived original unchanged."
+    },
+    {
+      "source_relative_path": "red_acceptance/pr306_final_acceptance_audit_ko.md",
+      "committed_file": "pr306_final_acceptance_audit_ko.md",
+      "sha256": "f22ead1a8d0bffe113707bbdad764ddcdcdeeb5ede6d57fc06c94ed92ef18063",
+      "archived_source_sha256": "071fd5099ad8decbfb0ea797d7a9815df61899d7f1fd481b8656b6e137259811",
+      "copy_format_note": "Trailing Markdown line-break spaces removed in committed copy; archived original unchanged."
+    },
+    {
+      "source_relative_path": "red_hook/red_hook_pr306_closure_ko.md",
+      "committed_file": "red_hook_pr306_closure_ko.md",
+      "sha256": "39276a43023a6cd34e44a6778d72ad6e9bdad431fb84924036f3746bad8b4c81"
+    },
+    {
+      "source_relative_path": "AD_SDIRK3_PR306_common_filter_reference_evidence_bundle_receipt.json",
+      "committed_file": "AD_SDIRK3_PR306_common_filter_reference_evidence_bundle_receipt.json",
+      "sha256": "3af06a6bcac301006e326a5040a39049fe417e3380e5a2a30e9aa79aa782a2e2"
+    }
+  ],
+  "status": "common_native_policy_fixed_reference_not_qualified",
+  "limitations": [
+    "Named-case V3 budgets remain a proposal, not a project-wide user-selected tolerance.",
+    "Final native reference sensitivity screen passes 20/24; all four W rows fail.",
+    "No production source or ABI changed; executable reused with source and archive binding.",
+    "Initial Full pressure reconstruction does not establish the cause of the entire 240-second difference."
+  ]
+}

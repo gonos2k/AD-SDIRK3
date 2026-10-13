@@ -1,0 +1,109 @@
+{
+  "task": "PR306 final source-to-Graphify binding after documentation phase",
+  "target_worktree": "/private/tmp/pr306-common-filter-reference-20261014",
+  "source_base_commit": "5dc69a35823a5af8f6d5e24978933a25ee2b7081",
+  "source_base_tree": "bbb46283d595f9d390d8c3bc77982c1feb61843b",
+  "tracked_worktree_changes_at_verification": [
+    "docs/PROBLEM_DEFINITION.md"
+  ],
+  "worktree_status_at_verification": [
+    " M docs/PROBLEM_DEFINITION.md",
+    "?? tools/__pycache__/"
+  ],
+  "preedit_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_graph/pr306_preedit_graph_binding_receipt.json",
+  "preedit_receipt_sha256": "87a4b7881599447d2b9592051b3e4d33e5c3dbbafa7864fdad196e38dbd13f3e",
+  "all_preedit_relevant_code_hashes_unchanged": true,
+  "source_bindings": [
+    {
+      "path": "dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+      "matches_preedit_receipt": true,
+      "graph_status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "dyn_em/solve_em.F",
+      "sha256": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "matches_preedit_receipt": true,
+      "graph_status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "dyn_em/module_small_step_em.F",
+      "sha256": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+      "matches_preedit_receipt": true,
+      "graph_status": "old_cache_pin_stale; use PR305 final single-file graph"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+      "matches_preedit_receipt": true,
+      "graph_status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp",
+      "sha256": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+      "matches_preedit_receipt": true,
+      "graph_status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.h",
+      "sha256": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+      "matches_preedit_receipt": true,
+      "graph_status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "76a40d51e93a1602c02f3c9407d220ca99a58876355f977072525acd973070ad",
+      "matches_preedit_receipt": true,
+      "graph_status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "c64fca783979413875f684a91ea6fc124dcf574ae68850bf955888e071b9e1e9",
+      "matches_preedit_receipt": true,
+      "graph_status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+      "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "matches_preedit_receipt": true,
+      "graph_status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs.h",
+      "sha256": "272bcadc9d65249c6ea9d37b945443b3e8a435b0401888b13ac8568887dc96d2",
+      "matches_preedit_receipt": true,
+      "graph_status": "fresh_bounded_ast_added_missing_source"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs_extended.cpp",
+      "sha256": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+      "matches_preedit_receipt": true,
+      "graph_status": "fresh_bounded_ast_added_missing_source"
+    }
+  ],
+  "reused_graphs": [
+    {
+      "path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+      "sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230",
+      "role": "unchanged exact-source PR299 cache for relevant C++/Fortran sources"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_module_relocation_graph/graphify-out/graph.json",
+      "sha256": "60e6b03041995778df3e879cc7b38f7a0a0f1b534eb44b324c1df7dc683c0ee4",
+      "role": "PR305 final exact-source module_small_step_em Fortran navigation"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_graph/pr306_missing_cpp_graph/graphify-out/graph.json",
+      "sha256": "afd143e64fe967dd06b2c94bb73135f4bb53bc291a384060f79d907b1e569669",
+      "role": "fresh bounded AST for previously unbound unified RHS declaration and FP64 metric cache sources"
+    }
+  ],
+  "documentation_policy": "Documentation and PROBLEM_DEFINITION prose are outside this code graph corpus; no full graph rebuild was run. At this verification, git diff against HEAD showed no tracked worktree changes; only untracked tools/__pycache__ was present.",
+  "limitations": [
+    "Fortran AST/call relationships are incomplete; solve_em\u2192advance_implicit, advance_implicit\u2192C ABI, and advance_uv/MUDF dataflow above were verified directly against authoritative source lines.",
+    "The PR299 graph revision is older than PR306, so only exact source-hash-matching files are reused; module_small_step_em old graph entry is stale and superseded by the exact PR305 final graph.",
+    "No numerical correctness or runtime behavior follows from graph edges.",
+    "No production edits/build/model execution were made."
+  ],
+  "scope": "Hash and graph-binding recheck only; no production edits, tests, build, model, or full graph rebuild."
+}

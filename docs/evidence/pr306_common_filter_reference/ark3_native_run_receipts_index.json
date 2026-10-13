@@ -1,0 +1,66 @@
+{
+  "schema": "pr306_native_ark_run_receipts_index_v2",
+  "receipt_version": 2,
+  "receipts": [
+    {
+      "label": "h15_current_a5_parity_control",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h15_current_a5_parity_control/run_receipt.json",
+      "sha256": "a42ca4dabf1fce10e04bf87caf4edb8ff6b953c103a3dfdcf746a20de74138ca",
+      "superseded_v1_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v1/ark3_mode3_h15_current_a5_parity_control/run_receipt.json",
+      "superseded_v1_sha256": "5fedc2c99a896f3d510553c3f15bb23a50e6e26063fa973f6945e1568f3ea43d",
+      "return_code": null,
+      "superseded_v2_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v2/ark3_mode3_h15_current_a5_parity_control/run_receipt.json",
+      "superseded_v2_sha256": "3872e175e6f32efb97844e749b09612e6d1ef61e93995db0507be68db168eed9"
+    },
+    {
+      "label": "h7p5",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h7p5/run_receipt.json",
+      "sha256": "386976d7301ff47e960e942c50a7249cce1fdc20d4ed7acf659ec4149f0a87ce",
+      "superseded_v1_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v1/ark3_mode3_h7p5/run_receipt.json",
+      "superseded_v1_sha256": "38e499e08920b3d3db3a2afe1a116ee6031103c6d90f5b8f8b743d0ed22ed5ed",
+      "return_code": 0,
+      "superseded_v2_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v2/ark3_mode3_h7p5/run_receipt.json",
+      "superseded_v2_sha256": "73d8861cec266daef8ed44a2733d140807beba4393ad6251ad9622651afef900"
+    },
+    {
+      "label": "h3p75",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h3p75/run_receipt.json",
+      "sha256": "7253c91ca9b89cb8437152e305d47ceaa0247da5772ba1f8db5cae8e9599c6e1",
+      "superseded_v1_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v1/ark3_mode3_h3p75/run_receipt.json",
+      "superseded_v1_sha256": "364862ce2efcbcb6dfc3b71b5e6c916dc81e3acb1f17f83e09c91a3082d02e58",
+      "return_code": null,
+      "superseded_v2_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v2/ark3_mode3_h3p75/run_receipt.json",
+      "superseded_v2_sha256": "a9760460aae3e18002cdb6913e3648a5957a0e96732b89e3576ed1cce9ab6d31"
+    },
+    {
+      "label": "h1p875_targeted",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h1p875_targeted/run_receipt.json",
+      "sha256": "6d9433306abbb099e6abc7955a5b10c593b8c9a0ff21982c8fe296b81b2fd47a",
+      "superseded_v1_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v1/ark3_mode3_h1p875_targeted/run_receipt.json",
+      "superseded_v1_sha256": "c0edab033783b287c80e7f99ffd473dac7e919db5ce2fdf0be91deb72aeaac1c",
+      "return_code": 0,
+      "superseded_v2_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v2/ark3_mode3_h1p875_targeted/run_receipt.json",
+      "superseded_v2_sha256": "bfed353d624031e9caf48bc4fa9f55104f36439a229acaa2de3758fa99f96feb"
+    },
+    {
+      "label": "h0p9375_targeted",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h0p9375_targeted/run_receipt.json",
+      "sha256": "1b501c734f833afcb545bef440b8086da5622ece335ca3e244904716315c4140",
+      "superseded_v1_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v1/ark3_mode3_h0p9375_targeted/run_receipt.json",
+      "superseded_v1_sha256": "3b0b553cf0d001fde50089608ac337668438ebf60a72fb8723ff4465f6c83d5a",
+      "return_code": 0,
+      "superseded_v2_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v2/ark3_mode3_h0p9375_targeted/run_receipt.json",
+      "superseded_v2_sha256": "1e75797feb8a34db3913e1a0e8d69599eb303050ecaed881b40cac2cb21056bb"
+    },
+    {
+      "label": "h0p46875_targeted",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h0p46875_targeted/run_receipt.json",
+      "sha256": "17922c3aaf331fcbdbabcd4300f36c91b266cf87c4c38d7c180e345c9e5e094b",
+      "superseded_v1_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v1/ark3_mode3_h0p46875_targeted/run_receipt.json",
+      "superseded_v1_sha256": "847936f5064e2e324b614770a13488406d550e566fbe8849e17fd31bee2bbada",
+      "return_code": 0,
+      "superseded_v2_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/superseded_receipts/v2/ark3_mode3_h0p46875_targeted/run_receipt.json",
+      "superseded_v2_sha256": "57ff5efedc2d612fc875e176ca9236af686c5b6a08bb2ff9a973fbca27cb6c22"
+    }
+  ]
+}
