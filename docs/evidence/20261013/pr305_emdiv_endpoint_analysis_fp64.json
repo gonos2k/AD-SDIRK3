@@ -1,0 +1,1343 @@
+{
+  "schema": "pr305_same_exe_rk3_emdiv_counterfactual_endpoint_analysis_fp64_v2",
+  "scope": "Offline analysis of three completed runs only; no WRF execution. Modified-filter counterfactual is outside frozen V3 qualification.",
+  "precision_policy": "Every FP32 operand is converted independently to FP64 before subtraction, vector concatenation, dot products, RMS, and norms.",
+  "provenance": {
+    "coarse": {
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/run_receipt.json",
+      "receipt_sha256": "242ffdc3bfb86952e56c2277079b504d31c93db84dbd4e5a71cfc3fbda254aa0",
+      "namelist_sha256": "70d6da33f3a19213c50f8054ccd8cdd5033e83f59fb66c7724614c49960e9c42",
+      "emdiv": 0.01,
+      "files": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1168690,
+          "sha256": "9b657c04aeb278afe9d822f75ee8ced5d668f664f7c3ec201a2249643e79efdb",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1339506,
+          "sha256": "913e211416b28ecc1f2bdf5afd86741ef83acf4ce594ff2ae76ffbd6ee34ed52",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 1114074,
+          "sha256": "a2585d5fafe00e7950e99a2b04e6c95d115cb2c9b9fe80427eb14ebf6e935eac",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ]
+    },
+    "fine": {
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/run_receipt.json",
+      "receipt_sha256": "1b9094f88b8272e4af22bfb32c1d37275c5a864f6c89b885734759277faacf2b",
+      "namelist_sha256": "daacfb916fd370eef9c370a09324e573ee8b843d6aac68f443f20c078298562d",
+      "emdiv": 0.01,
+      "files": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1168900,
+          "sha256": "9b8b6d168a9c7a2b76212bcda32d34658b7235296de0643253a2eb8e7e47c169",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1339428,
+          "sha256": "46bb5454269bf848390ebf098946b4ffcd39dbcc030a2b2c78b12d1b13c89e6e",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 1113730,
+          "sha256": "4467e8fa7071accac2d5157ceaf4f33d8b7c28bad3bffd4f625a83fafeb2b945",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ]
+    },
+    "counterfactual": {
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_emdiv0025_diagnostic/run_receipt.json",
+      "receipt_sha256": "77e764e21919c1a7da5a6f8f200512de17704559db46fa42ba7e367d0479cbd5",
+      "namelist_sha256": "8ebc2b24791e06c533174b1449c7ea4bbdc984854fba13a1b6886e57ae410d0a",
+      "emdiv": 0.0025,
+      "namelist_diff_sha256": "5ed153a085b3cd84aea186566986307235a41fbb1b5f05a874329ff3471e5da4",
+      "files": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_emdiv0025_diagnostic/wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1168766,
+          "sha256": "549f9517a3aa7d3ab4539a3298c668e1506877d1fc5ec49ac4c046df120c3d91",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_emdiv0025_diagnostic/wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1339768,
+          "sha256": "df13fc92fbbfe4d1c721cddc30b439d2426ab493dbd8cffd42b859d64db0f94a",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_emdiv0025_diagnostic/wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 1114362,
+          "sha256": "31fdca4ef36305dd7fdab042e2cc6c6078b37a0c76673421d37ffef393d17ab0",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ]
+    },
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "source": {
+      "path": "/private/tmp/pr305-rk3-reference-update-20261013/dyn_em/module_small_step_em.F",
+      "sha256": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c"
+    },
+    "executable": {
+      "path": "/private/tmp/pr305-rk3-reference-update-20261013/main/wrf.exe",
+      "sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49"
+    },
+    "cpp_archive_sha256": "b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "solve_em_object_sha256": "e50bac9d00bbdc20f82401e7d5170cae00c6b72a65a5c415df2d87a6af51ef9f"
+  },
+  "setup": {
+    "coarse_dt_seconds": 3.75,
+    "fine_dt_seconds": 0.9375,
+    "counterfactual_dt_seconds": 0.9375,
+    "run_seconds": 240,
+    "same_executable_and_source": true,
+    "initial_all_eight_fields_bitwise_equal": true,
+    "all_five_times_present_and_finite": true,
+    "observer_enabled_all_three": true
+  },
+  "physical_owner_contract": {
+    "U": "unique periodic X faces i=0..15",
+    "V": "all 17 forecast-state Y faces including both physical symmetric-Y walls",
+    "W_PH": "vertical faces k=1..16; fixed lower face omitted",
+    "T_THM_MU_MUB": "all mass points"
+  },
+  "per_time_field_metrics": [
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "U",
+      "owner_policy": "unique periodic X faces i=0..15; all mass-row/level owners",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "V",
+      "owner_policy": "all 17 Y faces, including both physical symmetric-Y walls",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 4352,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "W",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "PH",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "T",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "THM",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "MU",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "MUB",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "U",
+      "owner_policy": "unique periodic X faces i=0..15; all mass-row/level owners",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0014016332640720216,
+        "max_abs": 0.002381563186645508,
+        "mean": -5.037170475175046e-08
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.0014013271131442095,
+        "max_abs": 0.0023810863494873047,
+        "mean": -3.7108071559988076e-08
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 2.043998157130713e-06,
+        "max_abs": 1.2874603271484375e-05,
+        "mean": -8.747977631173853e-08
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.0014582974088332454,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "V",
+      "owner_policy": "all 17 Y faces, including both physical symmetric-Y walls",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 0.0004138557476862071,
+        "max_abs": 0.0012026894837617874,
+        "mean": 3.1209193698860235e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4352,
+        "rms": 0.00041362850212764554,
+        "max_abs": 0.0012017032131552696,
+        "mean": -3.1559509240402745e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 1.1604944131612273e-06,
+        "max_abs": 7.4187846621498466e-06,
+        "mean": -3.503155415425099e-08
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.0028041036512102165,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "W",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 7.305559892728415e-05,
+        "max_abs": 0.0004279656568542123,
+        "mean": -2.653270371627027e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 5.750980612635685e-05,
+        "max_abs": 0.0002872568438760936,
+        "mean": 1.317355742287273e-07
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 7.367531011698734e-05,
+        "max_abs": 0.0003140471162623726,
+        "mean": -2.5215347973982997e-06
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 1.008482733682329,
+      "counterfactual_closer_to_coarse": false
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "PH",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.005742815470539237,
+        "max_abs": 0.04296875,
+        "mean": -0.0007275044918060303
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.004036305291100319,
+        "max_abs": 0.025390625,
+        "mean": 2.8014183044433594e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.005775279536384668,
+        "max_abs": 0.04296875,
+        "mean": -0.0007247030735015869
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 1.0056529878091978,
+      "counterfactual_closer_to_coarse": false
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "T",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 9.075953676588158e-05,
+        "max_abs": 0.0008544921875,
+        "mean": 2.5331974029541016e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 2.443993955371761e-05,
+        "max_abs": 0.00018310546875,
+        "mean": -2.3096799850463867e-07
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 9.10184589233094e-05,
+        "max_abs": 0.0008544921875,
+        "mean": 2.2351741790771484e-08
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 1.002852836921102,
+      "counterfactual_closer_to_coarse": false
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "THM",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 8.972648620187328e-05,
+        "max_abs": 0.0008544921875,
+        "mean": 3.8032885640859604e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 2.1887087735374052e-05,
+        "max_abs": 0.00018310546875,
+        "mean": -3.1851232051849365e-07
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 8.989884673219057e-05,
+        "max_abs": 0.0008544921875,
+        "mean": 6.181653589010239e-08
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 1.0019209548664316,
+      "counterfactual_closer_to_coarse": false
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "MU",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.014726454965088984,
+        "max_abs": 0.02434062957763672,
+        "mean": -1.043081283569336e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.013563498416154873,
+        "max_abs": 0.02281475067138672,
+        "mean": 5.21540641784668e-08
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0013231389291720914,
+        "max_abs": 0.0022940635681152344,
+        "mean": -5.21540641784668e-08
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.08984775577752879,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "MUB",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "U",
+      "owner_policy": "unique periodic X faces i=0..15; all mass-row/level owners",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.004760892572716114,
+        "max_abs": 0.00803375244140625,
+        "mean": -6.209626235431642e-08
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.004759153407587721,
+        "max_abs": 0.008023977279663086,
+        "mean": 9.158512170870381e-09
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 5.773440440599325e-06,
+        "max_abs": 4.100799560546875e-05,
+        "mean": -5.293775018344604e-08
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.0012126802595139312,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "V",
+      "owner_policy": "all 17 Y faces, including both physical symmetric-Y walls",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 0.001079815877566851,
+        "max_abs": 0.00257050059735775,
+        "mean": 2.4623664155584863e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4352,
+        "rms": 0.0010790444507815073,
+        "max_abs": 0.002561355009675026,
+        "mean": -2.541262478633295e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 3.810389715862749e-06,
+        "max_abs": 3.601430216804147e-05,
+        "mean": -7.889606307480832e-08
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.0035287402186090274,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "W",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00011892409092672175,
+        "max_abs": 0.0005789875285699964,
+        "mean": 1.1712915954729258e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.00012440249564817983,
+        "max_abs": 0.0006778847891837358,
+        "mean": -1.0130394816404084e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00010148681705936038,
+        "max_abs": 0.0006083561456762254,
+        "mean": 1.5825211383251742e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.8533747558507232,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "PH",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.026068202642744405,
+        "max_abs": 0.12646484375,
+        "mean": -0.0011193454265594482
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.03895535482453495,
+        "max_abs": 0.1435546875,
+        "mean": -0.00042429566383361816
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.019491679695780015,
+        "max_abs": 0.08837890625,
+        "mean": -0.0015436410903930664
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.747718588922553,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "T",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00017943528621055401,
+        "max_abs": 0.001739501953125,
+        "mean": 6.258487701416016e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 8.114501997757199e-05,
+        "max_abs": 0.00054931640625,
+        "mean": -2.0489096641540527e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0001684423464874071,
+        "max_abs": 0.001739501953125,
+        "mean": -1.4230608940124512e-06
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.9387359088878009,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "THM",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00017903268856454013,
+        "max_abs": 0.001739501953125,
+        "mean": 5.413312464952469e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 8.009806549589749e-05,
+        "max_abs": 0.00054931640625,
+        "mean": -2.22580274567008e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0001681226869241432,
+        "max_abs": 0.001739501953125,
+        "mean": -1.6844714991748333e-06
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.9390613986313234,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "MU",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.08579108721758516,
+        "max_abs": 0.14560317993164062,
+        "mean": -2.775341272354126e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.08340208709807402,
+        "max_abs": 0.1413249969482422,
+        "mean": 9.499490261077881e-08
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0025172785139342623,
+        "max_abs": 0.004357814788818359,
+        "mean": -1.825392246246338e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.029341958419875105,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "MUB",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "U",
+      "owner_policy": "unique periodic X faces i=0..15; all mass-row/level owners",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.009170289587578227,
+        "max_abs": 0.01532292366027832,
+        "mean": -1.626456747061411e-08
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.009167375338910955,
+        "max_abs": 0.015293598175048828,
+        "mean": -9.442105142198898e-08
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 1.2154610089188798e-05,
+        "max_abs": 0.00011396408081054688,
+        "mean": -1.1068561889260309e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.0013254336161480694,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "V",
+      "owner_policy": "all 17 Y faces, including both physical symmetric-Y walls",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 0.0017580947619354804,
+        "max_abs": 0.003999378532171249,
+        "mean": -1.572454040029768e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4352,
+        "rms": 0.0017578526043687099,
+        "max_abs": 0.004003886133432388,
+        "mean": 1.4603567345092762e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 7.854426459902803e-06,
+        "max_abs": 7.471139542758465e-05,
+        "mean": -1.120973055204918e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.004467578557173956,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "W",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00022647484626088778,
+        "max_abs": 0.0010339791188016534,
+        "mean": -3.300040073315677e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.0001953134821827705,
+        "max_abs": 0.0010486081591807306,
+        "mean": -5.62834441743959e-08
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00011487985908777812,
+        "max_abs": 0.0005633196560665965,
+        "mean": -3.862874515059636e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.5072521782637275,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "PH",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.1073867224128437,
+        "max_abs": 0.44384765625,
+        "mean": -0.0007376372814178467
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.10692457473527604,
+        "max_abs": 0.41552734375,
+        "mean": -0.0007176846265792847
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.023508810782282133,
+        "max_abs": 0.1181640625,
+        "mean": -0.0014553219079971313
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.21891729493245457,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "T",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0002547252316520859,
+        "max_abs": 0.002593994140625,
+        "mean": 2.898275852203369e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.00015538600514627054,
+        "max_abs": 0.0008544921875,
+        "mean": -5.885958671569824e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00021037275087163026,
+        "max_abs": 0.002593994140625,
+        "mean": -2.987682819366455e-06
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.8258810856985144,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "THM",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0002541389553585489,
+        "max_abs": 0.002593994140625,
+        "mean": 2.926040906459093e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.00015501371361301402,
+        "max_abs": 0.0008697509765625,
+        "mean": -6.0452730394899845e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00020975181964307029,
+        "max_abs": 0.002593994140625,
+        "mean": -3.1192321330308914e-06
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.8253430464729206,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "MU",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.2417454356642067,
+        "max_abs": 0.42282962799072266,
+        "mean": -4.6938657760620117e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.23825465149480976,
+        "max_abs": 0.4168567657470703,
+        "mean": 2.5704503059387207e-07
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.003591632742983428,
+        "max_abs": 0.006196022033691406,
+        "mean": -2.123415470123291e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.01485708606292918,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "MUB",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "U",
+      "owner_policy": "unique periodic X faces i=0..15; all mass-row/level owners",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.014039289499950633,
+        "max_abs": 0.023200273513793945,
+        "mean": -4.605507086807847e-09
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.014035183438486684,
+        "max_abs": 0.0231541208922863,
+        "mean": -3.5631224193366506e-08
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 2.259958898672579e-05,
+        "max_abs": 0.00022363662719726562,
+        "mean": -4.0236731280174354e-08
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.0016097387967393406,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "V",
+      "owner_policy": "all 17 Y faces, including both physical symmetric-Y walls",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 0.0023633204830407536,
+        "max_abs": 0.005157299339771271,
+        "mean": -8.083425304835699e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4352,
+        "rms": 0.0023642731049230764,
+        "max_abs": 0.005209192633628845,
+        "mean": 7.97510277213714e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4352,
+        "rms": 1.270789856767588e-05,
+        "max_abs": 0.00014207558706402779,
+        "mean": -1.0832253269855904e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.005377137235033537,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "W",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00029835068203163924,
+        "max_abs": 0.0014289087848737836,
+        "mean": -1.550325144450762e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.00034503112321313326,
+        "max_abs": 0.001708355383016169,
+        "mean": -3.21241784170985e-07
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00012354732493329856,
+        "max_abs": 0.000656885327771306,
+        "mean": -4.762742986160612e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.41410103067971776,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "PH",
+      "owner_policy": "vertical faces k=1..16; fixed lower face excluded, top included",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.2502508791028624,
+        "max_abs": 0.93408203125,
+        "mean": -0.0011871904134750366
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.25067004598617937,
+        "max_abs": 0.95849609375,
+        "mean": -0.0010236650705337524
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.030989645400181533,
+        "max_abs": 0.15478515625,
+        "mean": -0.002210855484008789
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.12383431183649762,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "T",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0003230137989442814,
+        "max_abs": 0.003448486328125,
+        "mean": 4.045665264129639e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.00022024921999512886,
+        "max_abs": 0.001251220703125,
+        "mean": -9.134411811828613e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0002871094302204543,
+        "max_abs": 0.003448486328125,
+        "mean": -5.088746547698975e-06
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.8888457123467332,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "THM",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.0003224578696007586,
+        "max_abs": 0.0034637451171875,
+        "mean": 4.108122084289789e-06
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 4096,
+        "rms": 0.00022006878559044474,
+        "max_abs": 0.00125885009765625,
+        "mean": -9.023642633110285e-06
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 4096,
+        "rms": 0.00028679016320357407,
+        "max_abs": 0.0034637451171875,
+        "mean": -4.915520548820496e-06
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.8893880107768949,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "MU",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": false,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.4969522792829746,
+        "max_abs": 0.882537841796875,
+        "mean": -3.688037395477295e-07
+      },
+      "counterfactual_vs_fine_exact": false,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.4924852416690568,
+        "max_abs": 0.8747596740722656,
+        "mean": 2.2724270820617676e-07
+      },
+      "counterfactual_vs_coarse_exact": false,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.004567337168429932,
+        "max_abs": 0.007884979248046875,
+        "mean": -1.4156103134155273e-07
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": 0.009190695684140727,
+      "counterfactual_closer_to_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "MUB",
+      "owner_policy": "all mass points",
+      "coarse_vs_fine_exact": true,
+      "fine_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_fine_exact": true,
+      "counterfactual_minus_fine": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_vs_coarse_exact": true,
+      "counterfactual_minus_coarse": {
+        "owner_count": 256,
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "mean": 0.0
+      },
+      "counterfactual_distance_ratio_to_coarse_vs_baseline_fine": null,
+      "counterfactual_closer_to_coarse": null
+    }
+  ],
+  "uv_projection_by_time": [
+    {
+      "time": "0001-01-01_00:00:00",
+      "defined": false,
+      "reason": "baseline coarse/fine U/V displacement is zero at this time",
+      "owner_count": 8448,
+      "owner_policy": {
+        "U": "unique periodic X faces i=0..15; all mass-row/level owners",
+        "V": "all 17 Y faces, including both physical symmetric-Y walls"
+      }
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "defined": true,
+      "owner_count": 8448,
+      "owner_policy": {
+        "U": "unique periodic X faces i=0..15; all mass-row/level owners",
+        "V": "all 17 Y faces, including both physical symmetric-Y walls"
+      },
+      "alpha_toward_coarse": 0.999752270162199,
+      "distance_ratio_after_counterfactual": 0.001616462314499018,
+      "D_norm": 0.09376725537720616,
+      "Delta_norm": 0.09374414608714943,
+      "counterfactual_moves_toward_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "defined": true,
+      "owner_count": 8448,
+      "owner_policy": {
+        "U": "unique periodic X faces i=0..15; all mass-row/level owners",
+        "V": "all 17 Y faces, including both physical symmetric-Y walls"
+      },
+      "alpha_toward_coarse": 0.9996156619901702,
+      "distance_ratio_after_counterfactual": 0.0014281828211941253,
+      "D_norm": 0.3129133744505963,
+      "Delta_norm": 0.31279340607524414,
+      "counterfactual_moves_toward_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "defined": true,
+      "owner_count": 8448,
+      "owner_policy": {
+        "U": "unique periodic X faces i=0..15; all mass-row/level owners",
+        "V": "all 17 Y faces, including both physical symmetric-Y walls"
+      },
+      "alpha_toward_coarse": 0.9996878033155819,
+      "distance_ratio_after_counterfactual": 0.0015623403569505732,
+      "D_norm": 0.5982486718138634,
+      "Delta_norm": 0.5980626017606864,
+      "counterfactual_moves_toward_coarse": true
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "defined": true,
+      "owner_count": 8448,
+      "owner_policy": {
+        "U": "unique periodic X faces i=0..15; all mass-row/level owners",
+        "V": "all 17 Y faces, including both physical symmetric-Y walls"
+      },
+      "alpha_toward_coarse": 0.999726224057283,
+      "distance_ratio_after_counterfactual": 0.001833197223875947,
+      "D_norm": 0.9119405198300942,
+      "Delta_norm": 0.9116923510263123,
+      "counterfactual_moves_toward_coarse": true
+    }
+  ],
+  "endpoint_uv_projection": {
+    "time": "0001-01-01_00:04:00",
+    "defined": true,
+    "owner_count": 8448,
+    "owner_policy": {
+      "U": "unique periodic X faces i=0..15; all mass-row/level owners",
+      "V": "all 17 Y faces, including both physical symmetric-Y walls"
+    },
+    "alpha_toward_coarse": 0.999726224057283,
+    "distance_ratio_after_counterfactual": 0.001833197223875947,
+    "D_norm": 0.9119405198300942,
+    "Delta_norm": 0.9116923510263123,
+    "counterfactual_moves_toward_coarse": true
+  },
+  "interpretation_limits": "alpha>0 and distance_ratio<1 indicate this intervention moved the fine U/V endpoint toward coarse in this case. This is a parameter-effect diagnostic, not unique-cause proof, timestep accuracy/order qualification, or a frozen-reference acceptance result."
+}

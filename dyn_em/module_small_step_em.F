@@ -716,12 +716,28 @@ SUBROUTINE advance_uv ( u, ru_tend, v, rv_tend,        &
 !  Local 3d array from the stack (note tile size)
       REAL, DIMENSION (its:ite, kts:kte) :: dpn, dpxy
       REAL, DIMENSION (its:ite) :: mudf_xy
+      REAL, DIMENSION (its:ite, kds:kde-1) :: emdiv_obs_pre_u, emdiv_obs_pre_v
       REAL                      :: dx, dy
       INTEGER :: i,j,k, i_start, i_end, j_start, j_end, k_start, k_end
       INTEGER :: i_endu, j_endv, k_endw
       INTEGER :: i_start_up, i_end_up, j_start_up, j_end_up
       INTEGER :: i_start_vp, i_end_vp, j_start_vp, j_end_vp
       INTEGER :: i_start_u_tend, i_end_u_tend, j_start_v_tend, j_end_v_tend
+      INTEGER, SAVE :: emdiv_obs_unit = -1, emdiv_obs_call_id = 0
+      INTEGER, SAVE :: emdiv_obs_init = 0
+      INTEGER :: emdiv_obs_status, emdiv_obs_nproc, emdiv_obs_ios
+      INTEGER :: emdiv_obs_count(2,4), emdiv_obs_comp, emdiv_obs_tidx
+      INTEGER :: emdiv_obs_nu, emdiv_obs_nv
+      CHARACTER(LEN=64) :: emdiv_obs_env
+      LOGICAL, SAVE :: emdiv_obs_enabled = .FALSE.
+      LOGICAL :: emdiv_obs_context
+      LOGICAL, SAVE :: emdiv_obs_opened = .FALSE.
+      LOGICAL :: emdiv_obs_capture
+      REAL(KIND=8) :: emdiv_obs_sum(2,4), emdiv_obs_sumsq(2,4)
+      REAL(KIND=8) :: emdiv_obs_max(2,4), emdiv_obs_stats(2,4,3)
+      REAL(KIND=8) :: emdiv_obs_value
+      REAL :: emdiv_obs_term, emdiv_obs_before
+      EXTERNAL wrf_get_nproc
 !<DESCRIPTION>
 !
 !  advance_uv advances the explicit perturbation horizontal momentum
@@ -797,6 +813,62 @@ SUBROUTINE advance_uv ( u, ru_tend, v, rv_tend,        &
                      j_end_v_tend = j_end_v_tend-1
    dx = 1./rdx
    dy = 1./rdy
+
+! Optional observer for actual MUDF-derived U/V increments; default is off.
+! advance_uv is called from an OpenMP tile loop, so initialize its saved gate once.
+!$OMP CRITICAL(emdiv_observer_init)
+   IF (emdiv_obs_init == 0) THEN
+     emdiv_obs_env = ' '
+     CALL get_environment_variable('WRF_PARITY_EMDIV_INCREMENT_DUMP', &
+                                   emdiv_obs_env, STATUS=emdiv_obs_status)
+     emdiv_obs_enabled = emdiv_obs_status == 0 .AND. TRIM(emdiv_obs_env) == '1'
+     emdiv_obs_init = 1
+   END IF
+!$OMP END CRITICAL(emdiv_observer_init)
+   emdiv_obs_capture = .FALSE.
+   IF (emdiv_obs_enabled) THEN
+     CALL wrf_get_nproc(emdiv_obs_nproc)
+     emdiv_obs_context = emdiv_obs_nproc == 1 .AND. &
+          its <= ids .AND. ite >= ide-1 .AND. &
+          jts <= jds .AND. jte >= jde-1 .AND. &
+          kts <= kds .AND. kte >= kde-1 .AND. &
+          config_flags%periodic_x .AND. .NOT. config_flags%periodic_y .AND. &
+          config_flags%symmetric_ys .AND. config_flags%symmetric_ye .AND. &
+          .NOT. config_flags%open_xs .AND. .NOT. config_flags%open_xe .AND. &
+          .NOT. config_flags%open_ys .AND. .NOT. config_flags%open_ye .AND. &
+          .NOT. config_flags%specified .AND. .NOT. config_flags%nested .AND. &
+          .NOT. config_flags%polar
+     IF (.NOT. emdiv_obs_context) &
+          CALL wrf_error_fatal('WRF_PARITY_EMDIV_INCREMENT_DUMP requires one full-domain single-rank periodic-X/symmetric-Y tile')
+     emdiv_obs_capture = emdiv_obs_context
+     IF (emdiv_obs_capture .AND. .NOT. emdiv_obs_opened) THEN
+       OPEN(NEWUNIT=emdiv_obs_unit, FILE='wrf_emdiv_increment.csv', &
+            STATUS='REPLACE', ACTION='WRITE', IOSTAT=emdiv_obs_ios)
+       IF (emdiv_obs_ios /= 0) &
+            CALL wrf_error_fatal('failed opening wrf_emdiv_increment.csv')
+       WRITE(emdiv_obs_unit,'(A)',IOSTAT=emdiv_obs_ios) &
+            'call_id,dts,emdiv,nowner_u,nowner_v,' // &
+            'filter_u_rms,filter_u_max_abs,filter_u_signed_mean,' // &
+            'filter_v_rms,filter_v_max_abs,filter_v_signed_mean,' // &
+            'pressure_u_rms,pressure_u_max_abs,pressure_u_signed_mean,' // &
+            'pressure_v_rms,pressure_v_max_abs,pressure_v_signed_mean,' // &
+            'slow_u_rms,slow_u_max_abs,slow_u_signed_mean,' // &
+            'slow_v_rms,slow_v_max_abs,slow_v_signed_mean,' // &
+            'delta_u_rms,delta_u_max_abs,delta_u_signed_mean,' // &
+            'delta_v_rms,delta_v_max_abs,delta_v_signed_mean'
+       IF (emdiv_obs_ios /= 0) &
+            CALL wrf_error_fatal('failed writing wrf_emdiv_increment.csv header')
+       emdiv_obs_opened = .TRUE.
+     END IF
+   END IF
+   IF (emdiv_obs_capture) THEN
+     emdiv_obs_call_id = emdiv_obs_call_id + 1
+     emdiv_obs_sum = 0.0_8
+     emdiv_obs_sumsq = 0.0_8
+     emdiv_obs_max = 0.0_8
+     emdiv_obs_count = 0
+   END IF
+
 !  start real calculations.
 !  first, u
   u_outer_j_loop: DO j = j_start, j_end
@@ -805,6 +877,17 @@ SUBROUTINE advance_uv ( u, ru_tend, v, rv_tend,        &
      u(i,k,j) = u(i,k,j) + dts*ru_tend(i,k,j)
    ENDDO
    ENDDO
+   IF (emdiv_obs_capture .AND. j >= jds .AND. j < jde) THEN
+     DO k = MAX(k_start,kds), MIN(k_end,kde-1)
+     DO i = MAX(i_start_u_tend,ids), MIN(i_end_u_tend,ide-1)
+       emdiv_obs_value = DBLE(dts*ru_tend(i,k,j))
+       emdiv_obs_sum(1,3) = emdiv_obs_sum(1,3) + emdiv_obs_value
+       emdiv_obs_sumsq(1,3) = emdiv_obs_sumsq(1,3) + emdiv_obs_value*emdiv_obs_value
+       emdiv_obs_max(1,3) = MAX(emdiv_obs_max(1,3),ABS(emdiv_obs_value))
+       emdiv_obs_count(1,3) = emdiv_obs_count(1,3) + 1
+     ENDDO
+     ENDDO
+   END IF
    DO i = i_start_up, i_end_up
      MUDF_XY(i)= -emdiv*dx*(MUDF(i,j)-MUDF(i-1,j))/msfuy(i,j)
    ENDDO
@@ -863,11 +946,41 @@ SUBROUTINE advance_uv ( u, ru_tend, v, rv_tend,        &
        ENDDO
      ENDDO
    END IF
+   IF (emdiv_obs_capture .AND. j >= jds .AND. j < jde) THEN
+     DO k = MAX(k_start,kds), MIN(k_end,kde-1)
+     DO i = MAX(i_start_up,ids), MIN(i_end_up,ide-1)
+       emdiv_obs_pre_u(i,k) = u(i,k,j)
+     ENDDO
+     ENDDO
+   END IF
    DO k = k_start, k_end
      DO i = i_start_up, i_end_up
        u(i,k,j)=u(i,k,j)-dts*cqu(i,k,j)*dpxy(i,k)+(c1h(k)*mudf_xy(i))
      ENDDO
    ENDDO
+   IF (emdiv_obs_capture .AND. j >= jds .AND. j < jde) THEN
+     DO k = MAX(k_start,kds), MIN(k_end,kde-1)
+     DO i = MAX(i_start_up,ids), MIN(i_end_up,ide-1)
+       emdiv_obs_term = c1h(k)*mudf_xy(i)
+       emdiv_obs_value = DBLE(emdiv_obs_term)
+       emdiv_obs_sum(1,1) = emdiv_obs_sum(1,1) + emdiv_obs_value
+       emdiv_obs_sumsq(1,1) = emdiv_obs_sumsq(1,1) + emdiv_obs_value*emdiv_obs_value
+       emdiv_obs_max(1,1) = MAX(emdiv_obs_max(1,1),ABS(emdiv_obs_value))
+       emdiv_obs_count(1,1) = emdiv_obs_count(1,1) + 1
+       emdiv_obs_term = -dts*cqu(i,k,j)*dpxy(i,k)
+       emdiv_obs_value = DBLE(emdiv_obs_term)
+       emdiv_obs_sum(1,2) = emdiv_obs_sum(1,2) + emdiv_obs_value
+       emdiv_obs_sumsq(1,2) = emdiv_obs_sumsq(1,2) + emdiv_obs_value*emdiv_obs_value
+       emdiv_obs_max(1,2) = MAX(emdiv_obs_max(1,2),ABS(emdiv_obs_value))
+       emdiv_obs_count(1,2) = emdiv_obs_count(1,2) + 1
+       emdiv_obs_value = DBLE(u(i,k,j)-emdiv_obs_pre_u(i,k))
+       emdiv_obs_sum(1,4) = emdiv_obs_sum(1,4) + emdiv_obs_value
+       emdiv_obs_sumsq(1,4) = emdiv_obs_sumsq(1,4) + emdiv_obs_value*emdiv_obs_value
+       emdiv_obs_max(1,4) = MAX(emdiv_obs_max(1,4),ABS(emdiv_obs_value))
+       emdiv_obs_count(1,4) = emdiv_obs_count(1,4) + 1
+     ENDDO
+     ENDDO
+   END IF
    ENDDO u_outer_j_loop
 ! now v
   v_outer_j_loop: DO j = j_start_v_tend, j_end_v_tend
@@ -876,6 +989,17 @@ SUBROUTINE advance_uv ( u, ru_tend, v, rv_tend,        &
      v(i,k,j) = v(i,k,j) + dts*rv_tend(i,k,j)
    ENDDO
    ENDDO
+   IF (emdiv_obs_capture .AND. j > jds .AND. j < jde) THEN
+     DO k = MAX(k_start,kds), MIN(k_end,kde-1)
+     DO i = MAX(i_start,ids), MIN(i_end,ide-1)
+       emdiv_obs_value = DBLE(dts*rv_tend(i,k,j))
+       emdiv_obs_sum(2,3) = emdiv_obs_sum(2,3) + emdiv_obs_value
+       emdiv_obs_sumsq(2,3) = emdiv_obs_sumsq(2,3) + emdiv_obs_value*emdiv_obs_value
+       emdiv_obs_max(2,3) = MAX(emdiv_obs_max(2,3),ABS(emdiv_obs_value))
+       emdiv_obs_count(2,3) = emdiv_obs_count(2,3) + 1
+     ENDDO
+     ENDDO
+   END IF
    DO i = i_start, i_end
      MUDF_XY(i)= -emdiv*dy*(MUDF(i,j)-MUDF(i,j-1))*msfvx_inv(i,j)
    ENDDO
@@ -937,13 +1061,80 @@ SUBROUTINE advance_uv ( u, ru_tend, v, rv_tend,        &
          ENDDO
        ENDDO
      END IF
+     IF (emdiv_obs_capture .AND. j > jds .AND. j < jde) THEN
+       DO k = MAX(k_start,kds), MIN(k_end,kde-1)
+       DO i = MAX(i_start,ids), MIN(i_end,ide-1)
+         emdiv_obs_pre_v(i,k) = v(i,k,j)
+       ENDDO
+       ENDDO
+     END IF
      DO k = k_start, k_end
        DO i = i_start, i_end
          v(i,k,j)=v(i,k,j)-dts*cqv(i,k,j)*dpxy(i,k)+(c1h(k)*mudf_xy(i))
        ENDDO
      ENDDO
+     IF (emdiv_obs_capture .AND. j > jds .AND. j < jde) THEN
+       DO k = MAX(k_start,kds), MIN(k_end,kde-1)
+       DO i = MAX(i_start,ids), MIN(i_end,ide-1)
+         emdiv_obs_term = c1h(k)*mudf_xy(i)
+         emdiv_obs_value = DBLE(emdiv_obs_term)
+         emdiv_obs_sum(2,1) = emdiv_obs_sum(2,1) + emdiv_obs_value
+         emdiv_obs_sumsq(2,1) = emdiv_obs_sumsq(2,1) + emdiv_obs_value*emdiv_obs_value
+         emdiv_obs_max(2,1) = MAX(emdiv_obs_max(2,1),ABS(emdiv_obs_value))
+         emdiv_obs_count(2,1) = emdiv_obs_count(2,1) + 1
+         emdiv_obs_term = -dts*cqv(i,k,j)*dpxy(i,k)
+         emdiv_obs_value = DBLE(emdiv_obs_term)
+         emdiv_obs_sum(2,2) = emdiv_obs_sum(2,2) + emdiv_obs_value
+         emdiv_obs_sumsq(2,2) = emdiv_obs_sumsq(2,2) + emdiv_obs_value*emdiv_obs_value
+         emdiv_obs_max(2,2) = MAX(emdiv_obs_max(2,2),ABS(emdiv_obs_value))
+         emdiv_obs_count(2,2) = emdiv_obs_count(2,2) + 1
+         emdiv_obs_value = DBLE(v(i,k,j)-emdiv_obs_pre_v(i,k))
+         emdiv_obs_sum(2,4) = emdiv_obs_sum(2,4) + emdiv_obs_value
+         emdiv_obs_sumsq(2,4) = emdiv_obs_sumsq(2,4) + emdiv_obs_value*emdiv_obs_value
+         emdiv_obs_max(2,4) = MAX(emdiv_obs_max(2,4),ABS(emdiv_obs_value))
+         emdiv_obs_count(2,4) = emdiv_obs_count(2,4) + 1
+       ENDDO
+       ENDDO
+     END IF
    END IF
   ENDDO  v_outer_j_loop
+  IF (emdiv_obs_capture) THEN
+    DO emdiv_obs_comp = 1, 2
+      DO emdiv_obs_tidx = 1, 4
+        emdiv_obs_stats(emdiv_obs_comp,emdiv_obs_tidx,1) = 0.0_8
+        emdiv_obs_stats(emdiv_obs_comp,emdiv_obs_tidx,2) = 0.0_8
+        emdiv_obs_stats(emdiv_obs_comp,emdiv_obs_tidx,3) = 0.0_8
+        IF (emdiv_obs_count(emdiv_obs_comp,emdiv_obs_tidx) > 0) THEN
+          emdiv_obs_stats(emdiv_obs_comp,emdiv_obs_tidx,1) = SQRT( &
+               emdiv_obs_sumsq(emdiv_obs_comp,emdiv_obs_tidx) / &
+               DBLE(emdiv_obs_count(emdiv_obs_comp,emdiv_obs_tidx)))
+          emdiv_obs_stats(emdiv_obs_comp,emdiv_obs_tidx,2) = &
+               emdiv_obs_max(emdiv_obs_comp,emdiv_obs_tidx)
+          emdiv_obs_stats(emdiv_obs_comp,emdiv_obs_tidx,3) = &
+               emdiv_obs_sum(emdiv_obs_comp,emdiv_obs_tidx) / &
+               DBLE(emdiv_obs_count(emdiv_obs_comp,emdiv_obs_tidx))
+        END IF
+      END DO
+    END DO
+    emdiv_obs_nu = emdiv_obs_count(1,1)
+    emdiv_obs_nv = emdiv_obs_count(2,1)
+    WRITE(emdiv_obs_unit,'(I0,2(",",ES24.16E3),2(",",I0),24(",",ES24.16E3))', &
+          IOSTAT=emdiv_obs_ios) emdiv_obs_call_id, dts, emdiv, emdiv_obs_nu, emdiv_obs_nv, &
+          emdiv_obs_stats(1,1,1),emdiv_obs_stats(1,1,2),emdiv_obs_stats(1,1,3), &
+          emdiv_obs_stats(2,1,1),emdiv_obs_stats(2,1,2),emdiv_obs_stats(2,1,3), &
+          emdiv_obs_stats(1,2,1),emdiv_obs_stats(1,2,2),emdiv_obs_stats(1,2,3), &
+          emdiv_obs_stats(2,2,1),emdiv_obs_stats(2,2,2),emdiv_obs_stats(2,2,3), &
+          emdiv_obs_stats(1,3,1),emdiv_obs_stats(1,3,2),emdiv_obs_stats(1,3,3), &
+          emdiv_obs_stats(2,3,1),emdiv_obs_stats(2,3,2),emdiv_obs_stats(2,3,3), &
+          emdiv_obs_stats(1,4,1),emdiv_obs_stats(1,4,2),emdiv_obs_stats(1,4,3), &
+          emdiv_obs_stats(2,4,1),emdiv_obs_stats(2,4,2),emdiv_obs_stats(2,4,3)
+    IF (emdiv_obs_ios /= 0) &
+         CALL wrf_error_fatal('failed writing wrf_emdiv_increment.csv row')
+    FLUSH(emdiv_obs_unit, IOSTAT=emdiv_obs_ios)
+    IF (emdiv_obs_ios /= 0) &
+         CALL wrf_error_fatal('failed flushing wrf_emdiv_increment.csv')
+  END IF
+
   ! The check for j_start_vp and j_end_vp makes sure that the edges in v
   ! are not updated.  Let's add a polar boundary condition check here for
   ! safety to ensure that v at the poles never gets to be non-zero in the

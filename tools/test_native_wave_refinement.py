@@ -29,6 +29,12 @@ from scipy.linalg import expm
 ROOT = Path(__file__).resolve().parents[1]
 REF_PATH = ROOT / "tools" / "wave_energy_spatial_reference.py"
 LEGACY_PHASE_B_PACKET_SHA256 = "8816c7fd7f3ed67a0ecb5488576ff825c9c04403786347af09ef996ed2d5781b"
+LEGACY_NATIVE_TRANSPORT_CONFIG_LINES = {
+    "[NATIVE TRANSPORT CONFIG] tile=0 native_set=1 phi_adv_z=1 v_sca_adv_order=3",
+    # The archived WRF runtime receipt used a one-based tile id; the focused
+    # native-test logs used tile=0. Both pre-CF strings are exact and pinned.
+    "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3",
+}
 SPEC = importlib.util.spec_from_file_location("wave_energy_spatial_reference", REF_PATH)
 assert SPEC and SPEC.loader
 REF = importlib.util.module_from_spec(SPEC)
@@ -375,10 +381,26 @@ def select_runtime_cf_coefficients(rsl_text: str, phase_b_packet: Path) -> tuple
     transport_lines = [line for line in rsl_text.splitlines()
                        if "[NATIVE TRANSPORT CONFIG]" in line]
     pattern = re.compile(r"\[NATIVE TRANSPORT CONFIG\][^\r\n]*?\bcf1=([-+0-9.eEdD]+)\s+"
-                         r"cf2=([-+0-9.eEdD]+)\s+cf3=([-+0-9.eEdD]+)")
+                         r"cf2=([-+0-9.eEdD]+)\s+cf3=([-+0-9.eEdD]+)\s*$")
     if transport_lines:
+        # Legacy CF defaults predate the CF fields in this one pinned packet.
+        # Accept only exact old selector lines; any mixed, changed, or newer
+        # no-CF record is ambiguous and must fail closed.
+        cf_marked_lines = [line for line in transport_lines if re.search(r"\bcf[123]=", line)]
+        if not cf_marked_lines:
+            if sha256_file(phase_b_packet) == LEGACY_PHASE_B_PACKET_SHA256 and \
+                    all(line.strip() in LEGACY_NATIVE_TRANSPORT_CONFIG_LINES
+                        for line in transport_lines):
+                return [0.5, 0.0, 0.0], \
+                    "legacy_phaseB_packet_constructor_defaults_no_cf_record", 0
+            raise AssertionError("NATIVE TRANSPORT CONFIG lacks CF coefficients and is not the exact pinned legacy record")
+        if len(cf_marked_lines) != len(transport_lines):
+            raise AssertionError("runtime log mixes CF and no-CF NATIVE TRANSPORT CONFIG rows")
         rows = []
-        for line in transport_lines:
+        for line in cf_marked_lines:
+            if any(len(re.findall(rf"\b{name}=", line)) != 1
+                   for name in ("cf1", "cf2", "cf3")):
+                raise AssertionError("NATIVE TRANSPORT CONFIG must contain exactly one cf1/cf2/cf3 tuple")
             match = pattern.search(line)
             if not match:
                 raise AssertionError("NATIVE TRANSPORT CONFIG line lacks cf1/cf2/cf3")
@@ -390,8 +412,6 @@ def select_runtime_cf_coefficients(rsl_text: str, phase_b_packet: Path) -> tuple
         if any(row != rows[0] for row in rows[1:]):
             raise AssertionError("runtime NATIVE TRANSPORT CONFIG CF tuples differ across emitted tiles")
         return rows[0], "captured_rsl_native_transport_config", len(rows)
-    if sha256_file(phase_b_packet) == LEGACY_PHASE_B_PACKET_SHA256:
-        return [0.5, 0.0, 0.0], "legacy_phaseB_packet_constructor_defaults_no_cf_record", 0
     raise AssertionError("runtime log has no NATIVE TRANSPORT CONFIG CF record; defaults are allowed only for the pinned legacy Phase-B packet")
 
 
