@@ -1,0 +1,576 @@
+{
+  "schema": "pr305_loop_preserved_coarse_on_off_pr296_gate_v1",
+  "status": "pass",
+  "checked_local_time": "2026-10-13T20:16:08+09:00",
+  "reference_zip_sha256": "8adbea641fdd3e785b6c1853768783af2012cedcfb8e91acc4725fe1a4db5274",
+  "policy": "bitwise equality of eight finite raw FP32 NetCDF state fields at five exact saved times; also ON/OFF parity",
+  "observer_on": {
+    "run": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on",
+    "run_receipt_sha256": "242ffdc3bfb86952e56c2277079b504d31c93db84dbd4e5a71cfc3fbda254aa0",
+    "csv_sha256": "5c2e2aa677f7481adfb08366c2fd0c8e867a1c8fd986428919b5c9e1387fdf69"
+  },
+  "observer_off": {
+    "run": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_off",
+    "run_receipt_sha256": "1a5ebafc946cd2944d55fb451f8d2830397828c7679b5a65c1f34a2e40f0998f",
+    "csv_absent": true
+  },
+  "reference": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/references/pr296_rk3_h3p75_stock_control",
+  "counts": {
+    "total": 40,
+    "on_exact_pr296": 40,
+    "off_exact_pr296": 40,
+    "on_exact_off": 40
+  },
+  "array_comparisons": [
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "on_exact_pr296": true,
+      "off_exact_pr296": true,
+      "on_exact_off": true,
+      "max_abs_off_on": 0.0
+    }
+  ]
+}

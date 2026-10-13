@@ -2,7 +2,7 @@
 
 Local timestamp: 2026-10-11 17:47:15 JST (+0900)
 
-Last updated: 2026-10-12 02:11:01 JST (+0900)
+Last updated: 2026-10-13 20:35:34 JST (+0900)
 
 This is the single project-level definition of the first-stage research target.
 Case reports retain their own inputs, numerical budgets and completion status.
@@ -129,6 +129,8 @@ The candidate freezes `epsilon_X=max(0.01*S_X(240),3*q_X(240))`, where `S` is th
 | MU | 0.01459090046 | Pa |
 
 A reference qualifies empirically only if one h=0.9375 RK3 comparison to h=1.875 changes every field by at most `epsilon_X/3` at all checkpoints, with exact boundaries and admissibility. This observed sensitivity is not a proof of true-error bounds or third-order convergence. The one authorized qualification run failed all 24 field/time tests; no indefinite refinement ladder follows. Candidate-vs-reference differences remain provisional until reference qualification. No efficiency requirement is added.
+
+[EMDIV 원인·수용 경계 기록](<(202610132029)_rk3_emdiv_cause_and_acceptance.md>)은 동일 실행파일의 관찰 ON/OFF 및 보존 RK3 출력 일치를 확인하고, 한 번의 필터 계수 대조로 이 사례의 U/V 시간간격 차이에 대한 주요 기여를 확인했다. 기준해를 해석할 때는 목표 반이산 방정식뿐 아니라 진단·경계·수치 필터 정책과 그 시간간격 의존성도 먼저 명시한다. 같은 `emdiv` 값은 같은 물리시간당 필터 작용을 뜻하지 않는다. 변경 계수 대조는 원인 판별 자료이며 V3의 새 기준해가 아니다. 위 예산·평가 영역·24개 실패 상태는 변경하지 않는다.
 
 The frozen JSON `sampling.PH` label describes height in metres, whereas its `budgets.PH` and executed gate use geopotential in m²/s². The separate metadata erratum records this inconsistency without changing the frozen bytes or numeric gate; the PH epsilon in the table is authoritative.
 

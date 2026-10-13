@@ -1,0 +1,3015 @@
+{
+  "schema": "pr305_emdiv_increment_offline_analysis_v1",
+  "scope": "Archived/instrumented RK3 CSV analysis only. No model/build/source modification. No timestep-ladder d1/d2, cosine, or convergence-order reanalysis.",
+  "analysis_provenance": {
+    "analyzer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_metric/analyze_emdiv_increment.py",
+    "analyzer_sha256": "70777875c4c0a8839a03ee2cfbb15e20094ded4e28a4fdeae8eafb774f9274de",
+    "plan_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_metric/emdiv_increment_analysis_plan.json",
+    "plan_sha256": "39f6e1546801d1637e06033117951400b06e9b3e708025d068e1b11336ee6010",
+    "coarse_exact_gate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/coarse_loop_preserved_on_off_pr296_gate.json",
+    "coarse_exact_gate_sha256": "3736a594a190f88cc0fe6040e549410f8c803c3339b5e9e6815bddddf36e0f56"
+  },
+  "producer_schema": {
+    "source_path": "dyn_em/module_small_step_em.F:845-856, 1095-1106",
+    "header": [
+      "call_id",
+      "dts",
+      "emdiv",
+      "nowner_u",
+      "nowner_v",
+      "filter_u_rms",
+      "filter_u_max_abs",
+      "filter_u_signed_mean",
+      "filter_v_rms",
+      "filter_v_max_abs",
+      "filter_v_signed_mean",
+      "pressure_u_rms",
+      "pressure_u_max_abs",
+      "pressure_u_signed_mean",
+      "pressure_v_rms",
+      "pressure_v_max_abs",
+      "pressure_v_signed_mean",
+      "slow_u_rms",
+      "slow_u_max_abs",
+      "slow_u_signed_mean",
+      "slow_v_rms",
+      "slow_v_max_abs",
+      "slow_v_signed_mean",
+      "delta_u_rms",
+      "delta_u_max_abs",
+      "delta_u_signed_mean",
+      "delta_v_rms",
+      "delta_v_max_abs",
+      "delta_v_signed_mean"
+    ],
+    "columns": "call_id,dts,emdiv,physical U/V owner counts, then RMS/max_abs/signed_mean for filter, pressure, slow, and delta, U then V.",
+    "source_semantics": "filter is c1h*MUDf_XY; pressure is -dts*cqu/cqv*dpxy; slow is dts*ru_tend/rv_tend added before the captured delta baseline; delta is u/v after the pressure+filter assignment minus the immediately pre-assignment value, so it excludes slow.",
+    "increment_units": "The captured filter/pressure/slow/delta values are increments to the coupled small-step u/v variables. small_step_prep scales velocity by (c1h*MU+c2h), with c1h dimensionless and c2h Pa, so the coupled u/v state has Pa m/s units. This is a source-derived unit inference; the CSV has no units row.",
+    "ratio_units": "filter_rms/pressure_rms is dimensionless. filter_rms/dts has Pa m/s^2 units as a quotient, but is not an emdiv tendency because the source adds the filter without multiplying by dts.",
+    "owner_counts": {
+      "U": 4096,
+      "V": 3840
+    },
+    "schedule": "solve_em.F:RK3 stage acoustic call counts 1/2/4, dts=h/3 for stage1 and h/4 for stages2/3 with time_step_sound=4; calls occur in outer-step sequence."
+  },
+  "physical_time_bucket_policy": "Each summary groups calls from the outer step ending at t=60/120/240 s, then separates its RK stages. The RK stages are not interpreted as sequential physical-time snapshots.",
+  "coarse_exact_parity_gate": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/coarse_loop_preserved_on_off_pr296_gate.json",
+    "sha256": "3736a594a190f88cc0fe6040e549410f8c803c3339b5e9e6815bddddf36e0f56",
+    "status": "pass",
+    "all40_exact": true,
+    "gate_counts": {
+      "total": 40,
+      "on_exact_pr296": 40,
+      "off_exact_pr296": 40,
+      "on_exact_off": 40
+    },
+    "interpretation": "No analysis is emitted unless the corrected observer-ON coarse forecast exactly matches all 40 canonical output arrays."
+  },
+  "case_integrity": {
+    "rk3_h3p75": {
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "executable_path": "/private/tmp/pr305-rk3-reference-update-20261013/main/wrf.exe",
+      "executable_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+      "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/namelist.input",
+      "namelist_sha256": "70d6da33f3a19213c50f8054ccd8cdd5033e83f59fb66c7724614c49960e9c42",
+      "instrumented_source_path": "/private/tmp/pr305-rk3-reference-update-20261013/dyn_em/module_small_step_em.F",
+      "instrumented_source_sha256": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+      "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_build/loop_preserved_rebuild/pr305_loop_preserved_module_only_build_receipt.json",
+      "build_receipt_sha256": "d97a766109cb3bfd987938d5dd6d1ebfaeac23785c991d329fa4a2be388865b6",
+      "build_target_head": "65fd3dac067f93ab838a518a14cf83ca873030eb",
+      "configure_path": null,
+      "configure_sha256": null,
+      "cpp_archive_sha256": "b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159",
+      "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+      "namelist_output_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/namelist.output",
+      "namelist_output_sha256": "0772c48c4908b3d9c4d8e2a740b3bcb8fe1f654a743d471874f378eac2e4f784",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/run_receipt.json",
+      "run_receipt_sha256": "242ffdc3bfb86952e56c2277079b504d31c93db84dbd4e5a71cfc3fbda254aa0",
+      "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on/wrf_emdiv_increment.csv",
+      "csv_sha256": "5c2e2aa677f7481adfb08366c2fd0c8e867a1c8fd986428919b5c9e1387fdf69",
+      "base_fullflags_build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_build/pr305_correct_fullflags_build_receipt.json",
+      "base_fullflags_build_receipt_sha256": "14024d15b3f62e29d54eeb9b0b2b61811fbf7bf0b294aa2cbe369b137484e8f7",
+      "source_solve_em_sha256": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "h_seconds": 3.75,
+      "method": "RK3",
+      "run_seconds": 240,
+      "time_step_sound": 4,
+      "run_dir": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h3p75_loop_preserved_observer_on",
+      "return_code": 0,
+      "wall_seconds": 1.8232057909481227,
+      "expected_outer_steps": 64,
+      "expected_call_count": 448,
+      "label": "rk3_h3p75"
+    },
+    "rk3_h0p9375": {
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "executable_path": "/private/tmp/pr305-rk3-reference-update-20261013/main/wrf.exe",
+      "executable_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+      "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/namelist.input",
+      "namelist_sha256": "daacfb916fd370eef9c370a09324e573ee8b843d6aac68f443f20c078298562d",
+      "instrumented_source_path": "/private/tmp/pr305-rk3-reference-update-20261013/dyn_em/module_small_step_em.F",
+      "instrumented_source_sha256": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+      "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_build/loop_preserved_rebuild/pr305_loop_preserved_module_only_build_receipt.json",
+      "build_receipt_sha256": "d97a766109cb3bfd987938d5dd6d1ebfaeac23785c991d329fa4a2be388865b6",
+      "build_target_head": "65fd3dac067f93ab838a518a14cf83ca873030eb",
+      "configure_path": null,
+      "configure_sha256": null,
+      "cpp_archive_sha256": "b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159",
+      "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+      "namelist_output_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/namelist.output",
+      "namelist_output_sha256": "4cdb6f4b8fed85ba4351287702d3aa4a620984cece9845c14fd610293d67e94d",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/run_receipt.json",
+      "run_receipt_sha256": "1b9094f88b8272e4af22bfb32c1d37275c5a864f6c89b885734759277faacf2b",
+      "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on/wrf_emdiv_increment.csv",
+      "csv_sha256": "5d6ab0fba931af528dbe1dedf0d81a402acdbea9128a14529bdf7ff308ea6cb8",
+      "base_fullflags_build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_build/pr305_correct_fullflags_build_receipt.json",
+      "base_fullflags_build_receipt_sha256": "14024d15b3f62e29d54eeb9b0b2b61811fbf7bf0b294aa2cbe369b137484e8f7",
+      "source_solve_em_sha256": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "h_seconds": 0.9375,
+      "method": "RK3",
+      "run_seconds": 240,
+      "time_step_sound": 4,
+      "run_dir": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on",
+      "return_code": 0,
+      "wall_seconds": 3.0794710000045598,
+      "expected_outer_steps": 256,
+      "expected_call_count": 1792,
+      "label": "rk3_h0p9375"
+    }
+  },
+  "expected_cases": [
+    {
+      "label": "rk3_h3p75",
+      "h_seconds": 3.75,
+      "run_seconds": 240,
+      "time_step_sound": 4,
+      "outer_steps": 64,
+      "expected_call_count": 448
+    },
+    {
+      "label": "rk3_h0p9375",
+      "h_seconds": 0.9375,
+      "run_seconds": 240,
+      "time_step_sound": 4,
+      "outer_steps": 256,
+      "expected_call_count": 1792
+    }
+  ],
+  "observed_case_counts": {
+    "rk3_h3p75": {
+      "expected_outer_steps": 64,
+      "expected_call_count": 448,
+      "observed_call_id_first_last": [
+        1,
+        448
+      ],
+      "calls_per_outer_step": 7,
+      "expected_stage_iterations": [
+        1,
+        2,
+        4
+      ]
+    },
+    "rk3_h0p9375": {
+      "expected_outer_steps": 256,
+      "expected_call_count": 1792,
+      "observed_call_id_first_last": [
+        1,
+        1792
+      ],
+      "calls_per_outer_step": 7,
+      "expected_stage_iterations": [
+        1,
+        2,
+        4
+      ]
+    }
+  },
+  "all_call_distributions_no_accumulation": {
+    "rk3_h3p75": {
+      "call_count": 448,
+      "component_distributions_over_all_calls": {
+        "filter": {
+          "u": {
+            "per_call_rms_distribution": {
+              "n_finite": 448,
+              "median": 2.3476863712540164,
+              "p90": 4.510321201831072,
+              "max": 4.964103683851938
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 448,
+              "median": 3.9862385988235474,
+              "p90": 7.652316331863403,
+              "max": 8.413497924804688
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 448,
+              "median": 0.0,
+              "p90": 5.040783435106279e-09,
+              "max": 2.0721927285194397e-08
+            }
+          },
+          "v": {
+            "per_call_rms_distribution": {
+              "n_finite": 448,
+              "median": 0.9572140003205702,
+              "p90": 1.4079445048543353,
+              "max": 1.4897638610176467
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 448,
+              "median": 3.3036996126174927,
+              "p90": 4.0080043315887455,
+              "max": 4.127697944641113
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 448,
+              "median": 0.012149496375544307,
+              "p90": 0.013226632996617506,
+              "max": 0.013658218008155623
+            }
+          }
+        },
+        "pressure": {
+          "u": {
+            "per_call_rms_distribution": {
+              "n_finite": 448,
+              "median": 0.007970844134476027,
+              "p90": 0.016463777211996378,
+              "max": 0.020612326778148914
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 448,
+              "median": 0.03121362905949354,
+              "p90": 0.06523780897259712,
+              "max": 0.11199551075696945
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 448,
+              "median": 5.648108398082635e-10,
+              "p90": 2.1582558907690126e-07,
+              "max": 1.0855130469292207e-06
+            }
+          },
+          "v": {
+            "per_call_rms_distribution": {
+              "n_finite": 448,
+              "median": 0.007920855322198462,
+              "p90": 0.016356852192055907,
+              "max": 0.019417672571571568
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 448,
+              "median": 0.030428417026996613,
+              "p90": 0.06367297843098643,
+              "max": 0.10263524949550629
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 448,
+              "median": -3.0489968943998393e-06,
+              "p90": 2.516326549862522e-05,
+              "max": 9.333453121887677e-05
+            }
+          }
+        },
+        "slow": {
+          "u": {
+            "per_call_rms_distribution": {
+              "n_finite": 448,
+              "median": 30.684437121805562,
+              "p90": 40.70216758077192,
+              "max": 41.04260641301982
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 448,
+              "median": 75.00629425048828,
+              "p90": 99.56452407836915,
+              "max": 100.32131958007812
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 448,
+              "median": -0.002643527048633132,
+              "p90": -0.002198738538357503,
+              "max": -0.0020845428460773974
+            }
+          },
+          "v": {
+            "per_call_rms_distribution": {
+              "n_finite": 448,
+              "median": 4.761491456102531,
+              "p90": 6.293932346363305,
+              "max": 6.390404113730527
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 448,
+              "median": 17.457719802856445,
+              "p90": 22.857745933532716,
+              "max": 23.63813591003418
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 448,
+              "median": 0.028314834441430986,
+              "p90": 0.035943532109869045,
+              "max": 0.04111855920491507
+            }
+          }
+        },
+        "delta": {
+          "u": {
+            "per_call_rms_distribution": {
+              "n_finite": 448,
+              "median": 2.3459174651725117,
+              "p90": 4.5039539177731704,
+              "max": 4.9682367152104705
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 448,
+              "median": 4.007627010345459,
+              "p90": 7.660048294067383,
+              "max": 8.446342468261719
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 448,
+              "median": -1.4074430509936064e-09,
+              "p90": 1.9875806174241013e-07,
+              "max": 1.1090184557360772e-06
+            }
+          },
+          "v": {
+            "per_call_rms_distribution": {
+              "n_finite": 448,
+              "median": 0.9577128023771108,
+              "p90": 1.4070612305801098,
+              "max": 1.4880727984561326
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 448,
+              "median": 3.3212454319000244,
+              "p90": 4.022479438781739,
+              "max": 4.140480041503906
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 448,
+              "median": 0.012130553710934085,
+              "p90": 0.013211436121273437,
+              "max": 0.013665166513722701
+            }
+          }
+        }
+      },
+      "per_call_filter_rms_over_pressure_rms_distribution": {
+        "u": {
+          "n_finite": 448,
+          "median": 231.52142844859992,
+          "p90": 976.5243092509257,
+          "max": 1428.9252069804052
+        },
+        "v": {
+          "n_finite": 448,
+          "median": 94.02352323438501,
+          "p90": 347.89162930668266,
+          "max": 451.41058575168853
+        }
+      },
+      "per_call_filter_rms_over_dts_descriptive_distribution": {
+        "u": {
+          "n_finite": 448,
+          "median": 2.5041987960042844,
+          "p90": 4.811009281953144,
+          "max": 5.295043929442068
+        },
+        "v": {
+          "n_finite": 448,
+          "median": 1.0210282670086084,
+          "p90": 1.5018074718446244,
+          "max": 1.5890814517521565
+        }
+      },
+      "interpretation": "These are statistics of observer rows/call increments across the whole run. They are not accumulated endpoint effects and do not imply causality."
+    },
+    "rk3_h0p9375": {
+      "call_count": 1792,
+      "component_distributions_over_all_calls": {
+        "filter": {
+          "u": {
+            "per_call_rms_distribution": {
+              "n_finite": 1792,
+              "median": 1.8509950709315488,
+              "p90": 2.8536782316191984,
+              "max": 3.0051062538272646
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 1792,
+              "median": 3.1187856197357178,
+              "p90": 4.706443834304809,
+              "max": 4.935831069946289
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 1792,
+              "median": 0.0,
+              "p90": 3.3760443329811096e-09,
+              "max": 1.0128132998943329e-08
+            }
+          },
+          "v": {
+            "per_call_rms_distribution": {
+              "n_finite": 1792,
+              "median": 0.4799989759248705,
+              "p90": 0.5722927387968759,
+              "max": 0.5819174324747096
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 1792,
+              "median": 1.2133954763412476,
+              "p90": 1.2662131309509277,
+              "max": 1.2895818948745728
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 1792,
+              "median": 0.0019824495951373438,
+              "p90": 0.003445012729498558,
+              "max": 0.0036326827500791597
+            }
+          }
+        },
+        "pressure": {
+          "u": {
+            "per_call_rms_distribution": {
+              "n_finite": 1792,
+              "median": 0.0006634549436526523,
+              "p90": 0.0012158873183684153,
+              "max": 0.0016556972270647464
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 1792,
+              "median": 0.002752892207354307,
+              "p90": 0.005610967567190529,
+              "max": 0.0088646886870265
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 1792,
+              "median": -1.8426095805407217e-10,
+              "p90": 1.431886386855931e-08,
+              "max": 6.990342224229111e-08
+            }
+          },
+          "v": {
+            "per_call_rms_distribution": {
+              "n_finite": 1792,
+              "median": 0.000663441380391361,
+              "p90": 0.0011724309232981633,
+              "max": 0.001588205759909394
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 1792,
+              "median": 0.002717546303756535,
+              "p90": 0.005456032510846853,
+              "max": 0.00998668186366558
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 1792,
+              "median": -4.0742475902374083e-07,
+              "p90": 2.706540070823045e-06,
+              "max": 1.0295265785257671e-05
+            }
+          }
+        },
+        "slow": {
+          "u": {
+            "per_call_rms_distribution": {
+              "n_finite": 1792,
+              "median": 7.672878755707751,
+              "p90": 10.18931937523247,
+              "max": 10.260654868794937
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 1792,
+              "median": 18.754693031311035,
+              "p90": 24.913799858093263,
+              "max": 25.07942008972168
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 1792,
+              "median": -0.0006534477183528509,
+              "p90": -0.0005601431262672207,
+              "max": -0.000537541464329605
+            }
+          },
+          "v": {
+            "per_call_rms_distribution": {
+              "n_finite": 1792,
+              "median": 1.192507442413716,
+              "p90": 1.583289749692725,
+              "max": 1.5976031725237774
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 1792,
+              "median": 4.388249158859253,
+              "p90": 5.783390188217163,
+              "max": 5.91029691696167
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 1792,
+              "median": 0.006868029722193587,
+              "p90": 0.008863798297680744,
+              "max": 0.009744285238510505
+            }
+          }
+        },
+        "delta": {
+          "u": {
+            "per_call_rms_distribution": {
+              "n_finite": 1792,
+              "median": 1.8509238056104098,
+              "p90": 2.8535914785493524,
+              "max": 3.004871093570771
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 1792,
+              "median": 3.1208746433258057,
+              "p90": 4.7076380252838135,
+              "max": 4.937245845794678
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 1792,
+              "median": -5.796789714906936e-10,
+              "p90": 1.5895784599706533e-08,
+              "max": 7.235827581553167e-08
+            }
+          },
+          "v": {
+            "per_call_rms_distribution": {
+              "n_finite": 1792,
+              "median": 0.4800043065527003,
+              "p90": 0.5722739002442168,
+              "max": 0.5818597111145265
+            },
+            "per_call_max_abs_distribution": {
+              "n_finite": 1792,
+              "median": 1.2146641612052917,
+              "p90": 1.2676472187042236,
+              "max": 1.2919102907180786
+            },
+            "per_call_signed_mean_distribution": {
+              "n_finite": 1792,
+              "median": 0.00198319068949786,
+              "p90": 0.003444782420398648,
+              "max": 0.003634750286983035
+            }
+          }
+        }
+      },
+      "per_call_filter_rms_over_pressure_rms_distribution": {
+        "u": {
+          "n_finite": 1792,
+          "median": 2009.2079540045884,
+          "p90": 4620.726389369319,
+          "max": 6153.5408242018575
+        },
+        "v": {
+          "n_finite": 1792,
+          "median": 526.2488127294555,
+          "p90": 1037.0855653253907,
+          "max": 1180.8178469311615
+        }
+      },
+      "per_call_filter_rms_over_dts_descriptive_distribution": {
+        "u": {
+          "n_finite": 1792,
+          "median": 7.897578969307941,
+          "p90": 12.175693788241913,
+          "max": 12.82178668299633
+        },
+        "v": {
+          "n_finite": 1792,
+          "median": 2.047995630612781,
+          "p90": 2.4417823522000037,
+          "max": 2.482847711892094
+        }
+      },
+      "interpretation": "These are statistics of observer rows/call increments across the whole run. They are not accumulated endpoint effects and do not imply causality."
+    }
+  },
+  "matched_stage_summaries_at_checkpoint_outer_steps": [
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 16,
+      "outer_step_end_time_seconds": 60.0,
+      "rk_stage": 1,
+      "call_count": 1,
+      "dts_values_seconds": [
+        1.25
+      ],
+      "emdiv_values": [
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0005297540089258825,
+            "max_per_call_rms": 0.0005297540089258825,
+            "max_per_call_max_abs": 0.0025767574552446604,
+            "mean_of_per_call_signed_means": 3.6805451048005366e-10,
+            "per_call_rms_values": [
+              0.0005297540089258825
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0005405127061617398,
+            "max_per_call_rms": 0.0005405127061617398,
+            "max_per_call_max_abs": 0.002573243109509349,
+            "mean_of_per_call_signed_means": 4.29266812821405e-06,
+            "per_call_rms_values": [
+              0.0005405127061617398
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 40.99939672269332,
+            "max_per_call_rms": 40.99939672269332,
+            "max_per_call_max_abs": 100.26909637451172,
+            "mean_of_per_call_signed_means": -0.0037428944906423567,
+            "per_call_rms_values": [
+              40.99939672269332
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 6.375507621080726,
+            "max_per_call_rms": 6.375507621080726,
+            "max_per_call_max_abs": 23.481239318847656,
+            "mean_of_per_call_signed_means": 0.03568159379799643,
+            "per_call_rms_values": [
+              6.375507621080726
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 0.0005297361894084862,
+            "max_per_call_rms": 0.0005297361894084862,
+            "max_per_call_max_abs": 0.0025768280029296875,
+            "mean_of_per_call_signed_means": 1.885075562313432e-08,
+            "per_call_rms_values": [
+              0.0005297361894084862
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.000540511430119369,
+            "max_per_call_rms": 0.000540511430119369,
+            "max_per_call_max_abs": 0.0025730133056640625,
+            "mean_of_per_call_signed_means": 4.294140989221281e-06,
+            "per_call_rms_values": [
+              0.000540511430119369
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 16,
+      "outer_step_end_time_seconds": 60.0,
+      "rk_stage": 2,
+      "call_count": 2,
+      "dts_values_seconds": [
+        0.9375,
+        0.9375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 1.4118853622102487,
+            "max_per_call_rms": 1.4172563472945505,
+            "max_per_call_max_abs": 2.4016835689544678,
+            "mean_of_per_call_signed_means": 3.055902197957039e-10,
+            "per_call_rms_values": [
+              1.4172563472945505,
+              1.4065143771259467
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.6797756049272479,
+            "max_per_call_rms": 0.6868714787383251,
+            "max_per_call_max_abs": 2.6011955738067627,
+            "mean_of_per_call_signed_means": 0.010991031382400252,
+            "per_call_rms_values": [
+              0.6868714787383251,
+              0.6726797311161705
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.00686488487694846,
+            "max_per_call_rms": 0.010752472205487919,
+            "max_per_call_max_abs": 0.050066351890563965,
+            "mean_of_per_call_signed_means": 3.6769719796714284e-08,
+            "per_call_rms_values": [
+              0.010752472205487919,
+              0.0029772975484090003
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.00664529694756155,
+            "max_per_call_rms": 0.010358323762405428,
+            "max_per_call_max_abs": 0.03994479030370712,
+            "mean_of_per_call_signed_means": -1.9789675307616918e-05,
+            "per_call_rms_values": [
+              0.010358323762405428,
+              0.002932270132717673
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 30.74816990284866,
+            "max_per_call_rms": 30.74816990284866,
+            "max_per_call_max_abs": 75.19927978515625,
+            "mean_of_per_call_signed_means": -0.0028041116741519545,
+            "per_call_rms_values": [
+              30.74816990284866,
+              30.74816990284866
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 4.781235848565287,
+            "max_per_call_rms": 4.781235848565287,
+            "max_per_call_max_abs": 17.63494873046875,
+            "mean_of_per_call_signed_means": 0.02676609404218316,
+            "per_call_rms_values": [
+              4.781235848565287,
+              4.781235848565287
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 1.4110172443349414,
+            "max_per_call_rms": 1.415830221092953,
+            "max_per_call_max_abs": 2.4186668395996094,
+            "mean_of_per_call_signed_means": 1.7328602552879602e-08,
+            "per_call_rms_values": [
+              1.415830221092953,
+              1.4062042675769295
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.6794382326528947,
+            "max_per_call_rms": 0.6863109999855479,
+            "max_per_call_max_abs": 2.6124978065490723,
+            "mean_of_per_call_signed_means": 0.010971242180797466,
+            "per_call_rms_values": [
+              0.6863109999855479,
+              0.6725654653202414
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 205.66774061298636,
+          "filter_rms_over_dts_descriptive_only": 1.5060110530242654,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 102.29424061729661,
+          "filter_rms_over_dts_descriptive_only": 0.7250939785890644,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 16,
+      "outer_step_end_time_seconds": 60.0,
+      "rk_stage": 3,
+      "call_count": 4,
+      "dts_values_seconds": [
+        0.9375,
+        0.9375,
+        0.9375,
+        0.9375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 1.4282675922138797,
+            "max_per_call_rms": 1.4500071996810717,
+            "max_per_call_max_abs": 2.4580790996551514,
+            "mean_of_per_call_signed_means": -2.837623469531536e-10,
+            "per_call_rms_values": [
+              1.4282866593440406,
+              1.4065021716317434,
+              1.428274338198663,
+              1.4500071996810717
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.6803119839375654,
+            "max_per_call_rms": 0.6878104788862163,
+            "max_per_call_max_abs": 2.5771772861480713,
+            "mean_of_per_call_signed_means": 0.010891632562015727,
+            "per_call_rms_values": [
+              0.6801884751753451,
+              0.672872342662779,
+              0.6803766390259213,
+              0.6878104788862163
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.009308762128658995,
+            "max_per_call_rms": 0.01578503298637803,
+            "max_per_call_max_abs": 0.06377934664487839,
+            "mean_of_per_call_signed_means": 2.2873686032071072e-08,
+            "per_call_rms_values": [
+              0.01578503298637803,
+              0.007775593751840508,
+              0.003688948865196711,
+              0.00998547291122073
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.00909577403410743,
+            "max_per_call_rms": 0.015140573780446382,
+            "max_per_call_max_abs": 0.05441359803080559,
+            "mean_of_per_call_signed_means": 3.2194109772065705e-06,
+            "per_call_rms_values": [
+              0.015140573780446382,
+              0.007557661365769516,
+              0.0037612032468410795,
+              0.009923657743372737
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 30.747412139858415,
+            "max_per_call_rms": 30.747412139858415,
+            "max_per_call_max_abs": 75.19442749023438,
+            "mean_of_per_call_signed_means": -0.002800621594730046,
+            "per_call_rms_values": [
+              30.747412139858415,
+              30.747412139858415,
+              30.747412139858415,
+              30.747412139858415
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 4.780925091570823,
+            "max_per_call_rms": 4.780925091570823,
+            "max_per_call_max_abs": 17.6112060546875,
+            "mean_of_per_call_signed_means": 0.026726045591078672,
+            "per_call_rms_values": [
+              4.780925091570823,
+              4.780925091570823,
+              4.780925091570823,
+              4.780925091570823
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 1.4277070510617311,
+            "max_per_call_rms": 1.4511883734709714,
+            "max_per_call_max_abs": 2.4884886741638184,
+            "mean_of_per_call_signed_means": 1.4541456039296463e-08,
+            "per_call_rms_values": [
+              1.4260445089790508,
+              1.405347982073142,
+              1.4282473397237605,
+              1.4511883734709714
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.680122716021788,
+            "max_per_call_rms": 0.6884194960075217,
+            "max_per_call_max_abs": 2.592702865600586,
+            "mean_of_per_call_signed_means": 0.010894849338213436,
+            "per_call_rms_values": [
+              0.6793098023517271,
+              0.672383040026979,
+              0.6803785257009236,
+              0.6884194960075217
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 153.43260172226934,
+          "filter_rms_over_dts_descriptive_only": 1.523485431694805,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 74.7942925348106,
+          "filter_rms_over_dts_descriptive_only": 0.7256661162000698,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 32,
+      "outer_step_end_time_seconds": 120.0,
+      "rk_stage": 1,
+      "call_count": 1,
+      "dts_values_seconds": [
+        1.25
+      ],
+      "emdiv_values": [
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0005258963987327117,
+            "max_per_call_rms": 0.0005258963987327117,
+            "max_per_call_max_abs": 0.002707565203309059,
+            "mean_of_per_call_signed_means": -3.971231685509502e-09,
+            "per_call_rms_values": [
+              0.0005258963987327117
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.000519897337719061,
+            "max_per_call_rms": 0.000519897337719061,
+            "max_per_call_max_abs": 0.0026979625690728426,
+            "mean_of_per_call_signed_means": 7.651724836484537e-07,
+            "per_call_rms_values": [
+              0.000519897337719061
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 40.87230036625066,
+            "max_per_call_rms": 40.87230036625066,
+            "max_per_call_max_abs": 99.91448974609375,
+            "mean_of_per_call_signed_means": -0.003432148490148279,
+            "per_call_rms_values": [
+              40.87230036625066
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 6.338770321623662,
+            "max_per_call_rms": 6.338770321623662,
+            "max_per_call_max_abs": 23.168811798095703,
+            "mean_of_per_call_signed_means": 0.0374866826243012,
+            "per_call_rms_values": [
+              6.338770321623662
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 0.0005259143034961707,
+            "max_per_call_rms": 0.0005259143034961707,
+            "max_per_call_max_abs": 0.00270843505859375,
+            "mean_of_per_call_signed_means": -2.2347300898672984e-08,
+            "per_call_rms_values": [
+              0.0005259143034961707
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0005198926841390143,
+            "max_per_call_rms": 0.0005198926841390143,
+            "max_per_call_max_abs": 0.0026979446411132812,
+            "mean_of_per_call_signed_means": 7.659448499452993e-07,
+            "per_call_rms_values": [
+              0.0005198926841390143
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 32,
+      "outer_step_end_time_seconds": 120.0,
+      "rk_stage": 2,
+      "call_count": 2,
+      "dts_values_seconds": [
+        0.9375,
+        0.9375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 2.7291247307441173,
+            "max_per_call_rms": 2.7355170727400564,
+            "max_per_call_max_abs": 4.645049571990967,
+            "mean_of_per_call_signed_means": -1.57160684466362e-09,
+            "per_call_rms_values": [
+              2.7355170727400564,
+              2.7227323887481782
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.0558869450487138,
+            "max_per_call_rms": 1.0634643351620727,
+            "max_per_call_max_abs": 3.5698163509368896,
+            "mean_of_per_call_signed_means": 0.013400354298452537,
+            "per_call_rms_values": [
+              1.0634643351620727,
+              1.048309554935355
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.007826468957629684,
+            "max_per_call_rms": 0.012444149904077696,
+            "max_per_call_max_abs": 0.04754938185214996,
+            "mean_of_per_call_signed_means": 2.0577496460602585e-07,
+            "per_call_rms_values": [
+              0.012444149904077696,
+              0.0032087880111816725
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.007736292301669282,
+            "max_per_call_rms": 0.012313449441970542,
+            "max_per_call_max_abs": 0.04718485474586487,
+            "mean_of_per_call_signed_means": 5.445645940360678e-06,
+            "per_call_rms_values": [
+              0.012313449441970542,
+              0.003159135161368021
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 30.651920200436503,
+            "max_per_call_rms": 30.651920200436503,
+            "max_per_call_max_abs": 74.95079803466797,
+            "mean_of_per_call_signed_means": -0.0025711387251590168,
+            "per_call_rms_values": [
+              30.651920200436503,
+              30.651920200436503
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 4.753371029265605,
+            "max_per_call_rms": 4.753371029265605,
+            "max_per_call_max_abs": 17.370243072509766,
+            "mean_of_per_call_signed_means": 0.02814555197333798,
+            "per_call_rms_values": [
+              4.753371029265605,
+              4.753371029265605
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 2.727433323383105,
+            "max_per_call_rms": 2.7327387368521587,
+            "max_per_call_max_abs": 4.665739059448242,
+            "mean_of_per_call_signed_means": 1.962762326002121e-07,
+            "per_call_rms_values": [
+              2.7327387368521587,
+              2.7221279099140516
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.055233506965743,
+            "max_per_call_rms": 1.0623939363747834,
+            "max_per_call_max_abs": 3.579073429107666,
+            "mean_of_per_call_signed_means": 0.013405801148231452,
+            "per_call_rms_values": [
+              1.0623939363747834,
+              1.0480730775567029
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 348.7044726707326,
+          "filter_rms_over_dts_descriptive_only": 2.911066379460392,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 136.4848824056043,
+          "filter_rms_over_dts_descriptive_only": 1.1262794080519614,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 32,
+      "outer_step_end_time_seconds": 120.0,
+      "rk_stage": 3,
+      "call_count": 4,
+      "dts_values_seconds": [
+        0.9375,
+        0.9375,
+        0.9375,
+        0.9375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 2.74212154381118,
+            "max_per_call_rms": 2.761495474850908,
+            "max_per_call_max_abs": 4.689332008361816,
+            "mean_of_per_call_signed_means": -7.712515071034431e-10,
+            "per_call_rms_values": [
+              2.742134292380827,
+              2.722727575190842,
+              2.7421288328221434,
+              2.761495474850908
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.053107751750872,
+            "max_per_call_rms": 1.0577825669797036,
+            "max_per_call_max_abs": 3.507840871810913,
+            "mean_of_per_call_signed_means": 0.013204328475209574,
+            "per_call_rms_values": [
+              1.0529657479483783,
+              1.0485183767678947,
+              1.0531643153075114,
+              1.0577825669797036
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.010595749226965576,
+            "max_per_call_rms": 0.018305898219355275,
+            "max_per_call_max_abs": 0.07047963887453079,
+            "mean_of_per_call_signed_means": 9.968870687618314e-08,
+            "per_call_rms_values": [
+              0.018305898219355275,
+              0.00897296257150944,
+              0.003742579495367289,
+              0.0113615566216303
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.01046393824353626,
+            "max_per_call_rms": 0.018049227988897267,
+            "max_per_call_max_abs": 0.07356086373329163,
+            "mean_of_per_call_signed_means": -1.0370868877063177e-05,
+            "per_call_rms_values": [
+              0.018049227988897267,
+              0.008830127116214241,
+              0.003770159540193471,
+              0.011206238328840053
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 30.65073133701054,
+            "max_per_call_rms": 30.65073133701054,
+            "max_per_call_max_abs": 74.94741821289062,
+            "mean_of_per_call_signed_means": -0.002567243267321828,
+            "per_call_rms_values": [
+              30.65073133701054,
+              30.65073133701054,
+              30.65073133701054,
+              30.65073133701054
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 4.752971669283298,
+            "max_per_call_rms": 4.752971669283298,
+            "max_per_call_max_abs": 17.359804153442383,
+            "mean_of_per_call_signed_means": 0.028133999653381637,
+            "per_call_rms_values": [
+              4.752971669283298,
+              4.752971669283298,
+              4.752971669283298,
+              4.752971669283298
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 2.7412030272010814,
+            "max_per_call_rms": 2.763798571891284,
+            "max_per_call_max_abs": 4.717926025390625,
+            "mean_of_per_call_signed_means": 6.957907316973433e-08,
+            "per_call_rms_values": [
+              2.7380016904584474,
+              2.7207494771094805,
+              2.742262369345113,
+              2.763798571891284
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.0528191013430872,
+            "max_per_call_rms": 1.0587975007550787,
+            "max_per_call_max_abs": 3.5244407653808594,
+            "mean_of_per_call_signed_means": 0.013193960888702349,
+            "per_call_rms_values": [
+              1.0514440205770248,
+              1.047776838849261,
+              1.0532580451909848,
+              1.0587975007550787
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 258.7944924963529,
+          "filter_rms_over_dts_descriptive_only": 2.9249296467319255,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 100.64162528877627,
+          "filter_rms_over_dts_descriptive_only": 1.1233149352009302,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 64,
+      "outer_step_end_time_seconds": 240.0,
+      "rk_stage": 1,
+      "call_count": 1,
+      "dts_values_seconds": [
+        1.25
+      ],
+      "emdiv_values": [
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.000523279234990294,
+            "max_per_call_rms": 0.000523279234990294,
+            "max_per_call_max_abs": 0.0026986142620444298,
+            "mean_of_per_call_signed_means": 2.6439241603351538e-09,
+            "per_call_rms_values": [
+              0.000523279234990294
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0005321289128612151,
+            "max_per_call_rms": 0.0005321289128612151,
+            "max_per_call_max_abs": 0.0025977902114391327,
+            "mean_of_per_call_signed_means": 2.4633559223552484e-07,
+            "per_call_rms_values": [
+              0.0005321289128612151
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 40.39727919209014,
+            "max_per_call_rms": 40.39727919209014,
+            "max_per_call_max_abs": 98.87722778320312,
+            "mean_of_per_call_signed_means": -0.002789869360029229,
+            "per_call_rms_values": [
+              40.39727919209014
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 6.223647760167332,
+            "max_per_call_rms": 6.223647760167332,
+            "max_per_call_max_abs": 22.302738189697266,
+            "mean_of_per_call_signed_means": 0.04111855920491507,
+            "per_call_rms_values": [
+              6.223647760167332
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 0.000523295834354233,
+            "max_per_call_rms": 0.000523295834354233,
+            "max_per_call_max_abs": 0.002696990966796875,
+            "mean_of_per_call_signed_means": 1.1461601445716951e-08,
+            "per_call_rms_values": [
+              0.000523295834354233
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0005321248379625947,
+            "max_per_call_rms": 0.0005321248379625947,
+            "max_per_call_max_abs": 0.002597808837890625,
+            "mean_of_per_call_signed_means": 2.4825796269093795e-07,
+            "per_call_rms_values": [
+              0.0005321248379625947
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 64,
+      "outer_step_end_time_seconds": 240.0,
+      "rk_stage": 2,
+      "call_count": 2,
+      "dts_values_seconds": [
+        0.9375,
+        0.9375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 4.941619766098885,
+            "max_per_call_rms": 4.949602762059598,
+            "max_per_call_max_abs": 8.389612197875977,
+            "mean_of_per_call_signed_means": 1.0244548320770264e-08,
+            "per_call_rms_values": [
+              4.949602762059598,
+              4.933636770138171
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.4826613171253822,
+            "max_per_call_rms": 1.4897638610176467,
+            "max_per_call_max_abs": 4.127697944641113,
+            "mean_of_per_call_signed_means": 0.011809212736746608,
+            "per_call_rms_values": [
+              1.4897638610176467,
+              1.475558773233118
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.008724397299120997,
+            "max_per_call_rms": 0.013996103900340527,
+            "max_per_call_max_abs": 0.06637538969516754,
+            "mean_of_per_call_signed_means": -2.9382065256516876e-08,
+            "per_call_rms_values": [
+              0.013996103900340527,
+              0.0034526906979014654
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.008114316090419954,
+            "max_per_call_rms": 0.012908616736292214,
+            "max_per_call_max_abs": 0.053552452474832535,
+            "mean_of_per_call_signed_means": 1.1556411469474762e-05,
+            "per_call_rms_values": [
+              0.012908616736292214,
+              0.003320015444547694
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 30.293387234635606,
+            "max_per_call_rms": 30.293387234635606,
+            "max_per_call_max_abs": 74.13787841796875,
+            "mean_of_per_call_signed_means": -0.002088801816434227,
+            "per_call_rms_values": [
+              30.293387234635606,
+              30.293387234635606
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 4.666640738022793,
+            "max_per_call_rms": 4.666640738022793,
+            "max_per_call_max_abs": 16.69740104675293,
+            "mean_of_per_call_signed_means": 0.03086810134271379,
+            "per_call_rms_values": [
+              4.666640738022793,
+              4.666640738022793
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 4.938399602506001,
+            "max_per_call_rms": 4.944330105588764,
+            "max_per_call_max_abs": 8.410039901733398,
+            "mean_of_per_call_signed_means": -2.0205334294587374e-08,
+            "per_call_rms_values": [
+              4.944330105588764,
+              4.932469099423239
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.4816176138028414,
+            "max_per_call_rms": 1.4880727984561326,
+            "max_per_call_max_abs": 4.140480041503906,
+            "mean_of_per_call_signed_means": 0.011820770004730245,
+            "per_call_rms_values": [
+              1.4880727984561326,
+              1.4751624291495504
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 566.4138847272309,
+          "filter_rms_over_dts_descriptive_only": 5.271061083838811,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 182.72166139495897,
+          "filter_rms_over_dts_descriptive_only": 1.581505404933741,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h3p75",
+      "outer_step": 64,
+      "outer_step_end_time_seconds": 240.0,
+      "rk_stage": 3,
+      "call_count": 4,
+      "dts_values_seconds": [
+        0.9375,
+        0.9375,
+        0.9375,
+        0.9375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 4.9488791862243575,
+            "max_per_call_rms": 4.964103683851938,
+            "max_per_call_max_abs": 8.413497924804688,
+            "mean_of_per_call_signed_means": 2.7939677238464355e-09,
+            "per_call_rms_values": [
+              4.948882498633857,
+              4.933642357100516,
+              4.9488882053111185,
+              4.964103683851938
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.4780202859849179,
+            "max_per_call_rms": 1.4803893422009524,
+            "max_per_call_max_abs": 4.0517754554748535,
+            "mean_of_per_call_signed_means": 0.011592693770338277,
+            "per_call_rms_values": [
+              1.4779037231095196,
+              1.4757247692029285,
+              1.478063309426271,
+              1.4803893422009524
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.011678526339134687,
+            "max_per_call_rms": 0.020612326778148914,
+            "max_per_call_max_abs": 0.09365812689065933,
+            "mean_of_per_call_signed_means": -3.3211577456920827e-08,
+            "per_call_rms_values": [
+              0.020612326778148914,
+              0.009931765693653439,
+              0.0038741869936154373,
+              0.01229582589112096
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.01101889463029019,
+            "max_per_call_rms": 0.01899560212178766,
+            "max_per_call_max_abs": 0.07876082509756088,
+            "mean_of_per_call_signed_means": -5.9585680249149566e-06,
+            "per_call_rms_values": [
+              0.01899560212178766,
+              0.009245065621746009,
+              0.0038518346971149215,
+              0.011983076080512172
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 30.291143281569024,
+            "max_per_call_rms": 30.291143281569024,
+            "max_per_call_max_abs": 74.12215423583984,
+            "mean_of_per_call_signed_means": -0.0020845428460773974,
+            "per_call_rms_values": [
+              30.291143281569024,
+              30.291143281569024,
+              30.291143281569024,
+              30.291143281569024
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 4.666186221285065,
+            "max_per_call_rms": 4.666186221285065,
+            "max_per_call_max_abs": 16.693071365356445,
+            "mean_of_per_call_signed_means": 0.030894848889685515,
+            "per_call_rms_values": [
+              4.666186221285065,
+              4.666186221285065,
+              4.666186221285065,
+              4.666186221285065
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 4.947083304379681,
+            "max_per_call_rms": 4.9682367152104705,
+            "max_per_call_max_abs": 8.446342468261719,
+            "mean_of_per_call_signed_means": -2.2082531359046698e-08,
+            "per_call_rms_values": [
+              4.94107709126021,
+              4.92992907988026,
+              4.949090331167782,
+              4.9682367152104705
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.4774750090748865,
+            "max_per_call_rms": 1.4817638219249698,
+            "max_per_call_max_abs": 4.0717878341674805,
+            "mean_of_per_call_signed_means": 0.011586738249851198,
+            "per_call_rms_values": [
+              1.4754636994807175,
+              1.474540052742242,
+              1.4781324621516163,
+              1.4817638219249698
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 423.75887526499696,
+          "filter_rms_over_dts_descriptive_only": 5.278804465305981,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 134.13507757138734,
+          "filter_rms_over_dts_descriptive_only": 1.5765549717172458,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 64,
+      "outer_step_end_time_seconds": 60.0,
+      "rk_stage": 1,
+      "call_count": 1,
+      "dts_values_seconds": [
+        0.3125
+      ],
+      "emdiv_values": [
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0001330278348882317,
+            "max_per_call_rms": 0.0001330278348882317,
+            "max_per_call_max_abs": 0.0006355660152621567,
+            "mean_of_per_call_signed_means": -3.763617152305332e-10,
+            "per_call_rms_values": [
+              0.0001330278348882317
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0001312206594623498,
+            "max_per_call_rms": 0.0001312206594623498,
+            "max_per_call_max_abs": 0.0006561530753970146,
+            "mean_of_per_call_signed_means": 7.672027711065158e-08,
+            "per_call_rms_values": [
+              0.0001312206594623498
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 10.249421564153604,
+            "max_per_call_rms": 10.249421564153604,
+            "max_per_call_max_abs": 25.04802894592285,
+            "mean_of_per_call_signed_means": -0.0009231829054954233,
+            "per_call_rms_values": [
+              10.249421564153604
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.5943833367128744,
+            "max_per_call_rms": 1.5943833367128744,
+            "max_per_call_max_abs": 5.871232032775879,
+            "mean_of_per_call_signed_means": 0.008839824785330564,
+            "per_call_rms_values": [
+              1.5943833367128744
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 0.00013302666055481008,
+            "max_per_call_rms": 0.00013302666055481008,
+            "max_per_call_max_abs": 0.0006356239318847656,
+            "mean_of_per_call_signed_means": 2.4456743297207595e-09,
+            "per_call_rms_values": [
+              0.00013302666055481008
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.00013121925725286413,
+            "max_per_call_rms": 0.00013121925725286413,
+            "max_per_call_max_abs": 0.0006561279296875,
+            "mean_of_per_call_signed_means": 7.778048995987775e-08,
+            "per_call_rms_values": [
+              0.00013121925725286413
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 64,
+      "outer_step_end_time_seconds": 60.0,
+      "rk_stage": 2,
+      "call_count": 2,
+      "dts_values_seconds": [
+        0.234375,
+        0.234375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 1.250904430626569,
+            "max_per_call_rms": 1.2529525066789464,
+            "max_per_call_max_abs": 2.1249091625213623,
+            "mean_of_per_call_signed_means": -4.773028194904327e-09,
+            "per_call_rms_values": [
+              1.2529525066789464,
+              1.2488563545741918
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.3882815549795805,
+            "max_per_call_rms": 0.3902815317270279,
+            "max_per_call_max_abs": 1.1279131174087524,
+            "mean_of_per_call_signed_means": 0.003474289965136753,
+            "per_call_rms_values": [
+              0.3902815317270279,
+              0.38628157823213305
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0006852483780580094,
+            "max_per_call_rms": 0.0008506201820756268,
+            "max_per_call_max_abs": 0.0032195092644542456,
+            "mean_of_per_call_signed_means": -2.5559389674190136e-12,
+            "per_call_rms_values": [
+              0.0008506201820756268,
+              0.0005198765740403921
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0006712124491835712,
+            "max_per_call_rms": 0.0008307235989088137,
+            "max_per_call_max_abs": 0.0035972781479358673,
+            "mean_of_per_call_signed_means": -1.624332659501404e-06,
+            "per_call_rms_values": [
+              0.0008307235989088137,
+              0.0005117012994583287
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 7.686976567673899,
+            "max_per_call_rms": 7.686976567673899,
+            "max_per_call_max_abs": 18.785785675048828,
+            "mean_of_per_call_signed_means": -0.0006921988934642798,
+            "per_call_rms_values": [
+              7.686976567673899,
+              7.686976567673899
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.1957533269081926,
+            "max_per_call_rms": 1.1957533269081926,
+            "max_per_call_max_abs": 4.403265476226807,
+            "mean_of_per_call_signed_means": 0.006645155288380286,
+            "per_call_rms_values": [
+              1.1957533269081926,
+              1.1957533269081926
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 1.2508430138662088,
+            "max_per_call_rms": 1.252859148204462,
+            "max_per_call_max_abs": 2.1263346672058105,
+            "mean_of_per_call_signed_means": -3.2159732654690742e-09,
+            "per_call_rms_values": [
+              1.252859148204462,
+              1.2488268795279553
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.38826188645333326,
+            "max_per_call_rms": 0.39025158268039634,
+            "max_per_call_max_abs": 1.1282395124435425,
+            "mean_of_per_call_signed_means": 0.003472665570401053,
+            "per_call_rms_values": [
+              0.39025158268039634,
+              0.38627219022627013
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 1825.4759451917655,
+          "filter_rms_over_dts_descriptive_only": 5.3371922373400285,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 578.4778805158732,
+          "filter_rms_over_dts_descriptive_only": 1.6566679679128768,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 64,
+      "outer_step_end_time_seconds": 60.0,
+      "rk_stage": 3,
+      "call_count": 4,
+      "dts_values_seconds": [
+        0.234375,
+        0.234375,
+        0.234375,
+        0.234375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 1.2528361527005054,
+            "max_per_call_rms": 1.2568118426574533,
+            "max_per_call_max_abs": 2.131197690963745,
+            "mean_of_per_call_signed_means": 4.0745362639427185e-10,
+            "per_call_rms_values": [
+              1.25283654524471,
+              1.248858003967961,
+              1.2528382189318974,
+              1.2568118426574533
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.387035609731313,
+            "max_per_call_rms": 0.38776323298922305,
+            "max_per_call_max_abs": 1.1074198484420776,
+            "mean_of_per_call_signed_means": 0.0034158791922285063,
+            "per_call_rms_values": [
+              0.3869996240483434,
+              0.38633130066660126,
+              0.38704828122108426,
+              0.38776323298922305
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0007701916342748666,
+            "max_per_call_rms": 0.0011520256754359766,
+            "max_per_call_max_abs": 0.004435715731233358,
+            "mean_of_per_call_signed_means": 1.6314126327794925e-09,
+            "per_call_rms_values": [
+              0.0011520256754359766,
+              0.0006834257394310412,
+              0.0004959773566396375,
+              0.0007493377655928109
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.000756381978247568,
+            "max_per_call_rms": 0.0011217091133287618,
+            "max_per_call_max_abs": 0.004355564713478088,
+            "mean_of_per_call_signed_means": -3.7095105323338874e-07,
+            "per_call_rms_values": [
+              0.0011217091133287618,
+              0.0006722698648825947,
+              0.000496275827036333,
+              0.0007352731077425824
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 7.686943302035306,
+            "max_per_call_rms": 7.686943302035306,
+            "max_per_call_max_abs": 18.78561782836914,
+            "mean_of_per_call_signed_means": -0.000691953193909356,
+            "per_call_rms_values": [
+              7.686943302035306,
+              7.686943302035306,
+              7.686943302035306,
+              7.686943302035306
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.195744618973223,
+            "max_per_call_rms": 1.195744618973223,
+            "max_per_call_max_abs": 4.4032135009765625,
+            "mean_of_per_call_signed_means": 0.0066494787753805795,
+            "per_call_rms_values": [
+              1.195744618973223,
+              1.195744618973223,
+              1.195744618973223,
+              1.195744618973223
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 1.2528003927156048,
+            "max_per_call_rms": 1.25686998315957,
+            "max_per_call_max_abs": 2.1332969665527344,
+            "mean_of_per_call_signed_means": 2.190063241869211e-09,
+            "per_call_rms_values": [
+              1.2527063225329726,
+              1.2487915088391304,
+              1.2528337563307466,
+              1.25686998315957
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.38702233091075355,
+            "max_per_call_rms": 0.38778069730195763,
+            "max_per_call_max_abs": 1.1085357666015625,
+            "mean_of_per_call_signed_means": 0.0034155081167379347,
+            "per_call_rms_values": [
+              0.3869560321854772,
+              0.38630766686479456,
+              0.38704492729078466,
+              0.38778069730195763
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 1626.6551036743567,
+          "filter_rms_over_dts_descriptive_only": 5.345434251522156,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 511.69332541214266,
+          "filter_rms_over_dts_descriptive_only": 1.651351934853602,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 128,
+      "outer_step_end_time_seconds": 120.0,
+      "rk_stage": 1,
+      "call_count": 1,
+      "dts_values_seconds": [
+        0.3125
+      ],
+      "emdiv_values": [
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.00013691929842092623,
+            "max_per_call_rms": 0.00013691929842092623,
+            "max_per_call_max_abs": 0.0006976409931667149,
+            "mean_of_per_call_signed_means": -1.895597511424041e-10,
+            "per_call_rms_values": [
+              0.00013691929842092623
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.00013425300887016768,
+            "max_per_call_rms": 0.00013425300887016768,
+            "max_per_call_max_abs": 0.0006984246429055929,
+            "mean_of_per_call_signed_means": -4.920158739598705e-07,
+            "per_call_rms_values": [
+              0.00013425300887016768
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 10.221126594345918,
+            "max_per_call_rms": 10.221126594345918,
+            "max_per_call_max_abs": 24.97929573059082,
+            "mean_of_per_call_signed_means": -0.0008471922475052907,
+            "per_call_rms_values": [
+              10.221126594345918
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.5886548194033545,
+            "max_per_call_rms": 1.5886548194033545,
+            "max_per_call_max_abs": 5.839046955108643,
+            "mean_of_per_call_signed_means": 0.009116515095259577,
+            "per_call_rms_values": [
+              1.5886548194033545
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 0.0001369231439854554,
+            "max_per_call_rms": 0.0001369231439854554,
+            "max_per_call_max_abs": 0.000698089599609375,
+            "mean_of_per_call_signed_means": 5.03265340512371e-09,
+            "per_call_rms_values": [
+              0.0001369231439854554
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0001342520514853559,
+            "max_per_call_rms": 0.0001342520514853559,
+            "max_per_call_max_abs": 0.0006983280181884766,
+            "mean_of_per_call_signed_means": -4.920411204996829e-07,
+            "per_call_rms_values": [
+              0.0001342520514853559
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 128,
+      "outer_step_end_time_seconds": 120.0,
+      "rk_stage": 2,
+      "call_count": 2,
+      "dts_values_seconds": [
+        0.234375,
+        0.234375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 2.0868841858170226,
+            "max_per_call_rms": 2.089561496664013,
+            "max_per_call_max_abs": 3.5078365802764893,
+            "mean_of_per_call_signed_means": 1.862645149230957e-09,
+            "per_call_rms_values": [
+              2.089561496664013,
+              2.0842068749700324
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.5096582648355019,
+            "max_per_call_rms": 0.5116299255682286,
+            "max_per_call_max_abs": 1.2555843591690063,
+            "mean_of_per_call_signed_means": 0.0025530258277285615,
+            "per_call_rms_values": [
+              0.5116299255682286,
+              0.5076866041027751
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0007579447371972919,
+            "max_per_call_rms": 0.000992220643700564,
+            "max_per_call_max_abs": 0.004986559972167015,
+            "mean_of_per_call_signed_means": 1.8285453451307582e-08,
+            "per_call_rms_values": [
+              0.000992220643700564,
+              0.0005236688306940198
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0007577276254783461,
+            "max_per_call_rms": 0.0009932354684670738,
+            "max_per_call_max_abs": 0.004276324529200792,
+            "mean_of_per_call_signed_means": -1.454866436090274e-06,
+            "per_call_rms_values": [
+              0.0009932354684670738,
+              0.0005222197824896183
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 7.6657156064745084,
+            "max_per_call_rms": 7.6657156064745084,
+            "max_per_call_max_abs": 18.73334312438965,
+            "mean_of_per_call_signed_means": -0.0006352197670622672,
+            "per_call_rms_values": [
+              7.6657156064745084,
+              7.6657156064745084
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.191479044283995,
+            "max_per_call_rms": 1.191479044283995,
+            "max_per_call_max_abs": 4.379026889801025,
+            "mean_of_per_call_signed_means": 0.006841909884171097,
+            "per_call_rms_values": [
+              1.191479044283995,
+              1.191479044283995
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 2.0867943165920257,
+            "max_per_call_rms": 2.0894210271838487,
+            "max_per_call_max_abs": 3.5094194412231445,
+            "mean_of_per_call_signed_means": 1.9022991182282567e-08,
+            "per_call_rms_values": [
+              2.0894210271838487,
+              2.0841676060002032
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.5096319521205528,
+            "max_per_call_rms": 0.5115897321928328,
+            "max_per_call_max_abs": 1.256455421447754,
+            "mean_of_per_call_signed_means": 0.0025515708558865903,
+            "per_call_rms_values": [
+              0.5115897321928328,
+              0.5076741720482728
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 2753.3460995241526,
+          "filter_rms_over_dts_descriptive_only": 8.904039192819296,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 672.6140735779029,
+          "filter_rms_over_dts_descriptive_only": 2.1745419299648083,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 128,
+      "outer_step_end_time_seconds": 120.0,
+      "rk_stage": 3,
+      "call_count": 4,
+      "dts_values_seconds": [
+        0.234375,
+        0.234375,
+        0.234375,
+        0.234375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 2.0868474308716127,
+            "max_per_call_rms": 2.0894828740265554,
+            "max_per_call_max_abs": 3.506838798522949,
+            "mean_of_per_call_signed_means": -9.313225746154785e-10,
+            "per_call_rms_values": [
+              2.086844381994876,
+              2.0842125540639715,
+              2.086849913401047,
+              2.0894828740265554
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.5080156708557617,
+            "max_per_call_rms": 0.5083227651457991,
+            "max_per_call_max_abs": 1.2333835363388062,
+            "mean_of_per_call_signed_means": 0.0024929285638791046,
+            "per_call_rms_values": [
+              0.5079850130959829,
+              0.5077286404737918,
+              0.5080262647074728,
+              0.5083227651457991
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0008976862516754376,
+            "max_per_call_rms": 0.0014065197558732504,
+            "max_per_call_max_abs": 0.006690070498734713,
+            "mean_of_per_call_signed_means": 9.602675606719055e-09,
+            "per_call_rms_values": [
+              0.0014065197558732504,
+              0.0007911810004225773,
+              0.000520250944395525,
+              0.0008727933060103978
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0008918803963430322,
+            "max_per_call_rms": 0.0013987681114640141,
+            "max_per_call_max_abs": 0.006365260109305382,
+            "mean_of_per_call_signed_means": -1.306389033380271e-07,
+            "per_call_rms_values": [
+              0.0013987681114640141,
+              0.0007909400588660181,
+              0.0005179151446101487,
+              0.0008598982704319477
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 7.665668319613292,
+            "max_per_call_rms": 7.665668319613292,
+            "max_per_call_max_abs": 18.733192443847656,
+            "mean_of_per_call_signed_means": -0.0006350150272425026,
+            "per_call_rms_values": [
+              7.665668319613292,
+              7.665668319613292,
+              7.665668319613292,
+              7.665668319613292
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.1914815613624745,
+            "max_per_call_rms": 1.1914815613624745,
+            "max_per_call_max_abs": 4.380762100219727,
+            "mean_of_per_call_signed_means": 0.00684058221191511,
+            "per_call_rms_values": [
+              1.1914815613624745,
+              1.1914815613624745,
+              1.1914815613624745,
+              1.1914815613624745
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 2.086797629865663,
+            "max_per_call_rms": 2.0895803502317305,
+            "max_per_call_max_abs": 3.5086288452148438,
+            "mean_of_per_call_signed_means": 2.4519977159798145e-09,
+            "per_call_rms_values": [
+              2.086645655575054,
+              2.084114878404732,
+              2.086849635251135,
+              2.0895803502317305
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.5079987757151108,
+            "max_per_call_rms": 0.5083470983746066,
+            "max_per_call_max_abs": 1.2345929145812988,
+            "mean_of_per_call_signed_means": 0.0024927972918211104,
+            "per_call_rms_values": [
+              0.5079273325563808,
+              0.5076980505803027,
+              0.5080226213491529,
+              0.5083470983746066
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 2324.695768679458,
+          "filter_rms_over_dts_descriptive_only": 8.90388237171888,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 569.600669483008,
+          "filter_rms_over_dts_descriptive_only": 2.1675335289845834,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 256,
+      "outer_step_end_time_seconds": 240.0,
+      "rk_stage": 1,
+      "call_count": 1,
+      "dts_values_seconds": [
+        0.3125
+      ],
+      "emdiv_values": [
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0,
+            "max_per_call_rms": 0.0,
+            "max_per_call_max_abs": 0.0,
+            "mean_of_per_call_signed_means": 0.0,
+            "per_call_rms_values": [
+              0.0
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.00013531937489577985,
+            "max_per_call_rms": 0.00013531937489577985,
+            "max_per_call_max_abs": 0.0007036278839223087,
+            "mean_of_per_call_signed_means": -1.3376901080022286e-09,
+            "per_call_rms_values": [
+              0.00013531937489577985
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.00013727654055078976,
+            "max_per_call_rms": 0.00013727654055078976,
+            "max_per_call_max_abs": 0.0007089212886057794,
+            "mean_of_per_call_signed_means": -4.19843176157683e-07,
+            "per_call_rms_values": [
+              0.00013727654055078976
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 10.13435763245989,
+            "max_per_call_rms": 10.13435763245989,
+            "max_per_call_max_abs": 24.77727508544922,
+            "mean_of_per_call_signed_means": -0.0007171275079738137,
+            "per_call_rms_values": [
+              10.13435763245989
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.5758132752222844,
+            "max_per_call_rms": 1.5758132752222844,
+            "max_per_call_max_abs": 5.7108540534973145,
+            "mean_of_per_call_signed_means": 0.009744285238510505,
+            "per_call_rms_values": [
+              1.5758132752222844
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 0.00013531666157109109,
+            "max_per_call_rms": 0.00013531666157109109,
+            "max_per_call_max_abs": 0.0007038116455078125,
+            "mean_of_per_call_signed_means": -6.359180737547376e-09,
+            "per_call_rms_values": [
+              0.00013531666157109109
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.00013727560600001036,
+            "max_per_call_rms": 0.00013727560600001036,
+            "max_per_call_max_abs": 0.0007089376449584961,
+            "mean_of_per_call_signed_means": -4.192382732526312e-07,
+            "per_call_rms_values": [
+              0.00013727560600001036
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 0.0,
+          "filter_rms_over_dts_descriptive_only": 0.0,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 256,
+      "outer_step_end_time_seconds": 240.0,
+      "rk_stage": 2,
+      "call_count": 2,
+      "dts_values_seconds": [
+        0.234375,
+        0.234375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 3.001763203037783,
+            "max_per_call_rms": 3.0051062538272646,
+            "max_per_call_max_abs": 4.935831069946289,
+            "mean_of_per_call_signed_means": 3.841705620288849e-09,
+            "per_call_rms_values": [
+              3.0051062538272646,
+              2.9984201522483014
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.5799975860588258,
+            "max_per_call_rms": 0.5819174324747096,
+            "max_per_call_max_abs": 1.2868521213531494,
+            "mean_of_per_call_signed_means": 0.00037407544841698835,
+            "per_call_rms_values": [
+              0.5819174324747096,
+              0.5780777396429421
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0008531030809643054,
+            "max_per_call_rms": 0.0011519909854905436,
+            "max_per_call_max_abs": 0.006197761278599501,
+            "mean_of_per_call_signed_means": -1.89356268577405e-09,
+            "per_call_rms_values": [
+              0.0011519909854905436,
+              0.0005542151764380671
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0008305143538503677,
+            "max_per_call_rms": 0.0011190624830664311,
+            "max_per_call_max_abs": 0.005246404558420181,
+            "mean_of_per_call_signed_means": 1.7071480019928188e-06,
+            "per_call_rms_values": [
+              0.0011190624830664311,
+              0.0005419662246343042
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 7.600541806576118,
+            "max_per_call_rms": 7.600541806576118,
+            "max_per_call_max_abs": 18.582353591918945,
+            "mean_of_per_call_signed_means": -0.0005376343676921636,
+            "per_call_rms_values": [
+              7.600541806576118,
+              7.600541806576118
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.1818463111424016,
+            "max_per_call_rms": 1.1818463111424016,
+            "max_per_call_max_abs": 4.278564929962158,
+            "mean_of_per_call_signed_means": 0.00731528809336055,
+            "per_call_rms_values": [
+              1.1818463111424016,
+              1.1818463111424016
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 3.001609155200745,
+            "max_per_call_rms": 3.004871093570771,
+            "max_per_call_max_abs": 4.937245845794678,
+            "mean_of_per_call_signed_means": 1.9354047253727913e-09,
+            "per_call_rms_values": [
+              3.004871093570771,
+              2.998347216830718
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.579958668372869,
+            "max_per_call_rms": 0.5818597111145265,
+            "max_per_call_max_abs": 1.2879853248596191,
+            "mean_of_per_call_signed_means": 0.00037578230021608763,
+            "per_call_rms_values": [
+              0.5818597111145265,
+              0.5780576256312115
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 3518.640677800318,
+          "filter_rms_over_dts_descriptive_only": 12.807522999627874,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 698.3594965817086,
+          "filter_rms_over_dts_descriptive_only": 2.4746563671843234,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    },
+    {
+      "run": "rk3_h0p9375",
+      "outer_step": 256,
+      "outer_step_end_time_seconds": 240.0,
+      "rk_stage": 3,
+      "call_count": 4,
+      "dts_values_seconds": [
+        0.234375,
+        0.234375,
+        0.234375,
+        0.234375
+      ],
+      "emdiv_values": [
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582,
+        0.009999999776482582
+      ],
+      "components": {
+        "filter": {
+          "u": {
+            "mean_per_call_rms": 2.9995542833901303,
+            "max_per_call_rms": 3.0006829169498026,
+            "max_per_call_max_abs": 4.927669525146484,
+            "mean_of_per_call_signed_means": -1.6298145055770874e-09,
+            "per_call_rms_values": [
+              2.999547753850244,
+              2.9984293793675256,
+              2.9995570833929492,
+              3.0006829169498026
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.578146019676524,
+            "max_per_call_rms": 0.5781954490781412,
+            "max_per_call_max_abs": 1.2645851373672485,
+            "mean_of_per_call_signed_means": 0.0003170119704009267,
+            "per_call_rms_values": [
+              0.578118465097498,
+              0.5781146773484184,
+              0.5781554871820387,
+              0.5781954490781412
+            ]
+          }
+        },
+        "pressure": {
+          "u": {
+            "mean_per_call_rms": 0.0010032521160379074,
+            "max_per_call_rms": 0.0016448535726395546,
+            "max_per_call_max_abs": 0.007546622306108475,
+            "mean_of_per_call_signed_means": 3.7487663393973546e-10,
+            "per_call_rms_values": [
+              0.0016448535726395546,
+              0.000885606176508822,
+              0.0005210968406152025,
+              0.0009614518743880506
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.0009681450536610406,
+            "max_per_call_rms": 0.0015698476749324848,
+            "max_per_call_max_abs": 0.00692718056961894,
+            "mean_of_per_call_signed_means": -8.920812169732733e-07,
+            "per_call_rms_values": [
+              0.0015698476749324848,
+              0.0008341533300462457,
+              0.0005090985570033602,
+              0.0009594806526620716
+            ]
+          }
+        },
+        "slow": {
+          "u": {
+            "mean_per_call_rms": 7.600477417574825,
+            "max_per_call_rms": 7.600477417574825,
+            "max_per_call_max_abs": 18.581241607666016,
+            "mean_of_per_call_signed_means": -0.000537541464329605,
+            "per_call_rms_values": [
+              7.600477417574825,
+              7.600477417574825,
+              7.600477417574825,
+              7.600477417574825
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 1.1818336802999372,
+            "max_per_call_rms": 1.1818336802999372,
+            "max_per_call_max_abs": 4.278557777404785,
+            "mean_of_per_call_signed_means": 0.007319777616284758,
+            "per_call_rms_values": [
+              1.1818336802999372,
+              1.1818336802999372,
+              1.1818336802999372,
+              1.1818336802999372
+            ]
+          }
+        },
+        "delta": {
+          "u": {
+            "mean_per_call_rms": 2.999468799073659,
+            "max_per_call_rms": 3.000832446979912,
+            "max_per_call_max_abs": 4.928928375244141,
+            "mean_of_per_call_signed_means": -2.661181497387588e-09,
+            "per_call_rms_values": [
+              2.9992240817050115,
+              2.9982677746636903,
+              2.9995508929460226,
+              3.000832446979912
+            ]
+          },
+          "v": {
+            "mean_per_call_rms": 0.5781272517045938,
+            "max_per_call_rms": 0.5782313358747707,
+            "max_per_call_max_abs": 1.2659400701522827,
+            "mean_of_per_call_signed_means": 0.00031612021650365325,
+            "per_call_rms_values": [
+              0.5780450124557321,
+              0.5780779626851204,
+              0.5781546958027518,
+              0.5782313358747707
+            ]
+          }
+        }
+      },
+      "descriptive_ratios": {
+        "u": {
+          "filter_rms_over_pressure_rms": 2989.831006024804,
+          "filter_rms_over_dts_descriptive_only": 12.798098275797889,
+          "zero_pressure_denominator": false
+        },
+        "v": {
+          "filter_rms_over_pressure_rms": 597.1687997477907,
+          "filter_rms_over_dts_descriptive_only": 2.466756350619836,
+          "zero_pressure_denominator": false
+        }
+      },
+      "interpretation": "Per-stage means/maxima over actual call rows within the outer step whose endpoint is labeled here. RMS norms are not summed across RK stages or treated as endpoint changes. filter/pressure is a descriptive ratio of per-call RMS summaries. filter/dts is a descriptive quotient only: the source emdiv term is added without dts."
+    }
+  ],
+  "coarse_fine_same_physical_time_stage_ratios": [
+    {
+      "physical_outer_step_end_seconds": 60,
+      "rk_stage": 1,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": null,
+          "v": null
+        },
+        "pressure": {
+          "u": 0.25111246474180726,
+          "v": 0.24277072114394313
+        },
+        "slow": {
+          "u": 0.2499895701753219,
+          "v": 0.2500794339012345
+        },
+        "delta": {
+          "u": 0.2511186949552196,
+          "v": 0.24276870005114431
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    },
+    {
+      "physical_outer_step_end_seconds": 60,
+      "rk_stage": 2,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": 0.8859815847005662,
+          "v": 0.5711907755517879
+        },
+        "pressure": {
+          "u": 0.09981935463462749,
+          "v": 0.10100563669015097
+        },
+        "slow": {
+          "u": 0.2499978565215922,
+          "v": 0.25009293931128795
+        },
+        "delta": {
+          "u": 0.8864831517036292,
+          "v": 0.5714454497759842
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    },
+    {
+      "physical_outer_step_end_seconds": 60,
+      "rk_stage": 3,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": 0.8771718685842003,
+          "v": 0.5689089989142873
+        },
+        "pressure": {
+          "u": 0.0827383516336365,
+          "v": 0.08315751638192405
+        },
+        "slow": {
+          "u": 0.25000293576156235,
+          "v": 0.25010737379705494
+        },
+        "delta": {
+          "u": 0.8774912134698397,
+          "v": 0.5690477935725281
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    },
+    {
+      "physical_outer_step_end_seconds": 120,
+      "rk_stage": 1,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": null,
+          "v": null
+        },
+        "pressure": {
+          "u": 0.26035412821017595,
+          "v": 0.25822984487509437
+        },
+        "slow": {
+          "u": 0.25007465943330587,
+          "v": 0.2506250800701711
+        },
+        "delta": {
+          "u": 0.2603525765989218,
+          "v": 0.2582303147960016
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    },
+    {
+      "physical_outer_step_end_seconds": 120,
+      "rk_stage": 2,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": 0.7646716041622682,
+          "v": 0.48268260842261723
+        },
+        "pressure": {
+          "u": 0.09684376713184362,
+          "v": 0.09794454448351816
+        },
+        "slow": {
+          "u": 0.2500892458399831,
+          "v": 0.2506598026849334
+        },
+        "delta": {
+          "u": 0.7651128622288623,
+          "v": 0.48295656720185764
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    },
+    {
+      "physical_outer_step_end_seconds": 120,
+      "rk_stage": 3,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": 0.7610338920174835,
+          "v": 0.4823966683477041
+        },
+        "pressure": {
+          "u": 0.0847213568806326,
+          "v": 0.08523372133756245
+        },
+        "slow": {
+          "u": 0.25009740339725767,
+          "v": 0.2506813935085244
+        },
+        "delta": {
+          "u": 0.7612707300985282,
+          "v": 0.48251287905686163
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    },
+    {
+      "physical_outer_step_end_seconds": 240,
+      "rk_stage": 1,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": null,
+          "v": null
+        },
+        "pressure": {
+          "u": 0.2585987859776049,
+          "v": 0.2579760979584151
+        },
+        "slow": {
+          "u": 0.25086733154158103,
+          "v": 0.2531976962622827
+        },
+        "delta": {
+          "u": 0.2585853979481358,
+          "v": 0.2579763172221253
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    },
+    {
+      "physical_outer_step_end_seconds": 240,
+      "rk_stage": 2,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": 0.6074451991694814,
+          "v": 0.3911868336750961
+        },
+        "pressure": {
+          "u": 0.0977836120611171,
+          "v": 0.10235173791552217
+        },
+        "slow": {
+          "u": 0.2508977206050475,
+          "v": 0.2532541880742972
+        },
+        "delta": {
+          "u": 0.6078100997897319,
+          "v": 0.39143613235286767
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    },
+    {
+      "physical_outer_step_end_seconds": 240,
+      "rk_stage": 3,
+      "coarse_h_seconds": 3.75,
+      "fine_h_seconds": 0.9375,
+      "per_component_fine_over_coarse_rms_ratio": {
+        "filter": {
+          "u": 0.6061078014875882,
+          "v": 0.3911624388100067
+        },
+        "pressure": {
+          "u": 0.0859057116372649,
+          "v": 0.08786226623854591
+        },
+        "slow": {
+          "u": 0.2509141813144906,
+          "v": 0.253276149783508
+        },
+        "delta": {
+          "u": 0.6063105499796643,
+          "v": 0.3912940984812902
+        }
+      },
+      "interpretation": "Comparison of measured per-call component norms at matched outer physical time and RK stage only; different h and dts remain explicit. These ratios are not endpoint or truth-error ratios."
+    }
+  ],
+  "interpretation_limits": [
+    "Do not sum RMS norms over RK stages or reinterpret per-call RMS as an outer-step endpoint change.",
+    "filter_rms/pressure_rms is descriptive; filter_rms/dts is also descriptive because the source emdiv term is added without dts.",
+    "A smaller component norm or ratio alone does not establish a causal trajectory effect, accuracy, or the source of refinement behavior."
+  ]
+}

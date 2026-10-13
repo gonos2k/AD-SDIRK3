@@ -1,0 +1,509 @@
+{
+  "schema": "pr305_loop_preserved_fine_pr296_field_gate_v1",
+  "status": "pass",
+  "checked_local_time": "2026-10-13T20:17:00+09:00",
+  "new_run": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_execution/rk3_h0p9375_loop_preserved_observer_on",
+  "run_receipt_sha256": "1b9094f88b8272e4af22bfb32c1d37275c5a864f6c89b885734759277faacf2b",
+  "reference": "/Users/yhlee/AD-SDIRK3-review-evidence/seam-cause-acceptance-20261012/green_acceptance/native_qualification_v3/runs/rk3_h0p9375_reference_qualification",
+  "reference_namelist_sha256": "daacfb916fd370eef9c370a09324e573ee8b843d6aac68f443f20c078298562d",
+  "reference_input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "reference_wrfout_hashes": {
+    "wrfout_d01_0001-01-01_00:00:00": "9b8b6d168a9c7a2b76212bcda32d34658b7235296de0643253a2eb8e7e47c169",
+    "wrfout_d01_0001-01-01_00:02:00": "46bb5454269bf848390ebf098946b4ffcd39dbcc030a2b2c78b12d1b13c89e6e",
+    "wrfout_d01_0001-01-01_00:04:00": "4467e8fa7071accac2d5157ceaf4f33d8b7c28bad3bffd4f625a83fafeb2b945"
+  },
+  "fields": [
+    "U",
+    "V",
+    "W",
+    "PH",
+    "T",
+    "THM",
+    "MU",
+    "MUB"
+  ],
+  "times": [
+    "0001-01-01_00:00:00",
+    "0001-01-01_00:01:00",
+    "0001-01-01_00:02:00",
+    "0001-01-01_00:03:00",
+    "0001-01-01_00:04:00"
+  ],
+  "policy": "bitwise comparison of eight raw FP32 arrays at five exact timestamps; finite required",
+  "exact_array_count": 40,
+  "total_arrays": 40,
+  "all40_exact": true,
+  "array_comparisons": [
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:00:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:01:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:02:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:03:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "U",
+      "shape": [
+        16,
+        16,
+        17
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "V",
+      "shape": [
+        16,
+        17,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "W",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "PH",
+      "shape": [
+        17,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "T",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "THM",
+      "shape": [
+        16,
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "MU",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    },
+    {
+      "time": "0001-01-01_00:04:00",
+      "field": "MUB",
+      "shape": [
+        16,
+        16
+      ],
+      "dtype": "float32",
+      "exact_array_equal": true,
+      "max_abs_difference": 0.0
+    }
+  ],
+  "observer_csv_sha256": "5d6ab0fba931af528dbe1dedf0d81a402acdbea9128a14529bdf7ff308ea6cb8"
+}
