@@ -1,0 +1,297 @@
+{
+  "schema": "pr307_new_executable_stage_observer_off_on_gate_v2",
+  "baseline_off_parity": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_off_vs_a5_parity_v2.json",
+  "baseline_off_parity_sha256": "066d06e051de67272d0dd93a4a6a69b6ceb58d30d1d40ff2984c547d60cd1cc0",
+  "baseline_off_parity_pass": true,
+  "off_run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_off_v2/run_receipt.json",
+  "on_run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/run_receipt.json",
+  "new_off_vs_on_raw_state": {
+    "0001-01-01_00:00:00": {
+      "U": {
+        "shape_left": [
+          16,
+          16,
+          17
+        ],
+        "shape_right": [
+          16,
+          16,
+          17
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "V": {
+        "shape_left": [
+          16,
+          17,
+          16
+        ],
+        "shape_right": [
+          16,
+          17,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "W": {
+        "shape_left": [
+          17,
+          16,
+          16
+        ],
+        "shape_right": [
+          17,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "PH": {
+        "shape_left": [
+          17,
+          16,
+          16
+        ],
+        "shape_right": [
+          17,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "T": {
+        "shape_left": [
+          16,
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "THM": {
+        "shape_left": [
+          16,
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "MU": {
+        "shape_left": [
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "MUB": {
+        "shape_left": [
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      }
+    },
+    "0001-01-01_00:00:15": {
+      "U": {
+        "shape_left": [
+          16,
+          16,
+          17
+        ],
+        "shape_right": [
+          16,
+          16,
+          17
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "V": {
+        "shape_left": [
+          16,
+          17,
+          16
+        ],
+        "shape_right": [
+          16,
+          17,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "W": {
+        "shape_left": [
+          17,
+          16,
+          16
+        ],
+        "shape_right": [
+          17,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "PH": {
+        "shape_left": [
+          17,
+          16,
+          16
+        ],
+        "shape_right": [
+          17,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "T": {
+        "shape_left": [
+          16,
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "THM": {
+        "shape_left": [
+          16,
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "MU": {
+        "shape_left": [
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "MUB": {
+        "shape_left": [
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      }
+    }
+  },
+  "new_off_vs_on_all_16_arrays_bitwise_exact": true,
+  "rhs_count_records_identical_off_on": true,
+  "rhs_call_records_off": [
+    "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=3",
+    "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=65 delta=62"
+  ],
+  "rhs_call_records_on": [
+    "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=3",
+    "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=65 delta=62"
+  ],
+  "on_stage_capture": {
+    "name": "accepted_ark_w_step_1.csv",
+    "bytes": 28561538,
+    "sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b"
+  },
+  "stage_history_markers_on": 3,
+  "stage_applied_delta_markers_on": 3,
+  "stage_operand_failure_markers_on": [],
+  "scope_limit": "one native ARK macrostep at h=15 s; no forecast/reference ladder or post-step sweep"
+}

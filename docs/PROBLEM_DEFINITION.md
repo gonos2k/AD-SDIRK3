@@ -2,7 +2,7 @@
 
 Local timestamp: 2026-10-11 17:47:15 JST (+0900)
 
-Last updated: 2026-10-14 07:08:55 JST (+0900)
+Last updated: 2026-10-15 01:03:08 JST (+0900)
 
 This is the single project-level definition of the first-stage research target.
 Case reports retain their own inputs, numerical budgets and completion status.
@@ -184,6 +184,58 @@ remains. No production source or ABI changed and no rebuild was needed. The six
 240 s runs and three 15 s diagnostic controls were executed and archived
 separately; this documentation audit launched no further run.
 
+## PR307 accepted-stage W RHS and source-work diagnostic
+
+PR307 adds a default-off `WRF_SDIRK3_STAGE_OPERAND_DIAG` observer and records
+one accepted 15 s native mode-3 macrostep for the same e71 input. Its source is
+commit `18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc`; the observer build uses
+`wrf_sdirk3_tile_unified_impl.cpp` SHA256
+`a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076` and
+executable SHA256
+`5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769`.
+No equation coefficients, initial conditions, or public C/Fortran ABI changed.
+The C++ trace/class layout expanded, so matching C++ consumers were rebuilt.
+Two archived
+observer OFF/ON control pairs (the initial partial observer and final V2
+observer) preserve all 16 output arrays bitwise and identical RHS-call counts;
+the final V2 run records 62 RHS calls in both controls. These are short
+diagnostic controls, not 240 s forecast comparisons.
+
+On the 4,096 physical W owners, including the dynamic upper face and excluding
+the fixed bottom, the directly observed `Full - FI - FE` residual for implicit
+stages 2–4 is at roundoff (RMS about `1e-21 m/s²`). Stage 1 has no independently
+observed Full evaluation. The FI/Full evaluation input is accepted \(Y_i\); their
+auxiliary `U_ref_stage_` matches \(B_i\), while slow/FE uses an auxiliary reference
+matching \(Y_i\). These auxiliary-reference labels are not RHS evaluation points.
+The source residuals
+\(G_W=Y_W-B_W-h a_{ii}F_I(Y)_W\) have RMS `8.60e-10`, `1.96e-11`, and
+`8.31e-11 m/s` for stages 2–4. These are solver-stage residual diagnostics,
+not true-error bounds. Stage 4 has valid checked-`Y`, `FI`, Full and pressure
+captures, but returned-K equivalence is unknown and is not inferred from these
+measurements.
+
+The reference-state distinction is recorded explicitly: fast/`FI` uses the
+stage base \(B_i\), while slow/`FE` uses accepted \(Y_i\). In this run the
+effective mass-coordinate mode is WRFParity (`effective_wrf_omega_ww_cp=1`)
+even though the deprecated raw Omega flag is off; `omega_w_blend=1`,
+`buoyancy_use_current_w=1`, and W damping is off. The W advection, buoyancy and
+pressure paths therefore use current-state W/Omega/PH/T/MU, so changing only
+the auxiliary reference from \(B_i\) to \(Y_i\) does not change this case's W
+RHS. This case-specific observation does not imply that the reference is
+irrelevant in effective Omega-off or blended configurations.
+
+The source-derived pressure-plus-buoyancy work is `56.433 MJ`, including
+`7.019 MJ` from the dynamic top closure. With frozen input-state W mass, the
+one-step W-only quadratic energy change is `51.495 MJ` against `55.717 MJ` of
+method work, a defect of `−4.222 MJ`. This is a W-only, one-step diagnostic,
+not a total atmospheric energy budget or an explanation of the 240 s W
+qualification failures. The PR306 20/24 result and failed native reference
+qualification remain unchanged. Detailed records are in the external
+`accepted-ark-w-stage-20261014` bundle: `green_execution/pr307_v2_completion_receipt.json`,
+`green_metric/actual_accepted_stage_w_analysis_v2.json`,
+`green_pressure/actual_stage_pressure_work_v2.json`, and
+`green_pressure/frozen_w_energy_identity_v2.json`.
+
 ## Completed restricted rotating inverse
 
 The completed validation instance has a 484-component complex linear source,
@@ -260,5 +312,7 @@ This documentation was checked against main
 production tableau, supported derivative contracts and preserved case reports.
 Green and Red teams checked the definition, supported-path claims and scope
 boundaries against those sources and found no blocking issue.
-No production source/configuration was changed and no model build, numerical
-integration or new WRF/RK3 field/runtime comparison was performed for this update.
+No production source/configuration was changed for this documentation update.
+It records the four archived PR307 short native observer controls and existing
+one-step stage analysis; this edit launched no model run. No 240 s qualification
+run or same-setup RK3 field/runtime comparison was performed for PR307.

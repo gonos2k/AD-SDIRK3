@@ -360,6 +360,132 @@ inline bool native_option2_declared(
            grid->smagorinsky_opt > 0;
 }
 
+// Strict value identity for detached witness tensors. This is an elementwise
+// equality check, not a claim about storage-byte identity.
+inline bool same_stage_tensor_values(const torch::Tensor& a,
+                                     const torch::Tensor& b) {
+    return a.defined() && b.defined() && a.sizes() == b.sizes() &&
+           a.device() == b.device() && a.scalar_type() == b.scalar_type() &&
+           torch::equal(a, b);
+}
+
+inline bool finite_stage_tensor(const torch::Tensor& tensor) {
+    return tensor.defined() && tensor.numel() > 0 &&
+           torch::isfinite(tensor).all().item<bool>();
+}
+
+// Copy the already-observed W terms from the existing thread-local capture.
+// This helper never evaluates an RHS; callers arm the slot around a production
+// evaluation and pass its taken term inventory plus same-call identity here.
+inline void snapshot_stage_w_pressure_terms(
+    TileSDIRK3UnifiedSolver::ArkBudgetTrace& trace,
+    size_t stage_index,
+    bool scope_armed,
+    const wrf::sdirk3::RwTermCaptureIdentity& expected_identity,
+    const wrf::sdirk3::RwTermCaptureIdentity& captured_identity,
+    int rhs_mode,
+    const wrf::sdirk3::RwWConversionCapture& conversion,
+    const std::vector<std::pair<std::string, torch::Tensor>>& raw_terms) {
+    TORCH_CHECK(stage_index < trace.stage_meta.size() &&
+                stage_index < trace.w_pressure.size(),
+                "stage W term capture index out of range");
+    auto& meta = trace.stage_meta[stage_index];
+    auto& terms = trace.w_pressure[stage_index];
+    terms = TileSDIRK3UnifiedSolver::ArkBudgetTrace::WPressureTerms{};
+    meta.w_capture_armed = false;
+    meta.w_capture_available = false;
+    meta.w_capture_identity_valid = false;
+    meta.w_conversion_observed = false;
+    meta.w_conversion_canonical_horizontal = false;
+    meta.w_conversion_coupled_slow_export = false;
+    meta.w_capture_rhs_mode = -1;
+    meta.w_capture_input_digest = 0;
+    meta.w_capture_host_timestep = -1;
+    meta.w_capture_solver_id = 0;
+    meta.w_capture_newton_iter = -1;
+    meta.w_capture_solve_generation = 0;
+    meta.w_capture_armed = scope_armed;
+    if (!scope_armed) {
+        terms.unavailable_reason = "nested_scope";
+        return;
+    }
+    auto find_term = [&](const char* name) -> torch::Tensor {
+        for (const auto& item : raw_terms)
+            if (item.first == name) return item.second.detach().clone();
+        return torch::Tensor();
+    };
+    terms.pg = find_term("pg");
+    terms.buoy_mu1 = find_term("buoy_mu1");
+    terms.buoy_mu2 = find_term("buoy_mu2");
+    terms.w_pgf_buoy_all = find_term("w_pgf_buoy_all");
+    if (conversion.observed) {
+        if (conversion.velocity_mass_w.defined())
+            terms.velocity_mass_w = conversion.velocity_mass_w.detach().clone();
+        if (conversion.mu_tend_at_w.defined())
+            terms.mu_tend_at_w = conversion.mu_tend_at_w.detach().clone();
+        if (conversion.conversion_rate.defined())
+            terms.conversion_rate = conversion.conversion_rate.detach().clone();
+        if (conversion.w_tend_after_conversion.defined())
+            terms.w_tend_after_conversion =
+                conversion.w_tend_after_conversion.detach().clone();
+    }
+    const bool identity_matches = captured_identity.valid &&
+        captured_identity.timestep == expected_identity.timestep &&
+        captured_identity.solver_id == expected_identity.solver_id &&
+        captured_identity.stage == expected_identity.stage &&
+        captured_identity.newton_iter == expected_identity.newton_iter &&
+        captured_identity.solve_generation == expected_identity.solve_generation &&
+        captured_identity.input_digest == expected_identity.input_digest;
+    meta.w_capture_rhs_mode = rhs_mode;
+    meta.w_capture_identity_valid = identity_matches;
+    meta.w_capture_input_digest = captured_identity.input_digest;
+    meta.w_capture_host_timestep = captured_identity.timestep;
+    meta.w_capture_solver_id = captured_identity.solver_id;
+    meta.w_capture_newton_iter = captured_identity.newton_iter;
+    meta.w_capture_solve_generation = captured_identity.solve_generation;
+    meta.w_conversion_observed = conversion.observed;
+    meta.w_conversion_canonical_horizontal = conversion.canonical_horizontal;
+    meta.w_conversion_coupled_slow_export = conversion.coupled_slow_export;
+
+    const auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    const bool expect_wdamp = wrf::sdirk3::rw_term_capture_expects_wdamp(
+        cfg.wrf_w_damping == 1, cfg.implicit_wdamp,
+        cfg.w_damp_alpha, cfg.wrf_w_crit_cfl);
+    const std::string inventory_error =
+        wrf::sdirk3::validate_rw_term_inventory(raw_terms, expect_wdamp);
+    const bool required_terms_present = terms.pg.defined() &&
+        terms.buoy_mu1.defined() && terms.buoy_mu2.defined() &&
+        terms.w_pgf_buoy_all.defined();
+    const bool conversion_complete = conversion.observed &&
+        !conversion.coupled_slow_export && conversion.w_input.defined() &&
+        conversion.velocity_mass_w.defined() && conversion.mu_tend_at_w.defined() &&
+        (!conversion.canonical_horizontal || conversion.conversion_rate.defined()) &&
+        conversion.w_tend_after_conversion.defined();
+    if (!identity_matches) {
+        terms.unavailable_reason = "capture_identity_mismatch";
+    } else if (rhs_mode != static_cast<int>(wrf::sdirk3::RhsMode::ImplicitOnly)) {
+        terms.unavailable_reason = "unsupported_rhs_mode";
+    } else if (!inventory_error.empty()) {
+        terms.unavailable_reason = "term_inventory:" + inventory_error;
+    } else if (!required_terms_present) {
+        terms.unavailable_reason = "missing_required_pressure_term";
+    } else if (!finite_stage_tensor(terms.pg) ||
+               !finite_stage_tensor(terms.buoy_mu1) ||
+               !finite_stage_tensor(terms.buoy_mu2) ||
+               !finite_stage_tensor(terms.w_pgf_buoy_all) ||
+               !finite_stage_tensor(terms.velocity_mass_w) ||
+               !finite_stage_tensor(terms.mu_tend_at_w) ||
+               (conversion.canonical_horizontal &&
+                !finite_stage_tensor(terms.conversion_rate)) ||
+               !finite_stage_tensor(terms.w_tend_after_conversion)) {
+        terms.unavailable_reason = "nonfinite_capture_term";
+    } else if (!conversion_complete) {
+        terms.unavailable_reason = "missing_or_unsupported_w_conversion";
+    } else {
+        meta.w_capture_available = true;
+    }
+}
+
 }  // namespace
 
 // Ensure M_PI is defined (not always available on all compilers)
@@ -9303,19 +9429,75 @@ vertical_coefficients:
 
             using Ark = wrf::sdirk3::ARK324L2SACoefficients;
             telemetry_b3_coeff = static_cast<float>(Ark::b[2]);
+            const bool stage_operand_diag_on =
+                wrf::sdirk3::g_sdirk3_config.stage_operand_diag;
+            const bool capture_stage_arrays =
+                capture_ark_budget_trace_ || stage_operand_diag_on;
             std::vector<torch::Tensor> k_fast(Ark::stages);
             std::vector<torch::Tensor> k_slow(Ark::stages);
             std::vector<torch::Tensor> k_full(Ark::stages);
-            if (capture_ark_budget_trace_) {
+            if (capture_stage_arrays) {
                 torch::NoGradGuard no_grad;
                 auto& trace = last_ark_budget_trace_;
                 trace.input = U_n.detach().clone();
                 trace.physics = F_phys.detach().clone();
                 trace.dt = dt_ark;
+                const auto& capture_config = wrf::sdirk3::g_sdirk3_config;
+                trace.kdamp_config = capture_config.kdamp;
+                trace.kdamp_grid = grid_info_ ? grid_info_->kdamp
+                    : std::numeric_limits<double>::quiet_NaN();
+                trace.gravity_grid = grid_info_ ? grid_info_->g
+                    : std::numeric_limits<double>::quiet_NaN();
+                trace.gravity_fallback = g_;
+                trace.gravity_rhs_value =
+                    (grid_info_ && grid_info_->g > 0.0f) ? grid_info_->g : g_;
+                trace.rdx = rdx;
+                trace.rdy = rdy;
+                trace.mass_coordinate_mode = capture_config.mass_coordinate_mode;
+                trace.wrf_w_damping = capture_config.wrf_w_damping;
+                trace.wrf_damp_opt = capture_config.wrf_damp_opt;
+                trace.diffusion_option = capture_config.diffusion_option;
+                trace.khdif = capture_config.khdif;
+                trace.kvdif = capture_config.kvdif;
+                trace.omega_w_blend = capture_config.omega_w_blend;
+                trace.imex_split_mode = capture_config.imex_split_mode;
+                trace.split_explicit = capture_config.split_explicit;
+                trace.omega_update_ref_per_newton =
+                    capture_config.omega_update_ref_per_newton;
+                trace.imex_slow_in_tangent = capture_config.imex_slow_in_tangent;
+                trace.newton_tol = capture_config.newton_tol;
+                trace.newton_rtol = capture_config.newton_rtol;
+                trace.krylov_tol = capture_config.krylov_tol;
+                trace.ewt_rtol = capture_config.effective_ewt_rtol();
+                trace.gate_metric_mode = capture_config.gate_metric_mode;
+                trace.stage_gate_rel_threshold =
+                    capture_config.stage_gate_rel_threshold;
+                trace.stage3_gate_rel_threshold =
+                    capture_config.stage3_gate_rel_threshold;
+                trace.raw_wrf_omega_ww_cp = capture_config.wrf_omega_ww_cp;
+                trace.effective_wrf_omega_ww_cp =
+                    capture_config.effective_wrf_omega_ww_cp();
+                trace.buoyancy_use_current_w = capture_config.buoyancy_use_current_w;
+                trace.split_explicit_top_lid = capture_config.split_explicit_top_lid;
+                trace.implicit_divergence = capture_config.implicit_divergence;
+                trace.non_hydrostatic = capture_config.non_hydrostatic;
+                trace.do_curvature = capture_config.do_curvature;
+                trace.stage_operand_capture = stage_operand_diag_on;
                 trace.stage_state.resize(Ark::stages);
+                trace.stage_history_base.resize(Ark::stages);
+                trace.stage_base.resize(Ark::stages);
                 trace.fast.resize(Ark::stages);
                 trace.slow.resize(Ark::stages);
                 trace.full.resize(Ark::stages);
+                trace.checked_state.resize(Ark::stages);
+                trace.fi_checked.resize(Ark::stages);
+                trace.p_pert_checked.resize(Ark::stages);
+                trace.full_actual.resize(Ark::stages);
+                trace.g_checked.resize(Ark::stages);
+                trace.stage_meta.resize(Ark::stages);
+                trace.newton_scalars.resize(Ark::stages);
+                trace.newton_tensors.resize(Ark::stages);
+                trace.w_pressure.resize(Ark::stages);
                 trace.slow_faces.resize(Ark::stages);
             }
             // PR 9F P1-3: BIRTH-time immutable snapshots (detached clones) of each
@@ -9903,8 +10085,6 @@ vertical_coefficients:
             // record stage being assembled, the ACTUAL production delta each
             // source applied (rhs_after - rhs_before, in production FP32) -- the
             // ground truth the emitter checks per-source attribution against.
-            const bool stage_operand_diag_on =
-                wrf::sdirk3::g_sdirk3_config.stage_operand_diag;
             const bool stage2_rejection_snapshot_diag_on =
                 wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag;
             // The running FP32 state AFTER each source's add (index j = state
@@ -10119,6 +10299,13 @@ vertical_coefficients:
                 }
                 if (stage_operand_diag_on) {
                     stage_operand_step_label = ++stage_operand_diag_step_;
+                    if (capture_stage_arrays) {
+                        last_ark_budget_trace_.step_seq = stage_operand_step_label;
+                        const auto host_step =
+                            wrf::sdirk3::mpi_safety::currentHostTimestep();
+                        last_ark_budget_trace_.host_timestep_token =
+                            host_step > 0 ? host_step : -1;
+                    }
                 }
             }
 
@@ -10144,6 +10331,16 @@ vertical_coefficients:
                 capture_theta_faces_now_ = capture_ark_theta_faces && i == 0;
                 const double aii = Ark::a_implicit[i][i];
                 torch::Tensor U_stage = compute_stage_rhs(i);
+                if (capture_stage_arrays) {
+                    torch::NoGradGuard no_grad;
+                    auto& trace = last_ark_budget_trace_;
+                    trace.stage_history_base[i] = U_stage.detach().clone();
+                    auto& meta = trace.stage_meta[i];
+                    meta.stage_id = stage_id;
+                    meta.tableau_a_ii = aii;
+                    meta.effective_a_ii = aii;
+                    meta.explicit_stage = std::abs(aii) < 1e-14;
+                }
                 probe_firsthit_nonfinite(stage_id, false, "U_stage_pre", U_stage);
                 checkTensorHealth(U_stage, "U_stage_ark");
 
@@ -10351,6 +10548,8 @@ vertical_coefficients:
                 // stage_fail_action=2: one recoverable retry for failed implicit stages.
                 // Retry keeps the same implicit stage equation (no a_ii mutation).
                 double effective_aii = aii;
+                if (capture_stage_arrays)
+                    last_ark_budget_trace_.stage_meta[i].effective_a_ii = effective_aii;
                 bool retry_used = false;
                 torch::Tensor K_prev_attempt = K_prev_stage;
                 while (true) {
@@ -10363,6 +10562,21 @@ vertical_coefficients:
                             U_full_exch_stage = sanitize_nonfinite_tensor(U_full_exch_stage, "U_full_exch_stage_retry");
                         }
                     }
+                    if (capture_stage_arrays) {
+                        torch::NoGradGuard no_grad;
+                        auto& trace = last_ark_budget_trace_;
+                        auto& meta = trace.stage_meta[i];
+                        trace.stage_base[i] = U_stage.detach().clone();
+                        if (retry_used && trace.stage_history_base[i].defined()) {
+                            const bool differs =
+                                !torch::equal(trace.stage_history_base[i], U_stage);
+                            meta.retry_base_sanitized =
+                                meta.retry_base_sanitized || differs;
+                        }
+                        meta.base_differs_from_history =
+                            trace.stage_history_base[i].defined() &&
+                            !torch::equal(trace.stage_history_base[i], U_stage);
+                    }
                     if (std::abs(effective_aii) < 1e-14f) {
                         // R13.10 (red team P1-6): an explicit stage runs no Newton solve, so it
                         // must not carry the PREVIOUS implicit stage's signals into its gate.
@@ -10374,7 +10588,74 @@ vertical_coefficients:
                         last_stage_signals_populated_by_stage_ = stage_id;
                         last_stage_signals_is_explicit_ = true;
                         // ESDIRK explicit first stage: evaluate fast tendency directly.
-                        k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
+                        if (stage_operand_diag_on && capture_stage_arrays &&
+                            !wrf::sdirk3::rw_term_capture_slot().armed) {
+                            const auto host_step =
+                                wrf::sdirk3::mpi_safety::currentHostTimestep();
+                            wrf::sdirk3::RwTermCaptureIdentity identity;
+                            identity.valid = U_stage.defined() && U_stage.numel() > 0;
+                            identity.timestep = host_step > 0 ? host_step : -1;
+                            identity.solver_id = newton_solver_
+                                ? newton_solver_->solver_id() : 0;
+                            identity.stage = stage_id;
+                            identity.newton_iter = -1;  // explicit seed has no Newton solve
+                            identity.solve_generation = 0;
+                            if (identity.valid) {
+                                try {
+                                    identity.input_digest =
+                                        wrf::sdirk3::sdirk3_rhs_operand_digest(
+                                            U_stage);
+                                } catch (...) {
+                                    identity.valid = false;
+                                }
+                            }
+                            wrf::sdirk3::RwTermCaptureScope w_scope(true, identity);
+                            auto& trace = last_ark_budget_trace_;
+                            auto& meta = trace.stage_meta[i];
+                            meta.w_capture_armed = w_scope.armed_ok();
+                            if (w_scope.armed_ok()) {
+                                // Preserve the production call's ordinary grad mode and call
+                                // count. The scope only observes terms emitted by this call.
+                                k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
+                                auto captured_identity = w_scope.identity();
+                                const int rhs_mode = w_scope.rhs_mode();
+                                const auto conversion = w_scope.w_conversion_observation();
+                                auto raw_terms = w_scope.take();
+                                snapshot_stage_w_pressure_terms(
+                                    trace, i, true, identity, captured_identity,
+                                    rhs_mode, conversion, raw_terms);
+                            } else {
+                                trace.w_pressure[i].unavailable_reason = "nested_scope";
+                                k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
+                            }
+                        } else {
+                            if (stage_operand_diag_on && capture_stage_arrays &&
+                                wrf::sdirk3::rw_term_capture_slot().armed) {
+                                wrf::sdirk3::RwTermCaptureIdentity no_identity;
+                                wrf::sdirk3::RwWConversionCapture no_conversion;
+                                snapshot_stage_w_pressure_terms(
+                                    last_ark_budget_trace_, static_cast<size_t>(i),
+                                    false, no_identity, no_identity, -1,
+                                    no_conversion, {});
+                            }
+                            k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
+                        }
+                        if (stage_operand_diag_on && capture_stage_arrays) {
+                            torch::NoGradGuard no_grad;
+                            auto& trace = last_ark_budget_trace_;
+                            auto& meta = trace.stage_meta[i];
+                            trace.checked_state[i] = U_stage.detach().clone();
+                            trace.fi_checked[i] = k_fast[i].detach().clone();
+                            meta.fi_evaluation_observed = true;
+                            meta.fi_ref_matches_base = same_stage_tensor_values(
+                                U_ref_stage_, trace.stage_history_base[i]);
+                            meta.fi_ref_matches_checked_state = same_stage_tensor_values(
+                                U_ref_stage_, trace.checked_state[i]);
+                            if (p_pert_.defined() && p_pert_.numel() > 0) {
+                                trace.p_pert_checked[i] = p_pert_.detach().clone();
+                                meta.p_pert_observed = true;
+                            }
+                        }
                         if (capture_theta_faces_now_) {
                             last_ark_budget_trace_.stage1_fast_faces = rhs_theta_faces_;
                             capture_theta_faces_now_ = false;
@@ -10423,7 +10704,11 @@ vertical_coefficients:
                     }
                     probe_firsthit_nonfinite(stage_id, retry_used, "k_fast_postsolve", k_fast[i]);
                     if (retry_used && retry_sanitize_enabled) {
+                        const auto k_before_retry_sanitize = k_fast[i];
                         k_fast[i] = sanitize_nonfinite_tensor(k_fast[i], "k_fast_retry");
+                        if (capture_stage_arrays &&
+                            !torch::equal(k_before_retry_sanitize, k_fast[i]))
+                            last_ark_budget_trace_.stage_meta[i].fast_guard_applied = true;
                         probe_firsthit_nonfinite(stage_id, retry_used, "k_fast_retry_sanitized", k_fast[i]);
                     }
                     if (retry_used && wrf::sdirk3::g_sdirk3_config.mode3_retry_handoff_clip) {
@@ -10435,6 +10720,8 @@ vertical_coefficients:
                             k_fast[i], clip_abs, "k_fast_retry_handoff", "RETRY HANDOFF CLIP");
                         if (clipped_retry) {
                             stage_retry_handoff_clip_events++;
+                            if (capture_stage_arrays)
+                                last_ark_budget_trace_.stage_meta[i].fast_guard_applied = true;
                         }
                         probe_firsthit_nonfinite(stage_id, retry_used, "k_fast_retry_handoff_clipped", k_fast[i]);
                     }
@@ -10576,6 +10863,26 @@ vertical_coefficients:
                         tsnap.final_k = k_fast[i].detach().clone();
                     }
                     stage_operand_defect_tensors.push_back(tsnap);
+                    if (capture_stage_arrays) {
+                        torch::NoGradGuard no_grad;
+                        auto& trace = last_ark_budget_trace_;
+                        auto& meta = trace.stage_meta[i];
+                        meta.retry_used = retry_used;
+                        meta.gate_accepted = true;  // stage loop reached its accepted exit
+                        meta.converged = snap.converged;
+                        meta.newton_iterations = explicit_stage
+                            ? -1 : last_stage_signals_.newton_iterations;
+                        meta.krylov_iterations = explicit_stage
+                            ? -1 : last_stage_signals_.krylov_iterations;
+                        meta.final_scaled_residual = snap.scaled_final_residual;
+                        trace.newton_scalars[i] = snap;
+                        trace.newton_tensors[i] = tsnap;
+                        meta.postprocess_unchanged = explicit_stage ||
+                            (tsnap.returned_K.defined() && tsnap.final_k.defined() &&
+                             tsnap.returned_K.sizes() == tsnap.final_k.sizes() &&
+                             tsnap.returned_K.scalar_type() == tsnap.final_k.scalar_type() &&
+                             torch::equal(tsnap.returned_K, tsnap.final_k));
+                    }
                     // PR 9F P1-3: birth snapshot of THIS stage's fast derivative,
                     // now finalized (post solve/sanitize/damping), for later stages'
                     // history sources. A detached clone -- immune to any later
@@ -10612,6 +10919,40 @@ vertical_coefficients:
                 if (std::abs(effective_aii) >= 1e-14f) {
                     U_conv = U_stage + dt_ark * effective_aii * k_fast[i];
                 }
+                if (capture_stage_arrays) {
+                    torch::NoGradGuard no_grad;
+                    auto& trace = last_ark_budget_trace_;
+                    auto& meta = trace.stage_meta[i];
+                    trace.stage_state[i] = U_conv.detach().clone();
+                    if (stage_operand_diag_on) {
+                        const bool checked_matches_y = same_stage_tensor_values(
+                            trace.checked_state[i], U_conv);
+                        meta.checked_state_matches_y = checked_matches_y;
+                        meta.fi_available = checked_matches_y &&
+                            meta.fi_evaluation_observed && !meta.fast_guard_applied &&
+                            finite_stage_tensor(trace.fi_checked[i]);
+                        meta.p_pert_at_accepted_y = checked_matches_y &&
+                            meta.p_pert_observed &&
+                            finite_stage_tensor(trace.p_pert_checked[i]);
+                        meta.w_pressure_at_accepted_y = checked_matches_y &&
+                            !meta.fast_guard_applied && meta.w_capture_available;
+                        meta.full_available = checked_matches_y &&
+                            !meta.fast_guard_applied &&
+                            meta.full_evaluation_observed &&
+                            finite_stage_tensor(trace.full_actual[i]);
+                        if (meta.fi_available && !meta.explicit_stage) {
+                            const auto y64 = U_conv.detach()
+                                .to(torch::kCPU, torch::kFloat64);
+                            const auto b64 = trace.stage_base[i].detach()
+                                .to(torch::kCPU, torch::kFloat64);
+                            const auto fi64 = trace.fi_checked[i].detach()
+                                .to(torch::kCPU, torch::kFloat64);
+                            trace.g_checked[i] =
+                                (y64 - b64 - (dt_ark * effective_aii) * fi64)
+                                    .detach().clone();
+                        }
+                    }
+                }
                 probe_firsthit_nonfinite(stage_id, retry_used, "U_conv", U_conv);
                 torch::Tensor U_full_exch_conv;
                 if (use_ad_halo) {
@@ -10630,6 +10971,15 @@ vertical_coefficients:
                     last_ark_budget_trace_.slow_faces[i] = rhs_theta_faces_;
                     capture_theta_faces_now_ = false;
                     rhs_theta_faces_ = {};
+                }
+                if (stage_operand_diag_on && capture_stage_arrays) {
+                    torch::NoGradGuard no_grad;
+                    auto& meta = last_ark_budget_trace_.stage_meta[i];
+                    meta.slow_ref_matches_base =
+                        same_stage_tensor_values(
+                            U_ref_stage_, last_ark_budget_trace_.stage_base[i]);
+                    meta.slow_ref_matches_y =
+                        same_stage_tensor_values(U_ref_stage_, U_conv);
                 }
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
 
@@ -11708,7 +12058,7 @@ vertical_coefficients:
                 }
                 k_full[i] = k_fast[i] + k_slow[i];
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_full", k_full[i]);
-                if (capture_ark_budget_trace_) {
+                if (capture_stage_arrays) {
                     torch::NoGradGuard no_grad;
                     auto& trace = last_ark_budget_trace_;
                     trace.stage_state[i] = U_conv.detach().clone();
@@ -11964,7 +12314,7 @@ vertical_coefficients:
                 k3 = k_full[2];
                 k4 = k_full[3];
                 U_new = wrf::sdirk3::ark324_final_state(U_n, dt_ark, k_full);
-                if (capture_ark_budget_trace_) {
+                if (capture_stage_arrays) {
                     torch::NoGradGuard no_grad;
                     last_ark_budget_trace_.raw_final = U_new.detach().clone();
                 }
@@ -12732,6 +13082,316 @@ vertical_coefficients:
         const auto& adjoint_output_graph = carry_fp64 ? U_new : step_output_graph;
         last_step_output_graph_ = adjoint_output_graph;
         recordFixedTrajectoryStep(step_input_graph, adjoint_output_graph, F_phys, dt);
+    }
+
+    // PR307: persist the already-captured, accepted mode-3 stage witness only
+    // after the outcome and projected endpoint are known. All tensor values
+    // below are detached snapshots from existing RHS/ARK work; this writer
+    // invokes no RHS and adds no numerical branch to the step.
+    if (last_ark_budget_trace_.stage_operand_capture &&
+        getLastStepOutcomeCode() ==
+            static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED) &&
+        !last_step_final_update_aborted_) {
+        using Ark = wrf::sdirk3::ARK324L2SACoefficients;
+        auto& trace = last_ark_budget_trace_;
+        TORCH_CHECK(trace.step_seq > 0 && trace.dt > 0.0 &&
+                    trace.input.defined() && trace.physics.defined() &&
+                    trace.raw_final.defined() && trace.projected_final.defined() &&
+                    trace.stage_history_base.size() == Ark::stages &&
+                    trace.stage_base.size() == Ark::stages &&
+                    trace.stage_state.size() == Ark::stages &&
+                    trace.fast.size() == Ark::stages &&
+                    trace.slow.size() == Ark::stages &&
+                    trace.full.size() == Ark::stages &&
+                    trace.stage_meta.size() == Ark::stages,
+                    "accepted stage-operand trace is incomplete");
+        for (int i = 0; i < Ark::stages; ++i) {
+            TORCH_CHECK(trace.stage_meta[static_cast<size_t>(i)].gate_accepted &&
+                        trace.stage_history_base[static_cast<size_t>(i)].defined() &&
+                        trace.stage_base[static_cast<size_t>(i)].defined() &&
+                        trace.stage_state[static_cast<size_t>(i)].defined() &&
+                        trace.fast[static_cast<size_t>(i)].defined() &&
+                        trace.slow[static_cast<size_t>(i)].defined() &&
+                        trace.full[static_cast<size_t>(i)].defined(),
+                        "accepted ARK stage trace missing stage ", i + 1);
+        }
+
+        const std::string path = "accepted_ark_w_step_" +
+            std::to_string(trace.step_seq) + ".csv";
+        std::ofstream out(path, std::ios::out | std::ios::trunc);
+        TORCH_CHECK(out, "cannot open accepted ARK stage trace: ", path);
+        auto write_meta = [&](const std::string& key, double value) {
+            out << "M," << key << ',' << std::setprecision(17) << value << '\n';
+        };
+        auto write_text = [&](const std::string& key, const std::string& value) {
+            out << "T," << key << ',' << value << '\n';
+        };
+        auto write_array = [&](const std::string& name,
+                               const torch::Tensor& tensor) {
+            TORCH_CHECK(tensor.defined() && tensor.numel() > 0,
+                        "accepted ARK stage trace missing array ", name);
+            const auto values = tensor.detach()
+                .to(torch::kCPU, torch::kFloat64).contiguous().view({-1});
+            TORCH_CHECK(torch::isfinite(values).all().item<bool>(),
+                        "accepted ARK stage trace nonfinite array ", name);
+            const auto* data = values.data_ptr<double>();
+            out << "A," << name << ',' << values.numel();
+            for (int64_t i = 0; i < values.numel(); ++i)
+                out << ',' << std::setprecision(17) << data[i];
+            out << '\n';
+        };
+        auto write_optional = [&](const std::string& name,
+                                  const torch::Tensor& tensor) {
+            if (finite_stage_tensor(tensor)) write_array(name, tensor);
+        };
+
+        write_text("schema", "accepted_ark_w_stage_v2");
+        write_text("packed_order", "U_V_W_PH_T_MU");
+        write_text("tensor_values", "flattened_F64_from_detached_native_tensors");
+        write_text("stage_seq_semantics", "logical_diagnostic_sequence_not_physical_time");
+        write_text("physical_time_semantics", "host_timestep_token_and_dt_only_no_inferred_timestamp");
+        write_text("accepted_state_availability_contract",
+                   "same_checked_Y_observation_finite_no_fast_guard_and_capture_identity_inventory");
+        write_text("postprocess_equality_semantics",
+                   "reported_separately_from_same_state_FI_full_and_pressure_availability");
+        write_text("w_term_units", "raw_coupled_Rw_rhs_basis");
+        write_text("pressure_acceleration_formula", "captured_pg_div_velocity_mass_w");
+        write_text("newton_tol_source_binding",
+                   "runtime_config_newton_tol_passed_to_solver_options_at_construction");
+        write_meta("step_seq", static_cast<double>(trace.step_seq));
+        write_meta("host_timestep_token", static_cast<double>(trace.host_timestep_token));
+        write_meta("dt_seconds", trace.dt);
+        write_meta("accepted_outcome_code", getLastStepOutcomeCode());
+        write_meta("accepted", 1.0);
+        write_meta("stage_count", static_cast<double>(Ark::stages));
+        write_meta("nx", nx_); write_meta("ny", ny_); write_meta("nz", nz_);
+        write_meta("nx_u", nx_u_); write_meta("ny_v", ny_v_); write_meta("nz_w", nz_w_);
+        write_meta("physical_owners_nx", ide_ - ids_);
+        write_meta("physical_owners_ny", jde_ - jds_);
+        write_meta("kdamp_config", trace.kdamp_config);
+        write_meta("kdamp_grid", trace.kdamp_grid);
+        write_meta("gravity_grid", trace.gravity_grid);
+        write_meta("gravity_fallback", trace.gravity_fallback);
+        write_meta("gravity_rhs_value", trace.gravity_rhs_value);
+        write_meta("rdx", trace.rdx); write_meta("rdy", trace.rdy);
+        write_meta("dx_from_rdx", trace.rdx != 0.0 ? 1.0 / trace.rdx : 0.0);
+        write_meta("dy_from_rdy", trace.rdy != 0.0 ? 1.0 / trace.rdy : 0.0);
+        write_meta("mass_coordinate_mode", trace.mass_coordinate_mode);
+        write_meta("newton_tol_config", trace.newton_tol);
+        write_meta("newton_rtol_config", trace.newton_rtol);
+        write_meta("krylov_tol_config", trace.krylov_tol);
+        write_meta("effective_ewt_rtol_config", trace.ewt_rtol);
+        write_meta("gate_metric_mode", trace.gate_metric_mode);
+        write_meta("stage_metric", trace.gate_metric_mode);
+        write_meta("stage_gate_rel_threshold", trace.stage_gate_rel_threshold);
+        write_meta("stage3_gate_rel_threshold", trace.stage3_gate_rel_threshold);
+        write_meta("implicit_divergence", trace.implicit_divergence ? 1.0 : 0.0);
+        write_meta("wrf_w_damping", trace.wrf_w_damping);
+        write_meta("wrf_damp_opt", trace.wrf_damp_opt);
+        write_meta("diffusion_option", trace.diffusion_option);
+        write_meta("khdif", trace.khdif); write_meta("kvdif", trace.kvdif);
+        write_meta("raw_wrf_omega_ww_cp", trace.raw_wrf_omega_ww_cp ? 1.0 : 0.0);
+        write_meta("effective_wrf_omega_ww_cp",
+                   trace.effective_wrf_omega_ww_cp ? 1.0 : 0.0);
+        write_meta("omega_w_blend", trace.omega_w_blend);
+        write_meta("imex_split_mode", trace.imex_split_mode);
+        write_meta("split_explicit", trace.split_explicit ? 1.0 : 0.0);
+        write_meta("omega_update_ref_per_newton",
+                   trace.omega_update_ref_per_newton ? 1.0 : 0.0);
+        write_meta("imex_slow_in_tangent", trace.imex_slow_in_tangent ? 1.0 : 0.0);
+        write_meta("buoyancy_use_current_w", trace.buoyancy_use_current_w ? 1.0 : 0.0);
+        write_meta("split_explicit_top_lid", trace.split_explicit_top_lid ? 1.0 : 0.0);
+        write_meta("non_hydrostatic", trace.non_hydrostatic ? 1.0 : 0.0);
+        write_meta("do_curvature", trace.do_curvature ? 1.0 : 0.0);
+        write_meta("physics_exact_zero_check_required", 1.0);
+        write_meta("full_actual_is_existing_debug2_reevaluation", 1.0);
+        write_meta("full_actual_is_sum_of_fast_slow", 0.0);
+
+        for (int i = 0; i < Ark::stages; ++i) {
+            const auto suffix = std::to_string(i + 1);
+            const auto& meta = trace.stage_meta[static_cast<size_t>(i)];
+            const auto& defects = trace.newton_scalars[static_cast<size_t>(i)];
+            const auto& tensor_defect = trace.newton_tensors[static_cast<size_t>(i)];
+            const std::string prefix = "s" + suffix + '_';
+            const bool postprocess_equality_observed =
+                tensor_defect.returned_K.defined() && tensor_defect.final_k.defined() &&
+                tensor_defect.returned_K.sizes() == tensor_defect.final_k.sizes() &&
+                tensor_defect.returned_K.scalar_type() == tensor_defect.final_k.scalar_type();
+            const bool postprocess_equality = postprocess_equality_observed &&
+                torch::equal(tensor_defect.returned_K, tensor_defect.final_k);
+            write_meta(prefix + "stage_id", meta.stage_id);
+            write_meta(prefix + "tableau_a_ii", meta.tableau_a_ii);
+            write_meta(prefix + "effective_a_ii", meta.effective_a_ii);
+            write_meta(prefix + "explicit_stage", meta.explicit_stage ? 1.0 : 0.0);
+            write_meta(prefix + "retry_used", meta.retry_used ? 1.0 : 0.0);
+            write_meta(prefix + "retry_base_sanitized",
+                       meta.retry_base_sanitized ? 1.0 : 0.0);
+            write_meta(prefix + "base_differs_from_history",
+                       meta.base_differs_from_history ? 1.0 : 0.0);
+            write_meta(prefix + "gate_accepted", meta.gate_accepted ? 1.0 : 0.0);
+            write_meta(prefix + "newton_applicable", meta.explicit_stage ? 0.0 : 1.0);
+            write_meta(prefix + "solver_converged", meta.explicit_stage
+                ? -1.0 : (meta.converged ? 1.0 : 0.0));
+            write_meta(prefix + "postprocess_unchanged",
+                       meta.postprocess_unchanged ? 1.0 : 0.0);
+            write_meta(prefix + "postprocess_equality_observed",
+                       postprocess_equality_observed ? 1.0 : 0.0);
+            write_text(prefix + "postprocess_equality_status",
+                       meta.explicit_stage ? "not_applicable_explicit" :
+                       (postprocess_equality_observed
+                           ? (postprocess_equality ? "equal" : "different")
+                           : "unknown"));
+            write_meta(prefix + "checked_state_matches_y",
+                       meta.checked_state_matches_y ? 1.0 : 0.0);
+            write_meta(prefix + "fast_guard_applied", meta.fast_guard_applied ? 1.0 : 0.0);
+            write_meta(prefix + "fi_evaluation_observed",
+                       meta.fi_evaluation_observed ? 1.0 : 0.0);
+            write_meta(prefix + "fi_available", meta.fi_available ? 1.0 : 0.0);
+            write_meta(prefix + "p_pert_observed", meta.p_pert_observed ? 1.0 : 0.0);
+            write_meta(prefix + "p_pert_at_accepted_y",
+                       meta.p_pert_at_accepted_y ? 1.0 : 0.0);
+            write_meta(prefix + "full_evaluation_observed",
+                       meta.full_evaluation_observed ? 1.0 : 0.0);
+            write_meta(prefix + "full_available", meta.full_available ? 1.0 : 0.0);
+            write_meta(prefix + "full_includes_physics",
+                       meta.full_includes_physics ? 1.0 : 0.0);
+            write_meta(prefix + "fi_ref_matches_base",
+                       meta.fi_ref_matches_base ? 1.0 : 0.0);
+            write_meta(prefix + "fi_ref_matches_checked_state",
+                       meta.fi_ref_matches_checked_state ? 1.0 : 0.0);
+            write_meta(prefix + "full_ref_matches_base",
+                       meta.full_ref_matches_base ? 1.0 : 0.0);
+            write_meta(prefix + "full_ref_matches_checked_state",
+                       meta.full_ref_matches_checked_state ? 1.0 : 0.0);
+            write_meta(prefix + "slow_ref_matches_base",
+                       meta.slow_ref_matches_base ? 1.0 : 0.0);
+            write_meta(prefix + "slow_ref_matches_y",
+                       meta.slow_ref_matches_y ? 1.0 : 0.0);
+            write_meta(prefix + "w_capture_armed", meta.w_capture_armed ? 1.0 : 0.0);
+            write_meta(prefix + "w_capture_available",
+                       meta.w_capture_available ? 1.0 : 0.0);
+            write_meta(prefix + "w_capture_identity_valid",
+                       meta.w_capture_identity_valid ? 1.0 : 0.0);
+            write_meta(prefix + "w_capture_rhs_mode", meta.w_capture_rhs_mode);
+            {
+                std::ostringstream digest;
+                digest << "0x" << std::hex << meta.w_capture_input_digest;
+                write_text(prefix + "w_capture_input_digest_hex", digest.str());
+            }
+            write_meta(prefix + "w_capture_host_timestep",
+                       static_cast<double>(meta.w_capture_host_timestep));
+            {
+                std::ostringstream solver_id;
+                solver_id << "0x" << std::hex << meta.w_capture_solver_id;
+                write_text(prefix + "w_capture_solver_id_hex", solver_id.str());
+            }
+            write_meta(prefix + "w_capture_newton_iter", meta.w_capture_newton_iter);
+            {
+                std::ostringstream generation;
+                generation << "0x" << std::hex << meta.w_capture_solve_generation;
+                write_text(prefix + "w_capture_solve_generation_hex", generation.str());
+            }
+            write_meta(prefix + "w_conversion_observed",
+                       meta.w_conversion_observed ? 1.0 : 0.0);
+            write_meta(prefix + "w_conversion_canonical_horizontal",
+                       meta.w_conversion_canonical_horizontal ? 1.0 : 0.0);
+            write_meta(prefix + "w_conversion_coupled_slow_export",
+                       meta.w_conversion_coupled_slow_export ? 1.0 : 0.0);
+            write_meta(prefix + "w_pressure_at_accepted_y",
+                       meta.w_pressure_at_accepted_y ? 1.0 : 0.0);
+            write_meta(prefix + "newton_tensor_available",
+                       tensor_defect.K.defined() && tensor_defect.F.defined() &&
+                       tensor_defect.R.defined() ? 1.0 : 0.0);
+            write_meta(prefix + "newton_scaled_final_residual",
+                       defects.scaled_final_residual);
+            write_meta(prefix + "newton_iterations", meta.newton_iterations);
+            write_meta(prefix + "krylov_iterations", meta.krylov_iterations);
+            write_meta(prefix + "final_scaled_residual",
+                       meta.final_scaled_residual);
+            write_meta(prefix + "newton_raw_defect_norm",
+                       defects.newton_defect_norm);
+            write_meta(prefix + "newton_f_fast_norm", defects.f_fast_norm);
+            write_meta(prefix + "newton_iter", tensor_defect.newton_iter);
+            write_meta(prefix + "newton_retry_generation",
+                       tensor_defect.retry_generation);
+            write_meta(prefix + "p_pert_ny", ny_);
+            write_meta(prefix + "p_pert_nz", nz_);
+            write_meta(prefix + "p_pert_nx", nx_);
+            write_meta(prefix + "w_term_ny", ny_);
+            write_meta(prefix + "w_term_nzw", nz_w_);
+            write_meta(prefix + "w_term_nx", nx_);
+            write_meta(prefix + "w_terms_are_coupled_rhs",
+                       meta.w_capture_available ? 1.0 : 0.0);
+        }
+
+        write_array("input", trace.input);
+        write_array("physics", trace.physics);
+        write_array("raw_final", trace.raw_final);
+        write_array("projected_final", trace.projected_final);
+        std::array<double, Ark::stages> b_e{};
+        std::array<double, Ark::stages> b_i{};
+        for (int i = 0; i < Ark::stages; ++i) {
+            const auto suffix = std::to_string(i + 1);
+            write_array("tableau_AE_s" + suffix,
+                        torch::tensor({Ark::a_explicit[i][0], Ark::a_explicit[i][1],
+                                       Ark::a_explicit[i][2], Ark::a_explicit[i][3]},
+                                      torch::TensorOptions().dtype(torch::kFloat64)));
+            write_array("tableau_AI_s" + suffix,
+                        torch::tensor({Ark::a_implicit[i][0], Ark::a_implicit[i][1],
+                                       Ark::a_implicit[i][2], Ark::a_implicit[i][3]},
+                                      torch::TensorOptions().dtype(torch::kFloat64)));
+            b_e[static_cast<size_t>(i)] = Ark::b[static_cast<size_t>(i)];
+            b_i[static_cast<size_t>(i)] = Ark::b[static_cast<size_t>(i)];
+            write_array("history_base_s" + suffix,
+                        trace.stage_history_base[static_cast<size_t>(i)]);
+            write_array("base_s" + suffix, trace.stage_base[static_cast<size_t>(i)]);
+            write_array("y_s" + suffix, trace.stage_state[static_cast<size_t>(i)]);
+            write_array("k_fast_s" + suffix, trace.fast[static_cast<size_t>(i)]);
+            write_array("k_slow_s" + suffix, trace.slow[static_cast<size_t>(i)]);
+            write_array("k_full_s" + suffix, trace.full[static_cast<size_t>(i)]);
+            const auto si = static_cast<size_t>(i);
+            if (trace.checked_state[si].defined())
+                write_array("checked_state_s" + suffix, trace.checked_state[si]);
+            if (trace.fi_checked[si].defined())
+                write_array("fi_checked_s" + suffix, trace.fi_checked[si]);
+            if (trace.p_pert_checked[si].defined())
+                write_array("p_pert_checked_s" + suffix, trace.p_pert_checked[si]);
+            if (trace.g_checked[si].defined())
+                write_array("g_checked_s" + suffix, trace.g_checked[si]);
+            if (trace.full_actual[si].defined())
+                write_array("full_actual_s" + suffix, trace.full_actual[si]);
+            const auto& nt = trace.newton_tensors[si];
+            write_optional("newton_K_s" + suffix, nt.K);
+            write_optional("newton_F_s" + suffix, nt.F);
+            write_optional("newton_R_s" + suffix, nt.R);
+            write_optional("newton_returned_K_s" + suffix, nt.returned_K);
+            write_optional("newton_final_K_s" + suffix, nt.final_k);
+            const auto& wp = trace.w_pressure[si];
+            write_optional("pg_s" + suffix, wp.pg);
+            write_optional("buoy_mu1_s" + suffix, wp.buoy_mu1);
+            write_optional("buoy_mu2_s" + suffix, wp.buoy_mu2);
+            write_optional("w_pgf_buoy_all_s" + suffix, wp.w_pgf_buoy_all);
+            write_optional("velocity_mass_w_s" + suffix, wp.velocity_mass_w);
+            write_optional("mu_tend_at_w_s" + suffix, wp.mu_tend_at_w);
+            write_optional("conversion_rate_s" + suffix, wp.conversion_rate);
+            write_optional("w_tend_after_conversion_s" + suffix,
+                           wp.w_tend_after_conversion);
+            if (!wp.unavailable_reason.empty()) {
+                std::string reason = wp.unavailable_reason;
+                std::replace(reason.begin(), reason.end(), ',', ';');
+                std::replace(reason.begin(), reason.end(), ' ', '_');
+                write_text("s" + suffix + "_w_capture_unavailable_reason", reason);
+            }
+        }
+        write_array("tableau_bE", torch::tensor(
+            std::vector<double>(b_e.begin(), b_e.end()),
+            torch::TensorOptions().dtype(torch::kFloat64)));
+        write_array("tableau_bI", torch::tensor(
+            std::vector<double>(b_i.begin(), b_i.end()),
+            torch::TensorOptions().dtype(torch::kFloat64)));
+        out.flush();
+        TORCH_CHECK(out.good(), "failed writing accepted ARK stage trace: ", path);
+        trace.accepted = true;
     }
 
     // R13.1: THE np-equivalence record, and the only one entitled to that claim.
@@ -14061,11 +14721,99 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                     // "not the armed evaluation" rather than naming a stage it cannot know.
                     adv_split_blocks_enabled();
                 torch::Tensor F_fast_final;
-                {
+                auto evaluate_fast_final = [&]() {
                     std::unique_ptr<ArmProbeFor> arm;
                     if (arm_any) arm.reset(new ArmProbeFor(residual_eval_probe(), stage));
-                    F_fast_final = computeUnifiedRHS(U_new, RhsMode::ImplicitOnly)
-                                       .detach().to(torch::kCPU);
+                    return computeUnifiedRHS(U_new, RhsMode::ImplicitOnly)
+                        .detach().to(torch::kCPU);
+                };
+                if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
+                    stage >= 1 && stage <=
+                        wrf::sdirk3::ARK324L2SACoefficients::stages) {
+                    auto& trace = last_ark_budget_trace_;
+                    const size_t si = static_cast<size_t>(stage - 1);
+                    auto& meta = trace.stage_meta[si];
+                    trace.checked_state[si] = torch::Tensor();
+                    trace.fi_checked[si] = torch::Tensor();
+                    trace.p_pert_checked[si] = torch::Tensor();
+                    trace.full_actual[si] = torch::Tensor();
+                    trace.g_checked[si] = torch::Tensor();
+                    meta.fi_evaluation_observed = false;
+                    meta.fi_available = false;
+                    meta.p_pert_observed = false;
+                    meta.p_pert_at_accepted_y = false;
+                    meta.full_evaluation_observed = false;
+                    meta.full_available = false;
+                    meta.fi_ref_matches_base = false;
+                    meta.fi_ref_matches_checked_state = false;
+                    meta.full_ref_matches_base = false;
+                    meta.full_ref_matches_checked_state = false;
+                    if (wrf::sdirk3::rw_term_capture_slot().armed) {
+                        wrf::sdirk3::RwTermCaptureIdentity no_identity;
+                        wrf::sdirk3::RwWConversionCapture no_conversion;
+                        snapshot_stage_w_pressure_terms(
+                            trace, si, false, no_identity, no_identity, -1,
+                            no_conversion, {});
+                        F_fast_final = evaluate_fast_final();
+                    } else {
+                        const auto host_step =
+                            wrf::sdirk3::mpi_safety::currentHostTimestep();
+                        wrf::sdirk3::RwTermCaptureIdentity identity;
+                        identity.valid = U_new.defined() && U_new.numel() > 0;
+                        identity.timestep = host_step > 0 ? host_step : -1;
+                        identity.solver_id = newton_solver_
+                            ? newton_solver_->solver_id() : 0;
+                        identity.stage = stage;
+                        identity.newton_iter = stats.defect_newton_iter;
+                        identity.solve_generation = stats.defect_retry_generation >= 0
+                            ? static_cast<std::uint64_t>(stats.defect_retry_generation) : 0;
+                        if (identity.valid) {
+                            try {
+                                identity.input_digest =
+                                    wrf::sdirk3::sdirk3_rhs_operand_digest(U_new);
+                            } catch (...) {
+                                identity.valid = false;
+                            }
+                        }
+                        wrf::sdirk3::RwTermCaptureScope w_scope(true, identity);
+                        if (!w_scope.armed_ok()) {
+                            wrf::sdirk3::RwWConversionCapture no_conversion;
+                            snapshot_stage_w_pressure_terms(
+                                trace, si, false, identity, identity, -1,
+                                no_conversion, {});
+                            F_fast_final = evaluate_fast_final();
+                        } else {
+                            F_fast_final = evaluate_fast_final();
+                            const int rhs_mode = w_scope.rhs_mode();
+                            const auto captured_identity = w_scope.identity();
+                            const auto w_conversion = w_scope.w_conversion_observation();
+                            auto raw_terms = w_scope.take();
+                            snapshot_stage_w_pressure_terms(
+                                trace, si, true, identity, captured_identity,
+                                rhs_mode, w_conversion, raw_terms);
+                        }
+                    }
+                } else {
+                    F_fast_final = evaluate_fast_final();
+                }
+                if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
+                    stage >= 1 && stage <=
+                        wrf::sdirk3::ARK324L2SACoefficients::stages) {
+                    torch::NoGradGuard no_grad;
+                    auto& trace = last_ark_budget_trace_;
+                    const size_t si = static_cast<size_t>(stage - 1);
+                    trace.checked_state[si] = U_new.detach().clone();
+                    trace.fi_checked[si] = F_fast_final.detach().clone();
+                    if (p_pert_.defined() && p_pert_.numel() > 0) {
+                        trace.p_pert_checked[si] = p_pert_.detach().clone();
+                        trace.stage_meta[si].p_pert_observed = true;
+                    }
+                    auto& meta = trace.stage_meta[si];
+                    meta.fi_evaluation_observed = true;
+                    meta.fi_ref_matches_base =
+                        same_stage_tensor_values(U_ref_stage_, trace.stage_base[si]);
+                    meta.fi_ref_matches_checked_state =
+                        same_stage_tensor_values(U_ref_stage_, trace.checked_state[si]);
                 }
                 if (arm_any) {
                     // Report EVERY block's |F| on this evaluation, not just the one block I
@@ -14107,6 +14855,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                         R_fast_vec = torch::where(r_fast_finite, R_fast_vec, torch::zeros_like(R_fast_vec));
                         fast_guard_applied = true;
                     }
+                }
+                if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
+                    stage >= 1 && stage <=
+                        wrf::sdirk3::ARK324L2SACoefficients::stages) {
+                    last_ark_budget_trace_.stage_meta[
+                        static_cast<size_t>(stage - 1)].fast_guard_applied =
+                            fast_guard_applied;
                 }
                 // 9F.D111: PER-BLOCK decomposition of the stage residual that actually
                 // aborts the run.
@@ -14169,6 +14924,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                         auto F_full_check = computeUnifiedRHS(U_new, RhsMode::Full);
                         if (has_physics) F_full_check = F_full_check + F_phys;
+                        if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
+                            stage >= 1 && stage <=
+                                wrf::sdirk3::ARK324L2SACoefficients::stages) {
+                            torch::NoGradGuard no_grad;
+                            auto& trace = last_ark_budget_trace_;
+                            const size_t si = static_cast<size_t>(stage - 1);
+                            trace.full_actual[si] = F_full_check.detach().clone();
+                            auto& meta = trace.stage_meta[si];
+                            meta.full_evaluation_observed = true;
+                            meta.full_includes_physics = has_physics;
+                            meta.full_ref_matches_base =
+                                same_stage_tensor_values(U_ref_stage_, trace.stage_base[si]);
+                            meta.full_ref_matches_checked_state =
+                                same_stage_tensor_values(
+                                    U_ref_stage_, trace.checked_state[si]);
+                        }
                         float R_full_norm = (K_fast_cpu - F_full_check.detach().to(torch::kCPU)).norm().item<float>();
                         std::cerr << ", ||R_full||=" << R_full_norm
                                   << " (large is EXPECTED — K has no slow terms)";

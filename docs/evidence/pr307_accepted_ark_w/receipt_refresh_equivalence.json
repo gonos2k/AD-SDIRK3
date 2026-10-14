@@ -1,0 +1,29 @@
+{
+  "analysis_interpreter": "/opt/homebrew/bin/python3.10",
+  "csv_sha256_before_and_after": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b",
+  "current_run_receipt_sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "metric_sections_compared": [
+    "dimensions",
+    "runtime",
+    "stages",
+    "accepted_update",
+    "physical_pressure_work"
+  ],
+  "metric_sections_identical": true,
+  "model_rerun": false,
+  "old_run_receipt_sha256": "663e689f40ebaf3c6e9682b90f0a8cd90c8a85de423994d1598c8801fc38a81d",
+  "previous_json": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_metric/actual_accepted_stage_w_analysis_v2_pre_receipt_refresh.json",
+  "previous_json_sha256": "f6d776b98d7bab4c60f68dd6a7cdf3d1d3157ef5fb678d5a26f3fd04348b18bf",
+  "previous_npz": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_metric/actual_accepted_stage_w_analysis_v2_pre_receipt_refresh.npz",
+  "previous_npz_sha256": "aad0ba823daec8dd59bf6a4206ab6314d606ffc2ee33ca6c578a73dccaf18a15",
+  "producer_executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+  "producer_impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+  "receipt_rebind_preservation_map": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_receipt_rebind_preservation.json",
+  "receipt_rebind_preservation_map_sha256": "531e4494c2c1192d602d7164b562d98858a0b74e734f1bd8438e72df636089a7",
+  "refreshed_json": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_metric/actual_accepted_stage_w_analysis_v2.json",
+  "refreshed_json_sha256": "d4f117040ea521e51b7cddd2c8a20299d68208174a0a21c3a5a83e4eaacbf18d",
+  "refreshed_npz": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_metric/actual_accepted_stage_w_analysis_v2.npz",
+  "refreshed_npz_sha256": "aad0ba823daec8dd59bf6a4206ab6314d606ffc2ee33ca6c578a73dccaf18a15",
+  "schema": "pr307_stage_analysis_receipt_refresh_equivalence_v1"
+}

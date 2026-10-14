@@ -1,0 +1,268 @@
+{
+  "schema": "pr307_v2_single_member_cpp_rebuild_and_wrf_relink_receipt_v1",
+  "status": "build_and_relink_complete",
+  "completed_local_time": "2026-10-15T00:34:19+0900",
+  "source_freeze_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_transport/v2_source_semantic_freeze.json",
+  "source_freeze_receipt_sha256": "d89022548d03fd8826634655ad34f56256b31eb0b2754a63967979bf19d277b4",
+  "target_worktree": "/private/tmp/pr307-accepted-ark-w-stage-20261014",
+  "target_head": "192c9149fc1b5968755654a328f350d43604687f",
+  "frozen_cpp_source_hashes": {
+    "impl": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "private_header": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+    "public_interface_header": "6121e11e76007d6434a8ac894deb23dd5122d825a0b75b4d09650d4436bf321b",
+    "fortran_interface_bridge": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0"
+  },
+  "build": {
+    "clean_command_log": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/cpp_clean_attempt_002.log",
+    "clean_log_sha256": "e6a83a57cb3105120509541e9e0e50a2acd7bbe2c816ec3053aa4e47757e20bb",
+    "archive_command_log": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/cpp_build_attempt_002.log",
+    "archive_log_sha256": "cc399452bdb3eb6e9250d318c9fcaf6376803db0f89a7585d35b3e61b7c7e606",
+    "manifest_check_log": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/cpp_manifest_check_attempt_002.log",
+    "manifest_check_log_sha256": "446f3149e58961fd49a94c782cb244615be6d1b4e9bb15f8ec23499c7ff3ce48",
+    "return_codes": {
+      "single_object_compile": 0,
+      "archive_replace": 0,
+      "archive_gate": 0
+    },
+    "compiler": "/usr/bin/g++ (Apple clang 21.0.0)",
+    "standard": "C++17",
+    "historical_flags": "-O3 -c -DMACOS -DDMPARALLEL -DUSE_SDIRK3; libtorch include dirs; -D_GLIBCXX_USE_CXX11_ABI=0",
+    "libtorch_root": "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch",
+    "libtorch_runtime_version": "2.10.0",
+    "libtorch_runtime_abi_probe": true,
+    "libtorch_abi_compile_override": 0,
+    "mpi": "Open MPI 5.0.9; -DDMPARALLEL in core build",
+    "core_manifest_member_count": 24,
+    "manifest_exact_check": "24 object members; exact prior member order retained; only wrf_sdirk3_tile_unified_impl.o payload changed; see v2_archive_member_gate.json",
+    "archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/libwrf_sdirk3_libtorch.a",
+    "archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "archive_bytes": 11522024,
+    "source_objects": [
+      {
+        "source": "wrf_sdirk3_globals.cpp",
+        "source_sha256": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+        "object": "wrf_sdirk3_globals.o",
+        "object_sha256": "83d02af58e377694cb0015125371cd020f503ab0115d32362490b5a85f4623c0"
+      },
+      {
+        "source": "wrf_sdirk3_operator_contract.cpp",
+        "source_sha256": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+        "object": "wrf_sdirk3_operator_contract.o",
+        "object_sha256": "e389769ac8c9f38af9cd00e5bc5d56d3c180dff5985fb81ddfff63dfa89eb453"
+      },
+      {
+        "source": "wrf_sdirk3_tile_unified_interface.cpp",
+        "source_sha256": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+        "object": "wrf_sdirk3_tile_unified_interface.o",
+        "object_sha256": "baa85ef009b29235e543d620ff1afcc3ac69714e19f0221baa3266279eeedeb4"
+      },
+      {
+        "source": "wrf_sdirk3_interface_zerocopy.cpp",
+        "source_sha256": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+        "object": "wrf_sdirk3_interface_zerocopy.o",
+        "object_sha256": "07847fcd31c0aed242e5487fa833119333a8b11dc57be8e12f28caebd49b6c2d"
+      },
+      {
+        "source": "wrf_sdirk3_zero_copy_interface.cpp",
+        "source_sha256": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+        "object": "wrf_sdirk3_zero_copy_interface.o",
+        "object_sha256": "e389769ac8c9f38af9cd00e5bc5d56d3c180dff5985fb81ddfff63dfa89eb453"
+      },
+      {
+        "source": "wrf_sdirk3_tile_unified.cpp",
+        "source_sha256": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+        "object": "wrf_sdirk3_tile_unified.o",
+        "object_sha256": "f82448d79574e24b39a8bff62dde119d2a81188c19fd0ca023f5497c435ba215"
+      },
+      {
+        "source": "wrf_sdirk3_tile_unified_impl.cpp",
+        "source_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "object": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/wrf_sdirk3_tile_unified_impl.o",
+        "object_sha256": "5b2613f88a8d11534cb2d5dafe4a6b72051fba5614c0ddce39c375a68fd86ddc"
+      },
+      {
+        "source": "wrf_sdirk3_newton_solver.cpp",
+        "source_sha256": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+        "object": "wrf_sdirk3_newton_solver.o",
+        "object_sha256": "85201450feee74fac140f334da39a0391f328c5c25858c8dbfcf79ff47dd7616"
+      },
+      {
+        "source": "wrf_sdirk3_jvp_autograd.cpp",
+        "source_sha256": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+        "object": "wrf_sdirk3_jvp_autograd.o",
+        "object_sha256": "5a09a88ee0d6393d6aaae693376b376019ee1fcdb097623694edd753fc300589"
+      },
+      {
+        "source": "wrf_hydrostatic_pressure.cpp",
+        "source_sha256": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "object": "wrf_hydrostatic_pressure.o",
+        "object_sha256": "d187a774decaa1efc44e20ff131be903fc12fde371c952c332b2c8a8508d7674"
+      },
+      {
+        "source": "wrf_sdirk3_acoustic_substep.cpp",
+        "source_sha256": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "object": "wrf_sdirk3_acoustic_substep.o",
+        "object_sha256": "51b1e3e168edafe0f01f0ea43d51d7ab882d2022e3dbdcc6df5d1ed567724e20"
+      },
+      {
+        "source": "wrf_sdirk3_base_state_zerocopy.cpp",
+        "source_sha256": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+        "object": "wrf_sdirk3_base_state_zerocopy.o",
+        "object_sha256": "7e50662ded300e5d9e905c4aa3a492b7138f1883b9ac64d425f443569fdc62de"
+      },
+      {
+        "source": "wrf_tile_boundary_optimizer.cpp",
+        "source_sha256": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+        "object": "wrf_tile_boundary_optimizer.o",
+        "object_sha256": "2ab63db9d7cb0c70999676f52c00731f66a8517f0e7b4ae3a5f890f57aa7b8f6"
+      },
+      {
+        "source": "wrf_sdirk3_config.cpp",
+        "source_sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "object": "wrf_sdirk3_config.o",
+        "object_sha256": "101196449dc85dc151c9000d72a430305d1e625028b5779012dcad0a00f3d90e"
+      },
+      {
+        "source": "wrf_sdirk3_unified_preconditioner.cpp",
+        "source_sha256": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+        "object": "wrf_sdirk3_unified_preconditioner.o",
+        "object_sha256": "b2a3c2c5b60efa7c0f620835ae2de956c2ca40c0d6985c42f80104f072184459"
+      },
+      {
+        "source": "wrf_sdirk3_unified_rhs_extended.cpp",
+        "source_sha256": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+        "object": "wrf_sdirk3_unified_rhs_extended.o",
+        "object_sha256": "f6cfa7becae0129bea513b14e510f49ff77fe67a3689aa17c66a5ef5c9186493"
+      },
+      {
+        "source": "wrf_sdirk3_cache_utils.cpp",
+        "source_sha256": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+        "object": "wrf_sdirk3_cache_utils.o",
+        "object_sha256": "7e2db9ef2c0faea8bf43f5ac46e1b48a86bef0d31c7cbcd7b606f0a267eab4cb"
+      },
+      {
+        "source": "wrf_sdirk3_boundary_ad.cpp",
+        "source_sha256": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+        "object": "wrf_sdirk3_boundary_ad.o",
+        "object_sha256": "1a36ba0b1c8a8bac98d061ecc5276844474439a31cf75dcc91f0db3a7219d34f"
+      },
+      {
+        "source": "wrf_sdirk3_rayleigh_damping_ad.cpp",
+        "source_sha256": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+        "object": "wrf_sdirk3_rayleigh_damping_ad.o",
+        "object_sha256": "eb6e2a9d704ae44ef1b01839aa04da344381c2e9bbe759cdb58806bc1629a78f"
+      },
+      {
+        "source": "wrf_sdirk3_mpi_safety_impl.cpp",
+        "source_sha256": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+        "object": "wrf_sdirk3_mpi_safety_impl.o",
+        "object_sha256": "2bbe6a23e8dc124c24cde42b3714b96e39a11c298f08aef6ff0e84cfb10bdd52"
+      },
+      {
+        "source": "wrf_sdirk3_halo_exchange.cpp",
+        "source_sha256": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+        "object": "wrf_sdirk3_halo_exchange.o",
+        "object_sha256": "0fcbf069d995de4cf278dd91fa774b19bbd3ab366728e3ee3e52cf98a7f1949b"
+      },
+      {
+        "source": "wrf_sdirk3_ad_halo_exchange.cpp",
+        "source_sha256": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+        "object": "wrf_sdirk3_ad_halo_exchange.o",
+        "object_sha256": "611385d0ed55260183b55b11d7934d7e296bb3ed396b26ca1e4a2920bf69e595"
+      },
+      {
+        "source": "wrf_sdirk3_rhs_run_close.cpp",
+        "source_sha256": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+        "object": "wrf_sdirk3_rhs_run_close.o",
+        "object_sha256": "f1ee51efc081d6949b40a611f7e950a92aad3bdde9ec67405dd6c94ac97bda8b"
+      },
+      {
+        "source": "wrf_sdirk3_u_slow_diagnostics.cpp",
+        "source_sha256": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+        "object": "wrf_sdirk3_u_slow_diagnostics.o",
+        "object_sha256": "ac0c71550fb19c3f0fae4abf3f09d5ef1ae6a10cf0cb8afa4b6a14aee6a50b7e"
+      }
+    ],
+    "commands": [
+      [
+        "/usr/bin/env",
+        "MAKEFLAGS=",
+        "MFLAGS=",
+        "g++",
+        "-std=c++17",
+        "-O3",
+        "-c",
+        "-DMACOS",
+        "-DDMPARALLEL",
+        "-DUSE_SDIRK3",
+        "-I/private/tmp/pr307-accepted-ark-w-stage-20261014/external/libtorch_wrf/sdirk3",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+        "-I/opt/homebrew/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+        "-D_GLIBCXX_USE_CXX11_ABI=0",
+        "-MMD",
+        "-MP",
+        "-c",
+        "wrf_sdirk3_tile_unified_impl.cpp",
+        "-o",
+        "wrf_sdirk3_tile_unified_impl.o"
+      ],
+      [
+        "ar",
+        "-r",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/libwrf_sdirk3_libtorch.a",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/wrf_sdirk3_tile_unified_impl.o"
+      ]
+    ],
+    "single_object_compile_log": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_cpp_impl_compile.log",
+    "single_object_compile_log_sha256": "50a31f0ea0d6ba84f0edc9aad02741f6d4e2d9acda5cd694e8b76cb18cdf63d5",
+    "archive_member_gate": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_archive_member_gate.json",
+    "archive_member_gate_sha256": "ddc72dbf37c14893f6644e5a72a3e4fea43741e8ab699b20637676ae702e285d"
+  },
+  "wrf_relink": {
+    "method": "Isolated v2 C++ archive with only impl TU replaced; direct link into distinct wrf_v2.exe using the pinned exact Fortran archive bytes; v1 build/executable untouched.",
+    "tree": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree",
+    "initial_make_relink_log": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_relink_attempt_002.log",
+    "initial_make_relink_log_sha256": "f39cf3d4bc89e55da56898fb61c819be6f812540f5d0a4632d0964aebc30832d",
+    "initial_make_relink_rc": 0,
+    "fortran_archive_payload_parity_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/fortran_archive_ranlib_intermediate_comparison.json",
+    "fortran_archive_payload_parity_receipt_sha256": "2d27b00b88bf330d89eeb17e6667b09cdeb57c58d7940719b5605a1ae4acd316",
+    "direct_link_exact_fortran_archive_log": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_direct_link.log",
+    "direct_link_exact_fortran_archive_log_sha256": "62033386ca4e9ccaad66eb633423326620df6fdfe3478187c88fd34053f9f277",
+    "direct_link_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_direct_link_receipt.json",
+    "direct_link_receipt_sha256": "2bd8eccd46ea9dae538e065bdd6e0a4caa6b4a4630133040a1b88a1684dd930c",
+    "direct_link_return_code": 0,
+    "fortran_archive_sha256_after_final_link": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "fortran_archive_expected_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "configure_wrf_sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289",
+    "configure_wrf_expected_sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289",
+    "module_implicit_mod_sha256": "53b353afcf041103449337e8ee518e84060c2f6958cd0bbc77efe2738fd2b461",
+    "module_implicit_object_sha256": "e68d4c8d0d94ccba0fe0646002a925d3b8d05a18b70fc8c417fba3e8b0bf9689",
+    "solve_em_object_sha256": "e50bac9d00bbdc20f82401e7d5170cae00c6b72a65a5c415df2d87a6af51ef9f",
+    "wrf_executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "wrf_executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "wrf_executable_bytes": 52692488,
+    "otool_link_dependencies": [
+      "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch.dylib (compatibility version 0.0.0, current version 0.0.0)",
+      "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch_cpu.dylib (compatibility version 0.0.0, current version 0.0.0)",
+      "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libc10.dylib (compatibility version 0.0.0, current version 0.0.0)",
+      "/opt/homebrew/opt/gcc/lib/gcc/current/libgfortran.5.dylib (compatibility version 6.0.0, current version 6.0.0)",
+      "/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.7.0)",
+      "/opt/homebrew/opt/netcdf/lib/libnetcdf.22.dylib (compatibility version 22.0.0, current version 22.0.0)",
+      "/opt/homebrew/opt/netcdf-fortran/lib/libnetcdff.7.dylib (compatibility version 7.0.0, current version 7.1.0)",
+      "/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)"
+    ],
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5"
+  },
+  "input_reference": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/references/ark3_h15_postcf_e71/wrfinput_d01",
+    "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "expected_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "compile_log_error_count": 0,
+  "native_model_runs_in_build_phase": 0,
+  "v1_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/superseded_observer_v1/build/pr307_build_receipt.json",
+  "v1_receipt_sha256": "144e52ebd512c69771269ff96d72ad98c57e10f059fa8143eb8d7e24687db506"
+}

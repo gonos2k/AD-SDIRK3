@@ -1,0 +1,131 @@
+{
+  "all_4_stage_owner_and_top_gates_pass": true,
+  "current_run_receipt_sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a",
+  "green_metric_report": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_metric/actual_accepted_stage_w_analysis_v2.json",
+  "green_metric_report_sha256": "d4f117040ea521e51b7cddd2c8a20299d68208174a0a21c3a5a83e4eaacbf18d",
+  "green_pressure_report": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_pressure/actual_stage_pressure_work_v2.json",
+  "green_pressure_report_sha256": "a71bbb0d89cbd08f272a9fe377c79c79f280e86a33f043346cd27f89170fef5a",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "interpretation": "The captured C++ pressure/buoyancy arrays cover interior W faces; dynamic-top terms are derived from same accepted-Y p_pert, MU and source coefficients. Independent formulas agree. Full-W work and pressure/buoyancy component work are reported separately; the residual represents other RHS terms and is not an exact total-energy budget or error bound.",
+  "pressure_work_source_helper_sha256": "1e516540a9320d60bbe081cf3466b00bd9228b0a478af7d257b89930035acb65",
+  "producer_executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+  "producer_impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+  "schema": "pr307_green_pressure_work_independent_crosscheck_v2",
+  "stages": [
+    {
+      "component_abs_difference_w": {
+        "mu_buoyancy_domain_power_w": 0.0,
+        "pressure_domain_power_w": 0.0,
+        "pressure_plus_buoyancy_domain_power_w": 0.0
+      },
+      "green_metric_pressure_components_w": {
+        "mu_buoyancy_domain_power_w": 0.0,
+        "pressure_domain_power_w": 0.0,
+        "pressure_plus_buoyancy_domain_power_w": 0.0
+      },
+      "green_pressure_actual_full_Y_power_w": 0.0,
+      "green_pressure_method_K_plus_FE_power_w": 0.0,
+      "green_pressure_pressure_components_w": {
+        "mu_buoyancy_domain_power_w": 0.0,
+        "pressure_domain_power_w": 0.0,
+        "pressure_plus_buoyancy_domain_power_w": 0.0
+      },
+      "newton_returned_K_equivalence_claimed": false,
+      "newton_returned_K_used": false,
+      "stage": 1,
+      "unassigned_full_actual_Y_minus_source_work_w": 0.0
+    },
+    {
+      "component_abs_difference_w": {
+        "mu_buoyancy_domain_power_w": 0.0,
+        "pressure_domain_power_w": 0.0,
+        "pressure_plus_buoyancy_domain_power_w": 1.0244548320770264e-08
+      },
+      "green_metric_pressure_components_w": {
+        "mu_buoyancy_domain_power_w": -134834435.76118624,
+        "pressure_domain_power_w": 143035808.47846895,
+        "pressure_plus_buoyancy_domain_power_w": 8201372.717282712
+      },
+      "green_pressure_actual_full_Y_power_w": 8072312.075440317,
+      "green_pressure_method_K_plus_FE_power_w": 8072280.139056106,
+      "green_pressure_pressure_components_w": {
+        "mu_buoyancy_domain_power_w": -134834435.76118624,
+        "pressure_domain_power_w": 143035808.47846895,
+        "pressure_plus_buoyancy_domain_power_w": 8201372.717282702
+      },
+      "newton_returned_K_equivalence_claimed": false,
+      "newton_returned_K_used": false,
+      "stage": 2,
+      "unassigned_full_actual_Y_minus_source_work_w": -129060.64184238482
+    },
+    {
+      "component_abs_difference_w": {
+        "mu_buoyancy_domain_power_w": 0.0,
+        "pressure_domain_power_w": 1.4901161193847656e-08,
+        "pressure_plus_buoyancy_domain_power_w": 2.1420419216156006e-08
+      },
+      "green_metric_pressure_components_w": {
+        "mu_buoyancy_domain_power_w": -95032144.91809568,
+        "pressure_domain_power_w": 101179356.73653923,
+        "pressure_plus_buoyancy_domain_power_w": 6147211.818443552
+      },
+      "green_pressure_actual_full_Y_power_w": 6052155.4835293805,
+      "green_pressure_method_K_plus_FE_power_w": 6052154.719304767,
+      "green_pressure_pressure_components_w": {
+        "mu_buoyancy_domain_power_w": -95032144.91809568,
+        "pressure_domain_power_w": 101179356.73653924,
+        "pressure_plus_buoyancy_domain_power_w": 6147211.818443573
+      },
+      "newton_returned_K_equivalence_claimed": false,
+      "newton_returned_K_used": false,
+      "stage": 3,
+      "unassigned_full_actual_Y_minus_source_work_w": -95056.33491419256
+    },
+    {
+      "component_abs_difference_w": {
+        "mu_buoyancy_domain_power_w": 2.9802322387695312e-08,
+        "pressure_domain_power_w": 0.0,
+        "pressure_plus_buoyancy_domain_power_w": 1.210719347000122e-08
+      },
+      "green_metric_pressure_components_w": {
+        "mu_buoyancy_domain_power_w": -178960432.99667305,
+        "pressure_domain_power_w": 185087681.3816458,
+        "pressure_plus_buoyancy_domain_power_w": 6127248.384972751
+      },
+      "green_pressure_actual_full_Y_power_w": 6053280.928733609,
+      "green_pressure_method_K_plus_FE_power_w": 6053277.78200138,
+      "green_pressure_pressure_components_w": {
+        "mu_buoyancy_domain_power_w": -178960432.99667308,
+        "pressure_domain_power_w": 185087681.3816458,
+        "pressure_plus_buoyancy_domain_power_w": 6127248.384972739
+      },
+      "newton_returned_K_equivalence_claimed": false,
+      "newton_returned_K_used": false,
+      "stage": 4,
+      "unassigned_full_actual_Y_minus_source_work_w": -73967.45623913035
+    }
+  ],
+  "tableau_weighted_pressure_buoyancy_integral_j": {
+    "absolute_difference_j": {
+      "moisture_buoyancy": 0.0,
+      "mu_buoyancy": 2.384185791015625e-07,
+      "pressure": 2.384185791015625e-07,
+      "pressure_plus_buoyancy": 3.203749656677246e-07
+    },
+    "green_metric": {
+      "moisture_buoyancy": 0.0,
+      "mu_buoyancy": -1351313155.4895046,
+      "pressure": 1407746223.1432652,
+      "pressure_plus_buoyancy": 56433067.65376072
+    },
+    "green_pressure": {
+      "full_actual_Y_domain_power_w": 55716288.86379284,
+      "method_K_plus_FE_domain_power_w": 55716542.32521019,
+      "moisture_buoyancy_domain_power_w": 0.0,
+      "mu_buoyancy_domain_power_w": -1351313155.4895048,
+      "pressure_domain_power_w": 1407746223.1432655,
+      "pressure_plus_buoyancy_domain_power_w": 56433067.65376104
+    }
+  },
+  "trace_csv_sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b"
+}

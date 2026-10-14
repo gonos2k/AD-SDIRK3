@@ -1,0 +1,90 @@
+{
+  "schema": "pr307_selected_analysis_manifest_v1",
+  "code_commit": "18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc",
+  "files": [
+    {
+      "source_relative_path": "green_metric/actual_accepted_stage_w_analysis_v2.json",
+      "committed_file": "actual_accepted_stage_w_analysis_v2.json",
+      "sha256": "d4f117040ea521e51b7cddd2c8a20299d68208174a0a21c3a5a83e4eaacbf18d"
+    },
+    {
+      "source_relative_path": "green_metric/independent_pressure_work_crosscheck.json",
+      "committed_file": "independent_pressure_work_crosscheck.json",
+      "sha256": "d2eb7a8df88e9432d2d87adc1c24e260f53b798d900459b0cd5d10c1a39abb44"
+    },
+    {
+      "source_relative_path": "green_metric/receipt_refresh_equivalence.json",
+      "committed_file": "receipt_refresh_equivalence.json",
+      "sha256": "c8f1d4b6a8dbbea3e81a8497b220b6c4a7ce3ec7e7d58989abe51c94b73d5ddb"
+    },
+    {
+      "source_relative_path": "green_pressure/actual_stage_pressure_work_v2.json",
+      "committed_file": "actual_stage_pressure_work_v2.json",
+      "sha256": "a71bbb0d89cbd08f272a9fe377c79c79f280e86a33f043346cd27f89170fef5a"
+    },
+    {
+      "source_relative_path": "green_pressure/frozen_w_energy_identity_v2.json",
+      "committed_file": "frozen_w_energy_identity_v2.json",
+      "sha256": "08e477f3c5a2f12eefbb54b0d6b2c325602bf13e71ac1a109a0ba5255e798564"
+    },
+    {
+      "source_relative_path": "green_build/pr307_v2_build_receipt.json",
+      "committed_file": "pr307_v2_build_receipt.json",
+      "sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8"
+    },
+    {
+      "source_relative_path": "green_execution/new_exe_stage_observer_off_on_gate_v2.json",
+      "committed_file": "new_exe_stage_observer_off_on_gate_v2.json",
+      "sha256": "bbe065a7b5a131198547cbfedd1782af728e1931c1d7f902f84747a58994e0d3"
+    },
+    {
+      "source_relative_path": "green_execution/new_off_vs_a5_parity_v2.json",
+      "committed_file": "new_off_vs_a5_parity_v2.json",
+      "sha256": "1bdae5dc3df843d70523cf23e06d74c0021090b8e51132aa6cd44070f5f0299a"
+    },
+    {
+      "source_relative_path": "green_execution/new_exe_stage_operand_on_v2/run_receipt.json",
+      "committed_file": "on_run_receipt.json",
+      "sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a"
+    },
+    {
+      "source_relative_path": "red_provenance/pr307_v2_independent_raw_validation.json",
+      "committed_file": "pr307_v2_independent_raw_validation.json",
+      "sha256": "6f5fd12bf78951d427381b4595033d5092e15dfa6eefb58b4666bb76eab7ec95"
+    },
+    {
+      "source_relative_path": "green_transport/v2_semantic_review.json",
+      "committed_file": "v2_semantic_review.json",
+      "sha256": "cae0bf507bbc18fef2d6d27bbdd365dbeb046287464ca3ac657f363e090ff9e4"
+    },
+    {
+      "source_relative_path": "green_graph/pr307_committed_source_binding_receipt.json",
+      "committed_file": "pr307_committed_source_binding_receipt.json",
+      "sha256": "d7c40e19992277cb3dfa2d40d8f41d8c618989a3cb0f7a8b6bf373b57b417cd3"
+    },
+    {
+      "source_relative_path": "pr307_bounded_stage_capture_plan.json",
+      "committed_file": "pr307_bounded_stage_capture_plan.json",
+      "sha256": "603d59cd382d666db407148b884b671a722ea98522f42f33dcd481b91c291c98"
+    },
+    {
+      "source_relative_path": "red_acceptance/pr307_final_acceptance_audit_ko.md",
+      "committed_file": "pr307_final_acceptance_audit_ko.md",
+      "sha256": "678a61a434178ac1e08202312fc516c7d2a3361334cb619d28a553be4020c250",
+      "archived_source_sha256": "57e65885af0df3dbcd1d1355553e2a81433763ffe200915eed7bc2841706cef3",
+      "copy_format_note": "Only Markdown trailing whitespace normalized; archived original unchanged."
+    },
+    {
+      "source_relative_path": "red_hook/pr307_closing_scope_ko.md",
+      "committed_file": "pr307_closing_scope_ko.md",
+      "sha256": "ac42cf5873bc14ac7bb099acfa5b78e1f7ce764f7c00e5f43b22e5c50e704abf"
+    },
+    {
+      "source_relative_path": "AD_SDIRK3_PR307_accepted_ark_w_stage_package_receipt.json",
+      "committed_file": "AD_SDIRK3_PR307_accepted_ark_w_stage_package_receipt.json",
+      "sha256": "f8706678f9f26187aa7f4a85a2a954cf3697599c9960694a793537f55900c50e"
+    }
+  ],
+  "reference_status": "PR306 reference still unqualified; no new 240s run",
+  "scope": "one h=15s accepted native ARK step; final observer-v2 control pair"
+}

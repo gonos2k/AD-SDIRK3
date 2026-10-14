@@ -1,0 +1,149 @@
+{
+  "schema": "pr307_accepted_ark_stage_observer_run_receipt_v2",
+  "label": "on_v2",
+  "status": "completed",
+  "created_local_time": "2026-10-15T00:34:37+09:00",
+  "working_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2",
+  "command": {
+    "argv": [
+      "/usr/bin/time",
+      "-l",
+      "-o",
+      "time.log",
+      "/opt/homebrew/bin/mpirun",
+      "-np",
+      "1",
+      "--bind-to",
+      "none",
+      "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe"
+    ],
+    "environment": {
+      "OMP_NUM_THREADS": "1",
+      "WRF_SDIRK3_RHS_COUNT": "1",
+      "WRF_SDIRK3_STAGE_OPERAND_DIAG": "1",
+      "WRF_PARITY_RK_TEND_DUMP": "unset",
+      "WRF_PARITY_EMDIV_INCREMENT_DUMP": "unset",
+      "WRF_SDIRK3_FP64_STATE_CARRY": "unset; config comes from the exact h15 namelist"
+    },
+    "environment_prefixes_cleared": [
+      "WRF_SDIRK3_",
+      "WRF_PARITY_"
+    ],
+    "stdout": "run.log",
+    "stderr": "run.log"
+  },
+  "producer": {
+    "build_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/pr307_v2_build_receipt.json",
+    "build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8",
+    "executable": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "source_hashes": {
+      "impl": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "private_header": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "public_interface_header": "6121e11e76007d6434a8ac894deb23dd5122d825a0b75b4d09650d4436bf321b",
+      "fortran_interface_bridge": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0"
+    }
+  },
+  "inputs": {
+    "wrfinput_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/wrfinput_d01",
+    "wrfinput_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/namelist.input",
+    "namelist_sha256": "d5375e1d24818b16b947b29db8eeb79cf31f22724bb5cb23cb6983fc29a134c7",
+    "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+    "old_a5_control_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_B_debug2_off/run_receipt.json",
+    "old_a5_control_receipt_sha256": "e89bdd5c5b969d63674ba7779981b20d32f058c12aaa361d50c7423b2837d13c"
+  },
+  "case": {
+    "run_seconds": 15,
+    "time_step_seconds": 15,
+    "history_interval_seconds": 15,
+    "expected_model_steps": 1,
+    "expected_solver_steps": 3,
+    "expected_history_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15"
+    ],
+    "mpi_ranks": 1,
+    "omp_threads": 1,
+    "time_integration_scheme": 6,
+    "imex_split_mode": 3,
+    "split_explicit": false,
+    "implicit_divergence": true,
+    "kdamp": 0.2,
+    "diff_opt": 2,
+    "khdif": 1000,
+    "kvdif": 10,
+    "use_input_w": false,
+    "sdirk3_debug_level": 2,
+    "observer_enabled": true
+  },
+  "process_result": {
+    "return_code": 0,
+    "application_success_marker": true,
+    "application_status": "completed"
+  },
+  "actual": {
+    "history_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15"
+    ],
+    "exact_t0_t15": true,
+    "outputs": [
+      {
+        "name": "wrfout_d01_0001-01-01_00:00:00",
+        "bytes": 1040561,
+        "sha256": "f79ff43ddb08b06ca9dd51828c9411b707346b038a37175a66ca0ea665c9dbe1",
+        "times": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:00:15"
+        ],
+        "finite_by_field": {
+          "U": true,
+          "V": true,
+          "W": true,
+          "PH": true,
+          "T": true,
+          "THM": true,
+          "MU": true,
+          "MUB": true
+        }
+      }
+    ],
+    "all_raw_fields_finite": true,
+    "solver_summary_final": {
+      "steps": 3,
+      "failed": 0,
+      "last_dt_seconds": 15.0
+    },
+    "rhs_call_records": [
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=3",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=65 delta=62"
+    ],
+    "carry_inputs": {
+      "host": 1,
+      "internal": 0
+    },
+    "carry_publications": 1,
+    "accepted_ark_w_stage_file": {
+      "name": "accepted_ark_w_step_1.csv",
+      "bytes": 28561538,
+      "sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b"
+    },
+    "stage_operand_history_markers": 3,
+    "stage_operand_applied_delta_markers": 3,
+    "stage_operand_failure_markers": [],
+    "native_transport_config_lines": [
+      "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+    ],
+    "wall_seconds": 1.68,
+    "logs": {
+      "run.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time.log": "453108a220ec3d8b3633758c19665b13e0abbdd2b9ea7640c73ad7542c9a698f",
+      "rsl.error.0000": "2955b8e1b27691891f2b4504f1d80cdc447163d30e6fed1acfca2266f746cfe0",
+      "rsl.out.0000": "28537831f06f485494115eb55ddd377a1f3391a5bcc9df9f1ed8ccec8e53acc1",
+      "namelist.output": "8a8517f70d8da65eba0e5ba28ce90ffd39c05c2cf9cad2d76e5f05bf7ace3330"
+    }
+  }
+}

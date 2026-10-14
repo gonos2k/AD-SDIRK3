@@ -1,0 +1,67 @@
+{
+  "schema": "pr307_accepted_ark_w_evidence_package_receipt_v1",
+  "archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/AD_SDIRK3_PR307_accepted_ark_w_stage_evidence.zip",
+  "archive_sha256": "a4057d5d99831ba5538416d737218bc262c22e843cff53bc8365fd95fc2733e1",
+  "archive_bytes": 125351917,
+  "zip_crc": "pass",
+  "payload_manifest_path_in_stage": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/portable_bundle_stage/payload_manifest.json",
+  "payload_manifest_sha256": "9f3a47edade60d6c418bb5555f64b06b36abe43161eab3d84de4be71349e5239",
+  "payload_entry_count": 171,
+  "zip_member_count": 172,
+  "fresh_unpack_verifier": {
+    "script_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/verify_pr307_portable_bundle.py",
+    "script_sha256": "194344f3e2208422a6e3f428279844fe64842ff300b0887c9057537afec255e8",
+    "fresh_unpack_root": "/private/tmp/pr307_portable_fresh_verify_20261015_c",
+    "receipt_path": "/private/tmp/pr307_portable_fresh_verify_20261015_c/portable_verification_receipt.json",
+    "receipt_sha256": "1cf43343b09e040a700927c338066177088ac79b7fd87b4f288da7b0632aebaa",
+    "receipt": {
+      "schema": "pr307_portable_unpack_verification_v1",
+      "archive": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/AD_SDIRK3_PR307_accepted_ark_w_stage_evidence.zip",
+      "archive_sha256": "a4057d5d99831ba5538416d737218bc262c22e843cff53bc8365fd95fc2733e1",
+      "archive_bytes": 125351917,
+      "zip_crc": "pass",
+      "payload_files_checked": 171,
+      "v2_off_vs_a5_16_arrays": "bitwise_exact",
+      "v2_off_vs_on_16_arrays": "bitwise_exact",
+      "v1_off_vs_on_16_arrays": "bitwise_exact_historical_superseded",
+      "fresh_reanalysis": {
+        "green_metric": "matched canonical ignoring path keys",
+        "green_metric_npz": "all arrays exact",
+        "green_pressure": "matched canonical ignoring path keys",
+        "frozen_m0_identity": "matched canonical ignoring path keys"
+      },
+      "pressure_work_available": true,
+      "accepted_y_capture_stages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "physical_w_owner_count": 4096,
+      "stage4_postprocess_equality_status": "unknown",
+      "model_runs": 0,
+      "ci_claim": "none"
+    }
+  },
+  "document_snapshot": {
+    "progress_report_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/portable_bundle_stage/docs/(202610150105)_accepted_ark_w_split_work_and_residual.md",
+    "progress_report_sha256": "b2086e906f8a1531607dee667571797aa236f4e9e90e3483991467f413d178d1",
+    "problem_definition_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/portable_bundle_stage/docs/PROBLEM_DEFINITION.md",
+    "problem_definition_sha256": "c69e411e83cf50df3835764cf1386bb47ca547cbebb807a04ac8c38d55a82973",
+    "note": "The documents are the package-time copies; later repository edits are not silently represented."
+  },
+  "primary_source": {
+    "commit": "18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc",
+    "header_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+    "impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "unused_postfreeze_impl_sha256": "dd8052b7a40b4a526f6b23bad84c3de9d147233ba8695b05eab4728fe034d653"
+  },
+  "included_native_runs": [
+    "v1 observer OFF, superseded historical partial",
+    "v1 observer ON, superseded historical partial",
+    "v2 observer OFF, parity-gated against A5",
+    "v2 observer ON, same-case noninterference"
+  ],
+  "runtime_scope": "four h=15 s short native runs already completed; package verification performs no model run and makes no CI claim",
+  "package_self_hash_note": "This receipt is external to the ZIP to avoid a self-hash cycle."
+}
