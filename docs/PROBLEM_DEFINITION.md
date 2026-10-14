@@ -2,7 +2,7 @@
 
 Local timestamp: 2026-10-11 17:47:15 JST (+0900)
 
-Last updated: 2026-10-13 20:35:34 JST (+0900)
+Last updated: 2026-10-14 07:08:55 JST (+0900)
 
 This is the single project-level definition of the first-stage research target.
 Case reports retain their own inputs, numerical budgets and completion status.
@@ -135,6 +135,54 @@ A reference qualifies empirically only if one h=0.9375 RK3 comparison to h=1.875
 The frozen JSON `sampling.PH` label describes height in metres, whereas its `budgets.PH` and executed gate use geopotential in m²/s². The separate metadata erratum records this inconsistency without changing the frozen bytes or numeric gate; the PH epsilon in the table is authoritative.
 
 The changed stress path separately requires independent primitive-flux oracles, all owned seam faces, periodic shift consistency, and first-order derivative checks. A `gamma_n*sum|terms|` bound only covers accumulation of already computed terms; it cannot certify all primitive arithmetic or full cross-model RHS. The corrected U diffusion gates have direct evidence, while complete W/PH/theta RHS and integrated observation-window derivatives remain open.
+
+## PR306 same-native ARK refinement family and filter policy
+
+This is a separate named-case evidence family for the native WRF scheme-6
+mode-3 ARK324L2SA map. The six completed 240 s runs use the same current
+executable (`a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49`),
+C++ archive (`b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159`),
+and original e71 input (`e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9`),
+with FP64 state carry enabled and timesteps of 15, 7.5, 3.75, 1.875, 0.9375,
+and 0.46875 s. The current-source h=15 control matches the archived h=15
+trajectory bitwise for all eight raw fields at all five history times. This
+pins the series to one native operator and build; it does not make the archived
+Fortran RK3 trajectory the truth for this native family.
+
+The native filter policy is distinct from the stock RK3 acoustic-substep path.
+The archived configuration has `SDIRK3_IMEX_SPLIT_MODE=3`,
+`SDIRK3_SPLIT_EXPLICIT=F`, and `TIME_INTEGRATION_SCHEME=6`. Therefore the WRF
+`smdiv=0.1`, `emdiv=0.01`, and `epssm=0.1` values are configured but their
+split-explicit acoustic child is inactive. They must not be described as common
+filters with the stock RK3 reference. Instead, this ARK family has
+`SDIRK3_IMPLICIT_DIVERGENCE=T` and a stage coefficient `kdamp=0.2`; it is a
+separate divergence-damping contribution. The initial `grid%kdamp=0.01` value
+comes from `dampcoef`; `unifiedStep` replaces it with `SDIRK3_KDAMP=0.2` before
+the ARK stage RHS. The earlier initialization log showing 0.01 is not a stage
+readback. The `0.2` stage value is a source-and-configuration-call-order
+finding, not a direct stage-time runtime readback; see the [effective-context
+audit](evidence/pr306_common_filter_reference/ark3_mode3_effective_context_audit.json).
+`DIFF_OPT=2`, `KHDIF=1000`, and `KVDIF=10` also remain active in this map.
+`W_DAMPING=0` and `DAMP_OPT=0` disable W damping and Rayleigh/sponge
+application; PBL is disabled. The source audit is recorded in
+`green_pressure/ark3_mode3_filter_audit_ko.md` in the PR306 evidence bundle.
+
+The frozen V3 24-row screen remains the operational comparison rule. The
+native pairs h=7.5/3.75, h=3.75/1.875, and the final h=0.9375/0.46875 pair each
+pass only 20 of 24 rows; the four failures are W at 60, 120, 180, and 240 s.
+For the final pair the 240 s W RMS difference is `1.2126078e-5 m/s` against
+the fixed `epsilon_W/3=2.5981466e-6 m/s` limit. The native fine reference is
+therefore unqualified, so the h=15 candidate has no formal acceptance result.
+The earlier RK3 V3 reference failure across all 24 rows remains a separate
+result and is unchanged.
+
+These same-ARK refinements are empirical time-resolution checks for one shared
+ARK implementation. They do not establish an independent Fortran truth,
+formal order, a true-error bound, or an integrator-only comparison against
+stock RK3. The WRF acoustic filter paths differ, and common ARK operator bias
+remains. No production source or ABI changed and no rebuild was needed. The six
+240 s runs and three 15 s diagnostic controls were executed and archived
+separately; this documentation audit launched no further run.
 
 ## Completed restricted rotating inverse
 

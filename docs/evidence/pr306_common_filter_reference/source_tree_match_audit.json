@@ -1,0 +1,32 @@
+{
+  "schema": "pr306_source_tree_match_audit_v1",
+  "checked_local_time": "2026-10-14T06:15:45+09:00",
+  "w305": {
+    "path": "/private/tmp/pr305-rk3-reference-update-20261013",
+    "head": "134f02d4297b3e39f17098311d62691cabdca5bb",
+    "tree": "bbb46283d595f9d390d8c3bc77982c1feb61843b",
+    "status": [
+      "?? dyn_em/module_sdirk3_advect_u_diag.f90",
+      "?? tools/__pycache__/"
+    ]
+  },
+  "w306": {
+    "path": "/private/tmp/pr306-common-filter-reference-20261014",
+    "head": "5dc69a35823a5af8f6d5e24978933a25ee2b7081",
+    "tree": "bbb46283d595f9d390d8c3bc77982c1feb61843b",
+    "status": []
+  },
+  "tracked_authoritative_files_compared": 3388,
+  "tracked_authoritative_mismatches": [],
+  "committed_tree_equal": true,
+  "authoritative_code_current_tree_equal": true,
+  "selected_hashes": {
+    "dyn_em/module_small_step_em.F": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+    "dyn_em/solve_em.F": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "76a40d51e93a1602c02f3c9407d220ca99a58876355f977072525acd973070ad",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h": "6121e11e76007d6434a8ac894deb23dd5122d825a0b75b4d09650d4436bf321b",
+    "tools/test_native_wave_refinement.py": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+    "tools/test_native_wave_refinement_cf_selector_test.py": "9785448374c09d119cfeedc062f93693ff50772b4a99fd7b0f8c05394c155470"
+  },
+  "w306_untracked_note": "Untracked generated dyn_em/module_sdirk3_advect_u_diag.f90 and tools/__pycache__ were not treated as authoritative source changes."
+}

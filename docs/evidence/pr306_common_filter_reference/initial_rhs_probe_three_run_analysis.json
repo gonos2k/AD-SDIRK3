@@ -1,0 +1,1098 @@
+{
+  "schema": "pr306_initial_rhs_debug_observer_three_run_analysis_v1",
+  "input": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/references/ark3_h15_postcf_e71/wrfinput_d01",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "fields": [
+    "U",
+    "V",
+    "W",
+    "PH",
+    "T",
+    "THM",
+    "MU",
+    "MUB"
+  ],
+  "expected_times": [
+    "0001-01-01_00:00:00",
+    "0001-01-01_00:00:15"
+  ],
+  "case_receipts": {
+    "A_debug1_off": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_A_debug1_off",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_A_debug1_off/run_receipt.json",
+      "receipt_sha256": "9c6209216a7f075251b9013257fba34bf73d62f44b211c085f6d0743892df46d",
+      "return_code": 0,
+      "application_status": "completed",
+      "debug_level": 1,
+      "observer_enabled": false,
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "de974130d90861ae7233318cdf88b084ef4fc63290bc8a5e70b3bef455d76860",
+      "times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:00:15"
+      ],
+      "expected_times_exact": true,
+      "raw_state_files": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "f79ff43ddb08b06ca9dd51828c9411b707346b038a37175a66ca0ea665c9dbe1",
+          "bytes": 1040561,
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:00:15"
+          ]
+        }
+      ],
+      "sidecars": []
+    },
+    "B_debug2_off": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_B_debug2_off",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_B_debug2_off/run_receipt.json",
+      "receipt_sha256": "e89bdd5c5b969d63674ba7779981b20d32f058c12aaa361d50c7423b2837d13c",
+      "return_code": 0,
+      "application_status": "completed",
+      "debug_level": 2,
+      "observer_enabled": false,
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "d5375e1d24818b16b947b29db8eeb79cf31f22724bb5cb23cb6983fc29a134c7",
+      "times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:00:15"
+      ],
+      "expected_times_exact": true,
+      "raw_state_files": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "f79ff43ddb08b06ca9dd51828c9411b707346b038a37175a66ca0ea665c9dbe1",
+          "bytes": 1040561,
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:00:15"
+          ]
+        }
+      ],
+      "sidecars": []
+    },
+    "C_debug2_trace": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_C_debug2_trace",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_C_debug2_trace/run_receipt.json",
+      "receipt_sha256": "df2147ebf6aeb7d6ab45253bfd11e898e0d61a9a38aa0a6ffe5bafe836f09e5b",
+      "return_code": 0,
+      "application_status": "completed",
+      "debug_level": 2,
+      "observer_enabled": true,
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "d5375e1d24818b16b947b29db8eeb79cf31f22724bb5cb23cb6983fc29a134c7",
+      "times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:00:15"
+      ],
+      "expected_times_exact": true,
+      "raw_state_files": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "f79ff43ddb08b06ca9dd51828c9411b707346b038a37175a66ca0ea665c9dbe1",
+          "bytes": 1040561,
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:00:15"
+          ]
+        }
+      ],
+      "sidecars": [
+        {
+          "name": "port_full_rhs_components_snapshot.bin",
+          "bytes": 1392672,
+          "sha256": "a8c403c2ebb8a276dccf4264d72f21b872078a32b9e64ac4df7dc6a98f7588ad"
+        },
+        {
+          "name": "port_full_rhs_snapshot.bin",
+          "bytes": 196276,
+          "sha256": "b55f45376d96b48593b8943d99019c3b5b7bc0436094962e463e0ba7c9c3ce07"
+        },
+        {
+          "name": "port_hdiff_u_snapshot.bin",
+          "bytes": 78352,
+          "sha256": "c3bd104d3dee71eeb0ee44c32f80e33ac520edb61c826a1720ea928a1708957e"
+        },
+        {
+          "name": "port_u_pgf_operands_snapshot.bin",
+          "bytes": 150300,
+          "sha256": "af37bae317c7f4228f5d40d2031d72e80b78ffe5d72c337cf8b104e673dc5fdd"
+        },
+        {
+          "name": "port_u_pgf_snapshot.bin",
+          "bytes": 352956,
+          "sha256": "6a6086da7ef8fd46c6afd5d8bcf789b518793dfa3814f72f2a7fd3d97d777ac1"
+        },
+        {
+          "name": "port_vdiff_u_snapshot.bin",
+          "bytes": 78352,
+          "sha256": "68a582042283a26b703d786360b052f78bd9b9e95c2c714c5c158b9d74059abf"
+        }
+      ]
+    }
+  },
+  "pairwise_raw_output_comparisons": {
+    "A_debug1_off_vs_B_debug2_off": {
+      "0001-01-01_00:00:00": {
+        "U": {
+          "shape_a": [
+            16,
+            16,
+            17
+          ],
+          "shape_b": [
+            16,
+            16,
+            17
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "V": {
+          "shape_a": [
+            16,
+            17,
+            16
+          ],
+          "shape_b": [
+            16,
+            17,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "W": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "PH": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "T": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "THM": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MU": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MUB": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        }
+      },
+      "0001-01-01_00:00:15": {
+        "U": {
+          "shape_a": [
+            16,
+            16,
+            17
+          ],
+          "shape_b": [
+            16,
+            16,
+            17
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "V": {
+          "shape_a": [
+            16,
+            17,
+            16
+          ],
+          "shape_b": [
+            16,
+            17,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "W": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "PH": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "T": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "THM": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MU": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MUB": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        }
+      }
+    },
+    "B_debug2_off_vs_C_debug2_trace": {
+      "0001-01-01_00:00:00": {
+        "U": {
+          "shape_a": [
+            16,
+            16,
+            17
+          ],
+          "shape_b": [
+            16,
+            16,
+            17
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "V": {
+          "shape_a": [
+            16,
+            17,
+            16
+          ],
+          "shape_b": [
+            16,
+            17,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "W": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "PH": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "T": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "THM": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MU": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MUB": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        }
+      },
+      "0001-01-01_00:00:15": {
+        "U": {
+          "shape_a": [
+            16,
+            16,
+            17
+          ],
+          "shape_b": [
+            16,
+            16,
+            17
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "V": {
+          "shape_a": [
+            16,
+            17,
+            16
+          ],
+          "shape_b": [
+            16,
+            17,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "W": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "PH": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "T": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "THM": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MU": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MUB": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        }
+      }
+    },
+    "A_debug1_off_vs_C_debug2_trace": {
+      "0001-01-01_00:00:00": {
+        "U": {
+          "shape_a": [
+            16,
+            16,
+            17
+          ],
+          "shape_b": [
+            16,
+            16,
+            17
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "V": {
+          "shape_a": [
+            16,
+            17,
+            16
+          ],
+          "shape_b": [
+            16,
+            17,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "W": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "PH": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "T": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "THM": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MU": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MUB": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        }
+      },
+      "0001-01-01_00:00:15": {
+        "U": {
+          "shape_a": [
+            16,
+            16,
+            17
+          ],
+          "shape_b": [
+            16,
+            16,
+            17
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "V": {
+          "shape_a": [
+            16,
+            17,
+            16
+          ],
+          "shape_b": [
+            16,
+            17,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "W": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "PH": {
+          "shape_a": [
+            17,
+            16,
+            16
+          ],
+          "shape_b": [
+            17,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "T": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "THM": {
+          "shape_a": [
+            16,
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MU": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        },
+        "MUB": {
+          "shape_a": [
+            16,
+            16
+          ],
+          "shape_b": [
+            16,
+            16
+          ],
+          "finite_a": true,
+          "finite_b": true,
+          "bitwise_exact": true,
+          "max_abs_difference": 0.0,
+          "rms_difference": 0.0
+        }
+      }
+    }
+  },
+  "A_t0_vs_original_input": {
+    "U": {
+      "shape_a": [
+        16,
+        16,
+        17
+      ],
+      "shape_b": [
+        16,
+        16,
+        17
+      ],
+      "finite_a": true,
+      "finite_b": true,
+      "bitwise_exact": true,
+      "max_abs_difference": 0.0,
+      "rms_difference": 0.0
+    },
+    "V": {
+      "shape_a": [
+        16,
+        17,
+        16
+      ],
+      "shape_b": [
+        16,
+        17,
+        16
+      ],
+      "finite_a": true,
+      "finite_b": true,
+      "bitwise_exact": true,
+      "max_abs_difference": 0.0,
+      "rms_difference": 0.0
+    },
+    "W": {
+      "shape_a": [
+        17,
+        16,
+        16
+      ],
+      "shape_b": [
+        17,
+        16,
+        16
+      ],
+      "finite_a": true,
+      "finite_b": true,
+      "bitwise_exact": true,
+      "max_abs_difference": 0.0,
+      "rms_difference": 0.0
+    },
+    "PH": {
+      "shape_a": [
+        17,
+        16,
+        16
+      ],
+      "shape_b": [
+        17,
+        16,
+        16
+      ],
+      "finite_a": true,
+      "finite_b": true,
+      "bitwise_exact": true,
+      "max_abs_difference": 0.0,
+      "rms_difference": 0.0
+    },
+    "T": {
+      "shape_a": [
+        16,
+        16,
+        16
+      ],
+      "shape_b": [
+        16,
+        16,
+        16
+      ],
+      "finite_a": true,
+      "finite_b": true,
+      "bitwise_exact": true,
+      "max_abs_difference": 0.0,
+      "rms_difference": 0.0
+    },
+    "THM": {
+      "shape_a": [
+        16,
+        16,
+        16
+      ],
+      "shape_b": [
+        16,
+        16,
+        16
+      ],
+      "finite_a": true,
+      "finite_b": true,
+      "bitwise_exact": true,
+      "max_abs_difference": 0.0,
+      "rms_difference": 0.0
+    },
+    "MU": {
+      "shape_a": [
+        16,
+        16
+      ],
+      "shape_b": [
+        16,
+        16
+      ],
+      "finite_a": true,
+      "finite_b": true,
+      "bitwise_exact": true,
+      "max_abs_difference": 0.0,
+      "rms_difference": 0.0
+    },
+    "MUB": {
+      "shape_a": [
+        16,
+        16
+      ],
+      "shape_b": [
+        16,
+        16
+      ],
+      "finite_a": true,
+      "finite_b": true,
+      "bitwise_exact": true,
+      "max_abs_difference": 0.0,
+      "rms_difference": 0.0
+    }
+  },
+  "initial_W_max_abs_by_case": {
+    "A_debug1_off": 0.0,
+    "B_debug2_off": 0.0,
+    "C_debug2_trace": 0.0
+  },
+  "observer_capture": {
+    "expected_cpp_sidecars": {
+      "port_full_rhs_snapshot.bin": true,
+      "port_full_rhs_components_snapshot.bin": true,
+      "port_u_pgf_snapshot.bin": true,
+      "port_u_pgf_operands_snapshot.bin": true
+    },
+    "fortran_full_snapshot_present": false,
+    "fortran_full_snapshot_note": "Absence is expected: the legacy Fortran full-writer branch is skipped for time_integration_scheme=6."
+  },
+  "claim_limits": "This checks initial short-run state/output invariance among the three diagnostic controls. It does not compare the captured RHS to the archived h15 trajectory or decide the h refinement reference gate."
+}

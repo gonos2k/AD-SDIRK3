@@ -1,0 +1,1015 @@
+{
+  "schema": "pr306_native_ark_v3_fixed_budget_analysis_v1",
+  "status": "reference_unqualified_candidate_comparison_provisional",
+  "source_family": "same native mode-3 ARK Full/Fast/Slow, common executable/source/input; FP64 internal carry; 240s uninterrupted runs",
+  "reference_primary": "ark3_h3p75_primary",
+  "reference_sensitivity": "ark3_h7p5_reference_check",
+  "candidate": "ark3_h15_candidate_current_a5 (bitwise parity to archived PR304 h15)",
+  "checkpoint_seconds": [
+    60,
+    120,
+    180,
+    240
+  ],
+  "owned_counts": {
+    "U": 4096,
+    "V": 4352,
+    "W": 4096,
+    "PH": 4096,
+    "T": 4096,
+    "MU": 256
+  },
+  "budget_source": {
+    "contract_id": "dry-em-b-wave-16cubed-240s-fixed-physical-budgets-v3",
+    "frozen_contract_path": "/Users/yhlee/AD-SDIRK3-review-evidence/seam-cause-acceptance-20261012/acceptance_candidate_v3.json",
+    "frozen_contract_sha256": "77bc4dcc7b8e0bde91d6089e9aaa11a67a49311f824d88c97919bbbb8e64fe3f",
+    "metadata_erratum_path": "/Users/yhlee/AD-SDIRK3-review-evidence/seam-cause-acceptance-20261012/acceptance_candidate_v3_metadata_erratum.json",
+    "metadata_erratum_sha256": "e6cfae5632226b723e5e200454ad4fb5c4c3688ce994f81f0d70b920d5414ae9",
+    "budgets": {
+      "U": {
+        "units": "m/s; unique periodic X faces only",
+        "epsilon_240": 0.0007744417040064484,
+        "reference_check_limit_epsilon_over_3": 0.00025814723466881614
+      },
+      "V": {
+        "units": "m/s; both physical Y walls included",
+        "epsilon_240": 0.00010122007244795247,
+        "reference_check_limit_epsilon_over_3": 3.374002414931749e-05
+      },
+      "W": {
+        "units": "m/s; fixed lower W face excluded, top included",
+        "epsilon_240": 7.79443985679733e-06,
+        "reference_check_limit_epsilon_over_3": 2.5981466189324436e-06
+      },
+      "PH": {
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "epsilon_240": 0.010249750539744869,
+        "reference_check_limit_epsilon_over_3": 0.0034165835132482897
+      },
+      "T": {
+        "units": "physical potential temperature T+300 K; all mass points",
+        "epsilon_240": 3.619571391542998e-05,
+        "reference_check_limit_epsilon_over_3": 1.2065237971809995e-05
+      },
+      "MU": {
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "epsilon_240": 0.014590900457561187,
+        "reference_check_limit_epsilon_over_3": 0.004863633485853729
+      }
+    },
+    "owner_counts": {
+      "U": 4096,
+      "V": 4352,
+      "W": 4096,
+      "PH": 4096,
+      "T": 4096,
+      "MU": 256
+    },
+    "PH_semantics": "PH geopotential perturbation, m^2/s^2; use budgets.PH and the metadata erratum, not sampling.PH height label",
+    "T_semantics": "NetCDF T+300 K is the V3 criterion. Report THM-derived potential temperature separately as a diagnostic, not as a replacement."
+  },
+  "pins": {
+    "protocol_sha256": "7902b1d660f0fe283e05305e203fcd380d75819c36401f9100cd7ee41f299e32",
+    "plan_sha256": "9c339c14f709d376d84a824f6267885da145fac3b94fb7e46fbe8fbf64806cfa",
+    "benchmark_tool": "/private/tmp/pr306-common-filter-reference-20261014/tools/benchmark_wrf_accuracy_cost.py",
+    "benchmark_tool_sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8",
+    "benchmark_raw_output_sha256": "59eb49067c5e005002a9c8cc5ff1eef39a83e0b127568fd2fab0eb14809a871f",
+    "run_summary_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_native_runs_and_h15_parity.json",
+    "run_summary_sha256": "e8ffbae7953687e62b5c3555c5203ab0e40982a10408da664792fc7dfa63ff20",
+    "source_tree_match_audit": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/source_tree_match_audit.json",
+    "executable_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+    "cpp_archive_sha256": "b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "source_tree_match_audit_sha256": "d75f6c939b397b035850dccb455551b454e906e0024d352448c40e445e1dc91b",
+    "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/producer/pr305_loop_preserved_module_only_build_receipt.json",
+    "build_receipt_sha256": "d97a766109cb3bfd987938d5dd6d1ebfaeac23785c991d329fa4a2be388865b6",
+    "effective_context_audit_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/ark3_mode3_effective_context_audit.json",
+    "effective_context_audit_sha256": "58bf16e43eae600514d7be134873aafe8dad00a78f54d97d692f91f8a0c82c5d"
+  },
+  "h15_archive_parity_gate": {
+    "pass": true,
+    "array_count": 40,
+    "fields": [
+      "U",
+      "V",
+      "W",
+      "PH",
+      "T",
+      "THM",
+      "MU",
+      "MUB"
+    ],
+    "times": 5,
+    "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_native_runs_and_h15_parity.json",
+    "note": "whole raw fields bitwise equal current h15 control vs PR304 archived h15"
+  },
+  "run_receipts_and_admissibility": {
+    "ark3_h3p75_primary": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h3p75",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "545ee9994bae12910cc5e8b8c5c62afbcd048a0e4fc83ba64cdc7838f32f3dd2",
+      "executable_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+      "outputs": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h3p75/wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "ecab133fd28467ceea924ef6267482f37a35869ac90dea8eadd31cfbd7e39f94",
+          "timestamps": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h3p75/wrfout_d01_0001-01-01_00:02:00",
+          "sha256": "2c4c7a0c4b158fdcdb51b569cca5d74fac1526099338d7a9fd446ceaa1ac815d",
+          "timestamps": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h3p75/wrfout_d01_0001-01-01_00:04:00",
+          "sha256": "72b6b3983eee0f5f2a24a01083c9c11f8887eecbcc875459c9c6a80c7d99a0c2",
+          "timestamps": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "run_status": "completed",
+      "history_times_exact": true,
+      "finite_and_admissible": true,
+      "solver_failed_steps": 0,
+      "native_solver_steps": 192,
+      "failed_solver_steps": 0,
+      "last_dt_seconds": 3.75,
+      "fp64_state_carry_publications": 64,
+      "wall_seconds_whole_path": 29.74,
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "effective_namelist_sha256": "545ee9994bae12910cc5e8b8c5c62afbcd048a0e4fc83ba64cdc7838f32f3dd2",
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/candidate_namelists/ark3_mode3_h3p75.namelist.diff",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h3p75/run_receipt.json",
+      "run_receipt_sha256": "364862ce2efcbcb6dfc3b71b5e6c916dc81e3acb1f17f83e09c91a3082d02e58",
+      "command": {
+        "environment_assignments": {
+          "OMP_NUM_THREADS": "1"
+        },
+        "unset_environment_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ],
+        "argv": [
+          "/usr/bin/time",
+          "-l",
+          "-o",
+          "time.log",
+          "/opt/homebrew/bin/mpirun",
+          "-np",
+          "1",
+          "--bind-to",
+          "none",
+          "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/producer/wrf.exe"
+        ],
+        "stdout_redirect": "run.log",
+        "stderr_redirect": "run.log",
+        "environment_inheritance_note": "All other shell environment variables were inherited and not separately snapshotted."
+      },
+      "process_result": {
+        "return_code": null,
+        "return_code_capture": "not retained; do not infer shell status",
+        "application_success_marker": true,
+        "application_status": "completed"
+      },
+      "producer_source_hashes": {
+        "dyn_em/module_small_step_em.F": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+        "dyn_em/solve_em.F": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "76a40d51e93a1602c02f3c9407d220ca99a58876355f977072525acd973070ad",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h": "6121e11e76007d6434a8ac894deb23dd5122d825a0b75b4d09650d4436bf321b",
+        "tools/test_native_wave_refinement.py": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+        "tools/test_native_wave_refinement_cf_selector_test.py": "9785448374c09d119cfeedc062f93693ff50772b4a99fd7b0f8c05394c155470"
+      },
+      "producer_build_receipt_sha256": "d97a766109cb3bfd987938d5dd6d1ebfaeac23785c991d329fa4a2be388865b6",
+      "source_tree_match_summary": {
+        "tracked_authoritative_files_compared": 3388,
+        "tracked_authoritative_mismatches": [],
+        "committed_tree_equal": true
+      }
+    },
+    "ark3_h7p5_reference_check": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h7p5",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "0baf2846442bb39417f13d128e79580559a7496794d37b0f6c3ac90e67154823",
+      "executable_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+      "outputs": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h7p5/wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "45c4e6affd59d5fd55d690c0abf1d6fc72b15b9590cff6ecea62d246b115237f",
+          "timestamps": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h7p5/wrfout_d01_0001-01-01_00:02:00",
+          "sha256": "4da0089da8a329940bbf3e15843a8c627abdcd11c12e5848ccc11921657fc44e",
+          "timestamps": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h7p5/wrfout_d01_0001-01-01_00:04:00",
+          "sha256": "7e4abdcace384bf1e43de45b5cd8e6a42eb12270dc459c07d5b73be1199f8292",
+          "timestamps": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "run_status": "completed",
+      "history_times_exact": true,
+      "finite_and_admissible": true,
+      "solver_failed_steps": 0,
+      "native_solver_steps": 96,
+      "failed_solver_steps": 0,
+      "last_dt_seconds": 7.5,
+      "fp64_state_carry_publications": 32,
+      "wall_seconds_whole_path": 16.12,
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "effective_namelist_sha256": "0baf2846442bb39417f13d128e79580559a7496794d37b0f6c3ac90e67154823",
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/candidate_namelists/ark3_mode3_h7p5.namelist.diff",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h7p5/run_receipt.json",
+      "run_receipt_sha256": "38e499e08920b3d3db3a2afe1a116ee6031103c6d90f5b8f8b743d0ed22ed5ed",
+      "command": {
+        "environment_assignments": {
+          "OMP_NUM_THREADS": "1"
+        },
+        "unset_environment_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ],
+        "argv": [
+          "/usr/bin/time",
+          "-l",
+          "-o",
+          "time.log",
+          "/opt/homebrew/bin/mpirun",
+          "-np",
+          "1",
+          "--bind-to",
+          "none",
+          "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/producer/wrf.exe"
+        ],
+        "stdout_redirect": "run.log",
+        "stderr_redirect": "run.log",
+        "environment_inheritance_note": "All other shell environment variables were inherited and not separately snapshotted."
+      },
+      "process_result": {
+        "return_code": 0,
+        "return_code_capture": "captured by unified exec final result",
+        "application_success_marker": true,
+        "application_status": "completed"
+      },
+      "producer_source_hashes": {
+        "dyn_em/module_small_step_em.F": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+        "dyn_em/solve_em.F": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "76a40d51e93a1602c02f3c9407d220ca99a58876355f977072525acd973070ad",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h": "6121e11e76007d6434a8ac894deb23dd5122d825a0b75b4d09650d4436bf321b",
+        "tools/test_native_wave_refinement.py": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+        "tools/test_native_wave_refinement_cf_selector_test.py": "9785448374c09d119cfeedc062f93693ff50772b4a99fd7b0f8c05394c155470"
+      },
+      "producer_build_receipt_sha256": "d97a766109cb3bfd987938d5dd6d1ebfaeac23785c991d329fa4a2be388865b6",
+      "source_tree_match_summary": {
+        "tracked_authoritative_files_compared": 3388,
+        "tracked_authoritative_mismatches": [],
+        "committed_tree_equal": true
+      }
+    },
+    "ark3_h15_candidate_current_a5": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h15_current_a5_parity_control",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+      "executable_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+      "outputs": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h15_current_a5_parity_control/wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "5ed6e806d334a3f0167dd6a71333743cf32b5e3995fdab0ab1307a28bfc820ed",
+          "timestamps": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h15_current_a5_parity_control/wrfout_d01_0001-01-01_00:02:00",
+          "sha256": "c79bfcbfff752be53ee9ddb7475eb577d9668238b7f6946b499e5cb496fab488",
+          "timestamps": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h15_current_a5_parity_control/wrfout_d01_0001-01-01_00:04:00",
+          "sha256": "1d338d391270defbca386543c1966ab6ba1d60d8a369ff93f1695a0bb5c5897f",
+          "timestamps": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "run_status": "completed",
+      "history_times_exact": true,
+      "finite_and_admissible": true,
+      "solver_failed_steps": 0,
+      "native_solver_steps": 48,
+      "failed_solver_steps": 0,
+      "last_dt_seconds": 15.0,
+      "fp64_state_carry_publications": 16,
+      "wall_seconds_whole_path": 9.06,
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "effective_namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": null,
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h15_current_a5_parity_control/run_receipt.json",
+      "run_receipt_sha256": "5fedc2c99a896f3d510553c3f15bb23a50e6e26063fa973f6945e1568f3ea43d",
+      "command": {
+        "environment_assignments": {
+          "OMP_NUM_THREADS": "1"
+        },
+        "unset_environment_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ],
+        "argv": [
+          "/usr/bin/time",
+          "-l",
+          "-o",
+          "time.log",
+          "/opt/homebrew/bin/mpirun",
+          "-np",
+          "1",
+          "--bind-to",
+          "none",
+          "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/producer/wrf.exe"
+        ],
+        "stdout_redirect": "run.log",
+        "stderr_redirect": "run.log",
+        "environment_inheritance_note": "All other shell environment variables were inherited and not separately snapshotted."
+      },
+      "process_result": {
+        "return_code": null,
+        "return_code_capture": "not retained; do not infer shell status",
+        "application_success_marker": true,
+        "application_status": "completed"
+      },
+      "producer_source_hashes": {
+        "dyn_em/module_small_step_em.F": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+        "dyn_em/solve_em.F": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "76a40d51e93a1602c02f3c9407d220ca99a58876355f977072525acd973070ad",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface.h": "6121e11e76007d6434a8ac894deb23dd5122d825a0b75b4d09650d4436bf321b",
+        "tools/test_native_wave_refinement.py": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+        "tools/test_native_wave_refinement_cf_selector_test.py": "9785448374c09d119cfeedc062f93693ff50772b4a99fd7b0f8c05394c155470"
+      },
+      "producer_build_receipt_sha256": "d97a766109cb3bfd987938d5dd6d1ebfaeac23785c991d329fa4a2be388865b6",
+      "source_tree_match_summary": {
+        "tracked_authoritative_files_compared": 3388,
+        "tracked_authoritative_mismatches": [],
+        "committed_tree_equal": true
+      }
+    }
+  },
+  "reference_qualification": {
+    "criterion": "all 24 coarse/fine RMS <= frozen epsilon/3",
+    "pass": false,
+    "pass_count": 20,
+    "row_count": 24,
+    "maximum_ratio": {
+      "time": "0001-01-01_00:04:00",
+      "seconds": 240,
+      "field": "W",
+      "units": "m/s; fixed lower W face excluded, top included",
+      "rms": 2.922821777789848e-05,
+      "limit_epsilon_over_3": 2.5981466189324436e-06,
+      "ratio": 11.249641403958991,
+      "pass": false
+    },
+    "all_rows": [
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "U",
+        "units": "m/s; unique periodic X faces only",
+        "rms": 7.462429419726798e-08,
+        "limit_epsilon_over_3": 0.00025814723466881614,
+        "ratio": 0.00028907648107486195,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "V",
+        "units": "m/s; both physical Y walls included",
+        "rms": 5.5790830721684285e-08,
+        "limit_epsilon_over_3": 3.374002414931749e-05,
+        "ratio": 0.0016535504087009626,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "W",
+        "units": "m/s; fixed lower W face excluded, top included",
+        "rms": 1.140427545104099e-05,
+        "limit_epsilon_over_3": 2.5981466189324436e-06,
+        "ratio": 4.3893887157634355,
+        "pass": false
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "PH",
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "rms": 0.0004163375520321165,
+        "limit_epsilon_over_3": 0.0034165835132482897,
+        "ratio": 0.12185785900379964,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "T",
+        "units": "physical potential temperature T+300 K; all mass points",
+        "rms": 0.0,
+        "limit_epsilon_over_3": 1.2065237971809995e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "MU",
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "rms": 2.457562461863554e-07,
+        "limit_epsilon_over_3": 0.004863633485853729,
+        "ratio": 5.052935154368792e-05,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "U",
+        "units": "m/s; unique periodic X faces only",
+        "rms": 1.1955171217342727e-07,
+        "limit_epsilon_over_3": 0.00025814723466881614,
+        "ratio": 0.0004631144405897018,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "V",
+        "units": "m/s; both physical Y walls included",
+        "rms": 6.41896091030912e-08,
+        "limit_epsilon_over_3": 3.374002414931749e-05,
+        "ratio": 0.0019024766792998767,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "W",
+        "units": "m/s; fixed lower W face excluded, top included",
+        "rms": 2.2200783043354493e-05,
+        "limit_epsilon_over_3": 2.5981466189324436e-06,
+        "ratio": 8.544853812937088,
+        "pass": false
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "PH",
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "rms": 0.000676685523342724,
+        "limit_epsilon_over_3": 0.0034165835132482897,
+        "ratio": 0.19805911979577825,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "T",
+        "units": "physical potential temperature T+300 K; all mass points",
+        "rms": 0.0,
+        "limit_epsilon_over_3": 1.2065237971809995e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "MU",
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "rms": 3.345302391148157e-07,
+        "limit_epsilon_over_3": 0.004863633485853729,
+        "ratio": 6.878195902051912e-05,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "U",
+        "units": "m/s; unique periodic X faces only",
+        "rms": 1.1466170967101814e-07,
+        "limit_epsilon_over_3": 0.00025814723466881614,
+        "ratio": 0.00044417175267486654,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "V",
+        "units": "m/s; both physical Y walls included",
+        "rms": 6.314683549388546e-08,
+        "limit_epsilon_over_3": 3.374002414931749e-05,
+        "ratio": 0.0018715705482138137,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "W",
+        "units": "m/s; fixed lower W face excluded, top included",
+        "rms": 1.7040978006747025e-05,
+        "limit_epsilon_over_3": 2.5981466189324436e-06,
+        "ratio": 6.558897747560151,
+        "pass": false
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "PH",
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "rms": 0.0005649608828266757,
+        "limit_epsilon_over_3": 0.0034165835132482897,
+        "ratio": 0.16535842915472704,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "T",
+        "units": "physical potential temperature T+300 K; all mass points",
+        "rms": 0.0,
+        "limit_epsilon_over_3": 1.2065237971809995e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "MU",
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "rms": 3.625608998714816e-07,
+        "limit_epsilon_over_3": 0.004863633485853729,
+        "ratio": 7.454527585724116e-05,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "U",
+        "units": "m/s; unique periodic X faces only",
+        "rms": 1.5535919020522953e-07,
+        "limit_epsilon_over_3": 0.00025814723466881614,
+        "ratio": 0.000601823956799475,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "V",
+        "units": "m/s; both physical Y walls included",
+        "rms": 8.22811595098086e-08,
+        "limit_epsilon_over_3": 3.374002414931749e-05,
+        "ratio": 0.0024386811089900486,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "W",
+        "units": "m/s; fixed lower W face excluded, top included",
+        "rms": 2.922821777789848e-05,
+        "limit_epsilon_over_3": 2.5981466189324436e-06,
+        "ratio": 11.249641403958991,
+        "pass": false
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "PH",
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "rms": 0.0008526232409949401,
+        "limit_epsilon_over_3": 0.0034165835132482897,
+        "ratio": 0.24955433920721443,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "T",
+        "units": "physical potential temperature T+300 K; all mass points",
+        "rms": 0.0,
+        "limit_epsilon_over_3": 1.2065237971809995e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "MU",
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "rms": 4.235705853567092e-07,
+        "limit_epsilon_over_3": 0.004863633485853729,
+        "ratio": 8.708933076242248e-05,
+        "pass": true
+      }
+    ]
+  },
+  "candidate_gate": {
+    "criterion": "only after reference passes: all 24 candidate/fine RMS <= frozen epsilon",
+    "evaluated": false,
+    "pass": null,
+    "pass_count": 20,
+    "row_count": 24,
+    "maximum_ratio": {
+      "time": "0001-01-01_00:02:00",
+      "seconds": 120,
+      "field": "W",
+      "units": "m/s; fixed lower W face excluded, top included",
+      "rms": 5.737884557501371e-05,
+      "limit_epsilon": 7.79443985679733e-06,
+      "ratio": 7.361509823566743,
+      "pass": false
+    },
+    "all_rows": [
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "U",
+        "units": "m/s; unique periodic X faces only",
+        "rms": 1.8334375652869932e-07,
+        "limit_epsilon": 0.0007744417040064484,
+        "ratio": 0.00023674313454479553,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "V",
+        "units": "m/s; both physical Y walls included",
+        "rms": 9.337915980403488e-08,
+        "limit_epsilon": 0.00010122007244795247,
+        "ratio": 0.0009225359905966338,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "W",
+        "units": "m/s; fixed lower W face excluded, top included",
+        "rms": 2.793103529953634e-05,
+        "limit_epsilon": 7.79443985679733e-06,
+        "ratio": 3.583456388489341,
+        "pass": false
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "PH",
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "rms": 0.0012180489504089102,
+        "limit_epsilon": 0.010249750539744869,
+        "ratio": 0.11883693614647027,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "T",
+        "units": "physical potential temperature T+300 K; all mass points",
+        "rms": 0.0,
+        "limit_epsilon": 3.619571391542998e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:01:00",
+        "seconds": 60,
+        "field": "MU",
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "rms": 1.018524616398517e-06,
+        "limit_epsilon": 0.014590900457561187,
+        "ratio": 6.980546672640103e-05,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "U",
+        "units": "m/s; unique periodic X faces only",
+        "rms": 3.114093062564462e-07,
+        "limit_epsilon": 0.0007744417040064484,
+        "ratio": 0.00040210813111615855,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "V",
+        "units": "m/s; both physical Y walls included",
+        "rms": 1.3244702311440787e-07,
+        "limit_epsilon": 0.00010122007244795247,
+        "ratio": 0.0013085055158650705,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "W",
+        "units": "m/s; fixed lower W face excluded, top included",
+        "rms": 5.737884557501371e-05,
+        "limit_epsilon": 7.79443985679733e-06,
+        "ratio": 7.361509823566743,
+        "pass": false
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "PH",
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "rms": 0.001924960365542699,
+        "limit_epsilon": 0.010249750539744869,
+        "ratio": 0.18780558200693673,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "T",
+        "units": "physical potential temperature T+300 K; all mass points",
+        "rms": 0.0,
+        "limit_epsilon": 3.619571391542998e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:02:00",
+        "seconds": 120,
+        "field": "MU",
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "rms": 1.6652005964158764e-06,
+        "limit_epsilon": 0.014590900457561187,
+        "ratio": 0.00011412596510127987,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "U",
+        "units": "m/s; unique periodic X faces only",
+        "rms": 2.560423806594455e-07,
+        "limit_epsilon": 0.0007744417040064484,
+        "ratio": 0.0003306154347510624,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "V",
+        "units": "m/s; both physical Y walls included",
+        "rms": 1.5346126085385118e-07,
+        "limit_epsilon": 0.00010122007244795247,
+        "ratio": 0.001516114908263489,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "W",
+        "units": "m/s; fixed lower W face excluded, top included",
+        "rms": 3.400716690023098e-05,
+        "limit_epsilon": 7.79443985679733e-06,
+        "ratio": 4.363003310696433,
+        "pass": false
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "PH",
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "rms": 0.0022854619450236834,
+        "limit_epsilon": 0.010249750539744869,
+        "ratio": 0.22297732380524568,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "T",
+        "units": "physical potential temperature T+300 K; all mass points",
+        "rms": 0.0,
+        "limit_epsilon": 3.619571391542998e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:03:00",
+        "seconds": 180,
+        "field": "MU",
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "rms": 1.9960882722902715e-06,
+        "limit_epsilon": 0.014590900457561187,
+        "ratio": 0.00013680363854828942,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "U",
+        "units": "m/s; unique periodic X faces only",
+        "rms": 3.118591827228654e-07,
+        "limit_epsilon": 0.0007744417040064484,
+        "ratio": 0.0004026890353521932,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "V",
+        "units": "m/s; both physical Y walls included",
+        "rms": 2.0479563483588546e-07,
+        "limit_epsilon": 0.00010122007244795247,
+        "ratio": 0.0020232709766256265,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "W",
+        "units": "m/s; fixed lower W face excluded, top included",
+        "rms": 4.490878201684103e-05,
+        "limit_epsilon": 7.79443985679733e-06,
+        "ratio": 5.761643279302135,
+        "pass": false
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "PH",
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included",
+        "rms": 0.0036656416060739825,
+        "limit_epsilon": 0.010249750539744869,
+        "ratio": 0.357632275230498,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "T",
+        "units": "physical potential temperature T+300 K; all mass points",
+        "rms": 0.0,
+        "limit_epsilon": 3.619571391542998e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time": "0001-01-01_00:04:00",
+        "seconds": 240,
+        "field": "MU",
+        "units": "total dry column mass MU+MUB in Pa; all mass points",
+        "rms": 2.071207803951985e-06,
+        "limit_epsilon": 0.014590900457561187,
+        "ratio": 0.00014195202071155653,
+        "pass": true
+      }
+    ],
+    "disposition": "provisional_only_reference_unqualified",
+    "formal_gate_status": "not_evaluated_due_to_reference_failure; row booleans are arithmetic comparisons only",
+    "candidate_boolean_note": "The 24 pass booleans are shown for transparency, but they cannot be interpreted as candidate acceptance because the reference qualification failed."
+  },
+  "THM_diagnostic_only": {
+    "units_by_reader": {
+      "units": "K",
+      "description": "either 1) pert moist pot temp=(1+Rv/Rd Qv)*(theta)-T0, or 2) pert dry pot temp=t",
+      "stagger": ""
+    },
+    "same_exact_mass_point_grid": true,
+    "not_used_for_V3_gate": true,
+    "rows": [
+      {
+        "comparison": "coarse_minus_fine",
+        "time": "0001-01-01_00:01:00",
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "units": "K",
+        "diagnostic_only_not_V3_T_acceptance_field": true
+      },
+      {
+        "comparison": "candidate_minus_fine",
+        "time": "0001-01-01_00:01:00",
+        "rms": 2.9802322387695312e-08,
+        "max_abs": 1.9073486328125e-06,
+        "units": "K",
+        "diagnostic_only_not_V3_T_acceptance_field": true
+      },
+      {
+        "comparison": "coarse_minus_fine",
+        "time": "0001-01-01_00:02:00",
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "units": "K",
+        "diagnostic_only_not_V3_T_acceptance_field": true
+      },
+      {
+        "comparison": "candidate_minus_fine",
+        "time": "0001-01-01_00:02:00",
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "units": "K",
+        "diagnostic_only_not_V3_T_acceptance_field": true
+      },
+      {
+        "comparison": "coarse_minus_fine",
+        "time": "0001-01-01_00:03:00",
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "units": "K",
+        "diagnostic_only_not_V3_T_acceptance_field": true
+      },
+      {
+        "comparison": "candidate_minus_fine",
+        "time": "0001-01-01_00:03:00",
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "units": "K",
+        "diagnostic_only_not_V3_T_acceptance_field": true
+      },
+      {
+        "comparison": "coarse_minus_fine",
+        "time": "0001-01-01_00:04:00",
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "units": "K",
+        "diagnostic_only_not_V3_T_acceptance_field": true
+      },
+      {
+        "comparison": "candidate_minus_fine",
+        "time": "0001-01-01_00:04:00",
+        "rms": 0.0,
+        "max_abs": 0.0,
+        "units": "K",
+        "diagnostic_only_not_V3_T_acceptance_field": true
+      }
+    ]
+  },
+  "interpretation": "Observed timestep sensitivity within this native-ARK family only. The fixed epsilon screen is a named-case empirical criterion, not a Richardson estimate, measured order, or truth bound. Whole-path results; no integrator-only attribution.",
+  "run_receipts_and_admissibility_note": "All three per-run receipts are now linked. h7.5 return code is captured as 0; h15 control and h3.75 return codes were not retained, so only their recorded WRF completion markers and validators are reported.",
+  "operator_context_caveat": {
+    "run_family_identity": "All three runs used the same current executable/source tree, e71 input, ARK mode 3, native selectors, FP64 carry, diagnostics configuration, and timestep-only namelist changes; h15 was 40/40 bitwise against PR304 archive.",
+    "stage_kdamp": "Namelist shows SDIRK3_KDAMP=0.2, while RSL initialization prints grid kdamp=0.01. The source audit says the config setter overwrites the grid value before stage RHS with 0.2, but there is no direct stage-effective readback in these run receipts. Treat exact stage coefficient as source-audited, not directly measured. This does not change the within-build timestep comparison but limits claims about the absolute operator coefficient."
+  },
+  "run_receipt_index": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_native_run_receipts_index.json",
+  "run_receipt_index_sha256": "871463833100ca4e2442465437fa6da46a918207ac78d2029c552ccb9214703d"
+}

@@ -1,0 +1,143 @@
+{
+  "task": "PR306 pre-edit bounded Graphify/source navigation receipt",
+  "target_worktree": "/private/tmp/pr306-common-filter-reference-20261014",
+  "target_head": "5dc69a35823a5af8f6d5e24978933a25ee2b7081",
+  "target_tree": "bbb46283d595f9d390d8c3bc77982c1feb61843b",
+  "worktree_clean": true,
+  "reused_cache": {
+    "worktree": "/private/tmp/pr299-pressure-lineage-20261012",
+    "bound_revision": "ebf0b19fd758e32d4d3dc3a5f5f7564db6a09b73",
+    "source_count": 77,
+    "source_bindings_path": "/private/tmp/pr299-pressure-lineage-graph-20261012/source-bindings.json",
+    "source_bindings_sha256": "21e9a18227d85a1c494bbd5d276193fb76ff01479d86211ba8ca4e6a2b6c86ae",
+    "graph_path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+    "graph_sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230",
+    "note": "revision differs from PR306; each reused relevant source is matched by exact target SHA below"
+  },
+  "current_source_bindings": [
+    {
+      "path": "dyn_em/module_implicit_sdirk3.F",
+      "target_sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+      "cache_sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+      "status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "dyn_em/solve_em.F",
+      "target_sha256": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "cache_sha256": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "dyn_em/module_small_step_em.F",
+      "target_sha256": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+      "cache_sha256": "cabf1a177d50fb0096db79644af20cfe6d75217dbe63ab406a7e29bb54c17634",
+      "status": "old_cache_pin_stale; use PR305 final single-file graph"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "target_sha256": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+      "cache_sha256": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+      "status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp",
+      "target_sha256": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+      "cache_sha256": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+      "status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.h",
+      "target_sha256": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+      "cache_sha256": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+      "status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "target_sha256": "76a40d51e93a1602c02f3c9407d220ca99a58876355f977072525acd973070ad",
+      "cache_sha256": "76a40d51e93a1602c02f3c9407d220ca99a58876355f977072525acd973070ad",
+      "status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "target_sha256": "c64fca783979413875f684a91ea6fc124dcf574ae68850bf955888e071b9e1e9",
+      "cache_sha256": "c64fca783979413875f684a91ea6fc124dcf574ae68850bf955888e071b9e1e9",
+      "status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h",
+      "target_sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "cache_sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "status": "reused_verified_exact_source_hash"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs.h",
+      "target_sha256": "272bcadc9d65249c6ea9d37b945443b3e8a435b0401888b13ac8568887dc96d2",
+      "cache_sha256": null,
+      "status": "fresh_bounded_ast_added_missing_source"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs_extended.cpp",
+      "target_sha256": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+      "cache_sha256": null,
+      "status": "fresh_bounded_ast_added_missing_source"
+    }
+  ],
+  "module_small_step_reuse": {
+    "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_module_relocation_receipt.json",
+    "graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_module_relocation_graph/graphify-out/graph.json",
+    "graph_sha256": "60e6b03041995778df3e879cc7b38f7a0a0f1b534eb44b324c1df7dc683c0ee4",
+    "source_sha256": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+    "note": "PR305 final relocated source; exact source match in PR306. Old PR299 graph pin cabf1a... is stale and explicitly not used for current module semantics."
+  },
+  "missing_affected_cpp": {
+    "corpus": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_graph/pr306_missing_cpp_corpus",
+    "sources": [
+      {
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs.h",
+        "sha256": "272bcadc9d65249c6ea9d37b945443b3e8a435b0401888b13ac8568887dc96d2"
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs_extended.cpp",
+        "sha256": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9"
+      }
+    ],
+    "graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_graph/pr306_missing_cpp_graph/graphify-out/graph.json",
+    "graph_sha256": "afd143e64fe967dd06b2c94bb73135f4bb53bc291a384060f79d907b1e569669",
+    "nodes": 132,
+    "raw_edges": 269,
+    "method": "graphify extract <two-source bounded corpus> --no-cluster --out <pr306_missing_cpp_graph>",
+    "model_calls": 0,
+    "token_cost": 0
+  },
+  "source_navigation": {
+    "wrf_fortran_filter": {
+      "solve_em_advance_uv_call": "dyn_em/solve_em.F:1720-1737",
+      "advance_uv_definition": "dyn_em/module_small_step_em.F:654",
+      "mu_df_filter_terms": "dyn_em/module_small_step_em.F:885,987",
+      "advance_mu_t_definition_and_producer": "dyn_em/module_small_step_em.F:1136,1272"
+    },
+    "wrf_to_cpp_entry": {
+      "solve_em_to_advance_implicit": "dyn_em/solve_em.F:735-738",
+      "advance_implicit_definition": "dyn_em/module_implicit_sdirk3.F:954",
+      "fortran_c_abi_call": "dyn_em/module_implicit_sdirk3.F:1428-1444",
+      "c_abi_definition_and_dispatch": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp:206,566",
+      "cpp_advanceZeroCopy_definition": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:32142"
+    },
+    "mode3_rhs_filter": {
+      "computeUnifiedRHS_definition": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:14476",
+      "call_and_gate": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:25628-25636",
+      "implementation": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:25881",
+      "gate": "do_implicit && !split_explicit && implicit_divergence; split explicit path skips this RHS-level term because acoustic substeps own WRF smdiv/emdiv filtering."
+    },
+    "step_map_probe": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:170-177 (env toggles), 4041-4043 (guarded evaluation), 4164+ (tangent branch)",
+    "fp64_state_carry_and_fingerprint": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:6000-6044 (mode-3/carry gates and host-state validation), 12712-12727 (publish), 42549-42579,42656-42783 (hash/fingerprint and check); declarations in external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h:1591-1595, 2270-2284",
+    "fp64_metric_cache_separate_path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs_extended.cpp:586-650 (RdxRdyCache), 1668,1764 (used by applySmagorinskyTurbulenceWRF); distinct from applyDivergenceDamping, which uses config/grid reciprocal values directly.",
+    "legacy_filter_declaration": "wrf_sdirk3_unified_rhs.h:344 declares add_external_mode_filter; repository search found no implementation or call site in this code subtree. Do not conflate it with live TileSDIRK3UnifiedSolver::applyDivergenceDamping."
+  },
+  "extraction_gaps": [
+    "Fortran AST/call relationships are incomplete; solve_em\u2192advance_implicit, advance_implicit\u2192C ABI, and advance_uv/MUDF dataflow above were verified directly against authoritative source lines.",
+    "The PR299 graph revision is older than PR306, so only exact source-hash-matching files are reused; module_small_step_em old graph entry is stale and superseded by the exact PR305 final graph.",
+    "No numerical correctness or runtime behavior follows from graph edges.",
+    "No production edits/build/model execution were made."
+  ]
+}

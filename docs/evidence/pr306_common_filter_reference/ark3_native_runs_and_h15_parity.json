@@ -1,0 +1,1233 @@
+{
+  "schema": "pr306_same_native_ark_three_dt_runs_v1",
+  "producer": {
+    "executable": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/producer/wrf.exe",
+    "executable_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+    "cpp_archive_sha256": "b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "source_tree_match_audit": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/source_tree_match_audit.json",
+    "effective_context_audit": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/ark3_mode3_effective_context_audit.json",
+    "build_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/producer/pr305_loop_preserved_module_only_build_receipt.json"
+  },
+  "reference": {
+    "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/references/ark3_h15_postcf_e71",
+    "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/references/ark3_h15_postcf_e71/run_receipt.json",
+    "executable_sha256": "aecd20f900ca922775944df380ecbeb8b63655c7390e8a8a0faac9f821f95ef3"
+  },
+  "runs": {
+    "h15_current_a5_parity_control": {
+      "label": "h15_current_a5_parity_control",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h15_current_a5_parity_control",
+      "nominal_dt_seconds": 15.0,
+      "nominal_model_steps": 16,
+      "status": "completed",
+      "expected_five_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "actual_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "exact_five_history_times": true,
+      "raw_state_finite": true,
+      "physical_admissibility": {
+        "finite_all_eight_fields": true,
+        "mu_plus_mub_positive": true,
+        "ph_plus_phb_increasing_with_height": true
+      },
+      "admissibility_extrema": {
+        "min_mu_plus_mub": 89088.6328125,
+        "min_vertical_geopotential_increment": 9247.390625
+      },
+      "solver_summary": {
+        "solver_steps": 48,
+        "failed": 0,
+        "last_dt_seconds": 15.0
+      },
+      "solver_statistics_snapshots": [
+        {
+          "solver_steps": 48,
+          "failed": 0,
+          "last_dt_seconds": 15.0,
+          "final": true
+        }
+      ],
+      "fp64_state_carry_publications": 16,
+      "fp64_state_carry_input_counts": {
+        "host": 1,
+        "internal": 15
+      },
+      "wall_seconds": 9.06,
+      "outputs": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1042829,
+          "sha256": "5ed6e806d334a3f0167dd6a71333743cf32b5e3995fdab0ab1307a28bfc820ed",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1085998,
+          "sha256": "c79bfcbfff752be53ee9ddb7475eb577d9668238b7f6946b499e5cb496fab488",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 987253,
+          "sha256": "1d338d391270defbca386543c1966ab6ba1d60d8a369ff93f1695a0bb5c5897f",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "rsl_error_sha256": "2bb62f2e19b141ffe3b78ff6d2e1d563797d5a68112c8a41f566c965d548d70f",
+      "rsl_out_sha256": "cd18eb2982f56ae9ff34d2ee29d1099a466ac02eb404c63c4c842ee5520126dd",
+      "run_log_sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time_log_sha256": "abd346b44881ec5f76991cfc914bbc7a8493cfde692c8d6d45caa0599ef0062c",
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h15_current_a5_parity_control/run_receipt.json",
+      "run_receipt_sha256": "a42ca4dabf1fce10e04bf87caf4edb8ff6b953c103a3dfdcf746a20de74138ca",
+      "process_return_code": null,
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": null,
+      "parity_vs_archived_pr304_h15": {
+        "0001-01-01_00:00:00": {
+          "U": {
+            "shape_current": [
+              16,
+              16,
+              17
+            ],
+            "shape_archive": [
+              16,
+              16,
+              17
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "V": {
+            "shape_current": [
+              16,
+              17,
+              16
+            ],
+            "shape_archive": [
+              16,
+              17,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "W": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "PH": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "T": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "THM": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MU": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MUB": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          }
+        },
+        "0001-01-01_00:01:00": {
+          "U": {
+            "shape_current": [
+              16,
+              16,
+              17
+            ],
+            "shape_archive": [
+              16,
+              16,
+              17
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "V": {
+            "shape_current": [
+              16,
+              17,
+              16
+            ],
+            "shape_archive": [
+              16,
+              17,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "W": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "PH": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "T": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "THM": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MU": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MUB": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          }
+        },
+        "0001-01-01_00:02:00": {
+          "U": {
+            "shape_current": [
+              16,
+              16,
+              17
+            ],
+            "shape_archive": [
+              16,
+              16,
+              17
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "V": {
+            "shape_current": [
+              16,
+              17,
+              16
+            ],
+            "shape_archive": [
+              16,
+              17,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "W": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "PH": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "T": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "THM": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MU": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MUB": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          }
+        },
+        "0001-01-01_00:03:00": {
+          "U": {
+            "shape_current": [
+              16,
+              16,
+              17
+            ],
+            "shape_archive": [
+              16,
+              16,
+              17
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "V": {
+            "shape_current": [
+              16,
+              17,
+              16
+            ],
+            "shape_archive": [
+              16,
+              17,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "W": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "PH": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "T": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "THM": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MU": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MUB": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          }
+        },
+        "0001-01-01_00:04:00": {
+          "U": {
+            "shape_current": [
+              16,
+              16,
+              17
+            ],
+            "shape_archive": [
+              16,
+              16,
+              17
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "V": {
+            "shape_current": [
+              16,
+              17,
+              16
+            ],
+            "shape_archive": [
+              16,
+              17,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "W": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "PH": {
+            "shape_current": [
+              17,
+              16,
+              16
+            ],
+            "shape_archive": [
+              17,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "T": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "THM": {
+            "shape_current": [
+              16,
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MU": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          },
+          "MUB": {
+            "shape_current": [
+              16,
+              16
+            ],
+            "shape_archive": [
+              16,
+              16
+            ],
+            "bitwise_equal": true,
+            "max_abs_difference": 0.0
+          }
+        }
+      },
+      "parity_gate_pass": true
+    },
+    "h7p5": {
+      "label": "h7p5",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h7p5",
+      "nominal_dt_seconds": 7.5,
+      "nominal_model_steps": 32,
+      "status": "completed",
+      "expected_five_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "actual_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "exact_five_history_times": true,
+      "raw_state_finite": true,
+      "physical_admissibility": {
+        "finite_all_eight_fields": true,
+        "mu_plus_mub_positive": true,
+        "ph_plus_phb_increasing_with_height": true
+      },
+      "admissibility_extrema": {
+        "min_mu_plus_mub": 89088.6328125,
+        "min_vertical_geopotential_increment": 9247.3984375
+      },
+      "solver_summary": {
+        "solver_steps": 96,
+        "failed": 0,
+        "last_dt_seconds": 7.5
+      },
+      "solver_statistics_snapshots": [
+        {
+          "solver_steps": 96,
+          "failed": 0,
+          "last_dt_seconds": 7.5,
+          "final": true
+        }
+      ],
+      "fp64_state_carry_publications": 32,
+      "fp64_state_carry_input_counts": {
+        "host": 1,
+        "internal": 31
+      },
+      "wall_seconds": 16.12,
+      "outputs": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1042898,
+          "sha256": "45c4e6affd59d5fd55d690c0abf1d6fc72b15b9590cff6ecea62d246b115237f",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1086180,
+          "sha256": "4da0089da8a329940bbf3e15843a8c627abdcd11c12e5848ccc11921657fc44e",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 987278,
+          "sha256": "7e4abdcace384bf1e43de45b5cd8e6a42eb12270dc459c07d5b73be1199f8292",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "0baf2846442bb39417f13d128e79580559a7496794d37b0f6c3ac90e67154823",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "rsl_error_sha256": "beb5fdb544ab0ef146fe9f19b1e9a0cade8639253d4a3f6dc1346ab6b3b8d6e1",
+      "rsl_out_sha256": "a086b76341f486e4438008b878b0f9032992f2d7dc710ca2e93bcd691bba76bf",
+      "run_log_sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time_log_sha256": "e9c05961c3eb6bc0a757ad792b6eb43db249b6afdbd93e3739020ccf9c999939",
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h7p5/run_receipt.json",
+      "run_receipt_sha256": "386976d7301ff47e960e942c50a7249cce1fdc20d4ed7acf659ec4149f0a87ce",
+      "process_return_code": 0,
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/candidate_namelists/ark3_mode3_h7p5.namelist.diff"
+    },
+    "h3p75": {
+      "label": "h3p75",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h3p75",
+      "nominal_dt_seconds": 3.75,
+      "nominal_model_steps": 64,
+      "status": "completed",
+      "expected_five_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "actual_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "exact_five_history_times": true,
+      "raw_state_finite": true,
+      "physical_admissibility": {
+        "finite_all_eight_fields": true,
+        "mu_plus_mub_positive": true,
+        "ph_plus_phb_increasing_with_height": true
+      },
+      "admissibility_extrema": {
+        "min_mu_plus_mub": 89088.6328125,
+        "min_vertical_geopotential_increment": 9247.3984375
+      },
+      "solver_summary": {
+        "solver_steps": 192,
+        "failed": 0,
+        "last_dt_seconds": 3.75
+      },
+      "solver_statistics_snapshots": [
+        {
+          "solver_steps": 192,
+          "failed": 0,
+          "last_dt_seconds": 3.75,
+          "final": true
+        }
+      ],
+      "fp64_state_carry_publications": 64,
+      "fp64_state_carry_input_counts": {
+        "host": 1,
+        "internal": 63
+      },
+      "wall_seconds": 29.74,
+      "outputs": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1043000,
+          "sha256": "ecab133fd28467ceea924ef6267482f37a35869ac90dea8eadd31cfbd7e39f94",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1086006,
+          "sha256": "2c4c7a0c4b158fdcdb51b569cca5d74fac1526099338d7a9fd446ceaa1ac815d",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 987296,
+          "sha256": "72b6b3983eee0f5f2a24a01083c9c11f8887eecbcc875459c9c6a80c7d99a0c2",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "545ee9994bae12910cc5e8b8c5c62afbcd048a0e4fc83ba64cdc7838f32f3dd2",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "rsl_error_sha256": "79b419fd5cfbe2509e28cc646a3dc593a2289486a7854fb43c87d4958d88f16d",
+      "rsl_out_sha256": "d5c8923e0b51b1378b8716d94220bc1a7ef59e662055df80608c07fe43b63bc1",
+      "run_log_sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time_log_sha256": "091c7e816e344c08f5f62ae01c5cd2f16cd31b7e7fc7d4bdf3e2062bd80c1e43",
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h3p75/run_receipt.json",
+      "run_receipt_sha256": "7253c91ca9b89cb8437152e305d47ceaa0247da5772ba1f8db5cae8e9599c6e1",
+      "process_return_code": null,
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/preflight/candidate_namelists/ark3_mode3_h3p75.namelist.diff"
+    },
+    "h1p875_targeted": {
+      "label": "h1p875_targeted",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h1p875_targeted",
+      "nominal_dt_seconds": 1.875,
+      "nominal_model_steps": 128,
+      "status": "completed",
+      "expected_five_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "actual_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "exact_five_history_times": true,
+      "raw_state_finite": true,
+      "physical_admissibility": {
+        "finite_all_eight_fields": true,
+        "mu_plus_mub_positive": true,
+        "ph_plus_phb_increasing_with_height": true
+      },
+      "admissibility_extrema": {
+        "min_mu_plus_mub": 89088.6328125,
+        "min_vertical_geopotential_increment": 9247.390625
+      },
+      "solver_summary": {
+        "solver_steps": 384,
+        "failed": 0,
+        "last_dt_seconds": 1.875
+      },
+      "solver_statistics_snapshots": [
+        {
+          "solver_steps": 300,
+          "failed": 0,
+          "last_dt_seconds": 1.875,
+          "final": false
+        },
+        {
+          "solver_steps": 384,
+          "failed": 0,
+          "last_dt_seconds": 1.875,
+          "final": true
+        }
+      ],
+      "fp64_state_carry_publications": 128,
+      "fp64_state_carry_input_counts": {
+        "host": 1,
+        "internal": 127
+      },
+      "wall_seconds": 58.27,
+      "outputs": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1042988,
+          "sha256": "03b4c1331e9d393b929056f2f3356872c4afb03024638b67dcd08f679cb5eaf1",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1086116,
+          "sha256": "4ef52e54324e491c6e27d2938a8ca11c9fc21825c8988548ba57e9ea8c50de6f",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 987264,
+          "sha256": "3081e08fe1ffb489304b7e8ba3501ea79fc394d4b3709f9efa7b8a13f333a4a3",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "aee5266bd0e4daa81a875f16492b1cd4102028bd06d717b8948e773a5d659fec",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "rsl_error_sha256": "16fd6b0fc05c16761b520af05d19492910c66d339fda55195c3aeb616876203f",
+      "rsl_out_sha256": "db1c2ae48a9f7cd9b5e6e6087fe0cdd2a4dccd7e1ae4954b8e9864a3bf7c2abe",
+      "run_log_sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time_log_sha256": "5dbe4b4221e990e49a4a25bbcbea22f1b286eaada5242de0906cdd870485e4e0",
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h1p875_targeted/run_receipt.json",
+      "run_receipt_sha256": "6d9433306abbb099e6abc7955a5b10c593b8c9a0ff21982c8fe296b81b2fd47a",
+      "process_return_code": 0,
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h1p875_targeted/namelist.diff"
+    },
+    "h0p9375_targeted": {
+      "label": "h0p9375_targeted",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h0p9375_targeted",
+      "nominal_dt_seconds": 0.9375,
+      "nominal_model_steps": 256,
+      "status": "completed",
+      "expected_five_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "actual_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "exact_five_history_times": true,
+      "raw_state_finite": true,
+      "physical_admissibility": {
+        "finite_all_eight_fields": true,
+        "mu_plus_mub_positive": true,
+        "ph_plus_phb_increasing_with_height": true
+      },
+      "admissibility_extrema": {
+        "min_mu_plus_mub": 89088.6328125,
+        "min_vertical_geopotential_increment": 9247.390625
+      },
+      "solver_summary": {
+        "solver_steps": 768,
+        "failed": 0,
+        "last_dt_seconds": 0.9375
+      },
+      "solver_statistics_snapshots": [
+        {
+          "solver_steps": 300,
+          "failed": 0,
+          "last_dt_seconds": 0.9375,
+          "final": false
+        },
+        {
+          "solver_steps": 600,
+          "failed": 0,
+          "last_dt_seconds": 0.9375,
+          "final": false
+        },
+        {
+          "solver_steps": 768,
+          "failed": 0,
+          "last_dt_seconds": 0.9375,
+          "final": true
+        }
+      ],
+      "fp64_state_carry_publications": 256,
+      "fp64_state_carry_input_counts": {
+        "host": 1,
+        "internal": 255
+      },
+      "wall_seconds": 108.67,
+      "outputs": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1043146,
+          "sha256": "7724a7b4001bfce1671846f983e6a32334ff9862c8f647ef00266f542c0bab6c",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1086172,
+          "sha256": "4581faec1c7fff79e148ce7c4090b19aee555a3e3286692d37456a3aa07dcfda",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 987299,
+          "sha256": "88121016bd914ffe42c8b01fbee2a871ecc3e350b1e40185454da54b7bd54fee",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "2daf40700a402b4bfe96fb03e7db48177f265365bdf187140ab240fadeb31b48",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "rsl_error_sha256": "771e4a0248d03997cb45369980e643795fdad35071b84a5b7455472d5a51ce35",
+      "rsl_out_sha256": "cb0fabff2a5dff80a3bea75f4fcce0b52cfe0b3ff9520c1e4382439733171b70",
+      "run_log_sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time_log_sha256": "8e960f554a74a14d3d39055a46d6f241e9a376014d8386f4943af73d87263050",
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h0p9375_targeted/run_receipt.json",
+      "run_receipt_sha256": "1b501c734f833afcb545bef440b8086da5622ece335ca3e244904716315c4140",
+      "process_return_code": 0,
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h0p9375_targeted/namelist.diff"
+    },
+    "h0p46875_targeted": {
+      "label": "h0p46875_targeted",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h0p46875_targeted",
+      "nominal_dt_seconds": 0.46875,
+      "nominal_model_steps": 512,
+      "status": "completed",
+      "expected_five_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "actual_history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:04:00"
+      ],
+      "exact_five_history_times": true,
+      "raw_state_finite": true,
+      "physical_admissibility": {
+        "finite_all_eight_fields": true,
+        "mu_plus_mub_positive": true,
+        "ph_plus_phb_increasing_with_height": true
+      },
+      "admissibility_extrema": {
+        "min_mu_plus_mub": 89088.6328125,
+        "min_vertical_geopotential_increment": 9247.390625
+      },
+      "solver_summary": {
+        "solver_steps": 1536,
+        "failed": 0,
+        "last_dt_seconds": 0.4688
+      },
+      "solver_statistics_snapshots": [
+        {
+          "solver_steps": 300,
+          "failed": 0,
+          "last_dt_seconds": 0.4688,
+          "final": false
+        },
+        {
+          "solver_steps": 600,
+          "failed": 0,
+          "last_dt_seconds": 0.4688,
+          "final": false
+        },
+        {
+          "solver_steps": 900,
+          "failed": 0,
+          "last_dt_seconds": 0.4688,
+          "final": false
+        },
+        {
+          "solver_steps": 1200,
+          "failed": 0,
+          "last_dt_seconds": 0.4688,
+          "final": false
+        },
+        {
+          "solver_steps": 1500,
+          "failed": 0,
+          "last_dt_seconds": 0.4688,
+          "final": false
+        },
+        {
+          "solver_steps": 1536,
+          "failed": 0,
+          "last_dt_seconds": 0.4688,
+          "final": true
+        }
+      ],
+      "fp64_state_carry_publications": 512,
+      "fp64_state_carry_input_counts": {
+        "host": 1,
+        "internal": 511
+      },
+      "wall_seconds": 223.24,
+      "outputs": [
+        {
+          "name": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1043201,
+          "sha256": "03429b4db411ff0f40273451d88142d8da06a34924bad5f070454d47e24dd3d3",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:01:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1086234,
+          "sha256": "2169c28309f97a67078ade8299d06402c04f69f88972fd099339fa352f23812e",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:03:00"
+          ]
+        },
+        {
+          "name": "wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 987322,
+          "sha256": "219d96c8cbb361884e463018a397c5ce1f5970f4a508eb3fe4691fef4a4da804",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "namelist_sha256": "d945698a94e3b5671fd55c44aaa6a769c931687fa158ebf79770bf46853a5491",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "rsl_error_sha256": "42c7457d4163d30d3a81406c040a87fffacc922b8e4ce748eff75bbc57053387",
+      "rsl_out_sha256": "493e8a9ba86461bcd591982d79b116fed7f7a66d580977422943f5168b718c71",
+      "run_log_sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time_log_sha256": "fd5387af4c603ef28c19a69a6f6ef343add88b5e077152ec51f49ab6fe439c67",
+      "native_transport_config_lines": [
+        "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704"
+      ],
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h0p46875_targeted/run_receipt.json",
+      "run_receipt_sha256": "17922c3aaf331fcbdbabcd4300f36c91b266cf87c4c38d7c180e345c9e5e094b",
+      "process_return_code": 0,
+      "environment_controls": {
+        "mpi_ranks": 1,
+        "omp_threads": 1,
+        "unset_observer_or_carry_variables": [
+          "WRF_PARITY_EMDIV_INCREMENT_DUMP",
+          "WRF_PARITY_RK_TEND_DUMP",
+          "WRF_SDIRK3_FP64_STATE_CARRY"
+        ]
+      },
+      "namelist_diff_from_h15_baseline": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/ark3_mode3_h0p46875_targeted/namelist.diff"
+    }
+  },
+  "interpretation": "The h15 current-executable run is only a parity control. The h7.5/h3.75/h1.875/h0.9375/h0.46875 runs use the same native ARK configuration and are timestep-sensitivity observations, not stock RK3 comparisons or accuracy/cost claims."
+}

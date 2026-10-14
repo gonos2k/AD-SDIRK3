@@ -1,0 +1,179 @@
+{
+  "schema": "pr306_ark3_mode3_effective_context_audit_v1",
+  "checked_local_time": "2026-10-14T06:17:18+09:00",
+  "source_audit": "source_tree_match_audit.json",
+  "reference_run": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-time-map-20261012/green_execution/post_cf/postfix_240_e71",
+    "run_receipt_sha256": "9d610c9cf68e5a37aa6c5229d9a0cb523af10c57375a176ff42b9fa67cbd22ba",
+    "status": "completed",
+    "executable_sha256": "aecd20f900ca922775944df380ecbeb8b63655c7390e8a8a0faac9f821f95ef3",
+    "cpp_archive_sha256": "b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+    "expected_history_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:01:00",
+      "0001-01-01_00:02:00",
+      "0001-01-01_00:03:00",
+      "0001-01-01_00:04:00"
+    ],
+    "history_file_hashes": {
+      "wrfout_d01_0001-01-01_00:00:00": "5ed6e806d334a3f0167dd6a71333743cf32b5e3995fdab0ab1307a28bfc820ed",
+      "wrfout_d01_0001-01-01_00:02:00": "c79bfcbfff752be53ee9ddb7475eb577d9668238b7f6946b499e5cb496fab488",
+      "wrfout_d01_0001-01-01_00:04:00": "1d338d391270defbca386543c1966ab6ba1d60d8a369ff93f1695a0bb5c5897f"
+    },
+    "wall_seconds": 8.279680584091693,
+    "nominal_model_steps": 16,
+    "native_solver_step_counter": [
+      {
+        "failed": 0,
+        "last_dt": 15.0,
+        "steps": 48
+      }
+    ]
+  },
+  "settings_readback": {
+    "effective_namelist": {
+      "TIME_INTEGRATION_SCHEME": [
+        "6          ,"
+      ],
+      "SDIRK3_IMEX_SPLIT_MODE": [
+        "3          ,"
+      ],
+      "SDIRK3_SPLIT_EXPLICIT": [
+        "F,"
+      ],
+      "SDIRK3_IMPLICIT_DIVERGENCE": [
+        "T,"
+      ],
+      "SDIRK3_KDAMP": [
+        "0.200000003    ,"
+      ],
+      "KHDIF": [
+        "3*1000.00000      , 8*0.00000000      ,"
+      ],
+      "KVDIF": [
+        "3*10.0000000      , 8*0.00000000      ,"
+      ],
+      "DIFF_OPT": [
+        "3*2          , 8*-1         ,"
+      ],
+      "DAMP_OPT": [
+        "0          ,"
+      ],
+      "SMDIV": [
+        "11*0.100000001     ,"
+      ],
+      "EMDIV": [
+        "11*9.99999978E-03  ,"
+      ],
+      "EPSSM": [
+        "11*0.100000001     ,"
+      ],
+      "TIME_STEP_SOUND": [
+        "3*4          , 8*0          ,"
+      ],
+      "SDIRK3_INTERNAL_FP64": [
+        "T,"
+      ],
+      "SDIRK3_INTERNAL_FP64_STATE_CARRY": [
+        "T,"
+      ],
+      "USE_INPUT_W": [
+        "F,"
+      ]
+    },
+    "run_log_config_lines": [
+      "[CONFIG] IMEX raw: imex_split_mode=3, imex_enabled=0",
+      "[CONFIG] split_explicit = false",
+      "[CONFIG] split_explicit_time_step_sound = 4",
+      "[CONFIG] split_explicit_epssm = 0.1",
+      "[CONFIG] split_explicit_smdiv = 0.1",
+      "[CONFIG] split_explicit_emdiv = 0.01",
+      "[CONFIG] split_explicit_top_lid = false",
+      "[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.09557629 cf2=-1.73508799 cf3=0.639511704",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[FP64 STATE CARRY] timestep=1 input=host",
+      "[RHS CONFIG] split_mode=3 omega_update_ref_per_newton=0 omega_w_blend=1 imex_enabled=0 imex_split_mode=3 precond_relaxation=0 w_acoustic_boost=2",
+      "[FP64 STATE CARRY] published timestep=1",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[FP64 STATE CARRY] timestep=2 input=internal",
+      "[FP64 STATE CARRY] published timestep=2",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[FP64 STATE CARRY] timestep=3 input=internal",
+      "[FP64 STATE CARRY] published timestep=3",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[FP64 STATE CARRY] timestep=4 input=internal",
+      "[FP64 STATE CARRY] published timestep=4",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[FP64 STATE CARRY] timestep=5 input=internal",
+      "[FP64 STATE CARRY] published timestep=5",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[FP64 STATE CARRY] timestep=6 input=internal",
+      "[FP64 STATE CARRY] published timestep=6",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[FP64 STATE CARRY] timestep=7 input=internal",
+      "[FP64 STATE CARRY] published timestep=7",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[FP64 STATE CARRY] timestep=8 input=internal",
+      "[FP64 STATE CARRY] published timestep=8",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+      "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10"
+    ],
+    "grid_init_kdamp_log_unique": [
+      "0.01"
+    ],
+    "grid_init_khdif_log_unique": [
+      "1000"
+    ],
+    "grid_init_kvdif_log_unique": [
+      "10"
+    ],
+    "stage_cache_predictor_records": 46,
+    "fp64_carry_publish_records": 16
+  },
+  "static_operator_audit": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_pressure/ark3_mode3_filter_audit_ko.md",
+    "sha256": "668f37b5f333a70b80c66bc418b0d6d7de4ba16b83ef0ce81133973721171d19",
+    "ARK_mode3_integrator": "ARK324L2SA",
+    "split_explicit_acoustic_child": "inactive; WRF smdiv/emdiv/epssm values stay unscaled and are not applied in this path",
+    "active_common_rhs": "implicit divergence damping (configured SDIRK3_KDAMP=0.2) and DIFF_OPT=2/KHDIF=1000/KVDIF=10; keep constant across candidate timesteps",
+    "kdamp_diagnostic_note": "The existing RSL [SDIRK3] Grid config line prints 0.01 during initialization from scalars%kdamp=dampcoef. module_small_step_em.SDIRK3 config setter supplies sdirk3_kdamp=.2 to g_sdirk3_config; unifiedStep copies that value into grid_info before stage RHS, and applyDivergenceDamping reads grid_info. Do not treat the earlier initialization log as the stage RHS coefficient. This is source-audited; no new run validates updated executable runtime yet."
+  },
+  "reference_executable_lineage_caveat": "The archived ARK304 h15 run uses donor exe aecd20f9\u2026 and stale generated solve_em source lineage. Final W305 exe a5 uses current checked-halo solve_em source; the existing h15 raw output is not counted as same-binary reference until a5 h15 control passes exact 8-field/5-time parity.",
+  "source_build_evidence": {
+    "W305_build_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_build/loop_preserved_rebuild/pr305_loop_preserved_module_only_build_receipt.json",
+    "W305_build_receipt_sha256": "d97a766109cb3bfd987938d5dd6d1ebfaeac23785c991d329fa4a2be388865b6",
+    "W306_build_or_model_execution": false,
+    "final_exe_sha256": "a5b231b279309c3268771bc0d2746b7716fa9daafa106bd40249e3ca10421d49",
+    "cpp_archive_sha256": "b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15"
+  },
+  "execution_policy": {
+    "status": "prep_only_pending_root_policy_freeze",
+    "run_authorized": false,
+    "planned_run_count_if_approved": 3,
+    "sequence": [
+      "h15 final-a5 exact parity control vs archived h15",
+      "h7p5 final-a5 candidate",
+      "h3p75 final-a5 candidate"
+    ],
+    "stop_gate": "Do not count h7.5/h3.75 as reference family until h15 exact all-8-field/all-5-time parity passes, or root explicitly sets a new current-a5 baseline policy.",
+    "all_cases": "Use same e71 input, exact ARK mode3, FP64 state carry, native runtime CF, same coefficients/cache settings; only the timestep triple differs."
+  }
+}
