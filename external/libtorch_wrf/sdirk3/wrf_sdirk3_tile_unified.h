@@ -947,19 +947,114 @@ public:
     // Step outcome snapshot for ABI-side non-freeze contract.
     int getLastStepOutcomeCode() const { return last_step_outcome_code_; }
     void resetInternalFp64Carry() { clearInternalFp64Carry(); }
-    // Test-only observation; no production model setting or RHS change.
-    // The accepted ARK derivatives, not a later RHS re-evaluation, define the step.
-    // Native option-2 observation is stage-only: producer ThetaFaces remain
-    // undefined because their capture would disable the guarded option-2 operator.
+    // In-memory ARK witness used by tests and the opt-in stage_operand_diag
+    // accepted-step writer. Stage rates are the accepted production derivatives,
+    // not later RHS re-evaluations. The option-2 theta-face observation remains
+    // test-only and does not disable the guarded native option-2 operator.
     struct ArkBudgetTrace {
         struct ThetaFaces {
             torch::Tensor adv_x, adv_y, adv_z, diff_x, diff_y;
         };
+        struct StageMeta {
+            int stage_id = -1;
+            double tableau_a_ii = 0.0;
+            double effective_a_ii = 0.0;
+            bool explicit_stage = false;
+            bool retry_used = false;
+            bool retry_base_sanitized = false;
+            bool base_differs_from_history = false;
+            bool gate_accepted = false;
+            bool converged = false;
+            bool checked_state_matches_y = false;
+            bool postprocess_unchanged = false;
+            bool fast_guard_applied = false;
+            bool fi_evaluation_observed = false;
+            bool fi_available = false;
+            bool p_pert_observed = false;
+            bool full_available = false;
+            bool full_evaluation_observed = false;
+            bool p_pert_at_accepted_y = false;
+            bool fi_ref_matches_base = false;
+            bool fi_ref_matches_checked_state = false;
+            bool full_ref_matches_base = false;
+            bool full_ref_matches_checked_state = false;
+            bool slow_ref_matches_base = false;
+            bool slow_ref_matches_y = false;
+            bool full_includes_physics = false;
+            bool w_capture_armed = false;
+            bool w_capture_available = false;
+            bool w_capture_identity_valid = false;
+            bool w_conversion_observed = false;
+            bool w_conversion_canonical_horizontal = false;
+            bool w_conversion_coupled_slow_export = false;
+            bool w_pressure_at_accepted_y = false;
+            int w_capture_rhs_mode = -1;
+            std::uint64_t w_capture_input_digest = 0;
+            int64_t w_capture_host_timestep = -1;
+            std::uint64_t w_capture_solver_id = 0;
+            int w_capture_newton_iter = -1;
+            std::uint64_t w_capture_solve_generation = 0;
+            int newton_iterations = -1;
+            int krylov_iterations = -1;
+            double final_scaled_residual = -1.0;
+        };
+        struct WPressureTerms {
+            torch::Tensor pg, buoy_mu1, buoy_mu2, w_pgf_buoy_all;
+            torch::Tensor velocity_mass_w, mu_tend_at_w, conversion_rate;
+            torch::Tensor w_tend_after_conversion;
+            std::string unavailable_reason;
+        };
         torch::Tensor input, physics, raw_final, projected_final;
-        std::vector<torch::Tensor> stage_state, fast, slow, full;
+        std::vector<torch::Tensor> stage_history_base, stage_base, stage_state;
+        std::vector<torch::Tensor> fast, slow, full;
+        // Existing implicit residual evaluations only; undefined for the explicit seed
+        // and whenever the checked state/postprocessed K does not match accepted Y_i.
+        std::vector<torch::Tensor> checked_state, fi_checked, p_pert_checked;
+        std::vector<torch::Tensor> full_actual, g_checked;
+        std::vector<StageMeta> stage_meta;
+        std::vector<wrf::sdirk3::StageDefectSnapshot> newton_scalars;
+        std::vector<wrf::sdirk3::StageDefectTensorSnapshot> newton_tensors;
+        std::vector<WPressureTerms> w_pressure;
         ThetaFaces stage1_fast_faces;
         std::vector<ThetaFaces> slow_faces;
         double dt = 0.0;
+        double kdamp_config = 0.0;
+        double kdamp_grid = 0.0;
+        double gravity_grid = 0.0;
+        double gravity_fallback = 0.0;
+        double gravity_rhs_value = 0.0;
+        double rdx = 0.0;
+        double rdy = 0.0;
+        int mass_coordinate_mode = 0;
+        int wrf_w_damping = 0;
+        int wrf_damp_opt = 0;
+        int diffusion_option = 0;
+        double khdif = 0.0;
+        double kvdif = 0.0;
+        double omega_w_blend = 0.0;
+        int imex_split_mode = 0;
+        bool split_explicit = false;
+        bool omega_update_ref_per_newton = false;
+        bool imex_slow_in_tangent = false;
+        double newton_tol = 0.0;
+        double newton_rtol = 0.0;
+        double krylov_tol = 0.0;
+        double ewt_rtol = 0.0;
+        int gate_metric_mode = 0;
+        double stage_gate_rel_threshold = 0.0;
+        double stage3_gate_rel_threshold = 0.0;
+        bool raw_wrf_omega_ww_cp = false;
+        bool effective_wrf_omega_ww_cp = false;
+        bool buoyancy_use_current_w = false;
+        bool split_explicit_top_lid = false;
+        bool implicit_divergence = false;
+        bool non_hydrostatic = false;
+        bool do_curvature = false;
+        int64_t step_seq = -1;  // diagnostic sequence, not a physical timestamp
+        int64_t host_timestep_token = -1;
+        bool stage_operand_capture = false;
+        bool accepted = false;
+        bool full_actual_includes_physics = false;
     };
     void captureArkBudgetTraceForTest(bool enabled) {
         capture_ark_budget_trace_ = enabled;
