@@ -1,0 +1,315 @@
+{
+  "Ew0_frozen_j": 0.0,
+  "Ew_endpoint_frozen_j": 51494558.33618403,
+  "Ew_endpoint_projected_frozen_j": 51494558.33618403,
+  "Ew_endpoint_using_endpoint_mass_j": 51494558.08906317,
+  "accepted_raw_endpoint_delta_W_m_s": {
+    "count": 4096,
+    "max_abs": 0.0006213977573897526,
+    "mean": 1.0249493731213706e-05,
+    "rms": 0.00010302205435262532
+  },
+  "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/accepted_ark_w_step_1.csv",
+  "csv_sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b",
+  "delta_Ew_frozen_j": 51494558.33618403,
+  "endpoint_mass_minus_frozen_Ew_j": -0.24712086468935013,
+  "endpoint_minus_last_stage_Ew_frozen_M0_j": -336050.5816672668,
+  "endpoint_minus_tableau_delta_W_m_s": {
+    "count": 4096,
+    "max_abs": 0.0,
+    "mean": 0.0,
+    "rms": 0.0
+  },
+  "exact_RK_quadratic_defect_delta_E_minus_Pmethod_j": -4221984.021838285,
+  "fixed_metric": "input-state dry hybrid dual-W mass M0; horizontal area DX*DY/(MAPFAC_MX*MAPFAC_MY)",
+  "identity_arithmetic_residual_j": 0.0,
+  "independent_quadratic_norm_identity_residual_j": -1.4901161193847656e-08,
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "last_stage_Y4_Ew_frozen_M0_j": 51830608.9178513,
+  "notes": [
+    "M0 is frozen at the actual input state for the quadratic identity; stage-varying dry dual mass is reported separately and is not silently substituted.",
+    "Y_i and method K+FE are the recorded accepted stage state and source-stage operands; Newton returned_K is not used for stage 4.",
+    "Pressure/buoyancy tableau work is a source-component work integral. The quadratic defect is the actual one-step integrator's W quadratic defect in the frozen M0 norm, not a forecast error or total-energy budget.",
+    "A nonzero defect describes this one observed macrostep only; it does not establish a 240-second cause, frequency, or global energy conservation property.",
+    "The raw endpoint is the ARK tableau combination, not stage 4 state Y4; their W kinetic energies are reported separately."
+  ],
+  "other_method_work_frozen_M0_j": -716525.3449151665,
+  "owner_count": 4096,
+  "raw_minus_projected_endpoint_Ew_frozen_j": 0.0,
+  "replayed_tableau_delta_W_m_s": {
+    "count": 4096,
+    "max_abs": 0.0006213977573897526,
+    "mean": 1.0249493731213706e-05,
+    "rms": 0.00010302205435262532
+  },
+  "run_receipt_sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a",
+  "schema": "accepted_ark_w_frozen_mass_energy_identity_v1",
+  "scope": "one actual accepted macrostep; exact fixed-M0 W quadratic diagnostic, not total atmospheric energy conservation",
+  "separate_Full_vs_method_work_provenance": {
+    "captured_independent_full_arrays": [
+      {
+        "captured_full_available": false,
+        "point_binding": "same checked_Y; derived stage Full, not an independent Full reevaluation",
+        "reason": "explicit stage has no separate Full reevaluation; derived from same-point observed FI+FE",
+        "stage": 1
+      },
+      {
+        "captured_full_available": true,
+        "full_minus_FI_plus_FE_w_m_s2": {
+          "count": 4096,
+          "max_abs": 1.3552527156068805e-20,
+          "mean": 9.071319808415393e-24,
+          "rms": 1.8277093748294787e-21
+        },
+        "full_ref_matches_base": true,
+        "full_ref_matches_checked_state": false,
+        "point_binding": "captured full_actual at accepted Y per V2 checked-state/pressure gates; *_ref_matches_* are auxiliary U_ref labels",
+        "stage": 2
+      },
+      {
+        "captured_full_available": true,
+        "full_minus_FI_plus_FE_w_m_s2": {
+          "count": 4096,
+          "max_abs": 4.0657581468206416e-20,
+          "mean": 1.7159655820052988e-23,
+          "rms": 1.7742496826876135e-21
+        },
+        "full_ref_matches_base": true,
+        "full_ref_matches_checked_state": false,
+        "point_binding": "captured full_actual at accepted Y per V2 checked-state/pressure gates; *_ref_matches_* are auxiliary U_ref labels",
+        "stage": 3
+      },
+      {
+        "captured_full_available": true,
+        "full_minus_FI_plus_FE_w_m_s2": {
+          "count": 4096,
+          "max_abs": 1.3552527156068805e-20,
+          "mean": -2.680688195460317e-23,
+          "rms": 1.0615008150351627e-21
+        },
+        "full_ref_matches_base": true,
+        "full_ref_matches_checked_state": false,
+        "point_binding": "captured full_actual at accepted Y per V2 checked-state/pressure gates; *_ref_matches_* are auxiliary U_ref labels",
+        "stage": 4
+      }
+    ],
+    "full_Y_definition": "captured same-accepted-Y full_actual_s2..s4; stage1 uses same-Y observed FI+FE because no independent Full reevaluation exists",
+    "interpretation": "V2 same-Y pressure/checked-state gates bind the Full work point. full_ref_matches_base/checked_state are auxiliary U_ref reference labels, not the Full evaluation input point.",
+    "method_definition": "recorded accepted method K_i plus FE/slow_i",
+    "newton_returned_K_used": false
+  },
+  "stage_fixed_M0_work_rates_and_mass_changes": [
+    {
+      "accepted_Y_Ew_frozen_M0_j": 0.0,
+      "fixed_M0_work_rate_w": {
+        "full_actual_at_Y": 0.0,
+        "method_K_plus_FE": 0.0,
+        "moisture_buoyancy": 0.0,
+        "mu_buoyancy": 0.0,
+        "pressure": 0.0,
+        "pressure_plus_buoyancy": 0.0
+      },
+      "method_K_plus_FE_equals_stored_full_exact": true,
+      "method_K_plus_FE_minus_FI_plus_FE_w_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "method_K_plus_FE_minus_full_Y_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "newton_returned_K_available": false,
+      "newton_returned_K_used": false,
+      "postprocess_unchanged": true,
+      "same_Y_full_rhs_from_observed_FI_plus_FE_w_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 3.5130937336571334e-05,
+        "mean": 4.373540231890147e-07,
+        "rms": 1.0977233431588978e-05
+      },
+      "same_Y_full_rhs_rate_used_for_independent_full_work_m_s2": {
+        "count": 4096,
+        "max_abs": 3.5130937336571334e-05,
+        "mean": 4.373540231890147e-07,
+        "rms": 1.0977233431588978e-05
+      },
+      "stage": 1,
+      "stage_solver_residual_norms": {
+        "newton_raw_defect_norm": -1.0,
+        "newton_scaled_final_residual": -1.0,
+        "units": "solver norms only, not W-space error bounds"
+      },
+      "stage_to_frozen_dual_mass_relative_change": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      }
+    },
+    {
+      "accepted_Y_Ew_frozen_M0_j": 40777393.70092423,
+      "fixed_M0_work_rate_w": {
+        "full_actual_at_Y": 8072312.117330297,
+        "method_K_plus_FE": 8072280.180945948,
+        "moisture_buoyancy": 0.0,
+        "mu_buoyancy": -134834443.74173844,
+        "pressure": 143035816.50224775,
+        "pressure_plus_buoyancy": 8201372.760509333
+      },
+      "method_K_plus_FE_equals_stored_full_exact": true,
+      "method_K_plus_FE_minus_FI_plus_FE_w_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 1.9597077965182266e-09,
+        "mean": -5.193866051996365e-12,
+        "rms": 1.3152025157189722e-10
+      },
+      "method_K_plus_FE_minus_full_Y_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 1.9597077965199206e-09,
+        "mean": -5.1938660520054365e-12,
+        "rms": 1.3152025157194894e-10
+      },
+      "newton_returned_K_available": true,
+      "newton_returned_K_used": false,
+      "postprocess_unchanged": true,
+      "same_Y_full_rhs_from_observed_FI_plus_FE_w_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 9.706476613832138e-05,
+        "mean": 7.855717661761206e-07,
+        "rms": 1.540083455476351e-05
+      },
+      "same_Y_full_rhs_rate_used_for_independent_full_work_m_s2": {
+        "count": 4096,
+        "max_abs": 9.706476613832138e-05,
+        "mean": 7.855717661761206e-07,
+        "rms": 1.540083455476351e-05
+      },
+      "stage": 2,
+      "stage_solver_residual_norms": {
+        "newton_raw_defect_norm": 1.0929535498860332e-08,
+        "newton_scaled_final_residual": 6.978209676766767e-11,
+        "units": "solver norms only, not W-space error bounds"
+      },
+      "stage_to_frozen_dual_mass_relative_change": {
+        "count": 4096,
+        "max_abs": 1.1127822688393444e-07,
+        "mean": -1.532712995934203e-17,
+        "rms": 6.423771408623497e-08
+      }
+    },
+    {
+      "accepted_Y_Ew_frozen_M0_j": 24628723.24244865,
+      "fixed_M0_work_rate_w": {
+        "full_actual_at_Y": 6052155.497283517,
+        "method_K_plus_FE": 6052154.733058902,
+        "moisture_buoyancy": 0.0,
+        "mu_buoyancy": -95032146.77840886,
+        "pressure": 101179358.61089613,
+        "pressure_plus_buoyancy": 6147211.83248727
+      },
+      "method_K_plus_FE_equals_stored_full_exact": true,
+      "method_K_plus_FE_minus_FI_plus_FE_w_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 4.350287923675974e-11,
+        "mean": -1.3948681343493262e-13,
+        "rms": 3.003244622455001e-12
+      },
+      "method_K_plus_FE_minus_full_Y_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 4.350287923675974e-11,
+        "mean": -1.3948681345209228e-13,
+        "rms": 3.00324462275689e-12
+      },
+      "newton_returned_K_available": true,
+      "newton_returned_K_used": false,
+      "postprocess_unchanged": true,
+      "same_Y_full_rhs_from_observed_FI_plus_FE_w_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 9.782910832999228e-05,
+        "mean": 8.105369535561455e-07,
+        "rms": 1.3650731206577959e-05
+      },
+      "same_Y_full_rhs_rate_used_for_independent_full_work_m_s2": {
+        "count": 4096,
+        "max_abs": 9.782910832999226e-05,
+        "mean": 8.105369535561454e-07,
+        "rms": 1.3650731206577959e-05
+      },
+      "stage": 3,
+      "stage_solver_residual_norms": {
+        "newton_raw_defect_norm": 2.5096913436328805e-10,
+        "newton_scaled_final_residual": 1.6023686284089012e-12,
+        "units": "solver norms only, not W-space error bounds"
+      },
+      "stage_to_frozen_dual_mass_relative_change": {
+        "count": 4096,
+        "max_abs": 5.271903103185026e-08,
+        "mean": -7.435090524508168e-18,
+        "rms": 3.0433444639912826e-08
+      }
+    },
+    {
+      "accepted_Y_Ew_frozen_M0_j": 51830608.9178513,
+      "fixed_M0_work_rate_w": {
+        "full_actual_at_Y": 6053280.9602989135,
+        "method_K_plus_FE": 6053277.813566692,
+        "moisture_buoyancy": 0.0,
+        "mu_buoyancy": -178960446.47364122,
+        "pressure": 185087694.8938624,
+        "pressure_plus_buoyancy": 6127248.4202211695
+      },
+      "method_K_plus_FE_equals_stored_full_exact": true,
+      "method_K_plus_FE_minus_FI_plus_FE_w_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 1.448239230328449e-10,
+        "mean": -9.29676825739576e-13,
+        "rms": 1.2716358340093134e-11
+      },
+      "method_K_plus_FE_minus_full_Y_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 1.448239230328449e-10,
+        "mean": -9.29676825712769e-13,
+        "rms": 1.2716358340066721e-11
+      },
+      "newton_returned_K_available": false,
+      "newton_returned_K_used": false,
+      "postprocess_unchanged": false,
+      "same_Y_full_rhs_from_observed_FI_plus_FE_w_rate_m_s2": {
+        "count": 4096,
+        "max_abs": 6.169799950192963e-05,
+        "mean": 6.451716302316039e-07,
+        "rms": 8.709654286432875e-06
+      },
+      "same_Y_full_rhs_rate_used_for_independent_full_work_m_s2": {
+        "count": 4096,
+        "max_abs": 6.169799950192962e-05,
+        "mean": 6.451716302316039e-07,
+        "rms": 8.709654286432875e-06
+      },
+      "stage": 4,
+      "stage_solver_residual_norms": {
+        "newton_raw_defect_norm": -1.0,
+        "newton_scaled_final_residual": 6.038782755096728e-12,
+        "units": "solver norms only, not W-space error bounds"
+      },
+      "stage_to_frozen_dual_mass_relative_change": {
+        "count": 4096,
+        "max_abs": 1.4644028163551203e-07,
+        "mean": -2.8507806349306095e-17,
+        "rms": 8.453601337609832e-08
+      }
+    }
+  ],
+  "tableau_method_K_plus_FE_minus_full_actual_work_j": 253.46141860634089,
+  "tableau_method_K_plus_FE_work_frozen_M0_j": 55716542.35802232,
+  "tableau_moisture_buoyancy_work_frozen_M0_j": 0.0,
+  "tableau_mu_buoyancy_work_frozen_M0_j": -1351313199.4573588,
+  "tableau_pressure_plus_buoyancy_work_frozen_M0_j": 56433067.702937484,
+  "tableau_pressure_work_frozen_M0_j": 1407746267.1602962,
+  "tableau_same_Y_full_actual_work_frozen_M0_j": 55716288.89660371,
+  "top_lid": false
+}

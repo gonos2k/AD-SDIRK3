@@ -1,0 +1,803 @@
+{
+  "accepted_update": {
+    "E_plus_I_endpoint_difference_m_s": {
+      "count": 4096,
+      "max_abs": 2.168404344971009e-19,
+      "mean": -2.9384298791239194e-22,
+      "rms": 2.5119567644692925e-20
+    },
+    "accepted_rhs_increment_E_m_s": {
+      "count": 4096,
+      "max_abs": 4.4969600194761197e-05,
+      "mean": 5.95756850972126e-06,
+      "rms": 1.0385765257654869e-05
+    },
+    "accepted_rhs_increment_I_m_s": {
+      "count": 4096,
+      "max_abs": 0.0006663673575845137,
+      "mean": 4.291925221492447e-06,
+      "rms": 0.00010308369644282362
+    },
+    "full_rhs_tableau_replay_minus_raw_endpoint_m_s": {
+      "count": 4096,
+      "max_abs": 0.0,
+      "mean": 0.0,
+      "rms": 0.0
+    },
+    "projected_endpoint_delta_m_s": {
+      "count": 4096,
+      "max_abs": 0.0006213977573897526,
+      "mean": 1.0249493731213706e-05,
+      "rms": 0.00010302205435262532
+    },
+    "raw_endpoint_delta_m_s": {
+      "count": 4096,
+      "max_abs": 0.0006213977573897526,
+      "mean": 1.0249493731213706e-05,
+      "rms": 0.00010302205435262532
+    },
+    "units": "W state increments and endpoint deltas: m/s; RHS terms: m/s^2"
+  },
+  "analyzer_sha256": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b",
+  "dimensions": {
+    "W_owner_count": 4096,
+    "dt_seconds": 15.0,
+    "dynamic_top_included": true,
+    "fixed_bottom_excluded": true,
+    "nx": 17,
+    "ny": 17,
+    "nz": 16,
+    "physical_owner_dims_source": "trace metadata crosschecked to NetCDF MUB",
+    "physical_owner_nx": 16,
+    "physical_owner_ny": 16
+  },
+  "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/wrfinput_d01",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "input_trace_schema": "accepted_ark_w_stage_v2",
+  "newton_tolerance_source_binding": "runtime_config_newton_tol_passed_to_solver_options_at_construction",
+  "npz_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_metric/actual_accepted_stage_w_analysis_v2.npz",
+  "npz_sha256": "aad0ba823daec8dd59bf6a4206ab6314d606ffc2ee33ca6c578a73dccaf18a15",
+  "physical_pressure_work": {
+    "available": true,
+    "dynamic_top_source_derived_work_w": {
+      "moisture_buoyancy": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0,
+        "4": 0.0
+      },
+      "mu_buoyancy": {
+        "1": 0.0,
+        "2": -6680572.3614590205,
+        "3": -3906544.973929025,
+        "4": -13018408.341355613
+      },
+      "pressure": {
+        "1": 0.0,
+        "2": 7720530.553013697,
+        "3": 4543243.301292561,
+        "4": 14092773.841232942
+      },
+      "pressure_plus_buoyancy": {
+        "1": 0.0,
+        "2": 1039958.1915546767,
+        "3": 636698.3273635358,
+        "4": 1074365.49987733
+      }
+    },
+    "dynamic_top_tableau_weighted_work_integral_j": {
+      "moisture_buoyancy": 0.0,
+      "mu_buoyancy": -82405523.52532695,
+      "pressure": 89424510.88629578,
+      "pressure_plus_buoyancy": 7018987.3609688105
+    },
+    "eligible_stages": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "note": "measured pg/buoyancy divided by same-call velocity_mass_w; pressure-coordinate proxy is not physical work",
+    "stage_power_w": {
+      "moisture_buoyancy": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0,
+        "4": 0.0
+      },
+      "mu_buoyancy": {
+        "1": 0.0,
+        "2": -134834435.76118624,
+        "3": -95032144.91809568,
+        "4": -178960432.99667305
+      },
+      "pressure": {
+        "1": 0.0,
+        "2": 143035808.47846895,
+        "3": 101179356.73653923,
+        "4": 185087681.3816458
+      },
+      "pressure_plus_buoyancy": {
+        "1": 0.0,
+        "2": 8201372.717282712,
+        "3": 6147211.818443552,
+        "4": 6127248.384972751
+      }
+    },
+    "static_input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "tableau_weighted_power_time_integral_j": {
+      "moisture_buoyancy": 0.0,
+      "mu_buoyancy": -1351313155.4895046,
+      "pressure": 1407746223.1432652,
+      "pressure_plus_buoyancy": 56433067.65376072
+    },
+    "units": "physical domain power W, with source dry-column dual mass"
+  },
+  "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/run_receipt.json",
+  "run_receipt_sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a",
+  "runtime": {
+    "buoyancy_use_current_w": 1.0,
+    "diffusion_option": 2.0,
+    "effective_ewt_rtol_config": 9.999999974752427e-07,
+    "effective_wrf_omega_ww_cp": 1.0,
+    "gate_metric_mode": 0.0,
+    "gravity_fallback": 9.8100004196167,
+    "gravity_grid": 9.8100004196167,
+    "gravity_rhs_value": 9.8100004196167,
+    "implicit_divergence": 1.0,
+    "kdamp_config": 0.20000000298023224,
+    "kdamp_grid": 0.20000000298023224,
+    "khdif": 1000.0,
+    "krylov_tol_config": 1.0000000116860974e-07,
+    "kvdif": 10.0,
+    "mass_coordinate_mode": 1.0,
+    "newton_rtol_config": 0.0,
+    "newton_tol_config": 1.0000000116860974e-07,
+    "omega_w_blend": 1.0,
+    "raw_wrf_omega_ww_cp": 0.0,
+    "split_explicit_top_lid": 0.0,
+    "stage3_gate_rel_threshold": 0.0,
+    "stage_gate_rel_threshold": 100.0,
+    "stage_metric": 0.0,
+    "wrf_damp_opt": 0.0,
+    "wrf_w_damping": 0.0
+  },
+  "schema": "accepted_ark_w_stage_analysis_v2",
+  "scope": "one accepted step; solver defects and replay differences are diagnostics, not state-error bounds",
+  "source_csv": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/accepted_ark_w_step_1.csv",
+  "source_csv_sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b",
+  "stages": [
+    {
+      "G_residual": {
+        "available": false,
+        "composite_fi_available_flag": true,
+        "method_K_minus_FI_RK": {
+          "accepted_fi_composite_gate": true,
+          "postprocess_unchanged": true,
+          "scope": "accepted method K minus directly observed same-Y raw FI RHS",
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "newton_postprocess_returned_vs_final": {
+          "comparison_available": false,
+          "final_K_present": false,
+          "returned_K_present": false,
+          "scope": "postprocess_unchanged=false is not evidence of K change without both snapshots"
+        },
+        "raw_FI_observed_at_accepted_Y": true,
+        "unavailable_reason": "stage 1 is explicit; no nonlinear solver defect is defined"
+      },
+      "base_differs_from_history": false,
+      "effective_a_ii": 0.0,
+      "explicit_stage": true,
+      "postprocess_equality_observed": 0.0,
+      "postprocess_equality_status": "not_applicable_explicit",
+      "postprocess_unchanged": true,
+      "retry_base_sanitized": false,
+      "retry_used": false,
+      "rhs_reference_flags": {
+        "fi_ref_matches_base": true,
+        "fi_ref_matches_checked_state": true,
+        "full_ref_matches_base": false,
+        "full_ref_matches_checked_state": false,
+        "slow_ref_matches_base": true,
+        "slow_ref_matches_y": true
+      },
+      "same_call_W_terms": {
+        "available_at_accepted_y": true,
+        "captured_interior_moisture_buoyancy_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "captured_interior_mu_buoyancy_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0009023920589370602,
+          "mean": -0.0008819631783413584,
+          "rms": 0.0008820223453199671
+        },
+        "captured_interior_pressure_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0009347560907838474,
+          "mean": 0.0008818928932279837,
+          "rms": 0.0008820210852343202
+        },
+        "captured_top_pressure_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "dynamic_top_closure_source": "same-point p_pert, MU, MUB, C1F/C2F/RDNW; cqw=0 from input",
+        "dynamic_top_source_derived_from_accepted_Y_p_pert": {
+          "moisture_buoyancy_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          },
+          "mu_buoyancy_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0009023920589370602,
+            "mean": -0.0008819631783413584,
+            "rms": 0.0008820223453199671
+          },
+          "pressure_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0009064570560856327,
+            "mean": 0.0008836104618770238,
+            "rms": 0.0008836870031319159
+          }
+        },
+        "pg_minus_buoyancy_vs_all": {
+          "count": 4096,
+          "max_abs": 9.769962616701378e-15,
+          "mean": -4.307219446814261e-17,
+          "rms": 4.16065693291429e-15
+        },
+        "postprocess_unchanged": true,
+        "pressure_at_accepted_y": true,
+        "raw_capture_available": true,
+        "term_capture_vertical_extent": "measured interior W faces only; dynamic-top closure is source-derived separately",
+        "w_owner_count": 4096
+      },
+      "stage": 1,
+      "stage_base_source_order_replay": {
+        "accepted_Bi_minus_history_Bi": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "history_Bi_minus_source_order_replay": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        }
+      },
+      "stored_full_equals_fast_plus_slow": {
+        "w_owner_difference": {
+          "count": 4096,
+          "max_abs": 3.381514344116777e-21,
+          "mean": 1.6061365802480845e-25,
+          "rms": 4.966987593688651e-22
+        }
+      },
+      "tableau_a_ii": 0.0
+    },
+    {
+      "G_residual": {
+        "available": true,
+        "composite_fi_available_flag": true,
+        "full_remainders": {
+          "actual_FI_plus_FE_remainder_w_owner_m_s2": {
+            "count": 4096,
+            "max_abs": 1.5246593050577406e-20,
+            "mean": 1.1558699216773112e-23,
+            "rms": 1.6612423927210273e-21
+          },
+          "method_K_plus_FE_remainder_w_owner_m_s2": {
+            "count": 4096,
+            "max_abs": 1.959707796519497e-09,
+            "mean": 5.1938660520098915e-12,
+            "rms": 1.3152025157191146e-10
+          },
+          "scope": "same checked-Y RHS; first uses method K, second uses raw FI(Y)"
+        },
+        "method_K_minus_FI_RK": {
+          "accepted_fi_composite_gate": true,
+          "postprocess_unchanged": true,
+          "scope": "accepted method K minus directly observed same-Y raw FI RHS",
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 1.9597077965173795e-09,
+            "mean": -5.193866051998117e-12,
+            "rms": 1.3152025157189334e-10
+          }
+        },
+        "newton_final_K_vs_method_K": {
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "newton_postprocess_returned_vs_final": {
+          "comparison_available": true,
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "raw_FI_observed_at_accepted_Y": true,
+        "scope": "measured G=Y-B-h*a_ii*FI(Y), not a state-error bound",
+        "units": "W component m/s",
+        "versus_captured_G": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "w_owner_stats": {
+          "count": 4096,
+          "max_abs": 1.2812565306618152e-08,
+          "mean": -3.395748493910011e-11,
+          "rms": 8.59879118408881e-10
+        }
+      },
+      "base_differs_from_history": false,
+      "effective_a_ii": 0.435866521508459,
+      "explicit_stage": false,
+      "postprocess_equality_observed": 1.0,
+      "postprocess_equality_status": "equal",
+      "postprocess_unchanged": true,
+      "retry_base_sanitized": false,
+      "retry_used": false,
+      "rhs_reference_flags": {
+        "fi_ref_matches_base": true,
+        "fi_ref_matches_checked_state": false,
+        "full_ref_matches_base": true,
+        "full_ref_matches_checked_state": false,
+        "slow_ref_matches_base": false,
+        "slow_ref_matches_y": true
+      },
+      "same_call_W_terms": {
+        "available_at_accepted_y": true,
+        "captured_interior_moisture_buoyancy_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "captured_interior_mu_buoyancy_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0009024656484867655,
+          "mean": -0.0008819631783003109,
+          "rms": 0.0008820225735276079
+        },
+        "captured_interior_pressure_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0009318580850707245,
+          "mean": 0.000882170746764988,
+          "rms": 0.0008823461991415547
+        },
+        "captured_top_pressure_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "dynamic_top_closure_source": "same-point p_pert, MU, MUB, C1F/C2F/RDNW; cqw=0 from input",
+        "dynamic_top_source_derived_from_accepted_Y_p_pert": {
+          "moisture_buoyancy_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          },
+          "mu_buoyancy_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0009024656484867655,
+            "mean": -0.000881963178300311,
+            "rms": 0.0008820225735276079
+          },
+          "pressure_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0009399084402068538,
+            "mean": 0.0008850961583624367,
+            "rms": 0.000885565516243407
+          }
+        },
+        "pg_minus_buoyancy_vs_all": {
+          "count": 4096,
+          "max_abs": 1.687538997430238e-14,
+          "mean": -3.1778283974649845e-16,
+          "rms": 5.525310377935936e-15
+        },
+        "postprocess_unchanged": true,
+        "pressure_at_accepted_y": true,
+        "raw_capture_available": true,
+        "term_capture_vertical_extent": "measured interior W faces only; dynamic-top closure is source-derived separately",
+        "w_owner_count": 4096
+      },
+      "stage": 2,
+      "stage_base_source_order_replay": {
+        "accepted_Bi_minus_history_Bi": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "history_Bi_minus_source_order_replay": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        }
+      },
+      "stored_full_equals_fast_plus_slow": {
+        "w_owner_difference": {
+          "count": 4096,
+          "max_abs": 5.98051582875839e-21,
+          "mean": 4.305116882378666e-24,
+          "rms": 6.993052364552026e-22
+        }
+      },
+      "tableau_a_ii": 0.435866521508459
+    },
+    {
+      "G_residual": {
+        "available": true,
+        "composite_fi_available_flag": true,
+        "full_remainders": {
+          "actual_FI_plus_FE_remainder_w_owner_m_s2": {
+            "count": 4096,
+            "max_abs": 3.5575383784680614e-20,
+            "mean": 9.544871826528209e-26,
+            "rms": 1.6095044249427213e-21
+          },
+          "method_K_plus_FE_remainder_w_owner_m_s2": {
+            "count": 4096,
+            "max_abs": 4.3502879239724353e-11,
+            "mean": 1.3948681344165117e-13,
+            "rms": 3.00324462273002e-12
+          },
+          "scope": "same checked-Y RHS; first uses method K, second uses raw FI(Y)"
+        },
+        "method_K_minus_FI_RK": {
+          "accepted_fi_composite_gate": true,
+          "postprocess_unchanged": true,
+          "scope": "accepted method K minus directly observed same-Y raw FI RHS",
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 4.350287923675974e-11,
+            "mean": -1.39486813441605e-13,
+            "rms": 3.0032446224552474e-12
+          }
+        },
+        "newton_final_K_vs_method_K": {
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "newton_postprocess_returned_vs_final": {
+          "comparison_available": true,
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "raw_FI_observed_at_accepted_Y": true,
+        "scope": "measured G=Y-B-h*a_ii*FI(Y), not a state-error bound",
+        "units": "W component m/s",
+        "versus_captured_G": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "w_owner_stats": {
+          "count": 4096,
+          "max_abs": 2.844217297662613e-10,
+          "mean": -9.119644825703786e-13,
+          "rms": 1.9635206802478154e-11
+        }
+      },
+      "base_differs_from_history": false,
+      "effective_a_ii": 0.435866521508459,
+      "explicit_stage": false,
+      "postprocess_equality_observed": 1.0,
+      "postprocess_equality_status": "equal",
+      "postprocess_unchanged": true,
+      "retry_base_sanitized": false,
+      "retry_used": false,
+      "rhs_reference_flags": {
+        "fi_ref_matches_base": true,
+        "fi_ref_matches_checked_state": false,
+        "full_ref_matches_base": true,
+        "full_ref_matches_checked_state": false,
+        "slow_ref_matches_base": false,
+        "slow_ref_matches_y": true
+      },
+      "same_call_W_terms": {
+        "available_at_accepted_y": true,
+        "captured_interior_moisture_buoyancy_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "captured_interior_mu_buoyancy_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0009024268377274084,
+          "mean": -0.0008819631783320025,
+          "rms": 0.0008820223973352683
+        },
+        "captured_interior_pressure_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0009248479166772065,
+          "mean": 0.0008822394387976415,
+          "rms": 0.0008823890800108119
+        },
+        "captured_top_pressure_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "dynamic_top_closure_source": "same-point p_pert, MU, MUB, C1F/C2F/RDNW; cqw=0 from input",
+        "dynamic_top_source_derived_from_accepted_Y_p_pert": {
+          "moisture_buoyancy_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          },
+          "mu_buoyancy_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0009024268377274085,
+            "mean": -0.0008819631783320025,
+            "rms": 0.0008820223973352683
+          },
+          "pressure_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0009289301545648432,
+            "mean": 0.0008844508899720109,
+            "rms": 0.0008848400174567264
+          }
+        },
+        "pg_minus_buoyancy_vs_all": {
+          "count": 4096,
+          "max_abs": 1.7319479184152442e-14,
+          "mean": -2.3473241732107188e-17,
+          "rms": 5.818433570291204e-15
+        },
+        "postprocess_unchanged": true,
+        "pressure_at_accepted_y": true,
+        "raw_capture_available": true,
+        "term_capture_vertical_extent": "measured interior W faces only; dynamic-top closure is source-derived separately",
+        "w_owner_count": 4096
+      },
+      "stage": 3,
+      "stage_base_source_order_replay": {
+        "accepted_Bi_minus_history_Bi": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "history_Bi_minus_source_order_replay": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        }
+      },
+      "stored_full_equals_fast_plus_slow": {
+        "w_owner_difference": {
+          "count": 4096,
+          "max_abs": 6.3527471044072525e-21,
+          "mean": -1.0504418467204278e-23,
+          "rms": 6.273837468633356e-22
+        }
+      },
+      "tableau_a_ii": 0.435866521508459
+    },
+    {
+      "G_residual": {
+        "available": true,
+        "composite_fi_available_flag": true,
+        "full_remainders": {
+          "actual_FI_plus_FE_remainder_w_owner_m_s2": {
+            "count": 4096,
+            "max_abs": 1.0587911840678754e-20,
+            "mean": -1.5977833518442218e-23,
+            "rms": 9.597551552648263e-22
+          },
+          "method_K_plus_FE_remainder_w_owner_m_s2": {
+            "count": 4096,
+            "max_abs": 1.4482392303348018e-10,
+            "mean": 9.296768257267518e-13,
+            "rms": 1.2716358340098198e-11
+          },
+          "scope": "same checked-Y RHS; first uses method K, second uses raw FI(Y)"
+        },
+        "method_K_minus_FI_RK": {
+          "accepted_fi_composite_gate": true,
+          "postprocess_unchanged": false,
+          "scope": "accepted method K minus directly observed same-Y raw FI RHS",
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 1.448239230328449e-10,
+            "mean": -9.296768257427322e-13,
+            "rms": 1.2716358340096259e-11
+          }
+        },
+        "newton_final_K_vs_method_K": {
+          "w_owner_difference_m_s2": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "newton_postprocess_returned_vs_final": {
+          "comparison_available": false,
+          "final_K_present": true,
+          "returned_K_present": false,
+          "scope": "postprocess_unchanged=false is not evidence of K change without both snapshots"
+        },
+        "raw_FI_observed_at_accepted_Y": true,
+        "scope": "measured G=Y-B-h*a_ii*FI(Y), not a state-error bound",
+        "units": "W component m/s",
+        "versus_captured_G": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "w_owner_stats": {
+          "count": 4096,
+          "max_abs": 9.468584934396816e-10,
+          "mean": -6.078225062535272e-12,
+          "rms": 8.313952313923374e-11
+        }
+      },
+      "base_differs_from_history": false,
+      "effective_a_ii": 0.435866521508459,
+      "explicit_stage": false,
+      "postprocess_equality_observed": 0.0,
+      "postprocess_equality_status": "unknown",
+      "postprocess_unchanged": false,
+      "retry_base_sanitized": false,
+      "retry_used": false,
+      "rhs_reference_flags": {
+        "fi_ref_matches_base": true,
+        "fi_ref_matches_checked_state": false,
+        "full_ref_matches_base": true,
+        "full_ref_matches_checked_state": false,
+        "slow_ref_matches_base": false,
+        "slow_ref_matches_y": true
+      },
+      "same_call_W_terms": {
+        "available_at_accepted_y": true,
+        "captured_interior_moisture_buoyancy_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "captured_interior_mu_buoyancy_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0009024887334077983,
+          "mean": -0.0008819631782705073,
+          "rms": 0.0008820227392223309
+        },
+        "captured_interior_pressure_acceleration_m_s2": {
+          "count": 3840,
+          "max_abs": 0.000913721729073079,
+          "mean": 0.0008817383708450138,
+          "rms": 0.0008818288599577373
+        },
+        "captured_top_pressure_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "dynamic_top_closure_source": "same-point p_pert, MU, MUB, C1F/C2F/RDNW; cqw=0 from input",
+        "dynamic_top_source_derived_from_accepted_Y_p_pert": {
+          "moisture_buoyancy_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          },
+          "mu_buoyancy_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.0009024887334077983,
+            "mean": -0.0008819631782705076,
+            "rms": 0.0008820227392223309
+          },
+          "pressure_acceleration_m_s2": {
+            "count": 256,
+            "max_abs": 0.000930221743729201,
+            "mean": 0.0008893290126256712,
+            "rms": 0.0008895509629114225
+          }
+        },
+        "pg_minus_buoyancy_vs_all": {
+          "count": 4096,
+          "max_abs": 1.532107773982716e-14,
+          "mean": 8.634588682478068e-17,
+          "rms": 5.538779065024096e-15
+        },
+        "postprocess_unchanged": false,
+        "pressure_at_accepted_y": true,
+        "raw_capture_available": true,
+        "term_capture_vertical_extent": "measured interior W faces only; dynamic-top closure is source-derived separately",
+        "w_owner_count": 4096
+      },
+      "stage": 4,
+      "stage_base_source_order_replay": {
+        "accepted_Bi_minus_history_Bi": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        },
+        "history_Bi_minus_source_order_replay": {
+          "w_owner_difference": {
+            "count": 4096,
+            "max_abs": 0.0,
+            "mean": 0.0,
+            "rms": 0.0
+          }
+        }
+      },
+      "stored_full_equals_fast_plus_slow": {
+        "w_owner_difference": {
+          "count": 4096,
+          "max_abs": 6.470982233214051e-21,
+          "mean": 1.3800668533466778e-23,
+          "rms": 3.990996793316441e-22
+        }
+      },
+      "tableau_a_ii": 0.435866521508459
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "schema": "pr307_committed_source_graph_binding_v1",
+  "target_worktree": "/private/tmp/pr307-accepted-ark-w-stage-20261014",
+  "source_commit": "18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc",
+  "source_tree": "9a343abacdfb5d36353b0d94f60f2d2715b81242",
+  "commit_changed_paths": [
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+    "tools/analyze_accepted_ark_w_stage.py"
+  ],
+  "committed_source_bindings": [
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "status": "exact current committed source"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "status": "exact current committed source"
+    },
+    {
+      "path": "tools/analyze_accepted_ark_w_stage.py",
+      "sha256": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b",
+      "status": "exact current committed source"
+    }
+  ],
+  "parser_dependency": {
+    "path": "tools/test_native_wave_refinement.py",
+    "sha256": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+    "graph_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_bounded_graph_receipt.json",
+    "status": "unchanged exact source pin reused for read_payload import dependency"
+  },
+  "preserved_precommit_graph_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_v2_graph_binding_receipt.json",
+  "preserved_precommit_graph_receipt_sha256": "d874fabbf7965ad997ce065366b2b86b14e14c30d10063e460f38ab3ba9bd5d5",
+  "reused_graph_sources": [
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "graph": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+      "graph_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "graph": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+      "graph_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+    }
+  ],
+  "fresh_parser_graph": {
+    "source_path": "tools/analyze_accepted_ark_w_stage.py",
+    "source_sha256": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b",
+    "corpus": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_corpus",
+    "graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+    "graph_sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5",
+    "node_count": 22,
+    "edge_count": 86,
+    "model_calls": 0,
+    "token_cost": 0
+  },
+  "parser_source_dependency_callmap": {
+    "analyzer_imports": "tools/analyze_accepted_ark_w_stage.py:20-23 imports read_payload from test_native_wave_refinement.py",
+    "stage_csv_schema": "tools/analyze_accepted_ark_w_stage.py:147-175 validates accepted_ark_w_stage_v1, packed order, accepted outcome, and runtime gates",
+    "same_call_w_pressure": "tools/analyze_accepted_ark_w_stage.py:322-354 validates stage W capture and computes pressure/buoyancy accelerations from captured terms",
+    "physical_work_and_delta_w": "tools/analyze_accepted_ark_w_stage.py:390-443 computes physical work only with pinned static input; 445-487 compares E/I increments, raw/projected endpoint deltas and replay"
+  },
+  "runtime_provenance_boundary": "Historical native build/run evidence remains tied to its recorded base-plus-dirty-source snapshot. This commit binding verifies those source bytes are now committed; it does not rewrite historical run/build metadata or claim another run.",
+  "preserved_receipts": [
+    "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_preedit_graph_binding_receipt.json",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_binding_receipt.json",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_v2_graph_binding_receipt.json"
+  ],
+  "limitations": [
+    "Graph AST is a navigation aid, not numerical correctness proof.",
+    "The previous v2 graph includes an obsolete analyzer hash cd199bdc...; it is not used as the current parser binding.",
+    "No source edits, build, test, or model run performed by this graph task."
+  ]
+}

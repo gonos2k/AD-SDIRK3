@@ -1,0 +1,59 @@
+{
+  "schema": "pr307_bounded_accepted_native_ark_w_plan_v1",
+  "created_local_time": "2026-10-14T23:45:54.962755+09:00",
+  "source_base": "192c9149fc1b5968755654a328f350d43604687f",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "target": "actual accepted native mode3 W stage split, pressure work, solver defect, tableau endpoint increment",
+  "production_equations_changed": false,
+  "observer_flag": "existing WRF_SDIRK3_STAGE_OPERAND_DIAG",
+  "initial_native_plan": {
+    "dt_seconds": 15,
+    "duration_seconds": 15,
+    "model_steps": 1,
+    "mpi_ranks": 1,
+    "omp_threads": 1,
+    "debug_level": 2,
+    "controls": [
+      "archived_a5_debug2_observer_off",
+      "new_cpp_executable_observer_off",
+      "new_cpp_executable_observer_on"
+    ],
+    "gate": "eight raw fields at t0/t15 exactly equal; same accepted outcome/solver/carry; no observer-added RHS calls"
+  },
+  "stage_contract": {
+    "stage1": "explicit; no Newton solve or invented residual",
+    "implicit_stages": [
+      2,
+      3,
+      4
+    ],
+    "observations": "existing same-point FI check/Full check only; accepted FE and actual K stored; no RHS evaluation added",
+    "same_point_gate": "checked state equals accepted Yi; checked K equals method postprocessed K before assigning observed defect",
+    "full_semantics": "method K+FE separated from independently evaluated Full",
+    "pressure_semantics": "same FI call pressure retained before subsequent RHS overwrites",
+    "residual_units": "RK in m/s^2; G=ha_ii RK in m/s; not an error bound",
+    "increment": "source-order tableau replay versus raw and projected endpoint separately",
+    "owned_w_points": 4096,
+    "fixed_lower_excluded": true,
+    "dynamic_top_included": true
+  },
+  "runtime_readback": [
+    "kdamp",
+    "raw wrf_omega_ww_cp",
+    "effective_wrf_omega_ww_cp",
+    "mass-coordinate mode",
+    "omega_w_blend",
+    "buoyancy_use_current_w",
+    "gravity",
+    "top_lid"
+  ],
+  "forbidden": [
+    "new 240-second ladder",
+    "automatic timestep halving",
+    "input pressure forcing",
+    "initial W removal",
+    "changed V3 budget or owner mask",
+    "reopening completed inverse/transport/CF/EMDIV work"
+  ],
+  "conditional_followup": "At most one short solver-tolerance control or one short temporal comparison, selected only after stage evidence identifies a discriminating question; no pre-authorized arbitrary sweep."
+}

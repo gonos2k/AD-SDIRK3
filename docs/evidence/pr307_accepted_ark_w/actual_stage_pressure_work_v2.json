@@ -1,0 +1,1072 @@
+{
+  "csv": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/accepted_ark_w_step_1.csv",
+    "sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b"
+  },
+  "interpretation_limits": [
+    "Pressure/W terms are included only where same-accepted-Y pressure and capture flags pass.",
+    "Top pressure/buoyancy contributions are independently derived from same-Y pressure and the source top stencil; the C++ component sidecar omits top arrays.",
+    "Stage 4 postprocess_unchanged=0; same-Y Full actual and accepted method K+FE work are both valid stage quantities, while Newton returned-K equivalence remains separate solver evidence and is not substituted.",
+    "A complete tableau-weighted pressure/buoyancy component integral is not a closed exact full-system energy budget.",
+    "Full-actual-Y and accepted-method-K+FE W work/remainders are separately reported, including stage 4; Newton returned-K identity is not asserted.",
+    "This is a source-term work diagnostic, not an exact full atmospheric energy budget or error estimate."
+  ],
+  "observer_noninterference": {
+    "all_16_output_arrays_off_on_bitwise_exact": true,
+    "baseline_off_parity_pass": true,
+    "gate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_observer_off_on_gate_v2.json",
+    "gate_sha256": "bbe065a7b5a131198547cbfedd1782af728e1931c1d7f902f84747a58994e0d3",
+    "rhs_call_records": [
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=3",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=65 delta=62"
+    ],
+    "rhs_call_records_identical_off_on": true
+  },
+  "rk_pressure_work_quadrature": {
+    "component_basis": "same accepted-Y p-prime and MU; captured interior terms plus source-formula-derived dynamic top closure",
+    "dt_seconds": 15.0,
+    "omitted_stages": [],
+    "status": "complete_four_stage_source_component_tableau_quadrature_not_exact_energy_budget",
+    "tableau_b": [
+      0.18764102434672383,
+      -0.595297473576955,
+      0.9717899277217721,
+      0.435866521508459
+    ],
+    "tableau_component_integral_j": {
+      "full_actual_Y_domain_power_w": 55716288.86379284,
+      "method_K_plus_FE_domain_power_w": 55716542.32521019,
+      "moisture_buoyancy_domain_power_w": 0.0,
+      "mu_buoyancy_domain_power_w": -1351313155.4895048,
+      "pressure_domain_power_w": 1407746223.1432655,
+      "pressure_plus_buoyancy_domain_power_w": 56433067.65376104
+    },
+    "warning": "This is tableau-weighted pressure/buoyancy source work, not a closed exact full-system energy budget."
+  },
+  "run_receipt": {
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "implementation_source_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/run_receipt.json",
+    "return_code": 0,
+    "run_status": "completed",
+    "sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a"
+  },
+  "schema": "accepted_ark_w_pressure_work_analysis_v2",
+  "scope": "one accepted 15-s macrostep; stagewise W pressure/buoyancy attribution and physical kinetic work only",
+  "source_stage_csv_schema": "accepted_ark_w_stage_v2",
+  "stages": [
+    {
+      "accepted": true,
+      "accepted_state_W_kinetic_energy_j": 0.0,
+      "accepted_state_W_m_s": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "full_actual_Y_minus_same_Y_FI_plus_FE_w_m_s2": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "full_actual_Y_source": "stage-1 explicit Full(Y) assembled from same-Y observed FI+FE",
+      "full_w_rate_and_unassigned_remainder_m_s2": {
+        "full_actual_Y": {
+          "count": 4096,
+          "max_abs": 3.5130937336571334e-05,
+          "mean": 4.373540231890147e-07,
+          "rms": 1.0977233431588978e-05
+        },
+        "method_K_plus_FE": {
+          "count": 4096,
+          "max_abs": 3.5130937336571334e-05,
+          "mean": 4.373540231890147e-07,
+          "rms": 1.0977233431588978e-05
+        },
+        "postprocess_unchanged": true,
+        "remainder_full_actual_Y_minus_pressure_buoyancy": {
+          "count": 4096,
+          "max_abs": 2.9045716934067933e-06,
+          "mean": 4.0029109599883776e-07,
+          "rms": 6.843014156948348e-07
+        },
+        "remainder_method_K_plus_FE_after_pressure_buoyancy": {
+          "count": 4096,
+          "max_abs": 2.9045716934067933e-06,
+          "mean": 4.0029109599883776e-07,
+          "rms": 6.843014156948348e-07
+        },
+        "status": "accepted same-Y Full actual and method K+FE are distinct valid stage quantities"
+      },
+      "independent_source_formula_acceleration_m_s2": {
+        "moisture_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.0009023920589370602,
+          "mean": -0.0008819631783413584,
+          "rms": 0.0008820223453199671
+        },
+        "pressure": {
+          "count": 4096,
+          "max_abs": 0.0009347560907838473,
+          "mean": 0.0008820002412685487,
+          "rms": 0.0008821252972747546
+        },
+        "pressure_plus_buoyancy": {
+          "count": 4096,
+          "max_abs": 3.5105278695646215e-05,
+          "mean": 3.7062927190176915e-08,
+          "rms": 1.0936196516754255e-05
+        }
+      },
+      "p_pert_at_accepted_y": true,
+      "physical_dry_mass_energy": {
+        "W_kinetic_energy_j": 0.0,
+        "accepted_full_actual_Y_W_tendency_domain_power_w": 0.0,
+        "accepted_method_K_plus_FE_W_tendency_domain_power_w": 0.0,
+        "dual_W_mass_kg_m2": {
+          "count": 4096,
+          "max_abs": 1161.652226270996,
+          "mean": 529.0416666658925,
+          "rms": 610.6351201806489
+        },
+        "full_W_work_status": "accepted same-Y Full actual and accepted method K+FE both valid; Newton returned-K comparison is separate",
+        "moisture_buoyancy_domain_power_w": 0.0,
+        "moisture_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_domain_power_w": 0.0,
+        "mu_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "newton_returned_K_array_available": false,
+        "newton_returned_K_equivalence_claimed": false,
+        "newton_returned_K_used": false,
+        "physical_area_m2": {
+          "count": 256,
+          "max_abs": 10000000000.0,
+          "mean": 10000000000.0,
+          "rms": 10000000000.0
+        },
+        "pressure_domain_power_w": 0.0,
+        "pressure_plus_buoyancy_domain_power_w": 0.0,
+        "pressure_plus_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "pressure_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "unassigned_full_actual_Y_minus_pressure_buoyancy_work_w": 0.0,
+        "unassigned_method_K_plus_FE_minus_pressure_buoyancy_work_w": 0.0,
+        "units": "W-domain power is J/s; power-density fields are W/m2; kinetic energy is J",
+        "w_owner_count": 4096
+      },
+      "postprocess_equality_observed": false,
+      "postprocess_unchanged": true,
+      "pressure_work_status": "same_accepted_Y_static_source_reconstruction_passed",
+      "same_call_capture_available": true,
+      "same_call_measured_acceleration_interior_m_s2": {
+        "moisture_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.0009023920589370602,
+          "mean": -0.0008819631783413584,
+          "rms": 0.0008820223453199671
+        },
+        "pressure": {
+          "count": 3840,
+          "max_abs": 0.0009347560907838474,
+          "mean": 0.0008818928932279837,
+          "rms": 0.0008820210852343202
+        },
+        "pressure_plus_buoyancy": {
+          "count": 3840,
+          "max_abs": 3.5105278695646236e-05,
+          "mean": -7.028511337482567e-08,
+          "rms": 1.1102887476423316e-05
+        }
+      },
+      "same_call_source_formula_differences": {
+        "moisture_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 1.0842021724855044e-19,
+          "mean": -3.3881317890172014e-20,
+          "rms": 6.06087439757635e-20
+        },
+        "pressure_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 2.168404344971009e-19,
+          "mean": 3.5321273900504327e-20,
+          "rms": 7.950687592199219e-20
+        },
+        "pressure_plus_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 1.0164395367051604e-19,
+          "mean": -3.570423655213136e-21,
+          "rms": 4.0468581717893523e-20
+        }
+      },
+      "solver_residual_context": {
+        "krylov_iterations": -1,
+        "newton_iterations": -1,
+        "newton_raw_defect_norm": -1.0,
+        "newton_scaled_final_residual": -1.0,
+        "units": "solver-specific scaled/raw norms; not W acceleration or kinetic-work residuals"
+      },
+      "stage": 1,
+      "state_W_m_s": {
+        "count": 4096,
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0
+      },
+      "top_boundary_source_formula": {
+        "captured_component_arrays_include_top": false,
+        "full_actual_Y_w_rate_m_s2": {
+          "count": 256,
+          "max_abs": 1.877762060701133e-05,
+          "mean": 1.6472835356652705e-06,
+          "rms": 8.03085632652705e-06
+        },
+        "method_K_plus_FE_w_rate_m_s2": {
+          "count": 256,
+          "max_abs": 1.877762060701133e-05,
+          "mean": 1.6472835356652705e-06,
+          "rms": 8.03085632652705e-06
+        },
+        "moisture_buoyancy_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0009023920589370602,
+          "mean": -0.0008819631783413584,
+          "rms": 0.0008820223453199671
+        },
+        "owner_count": 256,
+        "pressure_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0009064570560856327,
+          "mean": 0.0008836104618770238,
+          "rms": 0.0008836870031319159
+        },
+        "unassigned_full_actual_Y_minus_pressure_buoyancy_m_s2": {
+          "count": 256,
+          "max_abs": 9.825582188149884e-20,
+          "mean": 1.406207041340147e-21,
+          "rms": 4.181951125246297e-20
+        },
+        "unassigned_remainder_m_s2": {
+          "count": 256,
+          "max_abs": 9.825582188149884e-20,
+          "mean": 1.406207041340147e-21,
+          "rms": 4.181951125246297e-20
+        }
+      },
+      "top_lid": false,
+      "velocity_mass_w_minus_source_L_f_pa": {
+        "count": 4096,
+        "max_abs": 1.0186340659856796e-10,
+        "mean": 1.0186340659856796e-10,
+        "rms": 1.0186340659856796e-10
+      },
+      "w_pressure_at_accepted_y": true
+    },
+    {
+      "accepted": true,
+      "accepted_state_W_kinetic_energy_j": 40777393.572035365,
+      "accepted_state_W_m_s": {
+        "count": 4096,
+        "max_abs": 0.0006322777957143666,
+        "mean": 8.028966124638473e-06,
+        "rms": 8.683708780815128e-05
+      },
+      "full_actual_Y_minus_same_Y_FI_plus_FE_w_m_s2": {
+        "count": 4096,
+        "max_abs": 1.3552527156068805e-20,
+        "mean": 9.071319808415393e-24,
+        "rms": 1.8277093748294787e-21
+      },
+      "full_actual_Y_source": "captured same-Y Full actual",
+      "full_w_rate_and_unassigned_remainder_m_s2": {
+        "full_actual_Y": {
+          "count": 4096,
+          "max_abs": 9.706476613832138e-05,
+          "mean": 7.855717661761206e-07,
+          "rms": 1.540083455476351e-05
+        },
+        "method_K_plus_FE": {
+          "count": 4096,
+          "max_abs": 9.706347539687297e-05,
+          "mean": 7.855665723100686e-07,
+          "rms": 1.5400821848798836e-05
+        },
+        "postprocess_unchanged": true,
+        "remainder_full_actual_Y_minus_pressure_buoyancy": {
+          "count": 4096,
+          "max_abs": 3.844563880488403e-06,
+          "mean": 3.9516507665854735e-07,
+          "rms": 7.169188365375865e-07
+        },
+        "remainder_method_K_plus_FE_after_pressure_buoyancy": {
+          "count": 4096,
+          "max_abs": 3.845938781503626e-06,
+          "mean": 3.9515988279249535e-07,
+          "rms": 7.169504221008275e-07
+        },
+        "status": "accepted same-Y Full actual and method K+FE are distinct valid stage quantities"
+      },
+      "independent_source_formula_acceleration_m_s2": {
+        "moisture_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.0009024656484867655,
+          "mean": -0.000881963178300311,
+          "rms": 0.000882022573527608
+        },
+        "pressure": {
+          "count": 4096,
+          "max_abs": 0.0009399084402068538,
+          "mean": 0.0008823535849898285,
+          "rms": 0.0008825477505018028
+        },
+        "pressure_plus_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.00010082607709416898,
+          "mean": 3.9040668951757326e-07,
+          "rms": 1.5448341345875273e-05
+        }
+      },
+      "p_pert_at_accepted_y": true,
+      "physical_dry_mass_energy": {
+        "W_kinetic_energy_j": 40777393.572035365,
+        "accepted_full_actual_Y_W_tendency_domain_power_w": 8072312.075440317,
+        "accepted_method_K_plus_FE_W_tendency_domain_power_w": 8072280.139056106,
+        "dual_W_mass_kg_m2": {
+          "count": 4096,
+          "max_abs": 1161.652234985912,
+          "mean": 529.0416666658925,
+          "rms": 610.6351201806501
+        },
+        "full_W_work_status": "accepted same-Y Full actual and accepted method K+FE both valid; Newton returned-K comparison is separate",
+        "moisture_buoyancy_domain_power_w": 0.0,
+        "moisture_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_domain_power_w": -134834435.76118624,
+        "mu_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.00017075476716357178,
+          "mean": -5.2669701469213384e-05,
+          "rms": 7.802568097465558e-05
+        },
+        "newton_returned_K_array_available": true,
+        "newton_returned_K_equivalence_claimed": false,
+        "newton_returned_K_used": false,
+        "physical_area_m2": {
+          "count": 256,
+          "max_abs": 10000000000.0,
+          "mean": 10000000000.0,
+          "rms": 10000000000.0
+        },
+        "pressure_domain_power_w": 143035808.47846895,
+        "pressure_plus_buoyancy_domain_power_w": 8201372.717282702,
+        "pressure_plus_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 3.957579360927637e-05,
+          "mean": 3.2036612176885558e-06,
+          "rms": 7.519556509559832e-06
+        },
+        "pressure_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.00018164565141998997,
+          "mean": 5.5873362686901926e-05,
+          "rms": 8.125457551077847e-05
+        },
+        "unassigned_full_actual_Y_minus_pressure_buoyancy_work_w": -129060.64184238482,
+        "unassigned_method_K_plus_FE_minus_pressure_buoyancy_work_w": -129092.57822659612,
+        "units": "W-domain power is J/s; power-density fields are W/m2; kinetic energy is J",
+        "w_owner_count": 4096
+      },
+      "postprocess_equality_observed": true,
+      "postprocess_unchanged": true,
+      "pressure_work_status": "same_accepted_Y_static_source_reconstruction_passed",
+      "same_call_capture_available": true,
+      "same_call_measured_acceleration_interior_m_s2": {
+        "moisture_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.0009024656484867655,
+          "mean": -0.0008819631783003109,
+          "rms": 0.0008820225735276079
+        },
+        "pressure": {
+          "count": 3840,
+          "max_abs": 0.0009318580850707245,
+          "mean": 0.000882170746764988,
+          "rms": 0.0008823461991415547
+        },
+        "pressure_plus_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.00010082607709416897,
+          "mean": 2.0756846467702148e-07,
+          "rms": 1.4415756191634465e-05
+        }
+      },
+      "same_call_source_formula_differences": {
+        "moisture_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 2.168404344971009e-19,
+          "mean": -4.701032857261367e-20,
+          "rms": 8.21578296184384e-20
+        },
+        "pressure_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 2.168404344971009e-19,
+          "mean": 5.610181553980983e-20,
+          "rms": 9.266401076346835e-20
+        },
+        "pressure_plus_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 1.1180834903756764e-19,
+          "mean": 2.8847331480837745e-21,
+          "rms": 4.250665802478358e-20
+        }
+      },
+      "solver_residual_context": {
+        "krylov_iterations": 13,
+        "newton_iterations": 2,
+        "newton_raw_defect_norm": 1.0929535498860332e-08,
+        "newton_scaled_final_residual": 6.978209676766767e-11,
+        "units": "solver-specific scaled/raw norms; not W acceleration or kinetic-work residuals"
+      },
+      "stage": 2,
+      "state_W_m_s": {
+        "count": 4096,
+        "max_abs": 0.0006322777957143666,
+        "mean": 8.028966124638473e-06,
+        "rms": 8.683708780815128e-05
+      },
+      "top_boundary_source_formula": {
+        "captured_component_arrays_include_top": false,
+        "full_actual_Y_w_rate_m_s2": {
+          "count": 256,
+          "max_abs": 6.898502873768911e-05,
+          "mean": 3.13297924977438e-06,
+          "rms": 2.6480348490902023e-05
+        },
+        "method_K_plus_FE_w_rate_m_s2": {
+          "count": 256,
+          "max_abs": 6.898501480711294e-05,
+          "mean": 3.1329299302890907e-06,
+          "rms": 2.6480394577358807e-05
+        },
+        "moisture_buoyancy_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0009024656484867655,
+          "mean": -0.000881963178300311,
+          "rms": 0.0008820225735276079
+        },
+        "owner_count": 256,
+        "pressure_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0009399084402068538,
+          "mean": 0.0008850961583624367,
+          "rms": 0.000885565516243407
+        },
+        "unassigned_full_actual_Y_minus_pressure_buoyancy_m_s2": {
+          "count": 256,
+          "max_abs": 8.154740951900621e-09,
+          "mean": -8.123514259268537e-13,
+          "rms": 3.0128928868541835e-09
+        },
+        "unassigned_remainder_m_s2": {
+          "count": 256,
+          "max_abs": 8.320856078077637e-09,
+          "mean": -5.0131836715275444e-11,
+          "rms": 3.022779738314621e-09
+        }
+      },
+      "top_lid": false,
+      "velocity_mass_w_minus_source_L_f_pa": {
+        "count": 4096,
+        "max_abs": 1.0186340659856796e-10,
+        "mean": 1.0186340659856796e-10,
+        "rms": 1.0186340659856796e-10
+      },
+      "w_pressure_at_accepted_y": true
+    },
+    {
+      "accepted": true,
+      "accepted_state_W_kinetic_energy_j": 24628723.210898705,
+      "accepted_state_W_m_s": {
+        "count": 4096,
+        "max_abs": 0.0005081365961031657,
+        "mean": 5.902508895715078e-06,
+        "rms": 6.531620438007226e-05
+      },
+      "full_actual_Y_minus_same_Y_FI_plus_FE_w_m_s2": {
+        "count": 4096,
+        "max_abs": 4.0657581468206416e-20,
+        "mean": 1.7159655820052988e-23,
+        "rms": 1.7742496826876135e-21
+      },
+      "full_actual_Y_source": "captured same-Y Full actual",
+      "full_w_rate_and_unassigned_remainder_m_s2": {
+        "full_actual_Y": {
+          "count": 4096,
+          "max_abs": 9.782910832999226e-05,
+          "mean": 8.105369535561454e-07,
+          "rms": 1.3650731206577959e-05
+        },
+        "method_K_plus_FE": {
+          "count": 4096,
+          "max_abs": 9.782906482919613e-05,
+          "mean": 8.105368140693321e-07,
+          "rms": 1.3650730470857565e-05
+        },
+        "postprocess_unchanged": true,
+        "remainder_full_actual_Y_minus_pressure_buoyancy": {
+          "count": 4096,
+          "max_abs": 3.5517275964084774e-06,
+          "mean": 3.960607895190814e-07,
+          "rms": 7.093851385578117e-07
+        },
+        "remainder_method_K_plus_FE_after_pressure_buoyancy": {
+          "count": 4096,
+          "max_abs": 3.551771099287714e-06,
+          "mean": 3.960606500322679e-07,
+          "rms": 7.093855683862618e-07
+        },
+        "status": "accepted same-Y Full actual and method K+FE are distinct valid stage quantities"
+      },
+      "independent_source_formula_acceleration_m_s2": {
+        "moisture_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.0009024268377274085,
+          "mean": -0.0008819631783320025,
+          "rms": 0.0008820223973352683
+        },
+        "pressure": {
+          "count": 4096,
+          "max_abs": 0.0009289301545648432,
+          "mean": 0.0008823776544960396,
+          "rms": 0.0008825424630126773
+        },
+        "pressure_plus_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.00010129711028406278,
+          "mean": 4.144761640370641e-07,
+          "rms": 1.3691238553329822e-05
+        }
+      },
+      "p_pert_at_accepted_y": true,
+      "physical_dry_mass_energy": {
+        "W_kinetic_energy_j": 24628723.210898705,
+        "accepted_full_actual_Y_W_tendency_domain_power_w": 6052155.4835293805,
+        "accepted_method_K_plus_FE_W_tendency_domain_power_w": 6052154.719304767,
+        "dual_W_mass_kg_m2": {
+          "count": 4096,
+          "max_abs": 1161.652230389709,
+          "mean": 529.0416666658925,
+          "rms": 610.6351201806491
+        },
+        "full_W_work_status": "accepted same-Y Full actual and accepted method K+FE both valid; Newton returned-K comparison is separate",
+        "moisture_buoyancy_domain_power_w": 0.0,
+        "moisture_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_domain_power_w": -95032144.91809568,
+        "mu_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.00011705993121001439,
+          "mean": -3.712193160863112e-05,
+          "rms": 5.0704138908773855e-05
+        },
+        "newton_returned_K_array_available": true,
+        "newton_returned_K_equivalence_claimed": false,
+        "newton_returned_K_used": false,
+        "physical_area_m2": {
+          "count": 256,
+          "max_abs": 10000000000.0,
+          "mean": 10000000000.0,
+          "rms": 10000000000.0
+        },
+        "pressure_domain_power_w": 101179356.73653924,
+        "pressure_plus_buoyancy_domain_power_w": 6147211.818443573,
+        "pressure_plus_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 2.9328730296512375e-05,
+          "mean": 2.4012546165795204e-06,
+          "rms": 5.6488843577503816e-06
+        },
+        "pressure_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.00013372727562729897,
+          "mean": 3.952318622521065e-05,
+          "rms": 5.341339013590506e-05
+        },
+        "unassigned_full_actual_Y_minus_pressure_buoyancy_work_w": -95056.33491419256,
+        "unassigned_method_K_plus_FE_minus_pressure_buoyancy_work_w": -95057.09913880564,
+        "units": "W-domain power is J/s; power-density fields are W/m2; kinetic energy is J",
+        "w_owner_count": 4096
+      },
+      "postprocess_equality_observed": true,
+      "postprocess_unchanged": true,
+      "pressure_work_status": "same_accepted_Y_static_source_reconstruction_passed",
+      "same_call_capture_available": true,
+      "same_call_measured_acceleration_interior_m_s2": {
+        "moisture_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.0009024268377274084,
+          "mean": -0.0008819631783320025,
+          "rms": 0.0008820223973352683
+        },
+        "pressure": {
+          "count": 3840,
+          "max_abs": 0.0009248479166772065,
+          "mean": 0.0008822394387976415,
+          "rms": 0.0008823890800108119
+        },
+        "pressure_plus_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.00010129711028406273,
+          "mean": 2.76260465638983e-07,
+          "rms": 1.2771906325426237e-05
+        }
+      },
+      "same_call_source_formula_differences": {
+        "moisture_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 2.168404344971009e-19,
+          "mean": -5.717472393966527e-20,
+          "rms": 9.364982585722283e-20
+        },
+        "pressure_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 2.168404344971009e-19,
+          "mean": 5.415363976112493e-20,
+          "rms": 9.054197161374027e-20
+        },
+        "pressure_plus_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 1.0842021724855044e-19,
+          "mean": -5.745925468333791e-21,
+          "rms": 4.5458813653083254e-20
+        }
+      },
+      "solver_residual_context": {
+        "krylov_iterations": 13,
+        "newton_iterations": 2,
+        "newton_raw_defect_norm": 2.5096913436328805e-10,
+        "newton_scaled_final_residual": 1.6023686284089012e-12,
+        "units": "solver-specific scaled/raw norms; not W acceleration or kinetic-work residuals"
+      },
+      "stage": 3,
+      "state_W_m_s": {
+        "count": 4096,
+        "max_abs": 0.0005081365961031657,
+        "mean": 5.902508895715078e-06,
+        "rms": 6.531620438007226e-05
+      },
+      "top_boundary_source_formula": {
+        "captured_component_arrays_include_top": false,
+        "full_actual_Y_w_rate_m_s2": {
+          "count": 256,
+          "max_abs": 5.826853395223187e-05,
+          "mean": 2.487711384684499e-06,
+          "rms": 2.3502654093190313e-05
+        },
+        "method_K_plus_FE_w_rate_m_s2": {
+          "count": 256,
+          "max_abs": 5.826853322416651e-05,
+          "mean": 2.487710305892942e-06,
+          "rms": 2.3502655381421065e-05
+        },
+        "moisture_buoyancy_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0009024268377274085,
+          "mean": -0.0008819631783320025,
+          "rms": 0.0008820223973352683
+        },
+        "owner_count": 256,
+        "pressure_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0009289301545648432,
+          "mean": 0.0008844508899720109,
+          "rms": 0.0008848400174567264
+        },
+        "unassigned_full_actual_Y_minus_pressure_buoyancy_m_s2": {
+          "count": 256,
+          "max_abs": 5.7114639647150225e-09,
+          "mean": -2.5532386915067346e-13,
+          "rms": 2.081869063978233e-09
+        },
+        "unassigned_remainder_m_s2": {
+          "count": 256,
+          "max_abs": 5.711189834732799e-09,
+          "mean": -1.3341154261242e-12,
+          "rms": 2.0819216025869555e-09
+        }
+      },
+      "top_lid": false,
+      "velocity_mass_w_minus_source_L_f_pa": {
+        "count": 4096,
+        "max_abs": 1.0186340659856796e-10,
+        "mean": 1.0186340659856796e-10,
+        "rms": 1.0186340659856796e-10
+      },
+      "w_pressure_at_accepted_y": true
+    },
+    {
+      "accepted": true,
+      "accepted_state_W_kinetic_energy_j": 51830608.66945173,
+      "accepted_state_W_m_s": {
+        "count": 4096,
+        "max_abs": 0.0006250530472968298,
+        "mean": 1.0264040453736564e-05,
+        "rms": 0.00010326878966561153
+      },
+      "full_actual_Y_minus_same_Y_FI_plus_FE_w_m_s2": {
+        "count": 4096,
+        "max_abs": 1.3552527156068805e-20,
+        "mean": -2.680688195460317e-23,
+        "rms": 1.0615008150351627e-21
+      },
+      "full_actual_Y_source": "captured same-Y Full actual",
+      "full_w_rate_and_unassigned_remainder_m_s2": {
+        "full_actual_Y": {
+          "count": 4096,
+          "max_abs": 6.169799950192962e-05,
+          "mean": 6.451716302316039e-07,
+          "rms": 8.709654286432875e-06
+        },
+        "method_K_plus_FE": {
+          "count": 4096,
+          "max_abs": 6.16979565430218e-05,
+          "mean": 6.451707005547782e-07,
+          "rms": 8.709651532476534e-06
+        },
+        "postprocess_unchanged": false,
+        "remainder_full_actual_Y_minus_pressure_buoyancy": {
+          "count": 4096,
+          "max_abs": 3.403185209322164e-06,
+          "mean": 3.955639444341257e-07,
+          "rms": 6.986172782542903e-07
+        },
+        "remainder_method_K_plus_FE_after_pressure_buoyancy": {
+          "count": 4096,
+          "max_abs": 3.4031665777201416e-06,
+          "mean": 3.9556301475730003e-07,
+          "rms": 6.986162610989044e-07
+        },
+        "status": "accepted same-Y Full actual and method K+FE are distinct valid stage quantities"
+      },
+      "independent_source_formula_acceleration_m_s2": {
+        "moisture_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy": {
+          "count": 4096,
+          "max_abs": 0.0009024887334077983,
+          "mean": -0.0008819631782705074,
+          "rms": 0.000882022739222331
+        },
+        "pressure": {
+          "count": 4096,
+          "max_abs": 0.000930221743729201,
+          "mean": 0.0008822127859563049,
+          "rms": 0.0008823134714144996
+        },
+        "pressure_plus_buoyancy": {
+          "count": 4096,
+          "max_abs": 6.169843377186197e-05,
+          "mean": 2.496076857974781e-07,
+          "rms": 8.709040350766101e-06
+        }
+      },
+      "p_pert_at_accepted_y": true,
+      "physical_dry_mass_energy": {
+        "W_kinetic_energy_j": 51830608.66945173,
+        "accepted_full_actual_Y_W_tendency_domain_power_w": 6053280.928733609,
+        "accepted_method_K_plus_FE_W_tendency_domain_power_w": 6053277.78200138,
+        "dual_W_mass_kg_m2": {
+          "count": 4096,
+          "max_abs": 1161.652237719767,
+          "mean": 529.0416666658925,
+          "rms": 610.635120180651
+        },
+        "full_W_work_status": "accepted same-Y Full actual and accepted method K+FE both valid; Newton returned-K comparison is separate",
+        "moisture_buoyancy_domain_power_w": 0.0,
+        "moisture_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_domain_power_w": -178960432.99667308,
+        "mu_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.00020511663836857632,
+          "mean": -6.990641913932541e-05,
+          "rms": 9.875816988200094e-05
+        },
+        "newton_returned_K_array_available": false,
+        "newton_returned_K_equivalence_claimed": false,
+        "newton_returned_K_used": false,
+        "physical_area_m2": {
+          "count": 256,
+          "max_abs": 10000000000.0,
+          "mean": 10000000000.0,
+          "rms": 10000000000.0
+        },
+        "pressure_domain_power_w": 185087681.3816458,
+        "pressure_plus_buoyancy_domain_power_w": 6127248.384972739,
+        "pressure_plus_buoyancy_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 2.2317632438165843e-05,
+          "mean": 2.393456400379976e-06,
+          "rms": 4.432351656723061e-06
+        },
+        "pressure_power_density_w_m2": {
+          "count": 256,
+          "max_abs": 0.00020655589589210066,
+          "mean": 7.229987553970539e-05,
+          "rms": 0.00010078991734510602
+        },
+        "unassigned_full_actual_Y_minus_pressure_buoyancy_work_w": -73967.45623913035,
+        "unassigned_method_K_plus_FE_minus_pressure_buoyancy_work_w": -73970.60297135916,
+        "units": "W-domain power is J/s; power-density fields are W/m2; kinetic energy is J",
+        "w_owner_count": 4096
+      },
+      "postprocess_equality_observed": false,
+      "postprocess_unchanged": false,
+      "pressure_work_status": "same_accepted_Y_static_source_reconstruction_passed",
+      "same_call_capture_available": true,
+      "same_call_measured_acceleration_interior_m_s2": {
+        "moisture_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy": {
+          "count": 3840,
+          "max_abs": 0.0009024887334077983,
+          "mean": -0.0008819631782705073,
+          "rms": 0.0008820227392223309
+        },
+        "pressure": {
+          "count": 3840,
+          "max_abs": 0.000913721729073079,
+          "mean": 0.0008817383708450138,
+          "rms": 0.0008818288599577373
+        },
+        "pressure_plus_buoyancy": {
+          "count": 3840,
+          "max_abs": 4.3628389773914265e-05,
+          "mean": -2.2480742549360735e-07,
+          "rms": 7.299482940069322e-06
+        }
+      },
+      "same_call_source_formula_differences": {
+        "moisture_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 2.168404344971009e-19,
+          "mean": -4.912791094074942e-20,
+          "rms": 8.938505560632178e-20
+        },
+        "pressure_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 2.168404344971009e-19,
+          "mean": 4.966436514067714e-20,
+          "rms": 8.707784333253097e-20
+        },
+        "pressure_plus_buoyancy_interior_reconstruction_minus_same_call_m_s2": {
+          "count": 3840,
+          "max_abs": 1.0672615135404184e-19,
+          "mean": 1.0544902487793831e-21,
+          "rms": 4.4991682715554075e-20
+        }
+      },
+      "solver_residual_context": {
+        "krylov_iterations": 13,
+        "newton_iterations": 2,
+        "newton_raw_defect_norm": -1.0,
+        "newton_scaled_final_residual": 6.038782755096728e-12,
+        "units": "solver-specific scaled/raw norms; not W acceleration or kinetic-work residuals"
+      },
+      "stage": 4,
+      "state_W_m_s": {
+        "count": 4096,
+        "max_abs": 0.0006250530472968298,
+        "mean": 1.0264040453736564e-05,
+        "rms": 0.00010326878966561153
+      },
+      "top_boundary_source_formula": {
+        "captured_component_arrays_include_top": false,
+        "full_actual_Y_w_rate_m_s2": {
+          "count": 256,
+          "max_abs": 6.169799950192962e-05,
+          "mean": 7.365832759827461e-06,
+          "rms": 2.0354389266798935e-05
+        },
+        "method_K_plus_FE_w_rate_m_s2": {
+          "count": 256,
+          "max_abs": 6.16979565430218e-05,
+          "mean": 7.365827536551655e-06,
+          "rms": 2.035438260933145e-05
+        },
+        "moisture_buoyancy_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0
+        },
+        "mu_buoyancy_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.0009024887334077983,
+          "mean": -0.0008819631782705076,
+          "rms": 0.0008820227392223309
+        },
+        "owner_count": 256,
+        "pressure_acceleration_m_s2": {
+          "count": 256,
+          "max_abs": 0.000930221743729201,
+          "mean": 0.0008893290126256712,
+          "rms": 0.0008895509629114225
+        },
+        "unassigned_full_actual_Y_minus_pressure_buoyancy_m_s2": {
+          "count": 256,
+          "max_abs": 1.0791337899456014e-08,
+          "mean": -1.595336282935948e-12,
+          "rms": 3.953910533706661e-09
+        },
+        "unassigned_remainder_m_s2": {
+          "count": 256,
+          "max_abs": 1.0773274706489218e-08,
+          "mean": -6.818612087582651e-12,
+          "rms": 3.954590170043347e-09
+        }
+      },
+      "top_lid": false,
+      "velocity_mass_w_minus_source_L_f_pa": {
+        "count": 4096,
+        "max_abs": 1.0186340659856796e-10,
+        "mean": 1.0186340659856796e-10,
+        "rms": 1.0186340659856796e-10
+      },
+      "w_pressure_at_accepted_y": true
+    }
+  ],
+  "static_input": {
+    "buoyancy_use_current_w": 1,
+    "dx_m": 100000.0,
+    "dy_m": 100000.0,
+    "effective_wrf_omega_ww_cp": 1,
+    "gravity_rhs_value_m_s2": 9.8100004196167,
+    "mass_coordinate_mode": 1,
+    "omega_w_blend": 1.0,
+    "physical_W_owner_count_per_stage": 4096,
+    "physical_owner_xy_count": 256,
+    "qvapor_exact_zero": true,
+    "raw_wrf_omega_ww_cp": 0,
+    "runtime_cqw_exact_zero_log_marker": "[SDIRK3] cqw_ range: [0.0, 0.0]",
+    "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "top_lid": false
+  }
+}

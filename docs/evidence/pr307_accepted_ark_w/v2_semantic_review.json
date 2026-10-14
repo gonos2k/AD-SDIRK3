@@ -1,0 +1,93 @@
+{
+  "schema": "pr307_accepted_stage_v2_semantic_review_v1",
+  "captured_local_time": "2026-10-15T00:42:00+09:00",
+  "source_hashes": {
+    "header": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+    "implementation": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076"
+  },
+  "on_run": {
+    "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/run_receipt.json",
+    "receipt_sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a",
+    "return_code": null,
+    "executable_sha256": null,
+    "input_sha256": null,
+    "csv_sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b"
+  },
+  "csv_contract": {
+    "schema": "accepted_ark_w_stage_v2",
+    "packed_nx_ny": [
+      17.0,
+      17.0
+    ],
+    "physical_owner_nx_ny": [
+      16.0,
+      16.0
+    ],
+    "physical_owner_count": 4096
+  },
+  "stage_gates": {
+    "1": {
+      "checked_state_matches_y": 1.0,
+      "fast_guard_applied": 0.0,
+      "fi_available": 1.0,
+      "full_available": 0.0,
+      "p_pert_at_accepted_y": 1.0,
+      "w_capture_available": 1.0,
+      "w_capture_identity_valid": 1.0,
+      "w_pressure_at_accepted_y": 1.0,
+      "postprocess_unchanged": 1.0,
+      "postprocess_equality_observed": 0.0,
+      "postprocess_equality_status": "not_applicable_explicit"
+    },
+    "2": {
+      "checked_state_matches_y": 1.0,
+      "fast_guard_applied": 0.0,
+      "fi_available": 1.0,
+      "full_available": 1.0,
+      "p_pert_at_accepted_y": 1.0,
+      "w_capture_available": 1.0,
+      "w_capture_identity_valid": 1.0,
+      "w_pressure_at_accepted_y": 1.0,
+      "postprocess_unchanged": 1.0,
+      "postprocess_equality_observed": 1.0,
+      "postprocess_equality_status": "equal"
+    },
+    "3": {
+      "checked_state_matches_y": 1.0,
+      "fast_guard_applied": 0.0,
+      "fi_available": 1.0,
+      "full_available": 1.0,
+      "p_pert_at_accepted_y": 1.0,
+      "w_capture_available": 1.0,
+      "w_capture_identity_valid": 1.0,
+      "w_pressure_at_accepted_y": 1.0,
+      "postprocess_unchanged": 1.0,
+      "postprocess_equality_observed": 1.0,
+      "postprocess_equality_status": "equal"
+    },
+    "4": {
+      "checked_state_matches_y": 1.0,
+      "fast_guard_applied": 0.0,
+      "fi_available": 1.0,
+      "full_available": 1.0,
+      "p_pert_at_accepted_y": 1.0,
+      "w_capture_available": 1.0,
+      "w_capture_identity_valid": 1.0,
+      "w_pressure_at_accepted_y": 1.0,
+      "postprocess_unchanged": 0.0,
+      "postprocess_equality_observed": 0.0,
+      "postprocess_equality_status": "unknown"
+    }
+  },
+  "review": {
+    "result": "PASS",
+    "checks": [
+      "Stage 4 FI, p-prime and W pressure are accepted-statepoint available with checked_state_matches_y=1, finite capture, no fast guard, valid scope identity/inventory.",
+      "Stage 4 postprocess equality is explicitly unknown because returned_K was not captured; this does not gate FI/pressure availability or G.",
+      "Stage 4 measured G is available as the same-Y stage equation residual, not a Newton returned-K defect.",
+      "Packed 17x17 and physical 16x16 ownership are distinct in metadata.",
+      "The three recorded stage calls and output-state parity are covered by the v2 execution gate."
+    ],
+    "outstanding_wording_note": "GreenPressure v2 interpretation_limits contains stale sentence claiming stage-4 full-W work/remainder is null despite its own finite stage-4 values; owner was notified to correct prose only."
+  }
+}

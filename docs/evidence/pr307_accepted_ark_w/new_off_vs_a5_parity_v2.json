@@ -1,0 +1,276 @@
+{
+  "schema": "pr307_new_executable_off_vs_a5_parity_v2",
+  "old_a5_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_B_debug2_off/run_receipt.json",
+  "new_off_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_off_v2/run_receipt.json",
+  "comparisons": {
+    "0001-01-01_00:00:00": {
+      "U": {
+        "shape_left": [
+          16,
+          16,
+          17
+        ],
+        "shape_right": [
+          16,
+          16,
+          17
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "V": {
+        "shape_left": [
+          16,
+          17,
+          16
+        ],
+        "shape_right": [
+          16,
+          17,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "W": {
+        "shape_left": [
+          17,
+          16,
+          16
+        ],
+        "shape_right": [
+          17,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "PH": {
+        "shape_left": [
+          17,
+          16,
+          16
+        ],
+        "shape_right": [
+          17,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "T": {
+        "shape_left": [
+          16,
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "THM": {
+        "shape_left": [
+          16,
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "MU": {
+        "shape_left": [
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "MUB": {
+        "shape_left": [
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      }
+    },
+    "0001-01-01_00:00:15": {
+      "U": {
+        "shape_left": [
+          16,
+          16,
+          17
+        ],
+        "shape_right": [
+          16,
+          16,
+          17
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "V": {
+        "shape_left": [
+          16,
+          17,
+          16
+        ],
+        "shape_right": [
+          16,
+          17,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "W": {
+        "shape_left": [
+          17,
+          16,
+          16
+        ],
+        "shape_right": [
+          17,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "PH": {
+        "shape_left": [
+          17,
+          16,
+          16
+        ],
+        "shape_right": [
+          17,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "T": {
+        "shape_left": [
+          16,
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "THM": {
+        "shape_left": [
+          16,
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "MU": {
+        "shape_left": [
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      },
+      "MUB": {
+        "shape_left": [
+          16,
+          16
+        ],
+        "shape_right": [
+          16,
+          16
+        ],
+        "bitwise_exact": true,
+        "finite_left": true,
+        "finite_right": true,
+        "max_abs_difference": 0.0,
+        "rms_difference": 0.0
+      }
+    }
+  },
+  "all_16_arrays_bitwise_exact": true
+}
