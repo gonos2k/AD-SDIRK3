@@ -1,0 +1,82 @@
+{
+  "schema": "pr309_offline_analysis_graph_binding_receipt_v1",
+  "target_worktree": "/private/tmp/pr309-solver-controlled-w-60s-20261015",
+  "target_source_head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+  "target_source_tree": "47b9496b61e99eba52cb72198fcc924d60169627",
+  "preserved_prebind_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_graph/pr309_preedit_graph_reuse_receipt.json",
+  "preserved_prebind_receipt_sha256": "00052eb3b4cb63e6cb4cc9d6d8f368165bacf78862d165778c6da58ea1bd0221",
+  "new_analysis_sources": [
+    {
+      "path": "green_metric/analyze_pr309_60s.py",
+      "sha256": "15dda05c41ecdebd78416bddbb468a651222e6f4518656a48c3fdde0e7d0b54e",
+      "corpus_sha256": "15dda05c41ecdebd78416bddbb468a651222e6f4518656a48c3fdde0e7d0b54e",
+      "output_json": "green_metric/pr309_60s_analysis.json",
+      "output_json_sha256": "f34dc64b71a038b05a4a39ed0b9984a3996caa33408763c50737d782fe7a8823",
+      "output_schema": "pr309_green_60s_analysis_v1",
+      "output_binds_script_sha256": "15dda05c41ecdebd78416bddbb468a651222e6f4518656a48c3fdde0e7d0b54e"
+    },
+    {
+      "path": "red_precision/analyze_pr309_pair.py",
+      "sha256": "f8168d62a8d5786dcb4adc9dd69569d6c7c182c02221915d0f84c327ab3bf248",
+      "corpus_sha256": "f8168d62a8d5786dcb4adc9dd69569d6c7c182c02221915d0f84c327ab3bf248",
+      "output_json": "red_precision/pr309_red_pair_analysis.json",
+      "output_json_sha256": "1aa1821491d18589a1bc83a3105e2bd3474b2b342f5002ed9f9412bcbe6de538",
+      "output_schema": "pr309_red_solver_controlled_w_h_pair_v3"
+    }
+  ],
+  "fresh_bounded_graph": {
+    "corpus": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_graph/pr309_analysis_scripts_corpus",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_graph/pr309_analysis_scripts_graph/graphify-out/graph.json",
+    "sha256": "be37a1b117701e88dca023822ec20dd0adadd69f6f0cd43f20b9ddb839b222e5",
+    "nodes": 44,
+    "raw_edges": 165,
+    "command": "graphify extract <two E-only analysis scripts> --no-cluster --out <pr309_analysis_scripts_graph>",
+    "model_calls": 0,
+    "token_cost": 0,
+    "diagnostic": {
+      "dangling_endpoint_edges": 27,
+      "valid_candidate_edges": 138,
+      "exact_duplicate_edges": 21,
+      "directed_unique_endpoint_pairs": 114,
+      "same_endpoint_collapsed_edges": 24,
+      "interpretation": "Graph edges are navigation only; duplicate/dangling extraction noise is recorded."
+    }
+  },
+  "reused_exact_dependency_graphs": [
+    {
+      "name": "pr307_v2_cpp",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+      "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+    },
+    {
+      "name": "pr307_accepted_parser",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+      "sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5"
+    },
+    {
+      "name": "pr305_read_payload",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_graph/graphify-out/graph.json",
+      "sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257"
+    },
+    {
+      "name": "pr299_benchmark_helpers",
+      "path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+      "sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230"
+    },
+    {
+      "name": "pr308_fine_pair_analyzer",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_fine_pair_analyzer_graph/graphify-out/graph.json",
+      "sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9"
+    }
+  ],
+  "dependency_callers": {
+    "green": "green_metric/analyze_pr309_60s.py:20-22 imports benchmark_wrf_accuracy_cost, analyze_accepted_ark_w_stage, test_native_wave_refinement.read_payload; source pins are in preserved prebind receipt. analyze starts line 241; CLI at 469.",
+    "red": "red_precision/analyze_pr309_pair.py:27 imports read_payload; uses it at line 173. It imports benchmark_wrf_accuracy_cost helpers inside its NetCDF comparison helper around line 504; CLI at 685-692."
+  },
+  "analysis_crosscheck_scope": "Green/Red output JSONs are hash-bound. The Graphify receipt does not independently establish the numerical cross-checks; those remain in the analysis outputs/root validation.",
+  "limitations": [
+    "Fresh graph contains only the two E-only scripts; helper sources are bound through prior exact-source graphs.",
+    "The graph provides navigation only and retains extraction noise.",
+    "No model, build, or production-source change was performed during this receipt."
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "schema": "pr309_solver_controlled_w_60s_run_index_v1",
+  "created_local_time": "2026-10-15T23:34:08+09:00",
+  "root_launch_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/pr309_root_launch_binding.json",
+  "root_launch_binding_sha256": "700cc2afbc07a77bb919718db1e7658ca17359c72a611ef63681bc85508e5242",
+  "protocol_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_analysis_protocol_v3_frozen.json",
+  "protocol_sha256": "2497c354ebb3ff74fc78ea4376999f007c47e30a6e7ee0cf5d23c7353a2dde99",
+  "preflight_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/pr309_preflight_manifest.json",
+  "preflight_sha256": "18e2519f7b9562203fb89f63a2977a6c1b3bc527257da4f49ac6279f71f2e119",
+  "runner_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/run_pr309_case.py",
+  "runner_sha256": "5f3dc0f18c1de01229d2b263c6ec8fe19bc69f1ca24f7ea80490932e433c4266",
+  "runs": [
+    {
+      "label": "h0p9375_0_60s_newton_tol1e-9",
+      "run_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9",
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "ca4c91645e4165ae33f802d33a1114f858cf178362c250cf7240306ea49450b5",
+      "return_code": 0,
+      "wall_seconds": 76.7,
+      "dt_seconds": 0.9375,
+      "duration_seconds": 60,
+      "accepted_macrosteps": 64,
+      "accepted_csvs_contiguous": true,
+      "all_accepted": true,
+      "all_dt_exact": true,
+      "solver_summaries": [
+        {
+          "steps": 192,
+          "failed": 0,
+          "dt": 0.9375
+        }
+      ],
+      "netcdf_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:00:15",
+        "0001-01-01_00:00:30",
+        "0001-01-01_00:00:45",
+        "0001-01-01_00:01:00"
+      ],
+      "all_eight_fields_finite": true,
+      "newton_tol_config_unique": [
+        "9.9999997171806854e-10",
+        "9.9999997171806854e-10"
+      ],
+      "krylov_tol_config_unique": [
+        "1.0000000116860974e-07",
+        "1.0000000116860974e-07"
+      ],
+      "effective_ewt_config_unique": [
+        "9.9999999747524271e-07",
+        "9.9999999747524271e-07"
+      ],
+      "total_stage_csv_bytes": 1923101286,
+      "netcdf_output_files": [
+        {
+          "path": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1040888,
+          "sha256": "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:00:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:00:30",
+          "bytes": 1079765,
+          "sha256": "d8f80633e95a3636e11fe4610e9699f9fa8892fe6a37636b43e84dfeb76d5600",
+          "times": [
+            "0001-01-01_00:00:30",
+            "0001-01-01_00:00:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:01:00",
+          "bytes": 984442,
+          "sha256": "af2a83cd29a92e1b045088e77d17666ae5b4308b92a94c83db3b1db058f08217",
+          "times": [
+            "0001-01-01_00:01:00"
+          ]
+        }
+      ],
+      "log_hashes": {
+        "run.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+        "time.log": "7c08db6430a42dc14cc34e08d3ac741bda816d4c46bc38a6fe60d9bb4bae6d58",
+        "rsl.error.0000": "76ca9160e954b409efe3e34e9cffd291d97d2874868be742003b4397f03d3596",
+        "rsl.out.0000": "ac86273d796c5c77fd32ebb37bd571606d35a42a9334bbf76ff723d658aa76ea",
+        "namelist.output": "4e7650ad4fa9d7ea80803a96243c43cf345fbac5f82dc097f90d7c2db217f9b3"
+      }
+    },
+    {
+      "label": "h0p46875_0_60s_newton_tol1e-9",
+      "run_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9",
+      "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "6123eb09ebe8507a95fed5db2cc5a133bf8e9435ff2946a9ad06ac79c0b3ce89",
+      "return_code": 0,
+      "wall_seconds": 150.9,
+      "dt_seconds": 0.46875,
+      "duration_seconds": 60,
+      "accepted_macrosteps": 128,
+      "accepted_csvs_contiguous": true,
+      "all_accepted": true,
+      "all_dt_exact": true,
+      "solver_summaries": [
+        {
+          "steps": 300,
+          "failed": 0,
+          "dt": 0.4688
+        },
+        {
+          "steps": 384,
+          "failed": 0,
+          "dt": 0.4688
+        }
+      ],
+      "netcdf_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:00:15",
+        "0001-01-01_00:00:30",
+        "0001-01-01_00:00:45",
+        "0001-01-01_00:01:00"
+      ],
+      "all_eight_fields_finite": true,
+      "newton_tol_config_unique": [
+        "9.9999997171806854e-10",
+        "9.9999997171806854e-10"
+      ],
+      "krylov_tol_config_unique": [
+        "1.0000000116860974e-07",
+        "1.0000000116860974e-07"
+      ],
+      "effective_ewt_config_unique": [
+        "9.9999999747524271e-07",
+        "9.9999999747524271e-07"
+      ],
+      "total_stage_csv_bytes": 3847612059,
+      "netcdf_output_files": [
+        {
+          "path": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1040885,
+          "sha256": "5072b2699a2413d2c30e5f94b357454a27cb9e33201733dbaa99989a2f8e5ab9",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:00:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:00:30",
+          "bytes": 1079895,
+          "sha256": "a63fd4c079cb6f34136ee12cd2112c3a6c3a0fa33929e6cca7ae2b9db016eeb8",
+          "times": [
+            "0001-01-01_00:00:30",
+            "0001-01-01_00:00:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:01:00",
+          "bytes": 984489,
+          "sha256": "89c52efe052aee1ea77fb01a6fd3549536a56f72e51f4b70edca33cc51646876",
+          "times": [
+            "0001-01-01_00:01:00"
+          ]
+        }
+      ],
+      "log_hashes": {
+        "run.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+        "time.log": "67627423711f6fa08bcf51e1c2d9c179c258d6aebbe4345cb92295308cc4341b",
+        "rsl.error.0000": "6af5166b99812a95f0f904bc3228450997d0bf0cfad39508834e8ad0dd172908",
+        "rsl.out.0000": "95f90c1decf3187b2e056577309fdd2ae470f185c36a57deef4faac38bb0029a",
+        "namelist.output": "3e04c9c3e9fe32fc453226460ca244832e522ee83f7c885a662a8914a461eb88"
+      }
+    }
+  ],
+  "total_native_runs": 2,
+  "additional_runs": 0,
+  "builds": 0
+}

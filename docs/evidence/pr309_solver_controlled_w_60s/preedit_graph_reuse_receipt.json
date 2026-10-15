@@ -1,0 +1,120 @@
+{
+  "schema": "pr309_preedit_graph_reuse_receipt_v1",
+  "task": "PR309 controlled Newton-tolerance 60 s W trajectory source graph reuse",
+  "target_worktree": "/private/tmp/pr309-solver-controlled-w-60s-20261015",
+  "target_head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+  "target_tree": "47b9496b61e99eba52cb72198fcc924d60169627",
+  "worktree_clean": true,
+  "change_paths_from_parent": [
+    "docs/(202610151003)_fine_pair_w_trajectory_and_solver_control.md",
+    "docs/PROBLEM_DEFINITION.md",
+    "docs/evidence/pr308_fine_pair_w/README.md",
+    "docs/evidence/pr308_fine_pair_w/analysis_protocol_frozen.json",
+    "docs/evidence/pr308_fine_pair_w/analyzer_graph_binding_receipt.json",
+    "docs/evidence/pr308_fine_pair_w/analyzer_red_review_ko.md",
+    "docs/evidence/pr308_fine_pair_w/baseline_csv_compression_manifest.json",
+    "docs/evidence/pr308_fine_pair_w/coarse_run_receipt.json",
+    "docs/evidence/pr308_fine_pair_w/common_initial_state_gate.json",
+    "docs/evidence/pr308_fine_pair_w/compact_recomputation_receipt.json",
+    "docs/evidence/pr308_fine_pair_w/conditional_csv_compression_manifest.json",
+    "docs/evidence/pr308_fine_pair_w/conditional_newton_tolerance_contrast_v1.json",
+    "docs/evidence/pr308_fine_pair_w/final_green_closing_review.json",
+    "docs/evidence/pr308_fine_pair_w/final_red_scope_audit_ko.md",
+    "docs/evidence/pr308_fine_pair_w/fine_pair_pressure_work_time_series.json",
+    "docs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory.png",
+    "docs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory_analysis.csv",
+    "docs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory_analysis.json",
+    "docs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory_analysis.npz",
+    "docs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory_analysis_steps.csv",
+    "docs/evidence/pr308_fine_pair_w/fine_run_receipt.json",
+    "docs/evidence/pr308_fine_pair_w/fixed_w_projection.npz",
+    "docs/evidence/pr308_fine_pair_w/fixed_w_projection_basis.json",
+    "docs/evidence/pr308_fine_pair_w/green_red_validation.json",
+    "docs/evidence/pr308_fine_pair_w/manifest.json",
+    "docs/evidence/pr308_fine_pair_w/newton_control_analysis.json",
+    "docs/evidence/pr308_fine_pair_w/newton_control_independent_comparison.json",
+    "docs/evidence/pr308_fine_pair_w/newton_control_review_ko.md",
+    "docs/evidence/pr308_fine_pair_w/newton_control_run_receipt.json",
+    "docs/evidence/pr308_fine_pair_w/newton_control_trajectories.npz",
+    "docs/evidence/pr308_fine_pair_w/newton_tol_entry_format_audit.json",
+    "docs/evidence/pr308_fine_pair_w/newton_tolerance_w_control.png",
+    "docs/evidence/pr308_fine_pair_w/portable_package_receipt.json",
+    "docs/evidence/pr308_fine_pair_w/pr308_fine_pair_run_index.json",
+    "docs/evidence/pr308_fine_pair_w/preedit_graph_binding_receipt.json",
+    "docs/evidence/pr308_fine_pair_w/previous_ci_baseline.md",
+    "docs/evidence/pr308_fine_pair_w/red_precision_fine_pair_analysis.json",
+    "docs/evidence/pr308_fine_pair_w/red_precision_fine_pair_audit_ko.md",
+    "tools/analyze_fine_pair_w_trajectory.py"
+  ],
+  "source_bindings": [
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "matches_PR309_target": true
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "matches_PR309_target": true
+    },
+    {
+      "path": "tools/analyze_accepted_ark_w_stage.py",
+      "sha256": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b",
+      "matches_PR309_target": true
+    },
+    {
+      "path": "tools/test_native_wave_refinement.py",
+      "sha256": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+      "matches_PR309_target": true
+    },
+    {
+      "path": "tools/benchmark_wrf_accuracy_cost.py",
+      "sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8",
+      "matches_PR309_target": true
+    },
+    {
+      "path": "tools/analyze_fine_pair_w_trajectory.py",
+      "sha256": "b3dfa74b43eae9ced7d98670aa127714dcb95796b7e771e488834d3842e490f7",
+      "matches_PR309_target": true
+    }
+  ],
+  "reused_graphs": [
+    {
+      "name": "pr307_v2_cpp",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+      "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+    },
+    {
+      "name": "pr307_accepted_parser",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+      "sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5"
+    },
+    {
+      "name": "pr305_read_payload",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_graph/graphify-out/graph.json",
+      "sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257"
+    },
+    {
+      "name": "pr299_benchmark_helpers",
+      "path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+      "sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230"
+    },
+    {
+      "name": "pr308_fine_pair_analyzer",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_fine_pair_analyzer_graph/graphify-out/graph.json",
+      "sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9"
+    }
+  ],
+  "reuse_basis": "All six relevant source hashes match the already verified PR307/PR308/PR305/PR299 graph inputs exactly. The target revision changes docs/evidence and commits the already frozen fine-pair analyzer; no relevant existing C++ source changed.",
+  "caller_dependencies": {
+    "fine_pair_analyzer": "tools/analyze_fine_pair_w_trajectory.py:25-31 imports benchmark time/hash helpers, accepted single-step analyzer, and read_payload; its analyze/CLI entry points are bound to the PR308 single-file graph.",
+    "accepted_w_writer": "reused PR307 v2 tile header/implementation graph; accepted trace source remains byte-identical at a4d65886..."
+  },
+  "preserved_preedit_source_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_preedit_graph_binding_receipt.json",
+  "preserved_preedit_source_receipt_sha256": "797ad07208d775c12d0db638fa247f8a81acd01dc676b9837d0ad85a018d2a4a",
+  "limitations": [
+    "Graph edges remain navigation only; exact source hashes, prior receipts, and run receipts are the provenance authorities.",
+    "The reuse verifies code navigation for the existing analyzer and dependencies; it does not itself verify 60 s trajectories or scientific conclusions.",
+    "No new full-repository graph, build, test, model run, or code edit was performed."
+  ]
+}

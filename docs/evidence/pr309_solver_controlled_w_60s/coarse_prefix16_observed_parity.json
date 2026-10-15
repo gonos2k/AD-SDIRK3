@@ -1,0 +1,72 @@
+{
+  "schema": "pr309_coarse16_strict60_observed_prefix_parity_v1",
+  "worktree": "/private/tmp/pr309-solver-controlled-w-60s-20261015",
+  "head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+  "sources": {
+    "wrf_sdirk3_tile_unified_impl.cpp": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "wrf_sdirk3_newton_solver.cpp": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+    "wrf_sdirk3_config.h": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+  },
+  "old_prefix": {
+    "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/run_receipt.json",
+    "run_receipt_sha256": "7669e1c022fa2edbcfc7ce49dd539d32d66f8efd6b8719829d80948370c4d25b",
+    "rsl": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/rsl.error.0000",
+    "rsl_sha256": "7811132b13f412c3ac3b8dc364bab770605fb52bee9f3412b145c02b9273db18",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "newton_tol": 1e-7
+  },
+  "strict_run": {
+    "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/run_receipt.json",
+    "run_receipt_sha256": "ca4c91645e4165ae33f802d33a1114f858cf178362c250cf7240306ea49450b5",
+    "rsl": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/rsl.error.0000",
+    "rsl_sha256": "76ca9160e954b409efe3e34e9cffd291d97d2874868be742003b4397f03d3596",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "newton_tol": 1e-9
+  },
+  "packed_state_comparison": {
+    "old_csv_dir": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s",
+    "strict_csv_dir": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9",
+    "comparison_json": "coarse16_strict60_sixstate_prefix_compare.json",
+    "comparison_json_sha256": "4e1b5eda0cea527f3a639b715a503ea68d6bb2734be30ce74adbf2da84c3dff9",
+    "steps": 16,
+    "fields": ["U", "V", "W", "PH", "T", "MU"],
+    "packed_order": "U_V_W_PH_T_MU",
+    "packed_length_per_step": 24531,
+    "all_16_solver_input_vectors_bitwise_equal": true,
+    "all_16_projected_final_vectors_bitwise_equal": true,
+    "full_storage_compared": true,
+    "halo_or_alias_cropping": false,
+    "all_field_nonzero_difference_count": 0,
+    "all_field_max_abs_difference": 0.0,
+    "all_field_rms_difference": 0.0
+  },
+  "newton_log_comparison": {
+    "comparison_json": "coarse16_old_vs_strict_newton_logs.json",
+    "comparison_json_sha256": "f21a09aad6caebb388c71702f857625eb40d72393dee25ef82242f15652ac16c",
+    "implicit_stage_calls_compared": 48,
+    "initial_scaled_rms_tokens_equal": true,
+    "final_scaled_rms_tokens_equal": true,
+    "iteration_count_tokens_equal": true,
+    "old_tolerance": 1e-7,
+    "strict_tolerance": 1e-9,
+    "newton_rtol": 0.0,
+    "reported_iterations_per_stage_call": 2,
+    "stage_summary": {
+      "2": {"initial_min": 1e-6, "initial_max": 1.1e-6, "final_min": 4.3e-15, "final_max": 6.7e-15, "all_initial_gt_1e-7": true, "all_final_lt_1e-9": true},
+      "3": {"initial_min": 3e-7, "initial_max": 1.1e-6, "final_min": 4.3e-15, "final_max": 6.9e-15, "all_initial_gt_1e-7": true, "all_final_lt_1e-9": true},
+      "4": {"initial_min": 4.1e-7, "initial_max": 4.6e-7, "final_min": 4.1e-15, "final_max": 4.3e-15, "all_initial_gt_1e-7": true, "all_final_lt_1e-9": true}
+    }
+  },
+  "conclusion": {
+    "observed_strict_tolerance_prefix_parity": "byte-identical for all six packed fields and all 16 accepted endpoints through 15 s; every step input vector also matches",
+    "coarse_15s_rerun_needed": false,
+    "limitations": [
+      "This confirms only the common 0-15 s prefix. It says nothing about divergence after 15 s.",
+      "RSL norms are rounded display tokens; endpoint/input array comparison is exact FP64 packed-data equality.",
+      "The W-only projection was not used; comparison covers all six packed state fields and the entire storage vector including halos/aliases."
+    ]
+  }
+}

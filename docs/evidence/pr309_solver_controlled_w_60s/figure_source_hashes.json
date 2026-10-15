@@ -1,0 +1,104 @@
+{
+  "schema": "pr309_w_60s_figure_korean_final_source_hashes_v1",
+  "data_sources": {
+    "red_analysis_json": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/red_precision/pr309_red_pair_analysis.json",
+      "sha256": "1aa1821491d18589a1bc83a3105e2bd3474b2b342f5002ed9f9412bcbe6de538"
+    },
+    "common_time_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/red_precision/pr309_common_time_w.csv",
+      "sha256": "e8acb8b474fd5f2bcd76aff79809d93b19af94defc27ba7a68f4073831268e92"
+    },
+    "compact_trajectory_arrays_npz": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/red_precision/pr309_red_pair_arrays.npz",
+      "sha256": "7fc736e4b10175cef8afed0fd55fbcde4d35ed2ce199636bb4ae3948ecc2f9f7"
+    },
+    "official_published_netcdf_t60_screen": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/root_official_netcdf_t60_screen.json",
+      "sha256": "886518f4ece4f41fa3f1fd175f1130289cdfc485db8eab2e3eb122807ad5f930",
+      "schema": "pr309_root_official_netcdf_t60_screen_v1"
+    },
+    "fixed_M0_e1_basis_npz": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/fixed_w_projection.npz",
+      "sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd"
+    },
+    "frozen_protocol_sha256": "2497c354ebb3ff74fc78ea4376999f007c47e30a6e7ee0cf5d23c7353a2dde99",
+    "run_receipts": {
+      "coarse": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/run_receipt.json",
+        "sha256": "ca4c91645e4165ae33f802d33a1114f858cf178362c250cf7240306ea49450b5"
+      },
+      "fine": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/run_receipt.json",
+        "sha256": "6123eb09ebe8507a95fed5db2cc5a133bf8e9435ff2946a9ad06ac79c0b3ce89"
+      }
+    },
+    "published_wrfout_sha256": {
+      "coarse": [
+        "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf",
+        "d8f80633e95a3636e11fe4610e9699f9fa8892fe6a37636b43e84dfeb76d5600",
+        "af2a83cd29a92e1b045088e77d17666ae5b4308b92a94c83db3b1db058f08217"
+      ],
+      "fine": [
+        "5072b2699a2413d2c30e5f94b357454a27cb9e33201733dbaa99989a2f8e5ab9",
+        "a63fd4c079cb6f34136ee12cd2112c3a6c3a0fa33929e6cca7ae2b9db016eeb8",
+        "89c52efe052aee1ea77fb01a6fd3549536a56f72e51f4b70edca33cc51646876"
+      ]
+    }
+  },
+  "source_context": {
+    "head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+    "implementation_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "run_seconds": 60.0,
+    "common_time_count": 65,
+    "owner_count": 4096,
+    "owner_policy": null
+  },
+  "quantities_at_60s": {
+    "internal_fp64_csv_W_delta_rms_m_s": 1.7984438422489106e-06,
+    "official_published_netcdf_W_delta_rms_m_s": 1.7984436497264701e-06,
+    "official_fixed_limit_m_s": 2.5981466189324436e-06,
+    "official_ratio_to_limit": 0.6922025249157938,
+    "official_all_field_screen_pass_count": 6
+  },
+  "preserved_english_v1": {
+    "manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/figures/pr309_w_60s_figure_source_hashes.json",
+    "manifest_sha256": "b5c49739caa67ff402232c625a27e987811483ce46ff7558d581e31c5e04898a",
+    "script_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/figures/plot_pr309_w_60s_pair.py",
+    "script_sha256": "abc84e8c5a49e521eb39fa3f48882cee8946118d8a553486dfaf1ca4828de12c",
+    "png_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/figures/pr309_w_60s_pair.png",
+    "png_sha256": "a7bbf5f60c84a0d82846c318f2c0c23767bae5bc206d8e78f31484fedfa24104",
+    "svg_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/figures/pr309_w_60s_pair.svg",
+    "svg_sha256": "d96f8de61c9fe33a305501d9c039b04780a0b8ee016959ee1a7ca5c296d6200a",
+    "status": "preserved unchanged"
+  },
+  "korean_final_plot": {
+    "script": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/figures/plot_pr309_w_60s_pair_final.py",
+    "script_sha256": "af446c7d07560edeba82a135bdeab33e737dc85acbb3ab1fba6c5e157d7e27b8",
+    "png": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/figures/pr309_w_60s_pair_final.png",
+    "png_sha256": "806dea6fba481b56d1f437a2292795cae11a7fda2f0e4acbe70b1ee16aa6bc41",
+    "png_bytes": 304519,
+    "svg": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/figures/pr309_w_60s_pair_final.svg",
+    "svg_sha256": "fd52cd133ef70193e1e98aaf1eadc56494851ec66bb521a309903eb883916957",
+    "svg_bytes": 82772,
+    "matplotlib_version": "3.10.8",
+    "font": "AppleGothic with Matplotlib mathtext",
+    "svg_xml_parses": true
+  },
+  "presentation_only_delta": {
+    "labels_and_titles": "Korean",
+    "callout_anchor_s": 58.0,
+    "callout_top_um_s": 2.48,
+    "callout_note": "White box placed in unoccupied band below epsilon/3=2.598 and above observed peak=1.968; outside W RMS curve.",
+    "footnote_lines": 2,
+    "numeric_script_body_matches_intermediate_korean_version_after_output_rename": true
+  },
+  "panel_definition": {
+    "left": "Internal FP64 CSV unweighted RMS of fine-minus-coarse W at 65 actual common times; fixed descriptive epsilon/3 line; official NetCDF W t=60 marker is separate and labeled FP32.",
+    "right": "Coarse and fine W signed M0-weighted projection onto frozen e1; projection is recomputed from the raw W arrays and frozen basis without fitting/refitting."
+  },
+  "transformations": "Display-only m/s × 1e6 to µm/s. No interpolation, smoothing, fit, spectrum, or new direction. Internal FP64 endpoint and official NetCDF FP32 endpoint are recorded separately; plotted markers overlap at visible scale.",
+  "visual_review": "Korean final PNG inspected; callout does not cover the 45-58 s curve, threshold remains visible, footnote wraps to two lines without edge overflow; English v1 artifacts remain preserved."
+}

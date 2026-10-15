@@ -1,0 +1,306 @@
+{
+  "coarse_reuse_audit": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_rhs/coarse_15s_reuse_audit.json",
+    "recorded_checks": "48 global initial residuals >1e-7 and final residuals <1e-9 across two stages (per the bound audit); do not substitute its old runtime tolerance for the PR309 1e-9 runs.",
+    "scope": "existing h=.9375, 15 s run only; reuse counterfactual audit, not a PR309 60 s result",
+    "sha256": "f8523306b0ecbf749d183dd9deda99fb6bb31a05cdcd2a1235d364f9fbb60d86"
+  },
+  "created_local_time": "2026-10-15T23:29:10+09:00",
+  "criteria": {
+    "W_fixed_trigger_epsilon_over_3_m_s": 2.5981466189324436e-06,
+    "if_all_six_pass_60": "stop at 60 s; no automatic horizon extension",
+    "if_any_field_fails_60": "record failure and diagnostics; stop at 60 s; no automatic horizon extension",
+    "meaning": "single named-case budget screen only; no project-wide target, accuracy bound, or reference qualification",
+    "metric": "At t=60 s, compare fine-minus-coarse in the official V3 published NetCDF fields: each FP32 field is promoted to FP64 before subtraction/RMS, apply the fixed V3 physical-owner masks, and compare RMS to the unchanged epsilon/3 reference-check limit per field. This is a resolution-pair screen, not truth, order, or global-error evidence.",
+    "other_five_fields_at_60": {
+      "MU": {
+        "epsilon_240": 0.014590900457561187,
+        "reference_check_limit_epsilon_over_3": 0.004863633485853729,
+        "units": "total dry column mass MU+MUB in Pa; all mass points"
+      },
+      "PH": {
+        "epsilon_240": 0.010249750539744869,
+        "reference_check_limit_epsilon_over_3": 0.0034165835132482897,
+        "units": "m^2/s^2 geopotential; PH perturbation, fixed lower face excluded, top included"
+      },
+      "T": {
+        "epsilon_240": 3.619571391542998e-05,
+        "reference_check_limit_epsilon_over_3": 1.2065237971809995e-05,
+        "units": "physical potential temperature T+300 K; all mass points"
+      },
+      "U": {
+        "epsilon_240": 0.0007744417040064484,
+        "reference_check_limit_epsilon_over_3": 0.00025814723466881614,
+        "units": "m/s; unique periodic X faces only"
+      },
+      "V": {
+        "epsilon_240": 0.00010122007244795247,
+        "reference_check_limit_epsilon_over_3": 3.374002414931749e-05,
+        "units": "m/s; both physical Y walls included"
+      }
+    },
+    "source": "committed named-case V3 fixed budget contract; budget values unchanged",
+    "source_json": "docs/evidence/pr306_common_filter_reference/native_ark_v3_fixed_budget_analysis.json",
+    "source_sha256": "f1d03774f6b231d49c4f090f3a105835eff6e98755af3c9715bf90a5c7ad2f9c"
+  },
+  "decision_policy": {
+    "all_outcomes": "Regardless of whether any/all six fields pass, stop all work at 60 s. No automatic or discretionary 120/240 s extension and no additional model runs under this protocol.",
+    "at_60s_all_six_pass": "record only that the named paired case passes the frozen V3 epsilon/3 resolution screen; stop all planned work at 60 s",
+    "at_60s_any_field_fails": "record the named screen failure and observed diagnostics; stop all planned work at 60 s",
+    "scope": "The six-field screen is the frozen named-case resolution check only; neither outcome establishes true error, convergence order, forecast acceptance, or a project-wide criterion."
+  },
+  "fixed_w_direction": {
+    "manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/fixed_w_projection_basis.json",
+    "manifest_sha256": "afc377620a427102be81d8a460d79ae7d72a32dc5503a80d14f7bf0e7aa8debe",
+    "must_not_recompute_or_refit": true,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/fixed_w_projection.npz",
+    "sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd",
+    "source": "PR308 frozen E308 fixed_w_projection.npz"
+  },
+  "forbidden_inferences": [
+    "Richardson/order claim",
+    "true-error/forecast-error bound",
+    "accuracy acceptance beyond the single frozen t60 V3 screen",
+    "frequency/phase identification",
+    "causality from coarse/fine difference",
+    "efficiency claim",
+    "automatic extension after t60"
+  ],
+  "limits": {
+    "no_automatic_horizon_extension": true,
+    "no_efficiency_claim": true,
+    "no_forecast_accuracy_claim": true,
+    "no_general_acceptance_claim": true,
+    "no_order_or_truth_bound": true
+  },
+  "outputs": {
+    "primary": "compact NPZ of 65/129 physical W endpoints, raw/projected W endpoints, fixed M0/e1, selected interval step summaries",
+    "secondary": [
+      "65-row exact-rational common-time W diagnostic CSV",
+      "192-row accepted-step/stage summary CSV",
+      "JSON binding hashes, receipts, all summaries, endpoint and initial-state gates"
+    ]
+  },
+  "pair": {
+    "coarse": {
+      "accepted_step_csv_count": 64,
+      "dt_fraction_seconds": "15/16",
+      "dt_seconds": 0.9375,
+      "steps": 64
+    },
+    "common_samples": 65,
+    "fine": {
+      "accepted_step_csv_count": 128,
+      "dt_fraction_seconds": "15/32",
+      "dt_seconds": 0.46875,
+      "steps": 128
+    },
+    "fine_common_step_indices": [
+      0,
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24,
+      26,
+      28,
+      30,
+      32,
+      34,
+      36,
+      38,
+      40,
+      42,
+      44,
+      46,
+      48,
+      50,
+      52,
+      54,
+      56,
+      58,
+      60,
+      62,
+      64,
+      66,
+      68,
+      70,
+      72,
+      74,
+      76,
+      78,
+      80,
+      82,
+      84,
+      86,
+      88,
+      90,
+      92,
+      94,
+      96,
+      98,
+      100,
+      102,
+      104,
+      106,
+      108,
+      110,
+      112,
+      114,
+      116,
+      118,
+      120,
+      122,
+      124,
+      126,
+      128
+    ],
+    "horizon_seconds": 60.0,
+    "initial_state": "all six packed state vectors must be exact equal between runs; separately require all eight published NetCDF initial fields bitwise equal and finite",
+    "time_join": "accepted CSV logical step_seq with exact rational elapsed time; coarse j matches fine 2j; NetCDF Times only endpoint checks at t=0 and t=60"
+  },
+  "per_step_operator_audit": {
+    "interpretation": "local increment bound does not propagate through later nonlinear stage maps and is not a trajectory error bound",
+    "required_per_step_counts": {
+      "coarse": 64,
+      "fine": 128
+    },
+    "source": "each actual current-run accepted_ark_w_step_N.csv via tools/analyze_accepted_ark_w_stage.py; never substitute PR308 h15 values for per-step quantities",
+    "summary": [
+      "G_W RMS/max for implicit stages 2-4; stage1 G N/A",
+      "K-FI_RK RMS/max per stage and local direct increment bound h*sum_(implicit i=2..4)|b_i|*RMS_W(K-FI_RK)",
+      "same-Y Full-FI-FE remainder",
+      "measured/source-derived-top pressure and buoyancy stage powers and tableau work",
+      "raw/projected W increment/replay defects"
+    ]
+  },
+  "physical_w_trajectory": {
+    "dynamic_top_included": true,
+    "fixed_bottom_excluded": true,
+    "owners": 4096,
+    "publication": "Official t=60 six-field V3 screen uses FP32 NetCDF outputs promoted to FP64. Internal FP64 accepted-step W trajectory remains a separate 65-point diagnostic; t=0/t=60 internal-to-publication roundtrip is reported independently.",
+    "raw_layout": "accepted trace packed U,V,W,PH,T,MU; internal W crop [j=0:16,kface=1:17,i=0:16] then transpose to physical [k,j,i]",
+    "store_endpoints": "initial input plus every projected_final FP64 W endpoint; retain raw_final W endpoints separately"
+  },
+  "producer_lineage": {
+    "built_observer_source_snapshot_commit": "18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc",
+    "canonical_preflight_manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/pr309_preflight_manifest.json",
+    "canonical_preflight_manifest_sha256": "7767c30127a82b311e564ed685e1cd889a34d5070b6665c003b00d9c280c8f84",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "observer_header_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+    "observer_implementation_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "pr307_build_receipt_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "source_pin_check": "The canonical preflight source_checks all pass; do not conflate build-receipt HEAD with committed observer source snapshot.",
+    "target_head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+    "target_is_current_PR308_source_tree": true,
+    "target_tree": "47b9496b61e99eba52cb72198fcc924d60169627",
+    "target_worktree": "/private/tmp/pr309-solver-controlled-w-60s-20261015"
+  },
+  "producer_pins": {
+    "base_revision": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "frozen_m0_e1_manifest_sha256": "afc377620a427102be81d8a460d79ae7d72a32dc5503a80d14f7bf0e7aa8debe",
+    "frozen_m0_e1_npz_sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd",
+    "impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "worktree": "/private/tmp/pr309-solver-controlled-w-60s-20261015"
+  },
+  "runtime_contract": {
+    "buoyancy_use_current_w": true,
+    "debug_level": 2,
+    "effective_ewt_rtol": 1e-06,
+    "effective_mass_coordinate_mode": 1,
+    "effective_wrf_omega_ww_cp": true,
+    "imex_mode": 3,
+    "kdamp_config_grid": 0.2,
+    "krylov_tol": 1e-07,
+    "mpi_ranks": 1,
+    "newton_tol": 1e-09,
+    "no_new_build_or_source_change": true,
+    "omega_w_blend": 1.0,
+    "omp_threads": 1,
+    "only_timestep_namelist_triple_differs_between_pair": true,
+    "raw_wrf_omega_ww_cp": false,
+    "same_executable_input_source_and_case_config": true,
+    "scheme": 6,
+    "split_explicit": false
+  },
+  "schema": "pr309_solver_controlled_w_60s_analysis_protocol_v3",
+  "scope": "one existing-source, existing-executable paired 0-60 s W trajectory at h=.9375/.46875 with Newton tolerance 1e-9; offline analysis only",
+  "six_field_t60": {
+    "fields": [
+      "U",
+      "V",
+      "W",
+      "PH",
+      "T",
+      "MU"
+    ],
+    "interpretation": "Arithmetic screen for this paired refinement only; passing does not establish accuracy or truth.",
+    "limits": {
+      "MU": 0.004863633485853729,
+      "PH": 0.0034165835132482897,
+      "T": 1.2065237971809995e-05,
+      "U": 0.00025814723466881614,
+      "V": 3.374002414931749e-05,
+      "W": 2.5981466189324436e-06
+    },
+    "owner_counts": {
+      "MU": 256,
+      "PH": 4096,
+      "T": 4096,
+      "U": 4096,
+      "V": 4352,
+      "W": 4096
+    },
+    "owner_masks": {
+      "MU": "all mass points",
+      "PH": "drop fixed lower z face; retain top",
+      "T": "all mass points",
+      "U": "drop periodic duplicate x face",
+      "V": "retain both physical y walls",
+      "W": "drop fixed lower z face; retain dynamic top"
+    },
+    "physical_transform_before_comparison": {
+      "MU": "MU + MUB Pa (total dry column mass)",
+      "PH": "PH geopotential perturbation (m^2/s^2)",
+      "T": "T + 300 K (physical potential temperature)",
+      "U": "U",
+      "V": "V",
+      "W": "W"
+    },
+    "precision_and_source": "Published WRF NetCDF endpoint values (FP32) are read with the repository-owned tools/benchmark_wrf_accuracy_cost.py::_load_run path, promoted to FP64, then differenced and scored. Do not substitute internal packed FP64 state for this official V3 screen.",
+    "source_contract_id": "dry-em-b-wave-16cubed-240s-fixed-physical-budgets-v3",
+    "source_contract_sha256": "77bc4dcc7b8e0bde91d6089e9aaa11a67a49311f824d88c97919bbbb8e64fe3f",
+    "source_json": "docs/evidence/pr306_common_filter_reference/native_ark_v3_fixed_budget_analysis.json",
+    "source_sha256": "f1d03774f6b231d49c4f090f3a105835eff6e98755af3c9715bf90a5c7ad2f9c"
+  },
+  "status": "frozen_before_pr309_native_outputs; v3 is final pre-run protocol",
+  "supersedes": {
+    "protocol_v1_sha256": "e686c541038db6b90a0a76d9c55c27c864a4e6200ec98cabb26c2a7e61b11813",
+    "reason": "Before either PR309 native case was started, the parent clarified that the official V3 six-field endpoint screen must use the published FP32 NetCDF fields promoted to FP64, matching the V3 reference method. V1 had incorrectly described an internal-FP64-only endpoint screen for five fields and a separate W publication check.",
+    "run_outputs_read_before_this_correction": false
+  },
+  "supersedes_v2": {
+    "reason": "Final pre-run closure: all possible outcomes stop at 60 s; bind canonical preflight and the existing coarse 15 s reuse audit. No screen values changed.",
+    "sha256": "a2e8c165dfb972d4d5a0aad6eea845f50540bd16b8048c92e9b1533f459bf0a2"
+  },
+  "trajectory_diagnostic": {
+    "compute_at_all_65_common_times": [
+      "W RMS/max absolute",
+      "M0-weighted W RMS",
+      "fixed-e1 signed projections coarse/fine/difference",
+      "M0 cosine and parallel/perpendicular components"
+    ],
+    "detail_interval": "first common endpoint j>0 where W RMS exceeds the unchanged epsilon_W/3 selects [t_(j-1),t_j]; if no crossing, use fixed final interval [59.0625,60] s",
+    "no_crossing_fallback_is_not_acceptance": true
+  }
+}

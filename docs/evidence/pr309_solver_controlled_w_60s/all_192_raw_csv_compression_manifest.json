@@ -1,0 +1,32 @@
+{
+  "schema": "pr309_all_192_stage_csv_zstd_manifest_v1",
+  "created_local_time": "2026-10-15T23:41:55+09:00",
+  "codec": "zstd 1.5.5 level 1",
+  "input_runs": [
+    {
+      "role": "coarse",
+      "manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/raw_csv_zstd/coarse/coarse_stage_csv_manifest.json",
+      "manifest_sha256": "f1090aa4c7d2b9834a024e75d019a27aad03704778eac7b4fca1aa3db7cdc619",
+      "csv_count": 64,
+      "original_bytes": 1923101286,
+      "compressed_bytes": 649849085,
+      "all_roundtrips_verified": true
+    },
+    {
+      "role": "fine",
+      "manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/raw_csv_zstd/fine/fine_stage_csv_manifest.json",
+      "manifest_sha256": "258431b83829a284fedf8e47e2bd11158240de78f621d833812261333bbcbe4b",
+      "csv_count": 128,
+      "original_bytes": 3847612059,
+      "compressed_bytes": 1300955500,
+      "all_roundtrips_verified": true
+    }
+  ],
+  "total_csv_count": 192,
+  "total_original_bytes": 5770713345,
+  "total_compressed_bytes": 1950804585,
+  "all_roundtrips_verified": true,
+  "loose_originals_retained": true,
+  "model_runs": 0,
+  "builds": 0
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "pr309_green_closing_peer_review_v1",
+  "captured_local_time": "2026-10-15T23:54:46+09:00",
+  "worktree": "/private/tmp/pr309-solver-controlled-w-60s-20261015",
+  "head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+  "scope": "read-only review of final PR309 scientific report, PR309 Problem Definition section and compact evidence README against frozen source/run/analysis receipts; no builds, tests, model runs or edits by reviewer",
+  "status": "PASS_NO_MATERIAL_ERRORS",
+  "findings": [],
+  "reviewed_claims": [
+    "Both tolerance-controlled runs use the same h pair, input and executable/source/archive pins; each completes 60 seconds with 64/128 accepted macrosteps and zero failures.",
+    "The official t=60 V3 published-FP32-to-FP64 screen has six passing rows; W RMS 1.79844365e-6 m/s is 0.6922 of the unchanged epsilon/3 limit. Scope is only the fixed named-case screen at t=60, not reference qualification or project-wide accuracy.",
+    "The internal W pair has 65 exact common times; max RMS difference is at t=56.25 s and the fixed fallback detail interval is [59.0625,60] s because there was no trigger crossing.",
+    "Newton count 2 is clarified as initial residual check plus one correction; max residual values and direct-local residual accounting are separately labeled. The residual sum is not a propagated state-error bound.",
+    "Stock RK3 comparison is correctly secondary under a different filter policy; no new RK3 run, 120-240 s run, frequency/phase, speed, or truth-error claim is made.",
+    "Small repository README recomputes compact NPZ arrays offline; no new production source or general CLI was added. Existing pressure/CF closures are explicitly not reopened."
+  ],
+  "source_hashes": {
+    "production_impl": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "analyzer": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b"
+  },
+  "artifact_hashes": {
+    "report": "8bec29c163599a89e957365a9094f06be1fe4a8bf6ff76e27b4879288447e26f",
+    "problem_definition": "b2e3576b3c7101ac58efc194476da9d63a1bc2fd2b7b980bc73ad36752044ec7",
+    "small_recompute_readme": "dfe62ef7e6eea320c88cf5708faf949762f878f42dc5bb93984bc4b0f3abf1e5",
+    "official_screen": "886518f4ece4f41fa3f1fd175f1130289cdfc485db8eab2e3eb122807ad5f930",
+    "numerical_summary": "8b43fc52d6b0390e73bd57e4e794e1531237eaebc8af20847d150c4f0ab11300",
+    "run_index": "d17cf4a5e6705fb065f1ad1c18244aff4041eb230a4f16a73a2f402ea5bc2ffd",
+    "runtime_config_audit": "7bcb76b1b8470eb7e1bc6b14b3ab35c53a1846131dbde96b47aee43a983a963e",
+    "rsl_telemetry_audit": "bbaf91535955fdd4d29d0d3aac5d77e19b10113f6fa4e96e017d6166fd3d1b5a",
+    "production_impl": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "analysis_tool": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b"
+  },
+  "evidence_paths": {
+    "official_screen": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/docs/evidence/pr309_solver_controlled_w_60s/official_t60_screen.json",
+    "numerical_summary": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/docs/evidence/pr309_solver_controlled_w_60s/numerical_summary.json",
+    "run_index": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/docs/evidence/pr309_solver_controlled_w_60s/run_index.json",
+    "runtime_config_audit": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/docs/evidence/pr309_solver_controlled_w_60s/stage_runtime_config_audit.json",
+    "rsl_telemetry_audit": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/docs/evidence/pr309_solver_controlled_w_60s/rsl_step_telemetry_audit.json",
+    "stock_rk3_secondary": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/docs/evidence/pr309_solver_controlled_w_60s/stock_rk3_t60_secondary_comparison.json"
+  },
+  "limits": [
+    "Only the new 60 s tolerance-controlled pair is assessed; 120/180/240 s and full reference eligibility remain open.",
+    "No true-error bound, global tolerance adoption, causal frequency or phase finding, or performance conclusion is made."
+  ]
+}
