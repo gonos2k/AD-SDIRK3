@@ -1,0 +1,61 @@
+{
+  "schema": "pr308_two_archive_fresh_unpack_verification_v1",
+  "raw_zip": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/bundles/PR308_accepted_w_trajectory_all80_raw_csvs_zstd.zip",
+    "sha256": "4af30d68be16fee96e064bf65efe5f85d5763c5a2fef078b5f4cfb4f065c0a79",
+    "bytes": 812602008,
+    "crc": "pass",
+    "payloads_checked": 119,
+    "zstd_csvs": 80,
+    "all_decompressed_sha_verified": true,
+    "raw_csv_original_bytes": 2404456943,
+    "raw_csv_compressed_bytes": 809992437,
+    "archive_crc_entries": 121,
+    "archive_crc_test": "pass"
+  },
+  "review_zip": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/bundles/PR308_fine_pair_w_trajectory_review_bundle.zip",
+    "sha256": "ef9fd8f51d605ae0bb985f4177a782781a4e1e2dc0f6d41f863b91e13d11f626",
+    "bytes": 80330531,
+    "crc": "pass",
+    "payloads_checked": 92,
+    "selected_csvs": [
+      {
+        "name": "coarse_h0p9375_step16.csv.zst",
+        "decompressed_sha256": "d265388e6b5b2c4917335d068b13f5b6669f3682cafb20b269504cab83a8ed5b",
+        "bytes": 30081644
+      },
+      {
+        "name": "fine_baseline_h0p46875_step31.csv.zst",
+        "decompressed_sha256": "0a4e9bb16dd426a763d6be3df9f6733acff46b59c4a9c71705ffc7b39c57647d",
+        "bytes": 30084794
+      },
+      {
+        "name": "fine_baseline_h0p46875_step32.csv.zst",
+        "decompressed_sha256": "0f19fbe62782619623db99b15a3c3680e71d9735833ec4be30ccdccd0b36fa64",
+        "bytes": 30081722
+      },
+      {
+        "name": "fine_newton1e9_h0p46875_step31.csv.zst",
+        "decompressed_sha256": "c6beaa2bd2bf82aa1a67b7dd7c1e1ed896d49ab52406a18dece282f054c70c43",
+        "bytes": 30085242
+      },
+      {
+        "name": "fine_newton1e9_h0p46875_step32.csv.zst",
+        "decompressed_sha256": "7d7091ab76da848ab6074cdf761c568a2963c8ff70d245b96fc236e6cae2adb9",
+        "bytes": 30077838
+      }
+    ],
+    "compact_npz_metric_recomputation": {
+      "common_samples": 17,
+      "owners": 4096,
+      "all_compact_metrics_recomputed": true,
+      "max_unweighted_delta_rms_m_s": 2.705154689949601e-07
+    },
+    "archive_crc_entries": 94,
+    "archive_crc_test": "pass"
+  },
+  "model_runs": 0,
+  "ci_claim": "none",
+  "receipt_scope": "Packaging and fresh-unpack verification only; no model runs or CI claim."
+}

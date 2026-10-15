@@ -236,6 +236,28 @@ qualification remain unchanged. Detailed records are in the external
 `green_pressure/actual_stage_pressure_work_v2.json`, and
 `green_pressure/frozen_w_energy_identity_v2.json`.
 
+## PR308 미세 시간간격 쌍의 초기 W 궤적
+
+[0–15초 궤적·풀이 대조 기록](<(202610151003)_fine_pair_w_trajectory_and_solver_control.md>)은
+PR307과 같은 실행파일·e71 입력으로 `h=0.9375/0.46875 s`의 16/32개 수용된
+스텝을 기록했다. 공통 시각 17개는 실제 FP64 끝값과 유리수 시간으로 대응한다.
+초기 여섯 상태와 t=0 여덟 NetCDF 필드는 일치하고, 4,096 W 소유면에는 동적
+상단을 포함한다. 기존 기준해 20/24 판정은 변경하지 않는다.
+
+기본 쌍의 최대 W RMS 차이는 15초의 `2.7051547e-7 m/s`다. 이 짧은 구간에서
+`epsilon_W/3` 관찰 기준을 넘지 않았다는 사실은 60–240초 기준해 수용을 뜻하지
+않는다. 첫 미세 스텝의 3·4단계는 전체 벡터의 Newton 기준 `1e-7`을 만족해
+선형 보정 없이 종료됐지만, W 상태 잔차는 각각 `1.57258e-7`, `8.66167e-8 m/s`였다.
+이는 설정한 수렴 계약의 결과이며 새 방정식 결함 판정이 아니다.
+
+이 관찰을 근거로 별도 사전등록한 단일 대조는 같은 미세 간격·구간에서
+Newton 기준만 `1e-9`로 바꿨다. Krylov·유효 EWT·물리식은 유지했다.
+첫 0.9375초의 coarse 대비 W 차이는 `2.48872e-7`에서 `3.21383e-8 m/s`로
+줄었지만 15초에는 `2.70515e-7`에서 `4.66568e-7 m/s`로 커졌다.
+따라서 기본 쌍은 풀이 정확도 영향이 섞인 비교이며, 초기 잔차의 제거가
+전 구간의 차이를 없앤다는 해석도 지지하지 않는다. 생산 tolerance 기본값,
+초기조건·가중·예산을 바꾸지 않았고 추가 240초 실행도 하지 않았다.
+
 ## Completed restricted rotating inverse
 
 The completed validation instance has a 484-component complex linear source,

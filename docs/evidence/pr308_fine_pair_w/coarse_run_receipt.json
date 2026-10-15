@@ -1,0 +1,477 @@
+{
+  "schema": "pr308_fine_pair_native_run_receipt_v1",
+  "label": "h0p9375_0_15s",
+  "status": "completed",
+  "created_local_time": "2026-10-15T09:47:53+09:00",
+  "working_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s",
+  "command": {
+    "argv": [
+      "/usr/bin/time",
+      "-l",
+      "-o",
+      "time.log",
+      "/opt/homebrew/bin/mpirun",
+      "-np",
+      "1",
+      "--bind-to",
+      "none",
+      "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe"
+    ],
+    "environment_explicit": {
+      "OMP_NUM_THREADS": "1",
+      "WRF_SDIRK3_RHS_COUNT": "1",
+      "WRF_SDIRK3_STAGE_OPERAND_DIAG": "1"
+    },
+    "cleared_prefixes": [
+      "WRF_SDIRK3_",
+      "WRF_PARITY_"
+    ],
+    "environment_note": "Existing host runtime environment inherited except the two cleared WRF prefixes; MPI rank bound explicitly to 1."
+  },
+  "producer": {
+    "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/libwrf_sdirk3_libtorch.a",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "fortran_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/libwrflib.a",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "v2_build_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/pr307_v2_build_receipt.json",
+    "v2_build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8",
+    "target_head": "e717aa30c55e8cd12dde0de35459c3aabec953c4",
+    "v2_impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "source_matches": [
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_globals.cpp",
+        "expected": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+        "actual": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_operator_contract.cpp",
+        "expected": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+        "actual": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_interface.cpp",
+        "expected": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+        "actual": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "expected": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+        "actual": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_zero_copy_interface.cpp",
+        "expected": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+        "actual": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.cpp",
+        "expected": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+        "actual": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "expected": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "actual": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+        "expected": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+        "actual": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_autograd.cpp",
+        "expected": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+        "actual": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp",
+        "expected": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "actual": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp",
+        "expected": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "actual": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp",
+        "expected": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+        "actual": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_tile_boundary_optimizer.cpp",
+        "expected": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+        "actual": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp",
+        "expected": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "actual": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_preconditioner.cpp",
+        "expected": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+        "actual": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs_extended.cpp",
+        "expected": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+        "actual": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_cache_utils.cpp",
+        "expected": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+        "actual": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_boundary_ad.cpp",
+        "expected": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+        "actual": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_rayleigh_damping_ad.cpp",
+        "expected": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+        "actual": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_mpi_safety_impl.cpp",
+        "expected": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+        "actual": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_halo_exchange.cpp",
+        "expected": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+        "actual": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_ad_halo_exchange.cpp",
+        "expected": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+        "actual": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_rhs_run_close.cpp",
+        "expected": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+        "actual": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_u_slow_diagnostics.cpp",
+        "expected": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+        "actual": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "expected": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "actual": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "match": true,
+        "label": "header"
+      },
+      {
+        "path": "/private/tmp/pr308-fine-pair-w-trajectory-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "expected": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "actual": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "match": true,
+        "label": "impl"
+      }
+    ],
+    "pr307_frozen_cpp_source_hashes": {
+      "impl": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "private_header": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "public_interface_header": "6121e11e76007d6434a8ac894deb23dd5122d825a0b75b4d09650d4436bf321b",
+      "fortran_interface_bridge": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0"
+    }
+  },
+  "inputs": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/wrfinput_d01",
+    "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "expected_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/namelist.input",
+    "namelist_sha256": "b096c83fdcbb061c2e3a0a08356e738d9971e959b0f1e0a6de7cf8de92331018",
+    "diagnostics_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/diagnostics.txt",
+    "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+    "protocol_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_metric/analysis_protocol_frozen.json",
+    "protocol_sha256": "3620ba8d9846b97da435aac635fc4f846ad5342c0cbdc2b37842fb5a317845d9",
+    "fixed_w_projection_npz": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/fixed_w_projection.npz",
+    "fixed_w_projection_npz_sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd",
+    "fixed_w_projection_manifest": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/fixed_w_projection_basis.json",
+    "fixed_w_projection_manifest_sha256": "afc377620a427102be81d8a460d79ae7d72a32dc5503a80d14f7bf0e7aa8debe"
+  },
+  "case": {
+    "run_seconds": 15,
+    "dt_numerator_seconds": 15,
+    "dt_denominator": 16,
+    "dt_seconds": 0.9375,
+    "model_steps_expected": 16,
+    "accepted_stage_csv_count_expected": 16,
+    "solver_implicit_stage_steps_expected": 48,
+    "expected_state_input_host": 1,
+    "expected_state_input_internal": 15,
+    "expected_fp64_carry_publications": 16,
+    "history_interval_seconds": 15,
+    "expected_wrf_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15"
+    ],
+    "common_time_rule": "coarse step j matches fine step 2*j; exact rational times derive from accepted step_seq and CSV dt, not NetCDF Times",
+    "mpi_ranks": 1,
+    "omp_threads": 1,
+    "scheme": 6,
+    "imex_mode": 3,
+    "debug_level": 2,
+    "stage_operand_diag": true,
+    "rhs_count": true,
+    "observer_off_control": false
+  },
+  "process_result": {
+    "return_code": 0,
+    "application_status": "completed",
+    "success_marker": true
+  },
+  "actual": {
+    "status": "completed",
+    "process_return_code": 0,
+    "application_success_marker": true,
+    "history_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15"
+    ],
+    "exact_t0_t15_only": true,
+    "wrfout_files": [
+      {
+        "name": "wrfout_d01_0001-01-01_00:00:00",
+        "bytes": 1040888,
+        "sha256": "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf",
+        "times": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:00:15"
+        ]
+      }
+    ],
+    "all_eight_fields_finite": true,
+    "solver_summaries": [
+      {
+        "steps": 48,
+        "failed": 0,
+        "dt": 0.9375
+      }
+    ],
+    "rhs_count_records": [
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=3",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=65 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=1 total=68",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=1 total=130 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=2 total=130",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=2 total=192 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=3 total=192",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=3 total=254 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=4 total=254",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=4 total=316 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=5 total=316",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=5 total=378 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=6 total=378",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=6 total=440 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=7 total=440",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=7 total=502 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=8 total=502",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=8 total=564 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=9 total=564",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=9 total=626 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=10 total=626",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=10 total=688 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=11 total=688",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=11 total=750 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=12 total=750",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=12 total=812 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=13 total=812",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=13 total=874 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=14 total=874",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=14 total=936 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=15 total=936",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=15 total=998 delta=62"
+    ],
+    "accepted_stage_csv_count": 16,
+    "accepted_stage_csvs": [
+      {
+        "filename": "accepted_ark_w_step_1.csv",
+        "step_seq": 1,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 28607385,
+        "sha256": "0f51cf06d2761dfb0228144c98adf3049d55d80e2fd0348a45de31777ebecfc9"
+      },
+      {
+        "filename": "accepted_ark_w_step_2.csv",
+        "step_seq": 2,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30144836,
+        "sha256": "54d35caee6c17463f625a3575c5893668a4ec12ad608cc32dc56f2495ce6824d"
+      },
+      {
+        "filename": "accepted_ark_w_step_3.csv",
+        "step_seq": 3,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30133270,
+        "sha256": "684fd68b3be879c34a3b3e865a4e12e2df77c42d2c081e25f7c7e4b0fa15e5d4"
+      },
+      {
+        "filename": "accepted_ark_w_step_4.csv",
+        "step_seq": 4,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30128138,
+        "sha256": "daf38e8827701556d99e3532f6900040e4b4d60986f9812bfebe90dc1a69fa34"
+      },
+      {
+        "filename": "accepted_ark_w_step_5.csv",
+        "step_seq": 5,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30125458,
+        "sha256": "1cfa6b1429eb933ac81f32f7aa6256769a0a1e60668badf72d75563b3a2333de"
+      },
+      {
+        "filename": "accepted_ark_w_step_6.csv",
+        "step_seq": 6,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30118380,
+        "sha256": "4b8e29a7f867149b6889e04d7627da223c4f6d14001fa6ce1b068d7a5aae96fe"
+      },
+      {
+        "filename": "accepted_ark_w_step_7.csv",
+        "step_seq": 7,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30117125,
+        "sha256": "3c8cfa551f678f50ce72841709ad07706f098254fba1a14a29f23863c648d885"
+      },
+      {
+        "filename": "accepted_ark_w_step_8.csv",
+        "step_seq": 8,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30118202,
+        "sha256": "54e9278faa661652bb16dc9ea3c9728634d5f39bbb6d9561cd843d79bca35629"
+      },
+      {
+        "filename": "accepted_ark_w_step_9.csv",
+        "step_seq": 9,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30114592,
+        "sha256": "89ab286a847eb382213bf8030214d63e03178aca625b7b1b97772528bf153ff7"
+      },
+      {
+        "filename": "accepted_ark_w_step_10.csv",
+        "step_seq": 10,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30116419,
+        "sha256": "b6a5a7daaadd7c3d8569cb644c45bd0a93575e74161852179ee82758d4da05bb"
+      },
+      {
+        "filename": "accepted_ark_w_step_11.csv",
+        "step_seq": 11,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30105053,
+        "sha256": "bd40135358b7378e8b5a3da9a8bfeb106f54821db56e09c4629e7c5db704e3ef"
+      },
+      {
+        "filename": "accepted_ark_w_step_12.csv",
+        "step_seq": 12,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30095675,
+        "sha256": "9b56d55b62aa16251f6d780352d0a1ec914904b2fc0f62fdbade8da87c8b4e6d"
+      },
+      {
+        "filename": "accepted_ark_w_step_13.csv",
+        "step_seq": 13,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30093196,
+        "sha256": "4a6f3a6b6e9b12adea970b90f4ba8f3079306931c24a4d133780b8dca3de90aa"
+      },
+      {
+        "filename": "accepted_ark_w_step_14.csv",
+        "step_seq": 14,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30092991,
+        "sha256": "17de3be0a06b2fdbfdabc601aeeeee2a2ec03d9e50e9192f84c944d157afb697"
+      },
+      {
+        "filename": "accepted_ark_w_step_15.csv",
+        "step_seq": 15,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30087818,
+        "sha256": "0b27e4bbc6663cf0326c47fc323edfa74622ff1e40bb9dd02612d6926a96553c"
+      },
+      {
+        "filename": "accepted_ark_w_step_16.csv",
+        "step_seq": 16,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "bytes": 30081644,
+        "sha256": "d265388e6b5b2c4917335d068b13f5b6669f3682cafb20b269504cab83a8ed5b"
+      }
+    ],
+    "contiguous_step_seq": true,
+    "all_csv_acceptances": true,
+    "all_csv_dt_exact": true,
+    "wall_seconds": 19.57,
+    "logs": {
+      "run.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time.log": "7d5de202d7872b3a066d96756b484194aecc5521e948b8d242271aab9163ba7d",
+      "rsl.error.0000": "7811132b13f412c3ac3b8dc364bab770605fb52bee9f3412b145c02b9273db18",
+      "rsl.out.0000": "05b819acf8e9c9d9c79012a1332c8ebb2500378ff917a60473e2aa2e9171bb10",
+      "namelist.output": "2ee0552ddc76a598338000698d559c97323e1939b9dac1fda161368fe07938b9"
+    },
+    "fp64_carry": {
+      "host_inputs": 1,
+      "internal_inputs": 15,
+      "publications": 16,
+      "expected_host_inputs": 1,
+      "expected_internal_inputs": 15,
+      "expected_publications": 16
+    }
+  },
+  "postprocess_correction": {
+    "reason": "The initial wrapper gate sorted filenames lexicographically (1,10,...,2), yielding a false contiguous_step_seq flag after a completed native run. Sorting parsed numeric step_seq values gives exactly 1..16.",
+    "native_rerun": false,
+    "native_process_return_code": 0,
+    "harness_initial_return_code": 1,
+    "corrected_numeric_sequence_gate": true,
+    "preserved_pre_correction_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/run_receipt_harness_sort_false_negative_preserved.json",
+    "preserved_pre_correction_receipt_sha256": "88e6bd7f641299e509a9d2c5aa22fc07e42d6468a3384f499844f0b71fdf8ca0"
+  }
+}

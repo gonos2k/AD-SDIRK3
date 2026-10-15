@@ -1,0 +1,61 @@
+{
+  "schema": "pr308_green_closing_review_v2",
+  "captured_local_time": "2026-10-15T10:14:00+09:00",
+  "review_scope": "read-only final binding review of final report, Problem Definition PR308 section, compact recomputation README, added execution/harness and Newton-log clarifications; no source/docs edits, builds, or model runs by reviewer",
+  "status": "PASS_NO_MATERIAL_ERRORS",
+  "findings": [],
+  "checked_claims": [
+    "The baseline pair is 16 steps at 0.9375 s and 32 steps at 0.46875 s, completed 0-15 s with zero failures and shared source/executable/input pins.",
+    "Initial six-state packed data and all eight t=0 NetCDF fields are exact; physical W starts at zero on 4096 owners.",
+    "The maximum baseline fine-minus-coarse W RMS difference is 2.705154689949601e-7 m/s at 15 s; all 17 values are below the pre-frozen descriptive epsilon/3 trigger, which is not reference qualification.",
+    "The single h=0.46875 s Newton tolerance control changes only sdirk3_newton_tol; the runtime EWT remains 1e-6, Krylov tolerance remains 1e-7, and fallback/retry/soft-continue telemetry is zero.",
+    "Control W gap versus coarse is 3.2138305034026466e-8 m/s at 0.9375 s (87.09% smaller than baseline fine gap) and 4.6656761167328086e-7 m/s at 15 s (72.47% larger); report does not claim a unique cause or accuracy pass.",
+    "The direct local Newton residual contribution sum is explicitly distinguished from a propagated state-error bound.",
+    "Offline trajectory analyzer reads accepted CSV/run receipts and WRF history; source contains no model-launch call. Production implementation/header hashes match the pinned executable source.",
+    "Existing PR298 pressure and PR303 CF conclusions are linked as closed bounded scopes; PR306 RK3 reference is explicitly not treated as truth and its qualification failure remains open."
+  ],
+  "hashes": {
+    "trajectory_report": "732d9f816b60cd77b0888eb5aa3df5bb815659c67271456e85a2971abb639d55",
+    "problem_definition": "ba46c71c4def022ad8907ab1d88e2daa73cd7c29e314763109e36aa520144b5d",
+    "production_impl": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "production_private_header": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+    "offline_analyzer": "b3dfa74b43eae9ced7d98670aa127714dcb95796b7e771e488834d3842e490f7",
+    "baseline_run_receipt": "f7bb6e7bcd32c116cdd0ef601cdd407bf267169160546d4636dc03d2218211d5",
+    "control_run_receipt": "30e458a7eea73a3f14e7763b52ec26879cb0e7e31c6461b6a8ef89d79bd479ff",
+    "control_red_analysis": "7106d2d584531a0c9f95142213993b33c8b0665c3fcf3ff1f8b60cff579bbb6e",
+    "control_independent_analysis": "d49b3c796fc690817bd8487584c856a25653383fca709b2f8f349174f5c3a65b",
+    "base_red_analysis": "96fb7bd0cbe32e248b6dc5f5642f9569f423b902432eeca68256e0d20a2a9e19",
+    "green_pair_analysis": "4fc214cdc9f1ee920e359943b1d36e561812e27f6f88587afd2fb80447a04569",
+    "compact_recomputation_readme": "9a3e3cb0ef59922c50351e40f103c196a8be0f8919eb3e78160b1ae3bb6ed3ec",
+    "compact_recomputation_receipt": "c975b8da9466c1970d1f25a6436854f4f9f0c9e531b02e6ad2ab511baaea32c9",
+    "harness_false_negative_preserved_receipt": "88e6bd7f641299e509a9d2c5aa22fc07e42d6468a3384f499844f0b71fdf8ca0",
+    "newton_entry_format_audit": "b3481309b3ecd888b92de3f69a868eda61fe6ac142af65bef90820ef1bc02a22",
+    "newton_control_red_review": "6e38651f3a92306cb3c8f15a13cb6836c1e37dcbd707f1be65cb1f1dd5f4a948",
+    "newton_control_run_receipt": "30e458a7eea73a3f14e7763b52ec26879cb0e7e31c6461b6a8ef89d79bd479ff"
+  },
+  "source_pins": {
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "production_impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "production_private_header_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+    "analyzer_sha256": "b3dfa74b43eae9ced7d98670aa127714dcb95796b7e771e488834d3842e490f7"
+  },
+  "scope_limits": [
+    "This review supports only the first 15 s and selected two timesteps plus one Newton tolerance control.",
+    "No truth-error bound, temporal order, frequency/phase, unique causal attribution, project accuracy acceptance, or 240 s result is inferred."
+  ],
+  "review_followup": {
+    "prior_review_snapshot": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_transport/final_green_closing_review_v1_before_final_doc_followups.json",
+    "prior_review_snapshot_sha256": "1067f68fcebb4fb96d84dbe2470bcc00284b4970b80ff03b537460b44ed4273e",
+    "final_document_sha256": "732d9f816b60cd77b0888eb5aa3df5bb815659c67271456e85a2971abb639d55",
+    "problem_definition_sha256": "ba46c71c4def022ad8907ab1d88e2daa73cd7c29e314763109e36aa520144b5d",
+    "followup_checks": [
+      "Harness caveat accurately identifies a lexicographic filename-order false negative; numeric sequence audit accepts the completed run and preserves the initial receipt, with no rerun.",
+      "Newton log formatting caveat is supported by source/RSL/CSV audit: solver-entry display can show dt=0.5/newton_tol=0.0 from stream formatting, while 96 convergence headers and 32 metadata rows show 1e-9; no production logging/source mutation.",
+      "Baseline fine first-step solver newton_iterations=1 is explicitly clarified as an iteration-0 initial-residual convergence check with no Newton correction and zero Krylov iterations.",
+      "The linked repository README and compact recomputation receipt reproduce selected baseline/control W RMS values from pinned arrays only; no model execution path is involved.",
+      "The changed report and Problem Definition preserve the bounded scope, non-propagated residual accounting, non-qualification status, and unchanged closed PR298 pressure / PR303 CF scopes."
+    ],
+    "final_reviewer_conclusion": "PASS_NO_MATERIAL_ERRORS_IN_FINAL_REPORT_OR_PROBLEM_SECTION"
+  }
+}
