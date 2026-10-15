@@ -1,0 +1,273 @@
+{
+  "additional_source_context": {
+    "per_step_diagnostics": {
+      "data_source": "each new run accepted_ark_w_step_N.csv, existing producer; never substitute E307 per-step values",
+      "call_and_state_gates": "same accepted Yi checked-state arrays, physical owners 4096; FI/Full available metadata and auxiliary reference/context source policy, stage1 explicit/independentFull unavailable; stage4 returned-K remains independently unknown if absent",
+      "units": "G_W in m/s; K-FI in m/s^2; signed measured/source-derived-top pressure/buoyancy powers in W and dt*tableau work in J",
+      "summary": "each accepted step: G_W and K-FI RMS/max per implicit stage, direct-increment norm bound h sum|b|*RMS(K-FI); pressure and buoyancy power/weighted work summaries; actual raw/projected W increment/replay defects",
+      "implementation": "reuse tools/analyze_accepted_ark_w_stage.py analytical equations/reader with existing exact e71 statics and same-call captures; export compact rows and endpoints as primary results"
+    },
+    "no_reinterpretation": "negative quadratic defect is a defined work-quadrature diagnostic, not true-energy error or an identified damping rate"
+  },
+  "created_local_time": "2026-10-15T09:43:54+09:00",
+  "fixed_diagnostic_trigger": {
+    "epsilon_w_rms_m_s": 7.7944398e-06,
+    "meaning": "fixed descriptive trigger only; it is not a reference qualification, acceptance target, or error bound; report per-time exceedance without pass/fail language",
+    "trigger_epsilon_over_3_m_s": 2.5981466e-06
+  },
+  "forbidden_inferences": [
+    "Richardson/order or truth-bound claim",
+    "accuracy pass/fail or reference qualification",
+    "frequency or oscillation identification from this comparison",
+    "causality of the observed W difference",
+    "efficiency claim"
+  ],
+  "frozen_direction": {
+    "artifact_manifest": "preflight/fixed_w_projection_basis.json",
+    "artifact_manifest_sha256": "afc377620a427102be81d8a460d79ae7d72a32dc5503a80d14f7bf0e7aa8debe",
+    "artifact_npz": "preflight/fixed_w_projection.npz",
+    "artifact_npz_sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd",
+    "definition": "Use these exact frozen arrays without recomputing or adjusting direction or mass weights.",
+    "keys": {
+      "a0": "a0_stage1_w_m_s2_kji",
+      "e1": "e1_dimensionless_kji",
+      "m0": "m0_physical_dry_w_dual_mass_kg_kji",
+      "owner": "owner_mask_kji"
+    },
+    "source_run_receipt_sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a",
+    "source_trace": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/accepted_ark_w_step_1.csv",
+    "source_trace_sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b"
+  },
+  "metrics": {
+    "primary": "At all 17 common times, compute coarse/fine W and delta=fine-coarse on the 4096 physical owners: unweighted RMS/max-abs, M0-weighted RMS, cosine(delta,coarse W) when both norms are nonzero, signed p_coarse/p_fine/p_delta=sum(M0*W*e1)/sum(M0), and parallel/perpendicular M0-weighted RMS relative to e1.",
+    "raw_arrays": "Save coarse/fine/delta W trajectories, owner mask, M0 weights, a0, e1 and projections in one compressed NPZ.",
+    "sign_convention": "fine minus coarse for delta and signed projection",
+    "zero_norm_policy": "cosine is null if either vector norm is zero; projection remains signed and finite"
+  },
+  "model_runs_performed_by_analyzer": false,
+  "optional_regression": {
+    "enabled": false,
+    "reason": "omit pair-fitted amplitude/derivative directions; retain the pre-run fixed spatial projection, trajectory norms and cosines only"
+  },
+  "physical_w_ownership": {
+    "crop": "W[1:,:,:] removes fixed lower face; keep top dynamic face; horizontal mask is physical 16x16 and excludes packed periodic closing row/column",
+    "owner_count": 4096,
+    "physical_grid": [
+      16,
+      16,
+      16
+    ],
+    "raw_layout": "WRF W [Time,bottom_top_stag,south_north,west_east]",
+    "source": "tools/benchmark_wrf_accuracy_cost.py::_owned and PR307 accepted-stage v2 physical-owner metadata, crosschecked to the pinned input NetCDF"
+  },
+  "previous_protocol_v1_sha256": "ee4a0c4d9428a29dcae7c722935f2d25279947f49d212405ca435616c07e2509",
+  "schema": "pr308_fine_pair_w_trajectory_protocol_v3",
+  "scope": "same-case W trajectory comparison for h=0.9375 s (16 steps) and h=0.46875 s (32 steps), 0-15 s; descriptive diagnostics only",
+  "status": "frozen_before_reading_fine_pair_run_outputs; direction artifact hash-bound",
+  "time_alignment": {
+    "coarse_frames_expected": 17,
+    "coarse_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "fine_frames_expected": 33,
+    "fine_indices": [
+      0,
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24,
+      26,
+      28,
+      30,
+      32
+    ],
+    "horizon_seconds": 15.0,
+    "initial_gate": "physical W owner values at t=0 must be bitwise identical after FP32 view",
+    "timestamp_join": "exact rational elapsed times from contiguous accepted CSV step_seq and each actual dt; coarse j matches fine 2*j. WRF Times is checked only at t0 and t15; 19-character Times cannot distinguish subsecond endpoints.",
+    "primary_endpoints": "projected_final internal FP64 W arrays per accepted step; t0 from first input, require all six initial prognostic vectors exact-equal across runs. Separately compare t0/t15 NetCDF FP32 publication after correct conversion."
+  },
+  "reviewed_local_time": "2026-10-15T09:45:36.780814+09:00",
+  "previous_protocol_v2_sha256": "eedcaa8a0cfd719fc7ada5d633ed2b3b7434f6e1f56b739f1533d6745d0086eb",
+  "producer": {
+    "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/libwrf_sdirk3_libtorch.a",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "fortran_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/libwrflib.a",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "pr307_build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/pr307_v2_build_receipt.json",
+    "pr307_build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8",
+    "no_rebuild_required": true
+  },
+  "input": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/common-filter-reference-20261014/green_execution/initial_rhs_probe_B_debug2_off/wrfinput_d01",
+    "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "source": "E306 debug2 h15 control input"
+  },
+  "case_pins": {
+    "imex_mode": 3,
+    "time_integration_scheme": 6,
+    "split_explicit": false,
+    "mpi_ranks": 1,
+    "omp_threads": 1,
+    "debug_level": 2,
+    "kdamp_config_and_grid": 0.2,
+    "newton_tol": 1e-07,
+    "krylov_tol": 1e-07,
+    "effective_ewt_rtol": 1e-06,
+    "effective_mass_coordinate_mode": 1,
+    "raw_wrf_omega_ww_cp": false,
+    "effective_wrf_omega_ww_cp": true,
+    "omega_w_blend": 1,
+    "buoyancy_use_current_w": true,
+    "w_damping": 0,
+    "damp_opt": 0,
+    "sdirk3_stage_operand_diag": true,
+    "case_namelists": [
+      {
+        "label": "h0p9375_0_15s",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/h0p9375_0_15s",
+        "namelist_sha256": "b096c83fdcbb061c2e3a0a08356e738d9971e959b0f1e0a6de7cf8de92331018",
+        "baseline_namelist_sha256": "d5375e1d24818b16b947b29db8eeb79cf31f22724bb5cb23cb6983fc29a134c7",
+        "namelist_diff_sha256": "28b21819cb8e36c092d107c5bc432398b5082a3eed2e4300b0e47c8a4c82d2bb",
+        "only_changed_settings": {
+          "time_step": 0,
+          "time_step_fract_num": 15,
+          "time_step_fract_den": 16
+        },
+        "unchanged_required_settings": {
+          "run_seconds": 15,
+          "history_interval_s": 15,
+          "sdirk3_debug_level": 2,
+          "mpi_ranks": 1,
+          "omp_threads": 1,
+          "nproc_x": 1,
+          "nproc_y": 1,
+          "stage_operand_diag": "via environment only"
+        },
+        "steps": 16,
+        "dt_seconds": 0.9375,
+        "expected_endpoint_times_seconds": [
+          0.0,
+          0.9375,
+          1.875,
+          2.8125,
+          3.75,
+          4.6875,
+          5.625,
+          6.5625,
+          7.5,
+          8.4375,
+          9.375,
+          10.3125,
+          11.25,
+          12.1875,
+          13.125,
+          14.0625,
+          15.0
+        ],
+        "expected_common_step_indices": {
+          "pair_index_rule": "fine index 2*j for coarse j=0..16"
+        }
+      },
+      {
+        "label": "h0p46875_0_15s",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/h0p46875_0_15s",
+        "namelist_sha256": "b5a7416fa9cdb2dc0d38dfc617369a376c31f1e568913d6889b38d229b204d6b",
+        "baseline_namelist_sha256": "d5375e1d24818b16b947b29db8eeb79cf31f22724bb5cb23cb6983fc29a134c7",
+        "namelist_diff_sha256": "fc4fa1db1e2945aa496617b79a7d240ce34d706158d30711f8b087c031783788",
+        "only_changed_settings": {
+          "time_step": 0,
+          "time_step_fract_num": 15,
+          "time_step_fract_den": 32
+        },
+        "unchanged_required_settings": {
+          "run_seconds": 15,
+          "history_interval_s": 15,
+          "sdirk3_debug_level": 2,
+          "mpi_ranks": 1,
+          "omp_threads": 1,
+          "nproc_x": 1,
+          "nproc_y": 1,
+          "stage_operand_diag": "via environment only"
+        },
+        "steps": 32,
+        "dt_seconds": 0.46875,
+        "expected_endpoint_times_seconds": [
+          0.0,
+          0.46875,
+          0.9375,
+          1.40625,
+          1.875,
+          2.34375,
+          2.8125,
+          3.28125,
+          3.75,
+          4.21875,
+          4.6875,
+          5.15625,
+          5.625,
+          6.09375,
+          6.5625,
+          7.03125,
+          7.5,
+          7.96875,
+          8.4375,
+          8.90625,
+          9.375,
+          9.84375,
+          10.3125,
+          10.78125,
+          11.25,
+          11.71875,
+          12.1875,
+          12.65625,
+          13.125,
+          13.59375,
+          14.0625,
+          14.53125,
+          15.0
+        ],
+        "expected_common_step_indices": {
+          "pair_index_rule": null
+        }
+      }
+    ],
+    "no_new_build_or_source_change": true
+  },
+  "detail_interval_selection": {
+    "primary": "first common endpoint j>0 with unweighted RMS(fine-coarse)>fixed epsilon_W/3 selects [t_(j-1),t_j] and the corresponding one coarse/two fine step capture(s)",
+    "fallback": "if no crossing, select final [14.0625,15] seconds; label fixed final-interval fallback, not acceptance or first growth",
+    "no_reexecution": "selected detail comes from the already saved captures; no added model call"
+  },
+  "raw_capture_storage": {
+    "no_new_producer_mode": true,
+    "source_format": "existing full CSV written temporarily; all raw CSV bytes preserved via lossless zstd-1 with source/decompressed SHA256 verification",
+    "primary_review_artifacts": "compact FP64 W trajectories at all accepted endpoints, per-step scalar summaries, 17 common-time comparisons, fixed basis and selected detail captures",
+    "raw_archive_scope": "full compressed raw captures retained separately; a smaller review bundle may include compact arrays, inputs/scripts and selected one coarse/two fine detail captures without duplicating every full CSV"
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "schema": "pr308_common_initial_state_gate_v1",
+  "protocol_sha256": "3620ba8d9846b97da435aac635fc4f846ad5342c0cbdc2b37842fb5a317845d9",
+  "case_labels": [
+    "h0p9375_0_15s",
+    "h0p46875_0_15s"
+  ],
+  "csv_paths": [
+    "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/accepted_ark_w_step_1.csv",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p46875_0_15s/accepted_ark_w_step_1.csv"
+  ],
+  "csv_sha256": [
+    "0f51cf06d2761dfb0228144c98adf3049d55d80e2fd0348a45de31777ebecfc9",
+    "1bb687873161706bbec8440cce4600455832f1dad76ee2fb335d2188c6604b16"
+  ],
+  "run_receipt_sha256": [
+    "7669e1c022fa2edbcfc7ce49dd539d32d66f8efd6b8719829d80948370c4d25b",
+    "f7bb6e7bcd32c116cdd0ef601cdd407bf267169160546d4636dc03d2218211d5"
+  ],
+  "packed_six_state_input": {
+    "array_order": "U,V,W,PH,T,MU",
+    "count": 24531,
+    "bitwise_equal": true,
+    "float64_view_sha256": "d2684934e033e879fab865ab4bd37b0aa1507b41408f7601bf30e75022cd5994"
+  },
+  "physical_initial_W": {
+    "shape": [
+      16,
+      16,
+      16
+    ],
+    "owner_count": 4096,
+    "both_bitwise_zero": true
+  },
+  "netcdf_t0_fields": {
+    "U": {
+      "bitwise_exact": true,
+      "finite_both": true,
+      "shape": [
+        16,
+        16,
+        17
+      ]
+    },
+    "V": {
+      "bitwise_exact": true,
+      "finite_both": true,
+      "shape": [
+        16,
+        17,
+        16
+      ]
+    },
+    "W": {
+      "bitwise_exact": true,
+      "finite_both": true,
+      "shape": [
+        17,
+        16,
+        16
+      ]
+    },
+    "PH": {
+      "bitwise_exact": true,
+      "finite_both": true,
+      "shape": [
+        17,
+        16,
+        16
+      ]
+    },
+    "T": {
+      "bitwise_exact": true,
+      "finite_both": true,
+      "shape": [
+        16,
+        16,
+        16
+      ]
+    },
+    "THM": {
+      "bitwise_exact": true,
+      "finite_both": true,
+      "shape": [
+        16,
+        16,
+        16
+      ]
+    },
+    "MU": {
+      "bitwise_exact": true,
+      "finite_both": true,
+      "shape": [
+        16,
+        16
+      ]
+    },
+    "MUB": {
+      "bitwise_exact": true,
+      "finite_both": true,
+      "shape": [
+        16,
+        16
+      ]
+    }
+  },
+  "netcdf_times_t0_t15_both": true,
+  "all_gates_pass": true,
+  "model_runs": 0
+}

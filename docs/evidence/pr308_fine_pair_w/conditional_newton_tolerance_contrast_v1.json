@@ -1,0 +1,103 @@
+{
+  "schema": "pr308_conditional_newton_tolerance_contrast_red_v1",
+  "created_local_time": "2026-10-15T10:03:44+09:00",
+  "status": "preregistered_one_run_authorization_gate_pass",
+  "scope": "one h=0.46875 s, 0-15 s, same-producer Newton-tolerance sensitivity diagnostic; not accuracy acceptance",
+  "trigger_evidence": {
+    "source": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/red_precision_fine_pair_analysis.json",
+    "sha256": "96fb7bd0cbe32e248b6dc5f5642f9569f423b902432eeca68256e0d20a2a9e19",
+    "fine_first_step_stage3": {
+      "G_W_rms_m_s": 1.5725778087964116e-7,
+      "newton_scaled_final_residual": 7.7124e-8,
+      "baseline_newton_tol": 1.0e-7
+    },
+    "fine_first_step_stage4": {
+      "G_W_rms_m_s": 8.661668569019415e-8,
+      "newton_scaled_final_residual": 4.053e-8,
+      "baseline_newton_tol": 1.0e-7
+    },
+    "comparison_scale": {
+      "fine_first_step_direct_increment_norm_bound_m_s": 4.372321215594794e-7,
+      "fine_minus_coarse_max_common_time_unweighted_rms_m_s": 2.705154689949601e-7,
+      "interpretation": "same-scale local accounting signal motivates one sensitivity counter; it does not bound propagated state error or attribute the pair difference"
+    }
+  },
+  "baseline_pins": {
+    "protocol_v3_sha256": "3620ba8d9846b97da435aac635fc4f846ad5342c0cbdc2b37842fb5a317845d9",
+    "basis_json_sha256": "afc377620a427102be81d8a460d79ae7d72a32dc5503a80d14f7bf0e7aa8debe",
+    "basis_npz_sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd",
+    "fine_baseline_receipt_sha256": "f7bb6e7bcd32c116cdd0ef601cdd407bf267169160546d4636dc03d2218211d5",
+    "coarse_receipt_sha256": "7669e1c022fa2edbcfc7ce49dd539d32d66f8efd6b8719829d80948370c4d25b",
+    "fine_pair_analysis_sha256": "838f66ce197d94b0154bb6b291448526727d33c0074e70e85dfd4be4f195fa52",
+    "fixed_projection": "reuse the frozen pre-run e1 and M0 arrays exactly; do not recompute or reorient"
+  },
+  "single_run": {
+    "fine_step_seconds": 0.46875,
+    "horizon_seconds": 15.0,
+    "expected_steps": 32,
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "implementation_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "nml_change_only": {
+      "field": "sdirk3_newton_tol",
+      "baseline": 1.0e-7,
+      "counter": 1.0e-9
+    },
+    "fixed_settings": {
+      "newton_rtol": 0.0,
+      "krylov_tol": 1.0e-7,
+      "effective_ewt_rtol": 1.0e-6,
+      "ewt_source": "ewt_rtol=0; source formula max(newton_tol, 1e-6), unchanged at both Newton tolerances",
+      "max_newton_iter": 40,
+      "dt_fraction": "15/32",
+      "run_seconds": 15,
+      "history_interval_seconds": 15,
+      "imex_mode": 3,
+      "scheme": 6,
+      "split_explicit": false,
+      "kdamp": 0.2,
+      "mpi_ranks": 1,
+      "omp_threads": 1,
+      "stage_operand_diag": true,
+      "rhs_count": true,
+      "wrf_sdirk3_and_parity_env": "clear all other prefixes; preserve identical deliberate observer settings"
+    },
+    "no_build_or_physics_change": true,
+    "attempt_limit": 1,
+    "run_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p46875_0_15s_newton_tol1e-9"
+  },
+  "mechanism_and_measurements": {
+    "authoritative_config_path": "dyn_em/module_implicit_sdirk3.F:1851-1852 -> wrf_sdirk3_set_config_float('newton_tol', config_flags%sdirk3_newton_tol)",
+    "runtime_parse_path": "wrf_sdirk3_config.cpp:176-177 parses sdirk3_newton_tol; impl.cpp:3759 copies config.newton_tol into NewtonKrylovOptions",
+    "other_newton_tol_consumers": "The setting also controls a degenerate-reference fallback damping branch; stage2_soft_resid_cap=max(1,5*newton_tol) remains 1 at both values. Record whether any tolerance-dependent fallback/soft-continue path executes; do not describe the contrast as a pure stop-only intervention if it does.",
+    "record_per_accepted_stage": [
+      "Newton/Krylov iterations, convergence, scaled solver residual, W-space G and K-FI vectors/norms",
+      "fallback/damping/postprocess flags and returned-K availability/equality separately",
+      "same-call pressure/buoyancy work and unassigned remainder with physical owners/units",
+      "accepted Y, projected endpoint, exact stage/step token and dt; preserve raw per-step CSVs and hashes"
+    ],
+    "trajectory_comparison": "Compare the counter h=.46875 trajectory against baseline h=.46875 at all 33 accepted endpoints; at the fixed 17 common times also compare D_tol = W_tightNewton - W_baselineFine with the original D_pair = W_baselineFine - W_baselineCoarse. Report unweighted RMS/max, M0-weighted RMS, frozen signed projection and cosine when defined. No pass/fail threshold.",
+    "continuity_gates": "same 32 accepted macrosteps and exact 17 common-time join; initial six prognostic vectors bitwise equal; no missing/nonfinite CSVs; receipt/effective config confirms only newton_tol differs; preserve FP64 publication/carry and exact e71 input"
+  },
+  "decision_interpretation": {
+    "if_tolerance_difference_aligns_with_pair_difference": "supports that this single-case Newton-tolerance sensitivity may contribute at 0-15 s; does not prove the fine/coarse difference is solver error or explain 240 s behavior",
+    "if_small_or_not_aligned": "this one contrast does not support a dominant Newton-tolerance explanation over 0-15 s; it does not prove absence of later nonlinear propagation",
+    "if_counter_rejects_or_fails": "record the first failure and stop; do not change iteration caps/tolerances or retry",
+    "unconditional_limits": [
+      "This is not a truth/error bound, pair qualification, accuracy pass/fail, or production tolerance selection.",
+      "Do not change Krylov/EWT, timestep, input W/pressure, physics/operator coefficients, norm/basis/threshold, or equations.",
+      "No second tolerance run, no timestep ladder, no 240 s run, no cost/speed claim."
+    ]
+  },
+  "pre_run_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/conditional_fine_h0p46875_newton_tol1e-9/pre_run_receipt.json",
+    "sha256": "43899af52f49a3a9c7691422c3c22c00b30d2a4c9df48b0d9e9c212aa7b6badd",
+    "namelist_sha256": "1e698453feac1cae8e3fd4af9476ba46d5b45545547a4e1a4a88de23d0bc1639",
+    "namelist_diff_sha256": "f00aef60e684dbc6e6ff1b3f7fd242e60a1d991be0198c23eac4144523822625",
+    "only_nml_change_lines": [
+      "sdirk3_newton_tol: 1e-7 -> 1e-9"
+    ]
+  }
+}

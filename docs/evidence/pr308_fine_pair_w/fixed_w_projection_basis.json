@@ -1,0 +1,62 @@
+{
+  "basis": {
+    "a0_source": "accepted V2 stage-1 k_full W = exact captured k_fast + k_slow, at Y1; physical acceleration m/s2",
+    "direction": "e1 = a0 / sqrt(sum(M0*a0^2)/sum(M0)); dimensionless",
+    "dynamic_top_dual_mass_per_area": "0.5*top-layer pressure thickness/g",
+    "gravity_m_s2": 9.8100004196167,
+    "interior_dual_mass_per_area": "0.5*(adjacent lower+upper layer pressure thickness)/g",
+    "layer_pressure_thickness": "-DNW*(C1H*(MUB+MU0)+C2H) [Pa]",
+    "mass_metric": "frozen initial dry dual-W mass M0 [kg per physical horizontal cell] times physical area DX*DY/(MAPFAC_MX*MAPFAC_MY)",
+    "projection": "p = sum(M0*W*e1)/sum(M0), units m/s"
+  },
+  "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/accepted_ark_w_step_1.csv",
+  "csv_sha256": "0ed70e465081f10472376931be881d916f2ed6ac7cfa3bfa592e2f920fb4e91b",
+  "dimensions": {
+    "array_order": "[k,j,i]",
+    "nx_packed": 17,
+    "ny_packed": 17,
+    "nz_mass": 16,
+    "owned_W_faces": 16,
+    "physical_x": 16,
+    "physical_y": 16,
+    "shape": [
+      16,
+      16,
+      16
+    ]
+  },
+  "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+  "implementation_source_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+  "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/wrfinput_d01",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "normalization_checks": {
+    "M0_positive_all_owners": true,
+    "QVAPOR_exact_zero": true,
+    "a0_e1_m0_cosine": 1.0,
+    "a0_m0_weighted_rms_m_s2": 1.2602577412218032e-05,
+    "e1_m0_weighted_rms": 1.0,
+    "initial_W_e1_cosine": null,
+    "initial_W_e1_cosine_reason": "undefined because the exact initial W owner vector has zero M0 norm",
+    "initial_W_e1_inner_product_kg_m_s": 0.0,
+    "initial_W_exactly_zero": true,
+    "initial_W_projection_m_s": 0.0
+  },
+  "output_npz": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/fixed_w_projection.npz",
+  "output_npz_sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd",
+  "owner": {
+    "bottom_face_excluded": true,
+    "count": 4096,
+    "periodic_closing_column_excluded": true,
+    "symmetric_closing_row_excluded": true,
+    "top_face_included": true
+  },
+  "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_execution/new_exe_stage_operand_on_v2/run_receipt.json",
+  "run_receipt_sha256": "4c9e31e9fcd4f8e4170dce3823ce44ae8c2cb9ff8d627db185eebb9b81084b9a",
+  "schema": "pr308_fixed_w_projection_basis_v1",
+  "source_scope": "E307 V2 source only; no fine-pair/candidate outputs read",
+  "template_sha256": {
+    "a0": "a96d4f2e056cf540bc850109cbcfa7dba7f64c9ee329bc1cb62354a2bf81871c",
+    "e1": "027d76bd7516bcbba3846cfd7526ca9a20d57cc9e67ea12a2880b1af58dc6a00",
+    "m0": "e2d1f2b513f47339482e6afdae32179eb1a3a9505463b4888eec7147ab3adab8"
+  }
+}

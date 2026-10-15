@@ -1,0 +1,72 @@
+{
+  "schema": "pr308_newton_tolerance_entry_format_audit_v1",
+  "worktree": "/private/tmp/pr308-fine-pair-w-trajectory-20261015",
+  "head": "e717aa30c55e8cd12dde0de35459c3aabec953c4",
+  "run": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p46875_0_15s_newton_tol1e-9",
+    "receipt": "run_receipt.json",
+    "rsl_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p46875_0_15s_newton_tol1e-9/rsl.error.0000",
+    "rsl_sha256": "b64c77a05a13c72f37ea368913101708e010e40596e0ca3112a2b3e307bf5b29",
+    "receipt_sha256": "30e458a7eea73a3f14e7763b52ec26879cb0e7e31c6461b6a8ef89d79bd479ff",
+    "csv_step1_sha256": "b7211499534a056d01e22e55576189df34934c890e3d3cc5abbe265d79d6296d",
+    "rsl_solver_entry_count": 96,
+    "entry_tolerance_prints": {
+      "stage2_1e-9": 1,
+      "stage2_0.0": 31,
+      "stage3_1e-9": 32,
+      "stage4_1e-9": 32
+    },
+    "convergence_norm_atol_readbacks": {
+      "stage2_1e-9": 32,
+      "stage3_1e-9": 32,
+      "stage4_1e-9": 32
+    },
+    "csv_metadata_all_32_steps": {
+      "newton_tol_config": 9.999999717180685e-10,
+      "krylov_tol_config": 1.0000000116860974e-7,
+      "effective_ewt_rtol_config": 9.999999974752427e-7
+    },
+    "effective_environment": {
+      "cleared_prefixes": ["WRF_SDIRK3_", "WRF_PARITY_"],
+      "ewt_override": "unset; source formula max(newton_tol,1e-6) applies"
+    },
+    "first_macrostep_stage3": {
+      "Newton_iterations_reported": 2,
+      "GMRES_iterations": 13,
+      "gmres_tolerance": 1e-7,
+      "trust_region": "attempt 0 accepted; radius 1 retained; rho=1"
+    },
+    "first_macrostep_stage4": {
+      "Newton_iterations_reported": 2,
+      "GMRES_iterations": 13,
+      "gmres_tolerance": 1e-7,
+      "trust_region": "attempt 0 accepted; radius 1 retained; rho=1"
+    },
+    "step_gate_telemetry": {
+      "stage2_gate_fail": 0,
+      "stage3_gate_fail": 0,
+      "gate_retry": 0,
+      "explicit_fallback": 0,
+      "first_newton_updates": "full trust radius; attempt 0 retained"
+    }
+  },
+  "source": {
+    "wrf_sdirk3_newton_solver.cpp": {
+      "sha256": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+      "entry_writer_lines": "4900-4924",
+      "global_norm_and_effective_tol_lines": "6441-6463",
+      "convergence_branch_lines": "6768-6792",
+      "scaled_rms_definition_lines": "4715-4726"
+    },
+    "wrf_sdirk3_config.h": {
+      "sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "newton_ewt_and_krylov_config_lines": "98-132"
+    },
+    "wrf_sdirk3_tile_unified_impl.cpp": {
+      "sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "wrms_gate_config_lines": "14305-14331"
+    }
+  },
+  "finding": "Entry-line newton_tol=0.0 is a formatting-state artifact, not a configuration mutation: all 96 inner convergence headers report atol=effective_tol=1e-9 and all 32 accepted CSVs report newton_tol_config=9.999999717e-10. The entry writer prints options_.newton_tol without forcing defaultfloat or saving/restoring stream format. Newton convergence uses global scaled RMS; Krylov and WRMS-EWT remain separately configured. This is not evidence of a fallback or tolerance mismatch.",
+  "scope": "Read-only source/RSL/CSV/receipt audit; no code edits, rebuild, or model run."
+}

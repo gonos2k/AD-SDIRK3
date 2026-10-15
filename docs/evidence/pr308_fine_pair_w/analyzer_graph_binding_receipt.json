@@ -1,0 +1,73 @@
+{
+  "schema": "pr308_fine_pair_analyzer_graph_binding_v1",
+  "task": "PR308 post-freeze bounded Graphify for fine-pair trajectory analyzer",
+  "target_worktree": "/private/tmp/pr308-fine-pair-w-trajectory-20261015",
+  "source_base_commit": "e717aa30c55e8cd12dde0de35459c3aabec953c4",
+  "source_base_tree": "af15be4b4045019b969735f3f61d055b6baa8497",
+  "new_source_status": [
+    "?? tools/analyze_fine_pair_w_trajectory.py"
+  ],
+  "new_source": {
+    "path": "tools/analyze_fine_pair_w_trajectory.py",
+    "sha256": "b3dfa74b43eae9ced7d98670aa127714dcb95796b7e771e488834d3842e490f7",
+    "corpus_copy_sha256": "b3dfa74b43eae9ced7d98670aa127714dcb95796b7e771e488834d3842e490f7",
+    "matches_frozen_source": true
+  },
+  "fresh_bounded_graph": {
+    "corpus": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_fine_pair_analyzer_corpus",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_fine_pair_analyzer_graph/graphify-out/graph.json",
+    "sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9",
+    "nodes": 18,
+    "raw_edges": 79,
+    "command": "graphify extract <one-file corpus: analyze_fine_pair_w_trajectory.py> --no-cluster --out <pr308_fine_pair_analyzer_graph>",
+    "model_calls": 0,
+    "token_cost": 0,
+    "diagnostic": {
+      "dangling_endpoint_edges": 17,
+      "valid_candidate_edges": 62,
+      "exact_duplicate_edges": 8,
+      "directed_unique_endpoint_pairs": 48,
+      "same_endpoint_collapsed_edges": 14,
+      "interpretation": "Graph edges are navigation only; duplication/dangling noise is recorded."
+    }
+  },
+  "reused_source_dependencies": [
+    {
+      "path": "tools/benchmark_wrf_accuracy_cost.py",
+      "sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8",
+      "graph_path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+      "graph_sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230",
+      "role": "imports _sha256 and _time_text; exact source matches PR299 cache"
+    },
+    {
+      "path": "tools/test_native_wave_refinement.py",
+      "sha256": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+      "graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_graph/graphify-out/graph.json",
+      "graph_sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257",
+      "role": "imports read_payload; exact source matches PR305 bounded graph"
+    },
+    {
+      "path": "tools/analyze_accepted_ark_w_stage.py",
+      "sha256": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b",
+      "graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+      "graph_sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5",
+      "role": "imports analyze, _blocks, _state_block; exact source matches PR307 parser graph"
+    }
+  ],
+  "imports_and_callers": {
+    "imports": "tools/analyze_fine_pair_w_trajectory.py:25-31",
+    "read_payload_call": "line 130",
+    "accepted_single_step_analyzer_call": "line 178",
+    "benchmark_time_parser_call": "line 309",
+    "cli": "lines 554-558 accepts repeated --plan/--protocol/--out paths"
+  },
+  "preserved_preedit_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_preedit_graph_binding_receipt.json",
+  "preserved_preedit_receipt_sha256": "797ad07208d775c12d0db638fa247f8a81acd01dc676b9837d0ad85a018d2a4a",
+  "reuse_reason": "The original e717aa30 source commit and exact source hashes are retained. The new parser was not present in that commit and is bound separately by frozen SHA; imported helpers are each pinned to prior matching graphs.",
+  "limitations": [
+    "Graphify AST for the new source is a navigation aid, not a numerical/provenance proof.",
+    "Its three local Python imports are source-hash-bound to prior matching graphs; no broad corpus scan was run.",
+    "The tool source is untracked in the original source commit e717 and is bound by the exact frozen SHA above.",
+    "No source edits, build, test, or model run was performed by this graph refresh."
+  ]
+}

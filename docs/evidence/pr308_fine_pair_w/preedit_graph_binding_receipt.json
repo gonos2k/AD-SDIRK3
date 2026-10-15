@@ -1,0 +1,68 @@
+{
+  "schema": "pr308_preedit_source_graph_binding_v1",
+  "task": "PR308 fine-pair accepted W trajectory analysis pre-edit Graphify binding",
+  "target_worktree": "/private/tmp/pr308-fine-pair-w-trajectory-20261015",
+  "target_head": "e717aa30c55e8cd12dde0de35459c3aabec953c4",
+  "target_tree": "af15be4b4045019b969735f3f61d055b6baa8497",
+  "worktree_clean": true,
+  "exact_existing_source_bindings": [
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076"
+    },
+    {
+      "path": "tools/analyze_accepted_ark_w_stage.py",
+      "sha256": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b"
+    },
+    {
+      "path": "tools/test_native_wave_refinement.py",
+      "sha256": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b"
+    }
+  ],
+  "reuse_graphs": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+      "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+      "sources": [
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp"
+      ],
+      "purpose": "accepted-stage writer, stage W trace, same-call pressure/capture and Newton metadata"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+      "sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5",
+      "sources": [
+        "tools/analyze_accepted_ark_w_stage.py"
+      ],
+      "purpose": "single-step accepted stage CSV schema, W owner, pressure work and update decomposition reader"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_graph/graphify-out/graph.json",
+      "sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257",
+      "sources": [
+        "tools/test_native_wave_refinement.py"
+      ],
+      "purpose": "exact read_payload parser dependency used by existing accepted-stage analyzer"
+    }
+  ],
+  "source_navigation": {
+    "stage_writer": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:13071-13360",
+    "existing_single_step_analyzer": "tools/analyze_accepted_ark_w_stage.py:147-488",
+    "payload_reader": "tools/test_native_wave_refinement.py (exact hash pinned by PR305 bounded graph receipt)"
+  },
+  "planned_source_not_yet_present": {
+    "path": "tools/analyze_fine_pair_w_trajectory.py",
+    "status": "not present at pre-edit check; do not bind until owner freezes it"
+  },
+  "reuse_reason": "PR307 and PR308 have different worktree revisions/trees, but all existing relevant source bytes match exactly. Reuse hash-pinned graphs for navigation; no graph rebuild needed before the new parser exists.",
+  "limitations": [
+    "Graph edges are navigation aids; accepted run evidence and source-level checks remain authoritative.",
+    "The current reused analyzer is single-step; it does not itself establish chronological 16/32-step same-0-to-15s pair comparisons.",
+    "No source edits, build, tests, or model run by this graph task."
+  ]
+}

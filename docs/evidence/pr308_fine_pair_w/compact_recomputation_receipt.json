@@ -1,0 +1,21 @@
+{
+  "created_local_time": "2026-10-15T10:13:01+09:00",
+  "scope": "NumPy-only recomputation of committed compact arrays, not a new model run",
+  "numpy_version": "2.2.6",
+  "baseline_arrays_exact_between_products": true,
+  "all_17_baseline_RMS_match_JSON": true,
+  "all_17_control_RMS_match_JSON": true,
+  "at_0p9375": {
+    "baseline_rms_m_s": 2.488718515025602e-07,
+    "newton_control_rms_m_s": 3.2138305034026466e-08
+  },
+  "at_15": {
+    "baseline_rms_m_s": 2.705154689949601e-07,
+    "newton_control_rms_m_s": 4.6656761167328086e-07,
+    "control_minus_baseline_fine_rms_m_s": 2.6909971749630156e-07
+  },
+  "inputs": {
+    "fine_pair_w_trajectory_analysis.npz": "0058d90d4220ee175c184142387cf8d34c37035adf8d4a71f21b49fea3aa6c04",
+    "newton_control_trajectories.npz": "a324e504fafe204aa76026fc48b0d7c1942c0f9b0f8cbaf35619d5b2ffeaf5e9"
+  }
+}

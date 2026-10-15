@@ -1,0 +1,185 @@
+{
+  "created_local_time": "2026-10-15T10:19:02+09:00",
+  "scope": "curated compact PR308 evidence copied byte-for-byte from external evidence; no new model run",
+  "source_base_commit": "e717aa30c55e8cd12dde0de35459c3aabec953c4",
+  "offline_analyzer_sha256": "b3dfa74b43eae9ced7d98670aa127714dcb95796b7e771e488834d3842e490f7",
+  "production_source_changed": false,
+  "payload_count": 35,
+  "payloads": [
+    {
+      "name": "README.md",
+      "bytes": 2706,
+      "sha256": "9a3e3cb0ef59922c50351e40f103c196a8be0f8919eb3e78160b1ae3bb6ed3ec"
+    },
+    {
+      "name": "analysis_protocol_frozen.json",
+      "bytes": 11988,
+      "sha256": "3620ba8d9846b97da435aac635fc4f846ad5342c0cbdc2b37842fb5a317845d9"
+    },
+    {
+      "name": "analyzer_graph_binding_receipt.json",
+      "bytes": 4314,
+      "sha256": "eb9d0e3a19307ade847260f94c2f158ee774608d104555eed6f0d6b492603e3b"
+    },
+    {
+      "name": "analyzer_red_review_ko.md",
+      "bytes": 3158,
+      "sha256": "10a35433eb0917fd1709dd73e382a21564a336e4966865160cf655db7c1cb3ca"
+    },
+    {
+      "name": "baseline_csv_compression_manifest.json",
+      "bytes": 42391,
+      "sha256": "d198d237e4185a8f197d57c485cc2781279388095ec18508cb3a32ab74e6a0f4"
+    },
+    {
+      "name": "coarse_run_receipt.json",
+      "bytes": 22425,
+      "sha256": "7669e1c022fa2edbcfc7ce49dd539d32d66f8efd6b8719829d80948370c4d25b"
+    },
+    {
+      "name": "common_initial_state_gate.json",
+      "bytes": 2350,
+      "sha256": "e29ab2047e94ca6ebf994bb480b28020a63676a475d1656171da195edc6bfbb4"
+    },
+    {
+      "name": "compact_recomputation_receipt.json",
+      "bytes": 848,
+      "sha256": "c975b8da9466c1970d1f25a6436854f4f9f0c9e531b02e6ad2ab511baaea32c9"
+    },
+    {
+      "name": "conditional_csv_compression_manifest.json",
+      "bytes": 28232,
+      "sha256": "ee5941e6994b5aa9373f1697d6bac3035214ff5d865b5674497ec5348d3e3887"
+    },
+    {
+      "name": "conditional_newton_tolerance_contrast_v1.json",
+      "bytes": 6759,
+      "sha256": "16130209941adb0bb387baf281d3e20f4983100c9f44de3c8b809173e28e5261"
+    },
+    {
+      "name": "final_green_closing_review.json",
+      "bytes": 5980,
+      "sha256": "49e3128d1c673ec6d3b3991ac5fed234194ba81b016febef58b05b22c217f31e"
+    },
+    {
+      "name": "final_red_scope_audit_ko.md",
+      "bytes": 3791,
+      "sha256": "b6f2c61beb0f0fe0eb7f07c9432820945a8a8e7c8de23f1f05d7f82b8cfe57be"
+    },
+    {
+      "name": "fine_pair_pressure_work_time_series.json",
+      "bytes": 315009,
+      "sha256": "e661808c11f5b590f3ee0d57c317dfb8430ba0c2c78ba0c401f36a2bf286ba3c"
+    },
+    {
+      "name": "fine_pair_w_trajectory.png",
+      "bytes": 326488,
+      "sha256": "e119038058d99d564c0d6d160cc8bb63932947f5a8a52c4fbf5cc3d53e82dc3a"
+    },
+    {
+      "name": "fine_pair_w_trajectory_analysis.csv",
+      "bytes": 4207,
+      "sha256": "e283444401dbccc758ae95d93e61b18fafd78c1c012a9d6a11f9939ba13e9f41"
+    },
+    {
+      "name": "fine_pair_w_trajectory_analysis.json",
+      "bytes": 298531,
+      "sha256": "4fc214cdc9f1ee920e359943b1d36e561812e27f6f88587afd2fb80447a04569"
+    },
+    {
+      "name": "fine_pair_w_trajectory_analysis.npz",
+      "bytes": 5590612,
+      "sha256": "0058d90d4220ee175c184142387cf8d34c37035adf8d4a71f21b49fea3aa6c04"
+    },
+    {
+      "name": "fine_pair_w_trajectory_analysis_steps.csv",
+      "bytes": 48347,
+      "sha256": "f7a9cf27ee1c439e1586247772b5613598342ab321e6dcf1f0cc16ae93ea798e"
+    },
+    {
+      "name": "fine_run_receipt.json",
+      "bytes": 27990,
+      "sha256": "f7bb6e7bcd32c116cdd0ef601cdd407bf267169160546d4636dc03d2218211d5"
+    },
+    {
+      "name": "fixed_w_projection.npz",
+      "bytes": 58781,
+      "sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd"
+    },
+    {
+      "name": "fixed_w_projection_basis.json",
+      "bytes": 3081,
+      "sha256": "afc377620a427102be81d8a460d79ae7d72a32dc5503a80d14f7bf0e7aa8debe"
+    },
+    {
+      "name": "green_red_validation.json",
+      "bytes": 58633,
+      "sha256": "5dd8d063f00a0d1be33642092f73cf6e1b21b1c5eaaf52751f87fea34dc3a187"
+    },
+    {
+      "name": "newton_control_analysis.json",
+      "bytes": 175856,
+      "sha256": "7106d2d584531a0c9f95142213993b33c8b0665c3fcf3ff1f8b60cff579bbb6e"
+    },
+    {
+      "name": "newton_control_independent_comparison.json",
+      "bytes": 35419,
+      "sha256": "d49b3c796fc690817bd8487584c856a25653383fca709b2f8f349174f5c3a65b"
+    },
+    {
+      "name": "newton_control_review_ko.md",
+      "bytes": 2874,
+      "sha256": "5b0fc725abc9a2697b3ec01f6608297ec07fc17040c2e82240d0986fa3ca7303"
+    },
+    {
+      "name": "newton_control_run_receipt.json",
+      "bytes": 138869,
+      "sha256": "30e458a7eea73a3f14e7763b52ec26879cb0e7e31c6461b6a8ef89d79bd479ff"
+    },
+    {
+      "name": "newton_control_trajectories.npz",
+      "bytes": 2567013,
+      "sha256": "a324e504fafe204aa76026fc48b0d7c1942c0f9b0f8cbaf35619d5b2ffeaf5e9"
+    },
+    {
+      "name": "newton_tol_entry_format_audit.json",
+      "bytes": 3360,
+      "sha256": "b3481309b3ecd888b92de3f69a868eda61fe6ac142af65bef90820ef1bc02a22"
+    },
+    {
+      "name": "newton_tolerance_w_control.png",
+      "bytes": 220973,
+      "sha256": "e4ff7a52202e2ddd74dc2fc4cfdf60dcb663684766c592306ce0d140c148a08e"
+    },
+    {
+      "name": "portable_package_receipt.json",
+      "bytes": 2334,
+      "sha256": "f28b83efe0f6f52dad179fb800783ff1e96d2b0742ffd78b8974a14a80c5ffbf"
+    },
+    {
+      "name": "pr308_fine_pair_run_index.json",
+      "bytes": 17546,
+      "sha256": "9810724d76aa7bacdb630def9323c1b981966814b6207f34f992de9505b5b539"
+    },
+    {
+      "name": "preedit_graph_binding_receipt.json",
+      "bytes": 3510,
+      "sha256": "797ad07208d775c12d0db638fa247f8a81acd01dc676b9837d0ad85a018d2a4a"
+    },
+    {
+      "name": "previous_ci_baseline.md",
+      "bytes": 1290,
+      "sha256": "5ab9abc33f38e98cdeeeff90831d242794c8aab134e32782847cb238d4b0a301"
+    },
+    {
+      "name": "red_precision_fine_pair_analysis.json",
+      "bytes": 463645,
+      "sha256": "96fb7bd0cbe32e248b6dc5f5642f9569f423b902432eeca68256e0d20a2a9e19"
+    },
+    {
+      "name": "red_precision_fine_pair_audit_ko.md",
+      "bytes": 7791,
+      "sha256": "a5ce5179c8c8927c547a55db4c0df1461a08c27fd88e772891b04cf22cd88856"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# PR308 prior-CI source binding
+
+- Current W308 base: `e717aa30c55e8cd12dde0de35459c3aabec953c4`, tree `af15be4b4045019b969735f3f61d055b6baa8497`; GitHub `main` reports the same SHA/tree.
+- The stage-observer C++/analysis implementation remains identical to accepted PR307 source commit `18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc`: header SHA-256 `a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e`, implementation `a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076`, analyzer `907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b`. Diff from that code commit is docs/evidence only; CMake and CI workflow are unchanged.
+- Reusable CI is run `38596507853` on PR307 head `df1bc9c7c5d8b07667e182391dc170f9a2dcc49a`, same tree `af15be4b4045019b969735f3f61d055b6baa8497`: five selected CTests passed, 16-step replay endpoints were bitwise equal, and 8480-element FP64 retained/replay pullbacks were byte-identical. Artifact SHA-256: `c2159a3a6ccb2f65acdadb94cfb1f4228602d4da620610e4127b32a3c894d7d5`; full receipt in sibling `accepted-ark-w-stage-20261014/remote_ci/pr307_remote_ci_receipt.json`.
+- This baseline validates the C++ core/test path only. No PR308-specific run exists yet; no CI dispatch, build, or model run was performed during preflight.
