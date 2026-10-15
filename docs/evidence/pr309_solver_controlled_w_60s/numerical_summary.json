@@ -1,0 +1,243 @@
+{
+  "scope": "same-source/input two-tolerance-controlled step-size comparison; 0-60 s; descriptive trajectory and captured stage diagnostics, no truth/error-order claim",
+  "source_head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+  "frozen_protocol_sha256": "2497c354ebb3ff74fc78ea4376999f007c47e30a6e7ee0cf5d23c7353a2dde99",
+  "root_launch_binding_sha256": "700cc2afbc07a77bb919718db1e7658ca17359c72a611ef63681bc85508e5242",
+  "current_launch_preflight_sha256": "18e2519f7b9562203fb89f63a2977a6c1b3bc527257da4f49ac6279f71f2e119",
+  "pair_source_input_binding": {
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "implementation_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "dt_seconds": {
+    "coarse": 0.9375,
+    "fine": 0.46875
+  },
+  "run_seconds": 60.0,
+  "W_owner_count": 4096,
+  "common_state_count": 65,
+  "initial_state_gate": {
+    "all_six_packed_state_vectors_bitwise_equal": true,
+    "pair_initial_full_state_exact": true,
+    "physical_W_initial_bitwise_equal": true,
+    "physical_W_initial_exact_zero": true
+  },
+  "endpoints": {
+    "D_time_60_internal_W_M0_weighted_rms_m_s": 1.6116069056565491e-06,
+    "D_time_60_internal_W_e1_projection_m_s": -7.366471058713781e-07,
+    "D_time_60_internal_W_m_s": {
+      "count": 4096,
+      "max_abs": 5.851036324578025e-06,
+      "mean": 1.1874570169642601e-08,
+      "rms": 1.7984438422489106e-06
+    },
+    "D_time_60_internal_W_perpendicular_M0_rms_m_s": 1.433397313996088e-06,
+    "coarse_time_60_internal_W_m_s": {
+      "count": 4096,
+      "max_abs": 0.001006800169773084,
+      "mean": -2.7005811166501983e-06,
+      "rms": 0.00023752108245189119
+    },
+    "direct_local_bound_sum_coarse_m_s": 3.3290383915765254e-12,
+    "direct_local_bound_sum_fine_m_s": 2.9231673522113608e-12,
+    "fine_time_60_internal_W_m_s": {
+      "count": 4096,
+      "max_abs": 0.0010083702573448112,
+      "mean": -2.688706546480552e-06,
+      "rms": 0.00023759534918482245
+    }
+  },
+  "detail_interval_selected_by_frozen_rule": {
+    "first_exceeding_common_index": null,
+    "interval_common_indices": [
+      63,
+      64
+    ],
+    "interval_seconds": [
+      59.0625,
+      60.0
+    ],
+    "reason": "no W crossing; fixed final interval used, not an acceptance"
+  },
+  "published_history_t60_v3_screen": {
+    "budget_source_contract": "unchanged V3 named-case epsilon/3 screen; descriptive single t=60 screen only",
+    "coarse_wrfout_files": [
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf"
+      },
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:00:30",
+        "sha256": "d8f80633e95a3636e11fe4610e9699f9fa8892fe6a37636b43e84dfeb76d5600"
+      },
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:01:00",
+        "sha256": "af2a83cd29a92e1b045088e77d17666ae5b4308b92a94c83db3b1db058f08217"
+      }
+    ],
+    "comparison_units": {
+      "MU": "Pa (MU+MUB)",
+      "PH": "m^2/s^2 perturbation",
+      "T": "K (T+300)",
+      "U": "m/s",
+      "V": "m/s",
+      "W": "m/s"
+    },
+    "exact_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:01:00"
+    ],
+    "fine_wrfout_files": [
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "5072b2699a2413d2c30e5f94b357454a27cb9e33201733dbaa99989a2f8e5ab9"
+      },
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:00:30",
+        "sha256": "a63fd4c079cb6f34136ee12cd2112c3a6c3a0fa33929e6cca7ae2b9db016eeb8"
+      },
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:01:00",
+        "sha256": "89c52efe052aee1ea77fb01a6fd3549536a56f72e51f4b70edca33cc51646876"
+      }
+    ],
+    "initial_all_eight_fields_bitwise_equal": true,
+    "internal_W_fp64_to_published_fp32_roundtrip": {
+      "coarse": {
+        "0001-01-01_00:00:00": {
+          "bitwise_equal_after_fp32_cast": true,
+          "internal_count": 4096,
+          "published_count": 4096
+        },
+        "0001-01-01_00:01:00": {
+          "bitwise_equal_after_fp32_cast": true,
+          "internal_count": 4096,
+          "published_count": 4096
+        }
+      },
+      "fine": {
+        "0001-01-01_00:00:00": {
+          "bitwise_equal_after_fp32_cast": true,
+          "internal_count": 4096,
+          "published_count": 4096
+        },
+        "0001-01-01_00:01:00": {
+          "bitwise_equal_after_fp32_cast": true,
+          "internal_count": 4096,
+          "published_count": 4096
+        }
+      }
+    },
+    "owner_counts": {
+      "MU": 256,
+      "PH": 4096,
+      "T": 4096,
+      "U": 4096,
+      "V": 4352,
+      "W": 4096
+    },
+    "physical_admissibility_t0_t60": {
+      "coarse": {
+        "0001-01-01_00:00:00": {
+          "all_positive_and_finite": true,
+          "minimum_layer_depth_m_using_g_9p81": 942.6574644813965,
+          "minimum_total_mu_Pa": 89091.7890625,
+          "minimum_total_theta_K": 302.2530450820923
+        },
+        "0001-01-01_00:01:00": {
+          "all_positive_and_finite": true,
+          "minimum_layer_depth_m_using_g_9p81": 942.6521386818297,
+          "minimum_total_mu_Pa": 89091.65737581253,
+          "minimum_total_theta_K": 302.25311279296875
+        }
+      },
+      "fine": {
+        "0001-01-01_00:00:00": {
+          "all_positive_and_finite": true,
+          "minimum_layer_depth_m_using_g_9p81": 942.6574644813965,
+          "minimum_total_mu_Pa": 89091.7890625,
+          "minimum_total_theta_K": 302.2530450820923
+        },
+        "0001-01-01_00:01:00": {
+          "all_positive_and_finite": true,
+          "minimum_layer_depth_m_using_g_9p81": 942.6521386818297,
+          "minimum_total_mu_Pa": 89091.65737581253,
+          "minimum_total_theta_K": 302.25311279296875
+        }
+      }
+    },
+    "t60_fields": {
+      "MU": {
+        "count": 256,
+        "epsilon_over_3": 0.004863633485853729,
+        "fine_minus_coarse_max_abs": 0.0,
+        "fine_minus_coarse_rms": 0.0,
+        "ratio_to_epsilon_over_3": 0.0,
+        "within_single_t60_screen": true
+      },
+      "PH": {
+        "count": 4096,
+        "epsilon_over_3": 0.0034165835132482897,
+        "fine_minus_coarse_max_abs": 0.00048828125,
+        "fine_minus_coarse_rms": 0.0001028908077946562,
+        "ratio_to_epsilon_over_3": 0.030115115698381854,
+        "within_single_t60_screen": true
+      },
+      "T": {
+        "count": 4096,
+        "epsilon_over_3": 1.2065237971809995e-05,
+        "fine_minus_coarse_max_abs": 0.0,
+        "fine_minus_coarse_rms": 0.0,
+        "ratio_to_epsilon_over_3": 0.0,
+        "within_single_t60_screen": true
+      },
+      "U": {
+        "count": 4096,
+        "epsilon_over_3": 0.00025814723466881614,
+        "fine_minus_coarse_max_abs": 4.76837158203125e-07,
+        "fine_minus_coarse_rms": 2.3350212277406657e-08,
+        "ratio_to_epsilon_over_3": 9.04530792567399e-05,
+        "within_single_t60_screen": true
+      },
+      "V": {
+        "count": 4352,
+        "epsilon_over_3": 3.374002414931749e-05,
+        "fine_minus_coarse_max_abs": 2.2351741790771484e-08,
+        "fine_minus_coarse_rms": 5.27999998338641e-09,
+        "ratio_to_epsilon_over_3": 0.00015649069959225906,
+        "within_single_t60_screen": true
+      },
+      "W": {
+        "count": 4096,
+        "epsilon_over_3": 2.5981466189324436e-06,
+        "fine_minus_coarse_max_abs": 5.851034075021744e-06,
+        "fine_minus_coarse_rms": 1.7984436497264701e-06,
+        "ratio_to_epsilon_over_3": 0.6922025249157938,
+        "within_single_t60_screen": true
+      }
+    }
+  },
+  "interpretation_limits": [
+    "The local direct sum does not include state-transition amplification and is not a global error bound.",
+    "The epsilon/3 value is a descriptive plotting threshold retained from PR308, not a newly adopted tolerance.",
+    "Captured Newton residuals and Kfast\u2212FI are related solver quantities; do not count them as independent proofs."
+  ],
+  "source_full_analysis_sha256": "1aa1821491d18589a1bc83a3105e2bd3474b2b342f5002ed9f9412bcbe6de538",
+  "source_full_analysis_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/red_precision/pr309_red_pair_analysis.json",
+  "maximum_internal_W_common_time_row": {
+    "D_M0_weighted_rms_m_s": 1.7021553384641753e-06,
+    "D_fine_minus_coarse_W_m_s": {
+      "count": 4096,
+      "max_abs": 6.441503582447106e-06,
+      "mean": 5.976608214215663e-08,
+      "rms": 1.9683104921731626e-06
+    },
+    "D_parallel_M0_rms_m_s": 5.10555927349013e-07,
+    "D_perpendicular_M0_rms_m_s": 1.623781217193647e-06,
+    "D_projection_frozen_e1_m_s": 5.10555927349013e-07,
+    "D_vs_coarse_cosine_M0": 0.10894897412154748,
+    "time_seconds": 56.25
+  }
+}

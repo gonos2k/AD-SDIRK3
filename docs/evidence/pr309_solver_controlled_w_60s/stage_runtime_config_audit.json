@@ -1,0 +1,2346 @@
+{
+  "schema": "pr309_all_stage_csv_runtime_config_audit_v1",
+  "created_local_time": "2026-10-15T23:34:24+09:00",
+  "protocol_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_analysis_protocol_v3_frozen.json",
+  "protocol_sha256": "2497c354ebb3ff74fc78ea4376999f007c47e30a6e7ee0cf5d23c7353a2dde99",
+  "run_index_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/pr309_run_index.json",
+  "run_index_sha256": "d17cf4a5e6705fb065f1ad1c18244aff4041eb230a4f16a73a2f402ea5bc2ffd",
+  "expected": {
+    "dt_by_case_s": {
+      "h0p9375_0_60s_newton_tol1e-9": 0.9375,
+      "h0p46875_0_60s_newton_tol1e-9": 0.46875
+    },
+    "newton_tol": 1e-09,
+    "krylov_tol": 1e-07,
+    "effective_ewt_rtol": 1e-06
+  },
+  "case_count": 2,
+  "csv_count": 192,
+  "all_192_rows_match": true,
+  "cases": [
+    {
+      "label": "h0p9375_0_60s_newton_tol1e-9",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "ca4c91645e4165ae33f802d33a1114f858cf178362c250cf7240306ea49450b5",
+      "accepted_csv_count": 64,
+      "expected_csv_count": 64,
+      "all_metadata_matches": true,
+      "csv_rows": [
+        {
+          "step_seq": 1,
+          "filename": "accepted_ark_w_step_1.csv",
+          "csv_sha256": "8e61145c438cf0e2d15fa75a0fedfb0eecd2d5395f8766c26a797de14e3bfbdb",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 2,
+          "filename": "accepted_ark_w_step_2.csv",
+          "csv_sha256": "ad7640516b86c1ac0971f8c40e15201a02c2902a73581e1ae306c94e8e462022",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 3,
+          "filename": "accepted_ark_w_step_3.csv",
+          "csv_sha256": "efc7d937eea500b268527031374ffac921721148904df1dd34fafbdb47505c7d",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 4,
+          "filename": "accepted_ark_w_step_4.csv",
+          "csv_sha256": "6c2058bf27ea50b4f4883048d0695b2734f337080b64b0641a1f35218536a5cc",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 5,
+          "filename": "accepted_ark_w_step_5.csv",
+          "csv_sha256": "7f27f99f904c153729bf9638bbdc1ebc59ccdf166fea0ddb0cd6a93e879be57b",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 6,
+          "filename": "accepted_ark_w_step_6.csv",
+          "csv_sha256": "89b239da81b166edf2768deb88c58332099baf2585756695a453a8062d75ffdb",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 7,
+          "filename": "accepted_ark_w_step_7.csv",
+          "csv_sha256": "211648b8da720a5e546d853d58373b90b51dff95b23c221d9b03f29558ef75f5",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 8,
+          "filename": "accepted_ark_w_step_8.csv",
+          "csv_sha256": "5d5678f824750cdefe3eedd47ae8551e74fd57fa63bb8cf12ad5112a967b9a0e",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 9,
+          "filename": "accepted_ark_w_step_9.csv",
+          "csv_sha256": "b752d5978636076a9c02f346b752745b60226973af7720a917b2857647a1c739",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 10,
+          "filename": "accepted_ark_w_step_10.csv",
+          "csv_sha256": "89e91b827612510d7c8a64933afe8165941c8df92f26a10a6f6cbac48c601d69",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 11,
+          "filename": "accepted_ark_w_step_11.csv",
+          "csv_sha256": "f4e5340c4f5355660346fc8116770dd08cd87f38e4f0dbb9889cc2618c4f3559",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 12,
+          "filename": "accepted_ark_w_step_12.csv",
+          "csv_sha256": "2caab8d3b31343ce1b54c382de9ef597fdb988432e2a3b09fdecafb481fcae1f",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 13,
+          "filename": "accepted_ark_w_step_13.csv",
+          "csv_sha256": "f8bb1d1934549a1bd42980d96bbb17c3e2b29f685a2a8ef47a3457977ce8b4b4",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 14,
+          "filename": "accepted_ark_w_step_14.csv",
+          "csv_sha256": "8658c950bc9eccbc01d54648fc770c2684737e805c49b7dae332d8bd2e839da1",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 15,
+          "filename": "accepted_ark_w_step_15.csv",
+          "csv_sha256": "e51ff343fa029a7676f35b4cd7ba99bbaa5a4406dbb6c9ab9f21cca9a861eb77",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 16,
+          "filename": "accepted_ark_w_step_16.csv",
+          "csv_sha256": "004420238f88df5320d8d69e5f3cf14a03ca8b97ee070bd1fbefaca2d4ab55c3",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 17,
+          "filename": "accepted_ark_w_step_17.csv",
+          "csv_sha256": "6c3eddbb59f9db6a77b96afe24b326a82fbfa61c8e25f2b9a7a1c1bc072fc3b4",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 18,
+          "filename": "accepted_ark_w_step_18.csv",
+          "csv_sha256": "b48825dcf7063e1100bbd79b33e4f4bc00157870aa0fbcc92cd3962d4ded5f42",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 19,
+          "filename": "accepted_ark_w_step_19.csv",
+          "csv_sha256": "ccb7614fff1eab2ff34e7b213e02637d281a2db896138022698b0908c8d6bc92",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 20,
+          "filename": "accepted_ark_w_step_20.csv",
+          "csv_sha256": "281a099658c407544f4c97f2783ce5012e97ba6d946048a7facda0975363142f",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 21,
+          "filename": "accepted_ark_w_step_21.csv",
+          "csv_sha256": "f834008867aaa9aa4fe05a0eac31065067b02a51fd04dab862e31fb5ac7b3816",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 22,
+          "filename": "accepted_ark_w_step_22.csv",
+          "csv_sha256": "e7f5fd531fb24af6a2e7969829acc1ba9f41bc8fef80385bd7083de63f43a1c3",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 23,
+          "filename": "accepted_ark_w_step_23.csv",
+          "csv_sha256": "ed9271f06b3b67dbb1959f837789e8748c508a11a2ff621c1e1a5354e7370d3a",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 24,
+          "filename": "accepted_ark_w_step_24.csv",
+          "csv_sha256": "46d537f1992e31623614bb9cdcee84ef96c3925bdf9b7d9ac15cb0a9d45caa05",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 25,
+          "filename": "accepted_ark_w_step_25.csv",
+          "csv_sha256": "ea630b8dac8cad1fbd7fb5f5a6f54813c56e5390f40900018a2a6708b9a2c12d",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 26,
+          "filename": "accepted_ark_w_step_26.csv",
+          "csv_sha256": "cbbba321b7767177f42e02ff1446df8eef45394199962bd458a162e4a7108723",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 27,
+          "filename": "accepted_ark_w_step_27.csv",
+          "csv_sha256": "059300dcc9f5bc735bf93a22926acf6039431f6e5cb6badb03da026709af620e",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 28,
+          "filename": "accepted_ark_w_step_28.csv",
+          "csv_sha256": "13315fca6ac50d1b47a17ae8da4e8f0a8dde95c13d04b9eaaa301bff7c744b3a",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 29,
+          "filename": "accepted_ark_w_step_29.csv",
+          "csv_sha256": "5f66c9074a37e29755cc09f2f3012186de3158d15234c1839b4dbf6ad85eb601",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 30,
+          "filename": "accepted_ark_w_step_30.csv",
+          "csv_sha256": "d255160c839e17707076295ec917ab7f3805d6228758033997fd5174e6a4dbb3",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 31,
+          "filename": "accepted_ark_w_step_31.csv",
+          "csv_sha256": "e125cc44ef49de7348a55b12f8b2f80f0f438b5394c69bccfa25a73e9f96e15a",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 32,
+          "filename": "accepted_ark_w_step_32.csv",
+          "csv_sha256": "69c4416e81247c27577588953bdd4b08241afc05f746ce9ca8c2366e69198c12",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 33,
+          "filename": "accepted_ark_w_step_33.csv",
+          "csv_sha256": "ee2e1936c38f0d69ff2d2877f01de1fb9c8d3a62e3ed6228522921e4c6f2fb21",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 34,
+          "filename": "accepted_ark_w_step_34.csv",
+          "csv_sha256": "c98e064b9d10db5daf9fbeb88ebaeb3de411a379890356a0e71b86c21bd1141a",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 35,
+          "filename": "accepted_ark_w_step_35.csv",
+          "csv_sha256": "5c4d0dda13b4c6f3ce776a0e12d20bb45276969a827b701d7ffb303ab084de2a",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 36,
+          "filename": "accepted_ark_w_step_36.csv",
+          "csv_sha256": "4dc742390fdb1908ffa8ca1703cbe2743fa3c2ad3a2cb9bd2d691c519edc76f4",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 37,
+          "filename": "accepted_ark_w_step_37.csv",
+          "csv_sha256": "94ea6afbd4b3f1283bb34a2387582c3793632b63b474c44684ad62b9558665a6",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 38,
+          "filename": "accepted_ark_w_step_38.csv",
+          "csv_sha256": "bb21a67c6dec28ae33f4e7ee8d7304c037454d94d7dd38f96a89fd6643cc1b97",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 39,
+          "filename": "accepted_ark_w_step_39.csv",
+          "csv_sha256": "742e29e16365f9bb3b2920c326a32e1904bda8c112b1e4798fb63e2a4b3ee3fc",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 40,
+          "filename": "accepted_ark_w_step_40.csv",
+          "csv_sha256": "5068ed73aaf54ad3dbad07d553f8a2fbcbc1ea2524938af3486a5b0dff3a5307",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 41,
+          "filename": "accepted_ark_w_step_41.csv",
+          "csv_sha256": "02243252e468523d2d3e19481496047c19e82db376c7189d58c63a08b0526a41",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 42,
+          "filename": "accepted_ark_w_step_42.csv",
+          "csv_sha256": "0af6dc17368eb99f9ac9f65d7b4c91a3f384d2d555d6102a28488d4e389b7afa",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 43,
+          "filename": "accepted_ark_w_step_43.csv",
+          "csv_sha256": "fc3e965186e29d21c91c4c49b52d0ebf8b4d43dc6e6f085728874dd7412125ed",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 44,
+          "filename": "accepted_ark_w_step_44.csv",
+          "csv_sha256": "625facf6c750d9dc12d59d6de22a3716200443515293f8a2433455783d7d1f06",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 45,
+          "filename": "accepted_ark_w_step_45.csv",
+          "csv_sha256": "f04ceabe96bc9402e6abba1a2e7aa330b498174dfb9d155113b439f437a12b4a",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 46,
+          "filename": "accepted_ark_w_step_46.csv",
+          "csv_sha256": "4d3ad692a25f85f37c50a0dcc0d9661cf068270edbe69632a05e8e24ab68df67",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 47,
+          "filename": "accepted_ark_w_step_47.csv",
+          "csv_sha256": "6f0b9f238cf84539d60b65f64c6d9ceb0663c7a74fc05a7ab67088932ce01f2a",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 48,
+          "filename": "accepted_ark_w_step_48.csv",
+          "csv_sha256": "9585febcc23539fc9ca4a8438dd7490771293e733a77a1792555188bd2328a84",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 49,
+          "filename": "accepted_ark_w_step_49.csv",
+          "csv_sha256": "60aacdb9e8c2bbe7bafb6fde92db37a6278a0d90d0f49876e4c46268dc3057ea",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 50,
+          "filename": "accepted_ark_w_step_50.csv",
+          "csv_sha256": "e3e73a9142310019e8824d8e75fd3e0993c484b27625ce383bf0d1837b179cb1",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 51,
+          "filename": "accepted_ark_w_step_51.csv",
+          "csv_sha256": "f26603f672dbc9173582b5b3de6089065a8ddd4bbcaeb166872850e21a42a94e",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 52,
+          "filename": "accepted_ark_w_step_52.csv",
+          "csv_sha256": "0eed6a92edefd1c08f0a137035e61dab98621fd26a0a7c752d80e19d4eb131d1",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 53,
+          "filename": "accepted_ark_w_step_53.csv",
+          "csv_sha256": "900d37dc36d8fd9d08d68166dafa5a8fcb98395f20c6c8198cd08d5e49816596",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 54,
+          "filename": "accepted_ark_w_step_54.csv",
+          "csv_sha256": "344717a8d038f0ca9a2a1944f26759c3a7d8ee528b3850f877bd3ace2f16d73e",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 55,
+          "filename": "accepted_ark_w_step_55.csv",
+          "csv_sha256": "2b393b7235f1ab37c139f1b4177cc9a6b5e740c9f7366e180d76aff01019a003",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 56,
+          "filename": "accepted_ark_w_step_56.csv",
+          "csv_sha256": "63443b9f3931df5de054d54053bcca44ec8aaf7c7ba5772af3b0d2e154fb7624",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 57,
+          "filename": "accepted_ark_w_step_57.csv",
+          "csv_sha256": "b93c01ecbaf854b4797cbd206fbd86e8fb3d119e10b32f26d1a62808795d3fb8",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 58,
+          "filename": "accepted_ark_w_step_58.csv",
+          "csv_sha256": "fb829856f6dc1e973c2dce2ed9ca91c9cf3927c3547f1b8cc149d9fd5f95ab2e",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 59,
+          "filename": "accepted_ark_w_step_59.csv",
+          "csv_sha256": "aca35312b6e2df20fb3556000dc01e2e67444c97c902b63533b7c6b5601b124c",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 60,
+          "filename": "accepted_ark_w_step_60.csv",
+          "csv_sha256": "2eaf6f2d231245a2ee626fe8648ed851e5a4e9a7af567b80ef80b59a5a538e36",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 61,
+          "filename": "accepted_ark_w_step_61.csv",
+          "csv_sha256": "28cdd2d43df594636d5fdce798b4b8eee58039bac57a18c0d9f2edfa26cb146d",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 62,
+          "filename": "accepted_ark_w_step_62.csv",
+          "csv_sha256": "42571a8d0aadaa2a336edb6c412c7d48559d44e35150a74fc7bf7ef637b1e628",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 63,
+          "filename": "accepted_ark_w_step_63.csv",
+          "csv_sha256": "b8a743ba492073f8ef9e0de877d072bb67e175820551fbb6a16ef2e0efde1963",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 64,
+          "filename": "accepted_ark_w_step_64.csv",
+          "csv_sha256": "f598d0c9f371c0cf9049aac126bbc0d2afda164b2636cfc1ae6d1cedfe4a5e2b",
+          "dt_seconds": 0.9375,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        }
+      ]
+    },
+    {
+      "label": "h0p46875_0_60s_newton_tol1e-9",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "6123eb09ebe8507a95fed5db2cc5a133bf8e9435ff2946a9ad06ac79c0b3ce89",
+      "accepted_csv_count": 128,
+      "expected_csv_count": 128,
+      "all_metadata_matches": true,
+      "csv_rows": [
+        {
+          "step_seq": 1,
+          "filename": "accepted_ark_w_step_1.csv",
+          "csv_sha256": "b7211499534a056d01e22e55576189df34934c890e3d3cc5abbe265d79d6296d",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 2,
+          "filename": "accepted_ark_w_step_2.csv",
+          "csv_sha256": "f06d229de253fe4dc5b8a9c0ef8dde02aa9178ada202752a07d865b5075ee840",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 3,
+          "filename": "accepted_ark_w_step_3.csv",
+          "csv_sha256": "a1e01dbe45961b5ab5249557f2bbcc02216b6e4243c4deeaf9da00e2667c6188",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 4,
+          "filename": "accepted_ark_w_step_4.csv",
+          "csv_sha256": "28a79b1feb19a622b5a87589fbddd4cf369be08e22fe7da15ddc603ed18ad301",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 5,
+          "filename": "accepted_ark_w_step_5.csv",
+          "csv_sha256": "86b6bde8c84b725b6496111e45e18d2156d4a76bf99434d10474bec7bd6e441f",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 6,
+          "filename": "accepted_ark_w_step_6.csv",
+          "csv_sha256": "9a40a4bbe74591521bf080ffbdcc087de7ef4ff3848371bf891372e65efb3047",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 7,
+          "filename": "accepted_ark_w_step_7.csv",
+          "csv_sha256": "45576e8b7b5a521052f37d3175a85317c0486b6e2a2b7c33390562ef2b33d0b2",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 8,
+          "filename": "accepted_ark_w_step_8.csv",
+          "csv_sha256": "9fe4d90d2984f82c6b41b9800e2a8d63abd648ccec566ee228c76e5280e6c231",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 9,
+          "filename": "accepted_ark_w_step_9.csv",
+          "csv_sha256": "e50f44f0c25462cd4603f05cce506ac9111bbde6d515dc8b7acdd2893f0477f2",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 10,
+          "filename": "accepted_ark_w_step_10.csv",
+          "csv_sha256": "fdf6ac924c23e9abd296f020a90480327bee45c49e473ab0a7948ca5585392c1",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 11,
+          "filename": "accepted_ark_w_step_11.csv",
+          "csv_sha256": "9ec71b6bfdbc3246418b37b124de78c0b601e9eef7c3b36387beb9880e852987",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 12,
+          "filename": "accepted_ark_w_step_12.csv",
+          "csv_sha256": "283c63e487a95afa1fea14fec636aea836658f04524d76b45b436808e7fe0aa5",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 13,
+          "filename": "accepted_ark_w_step_13.csv",
+          "csv_sha256": "6c227599f7efb3a1e5269b90b5c3581ef171419572b2586a7c0f3f7ac0df6595",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 14,
+          "filename": "accepted_ark_w_step_14.csv",
+          "csv_sha256": "bcd67f1720ee64fc152cf4ad537b3793a0c6a4371225f2c6e9c0d3994939d867",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 15,
+          "filename": "accepted_ark_w_step_15.csv",
+          "csv_sha256": "05de32131ddbd98cc56e9823254842d1c7ba8fdbdf906a768916da1922e4cc23",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 16,
+          "filename": "accepted_ark_w_step_16.csv",
+          "csv_sha256": "7f5511ceea8270a47cc832155160c0e33d15e45b0980b3d506578de7a9fd0dc5",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 17,
+          "filename": "accepted_ark_w_step_17.csv",
+          "csv_sha256": "dd93217c3aefa0c63a92ba05839bef9865b6d0071f8fbec611d416bfd6d42b91",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 18,
+          "filename": "accepted_ark_w_step_18.csv",
+          "csv_sha256": "5037a9c79885018bb613eea2fe5df19647de25d9724022b1adea7e273d505e08",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 19,
+          "filename": "accepted_ark_w_step_19.csv",
+          "csv_sha256": "6c2e9b0bd7045117f348811276e50f802a9767c828e34e9d3372d070c6d25a3b",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 20,
+          "filename": "accepted_ark_w_step_20.csv",
+          "csv_sha256": "bdf70cf58aeff3157451a303dec0cdf21e9242c9c4f5ecec37d0ba1a5ad020a4",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 21,
+          "filename": "accepted_ark_w_step_21.csv",
+          "csv_sha256": "9bee7b89ba6d75d38051c0c21dc8efe3efcd3654a547d86810c6da57454046b6",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 22,
+          "filename": "accepted_ark_w_step_22.csv",
+          "csv_sha256": "39d79f90ac2b9b7f7cd196c605458d4c2f58b6a1438a6291ef8f34992bb7fa71",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 23,
+          "filename": "accepted_ark_w_step_23.csv",
+          "csv_sha256": "af609fd5ae79eedd687e1497a6774d0786f9af87deb696a0066daf02f032a301",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 24,
+          "filename": "accepted_ark_w_step_24.csv",
+          "csv_sha256": "e9e2cd1bb69a506ee0799bc01598c7fed3035e50c10ea2303ddaa045b7c7a179",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 25,
+          "filename": "accepted_ark_w_step_25.csv",
+          "csv_sha256": "8972779b74bee0d065f48b0cd67d8e7bf11da03615700c19cff69eb9da59b26e",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 26,
+          "filename": "accepted_ark_w_step_26.csv",
+          "csv_sha256": "c481dfa6217ef81a409d7bbc64feb08af7d8625e83971b96df31fd530717e5f7",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 27,
+          "filename": "accepted_ark_w_step_27.csv",
+          "csv_sha256": "2237967cceeef8b26a123a657c9c7ec433e2e65fa038229793c96fe4eef09f2f",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 28,
+          "filename": "accepted_ark_w_step_28.csv",
+          "csv_sha256": "7ad932de41d5aa07764450df3b0cd126b91433b110ea3eea95592ee900076d60",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 29,
+          "filename": "accepted_ark_w_step_29.csv",
+          "csv_sha256": "94f6073ba418a7c0eff1c0626bbf59ae37a9a0e67da13effc8cac45a42edd71c",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 30,
+          "filename": "accepted_ark_w_step_30.csv",
+          "csv_sha256": "1f9a4f4eb082c2b14cca43d7d8b602be4c6e065da90bf596fef908d08fd4e432",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 31,
+          "filename": "accepted_ark_w_step_31.csv",
+          "csv_sha256": "c6beaa2bd2bf82aa1a67b7dd7c1e1ed896d49ab52406a18dece282f054c70c43",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 32,
+          "filename": "accepted_ark_w_step_32.csv",
+          "csv_sha256": "7d7091ab76da848ab6074cdf761c568a2963c8ff70d245b96fc236e6cae2adb9",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 33,
+          "filename": "accepted_ark_w_step_33.csv",
+          "csv_sha256": "1534bef1fd770823a2c4e56e4877732647e0b5dd94e415672aeb69ab143d95b0",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 34,
+          "filename": "accepted_ark_w_step_34.csv",
+          "csv_sha256": "270893ec33beec1f2bc17766473f8c0742f77953bd17fa382e95e690ff3ab60f",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 35,
+          "filename": "accepted_ark_w_step_35.csv",
+          "csv_sha256": "702afc3c6fbfbf4c42baeec200b56af0ba39d2962101fd0838d7c1ce8a6f272c",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 36,
+          "filename": "accepted_ark_w_step_36.csv",
+          "csv_sha256": "2a55d561e78a1d4e94f13b424008e8a90501ee47efcf564492eafa4d3f1b79f9",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 37,
+          "filename": "accepted_ark_w_step_37.csv",
+          "csv_sha256": "9d8da9c31692d05fdd331125a29f1b3246ba7f7e3645213d7dfc13bee6d4a727",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 38,
+          "filename": "accepted_ark_w_step_38.csv",
+          "csv_sha256": "bd27668970f3094d750eb3ee02fdda793b1b30ea87b259c2f53777a11b289838",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 39,
+          "filename": "accepted_ark_w_step_39.csv",
+          "csv_sha256": "447e581a8e2148f9e0532863227d5a3e77ba3f4545b40f2faab679af7ef7fab7",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 40,
+          "filename": "accepted_ark_w_step_40.csv",
+          "csv_sha256": "b4489173dca24cbd23e7e698a81fa57c62f366ed7a3f28083dd397c03b18710a",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 41,
+          "filename": "accepted_ark_w_step_41.csv",
+          "csv_sha256": "5732326899398318fb84fed6caae0ed8db963ee6e68dedb6681a890ce6b90360",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 42,
+          "filename": "accepted_ark_w_step_42.csv",
+          "csv_sha256": "0970880529fe9a0a29c2d91650b097cf6046713b607786eb839e9188504b7001",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 43,
+          "filename": "accepted_ark_w_step_43.csv",
+          "csv_sha256": "b5ba9821cc7b951558b0ff935f1840a95ab848996d6d739cb3b5b23a776039a7",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 44,
+          "filename": "accepted_ark_w_step_44.csv",
+          "csv_sha256": "a6c494643a6942a74fa4e7e230e76836984cd0d0c63a65f733eb452b86f27be2",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 45,
+          "filename": "accepted_ark_w_step_45.csv",
+          "csv_sha256": "04cabe8aea42fabc3cd2f85b72d7daf7bbad3e592dc9bea6978e17fb227b109f",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 46,
+          "filename": "accepted_ark_w_step_46.csv",
+          "csv_sha256": "9be81d7aa15d4f3038c3102e211120b16fa440f5fc439e711f03cabfa36d2c11",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 47,
+          "filename": "accepted_ark_w_step_47.csv",
+          "csv_sha256": "b6af39d0b819f66a41cdcdc335f6d3ddd598a0242182e1d018ffd78977c319b6",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 48,
+          "filename": "accepted_ark_w_step_48.csv",
+          "csv_sha256": "5a148be228f2be9c73c0f62b47b1a0aa9ce843482f8e5d628427da6afe17d3cd",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 49,
+          "filename": "accepted_ark_w_step_49.csv",
+          "csv_sha256": "8e759a99e83ff5709f8155ea072f94bb824562841791cef05f9022a6325aca6d",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 50,
+          "filename": "accepted_ark_w_step_50.csv",
+          "csv_sha256": "f88a575fa53e3325c76600e0f1ebd47deb2856186f8bef6a29578ad78a8d7ae0",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 51,
+          "filename": "accepted_ark_w_step_51.csv",
+          "csv_sha256": "e2519d7a976313c0508d648dc896c1294db7f85dcfd84e86888f01662b89c93e",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 52,
+          "filename": "accepted_ark_w_step_52.csv",
+          "csv_sha256": "1136f6b13df28a5bb1944fbc1b752921ffec05cd569c2c2aa2689c1dbf531e0d",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 53,
+          "filename": "accepted_ark_w_step_53.csv",
+          "csv_sha256": "8d227726b895adc3ff3e7a302577abdcc3d57c23c733d434e561b56639f75d6d",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 54,
+          "filename": "accepted_ark_w_step_54.csv",
+          "csv_sha256": "4613f6d2881f31a5a6577ae4413659a91c5d90cb8e5a0812460bff8b89d70baf",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 55,
+          "filename": "accepted_ark_w_step_55.csv",
+          "csv_sha256": "6eb0c8b18361bd78be65e6fc8b553b1b87a16fe93c522b3a6f93d4e4f66ef56b",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 56,
+          "filename": "accepted_ark_w_step_56.csv",
+          "csv_sha256": "cfd6374e5688dcd01182b818049e804eedd500be8a0d5ef69541d13f5e84749d",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 57,
+          "filename": "accepted_ark_w_step_57.csv",
+          "csv_sha256": "b2589afc244264d815eac50c0b47d78771d15d6978f347b212f3b9692ac7ffdb",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 58,
+          "filename": "accepted_ark_w_step_58.csv",
+          "csv_sha256": "26aadd0ca1c8c932a7dcb5357ba7dc2691a85836b4016bc6f10b4c72c67f46dd",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 59,
+          "filename": "accepted_ark_w_step_59.csv",
+          "csv_sha256": "7e2f0bfe3e7744c04baa208c66698244a7501de1904f8d85fc692dada6338514",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 60,
+          "filename": "accepted_ark_w_step_60.csv",
+          "csv_sha256": "b60e3d3922a2421e39c1f6b809200423de9e967e6a373058527bb4979f16681a",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 61,
+          "filename": "accepted_ark_w_step_61.csv",
+          "csv_sha256": "0cc29a2a24e5925e49960a49e03a8e76f73fea23be1f1d2cb1c36008893c2e77",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 62,
+          "filename": "accepted_ark_w_step_62.csv",
+          "csv_sha256": "444287a4be91bb427a0a741c060c4bfb43844dfafe3a0a0b5de66a15461413f0",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 63,
+          "filename": "accepted_ark_w_step_63.csv",
+          "csv_sha256": "ba00cf28aba27b2313035bb47edbadba1a978fc1a97439658ef89f3071d5f6da",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 64,
+          "filename": "accepted_ark_w_step_64.csv",
+          "csv_sha256": "593f440b8d422b677f32314de900f66720f8b159f06103c871bcae22106a3735",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 65,
+          "filename": "accepted_ark_w_step_65.csv",
+          "csv_sha256": "834846d535fa108e80a3ff597e7f60a808ea31f2105cc107eed0d8749eee472f",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 66,
+          "filename": "accepted_ark_w_step_66.csv",
+          "csv_sha256": "150aa998c85abf8e856f2ca1380af1eda9cd01bf8906a5b8bbcef9485813a31a",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 67,
+          "filename": "accepted_ark_w_step_67.csv",
+          "csv_sha256": "8b2fa96c76f03224c693e21ef04e5f13bb5138d4dcf29c5fd9417560dc9506d2",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 68,
+          "filename": "accepted_ark_w_step_68.csv",
+          "csv_sha256": "7e1a0477a47386df79bb3afcad7488c101d880f4f099db8227e7f8abbd3512fc",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 69,
+          "filename": "accepted_ark_w_step_69.csv",
+          "csv_sha256": "e16f6f2ad11ad4c301a349ae6a8146f6063592e5973c7b1967df7652917a828a",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 70,
+          "filename": "accepted_ark_w_step_70.csv",
+          "csv_sha256": "13fc77781e69dc0638268b88b227cc498bf1a9fb7575ca4fd4cf20e499dbf6b6",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 71,
+          "filename": "accepted_ark_w_step_71.csv",
+          "csv_sha256": "6d57f7cabd843c2c870a98651b5665d1e2bbdc94b9dc6a4ae8d6255643a0a42b",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 72,
+          "filename": "accepted_ark_w_step_72.csv",
+          "csv_sha256": "a5828dbf731ddde9ce8f18407c0452d3c252962226778fa097047cfc6ecbd974",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 73,
+          "filename": "accepted_ark_w_step_73.csv",
+          "csv_sha256": "35abb01a79894c6df431f8b0f1acfb1bb6e90fff4b140c7852dee0479aa2c060",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 74,
+          "filename": "accepted_ark_w_step_74.csv",
+          "csv_sha256": "76b8b9cade6767c3ce1435176bb23904fa1d8a0f8901bc508feb4230367f28f0",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 75,
+          "filename": "accepted_ark_w_step_75.csv",
+          "csv_sha256": "76669cc0340a2ec61751f29442781c32aa3ddea2294cb5e1c83b13429da93f59",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 76,
+          "filename": "accepted_ark_w_step_76.csv",
+          "csv_sha256": "2303f967e55448aacab7e5e3088f23f0ce093cbe87712fc09da686ce9a0fc1b5",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 77,
+          "filename": "accepted_ark_w_step_77.csv",
+          "csv_sha256": "e31126f50121dc05c4cfe7cb4138cde6c754bae49757b73ed1dcbff98489d125",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 78,
+          "filename": "accepted_ark_w_step_78.csv",
+          "csv_sha256": "1198ede01dc86aee0c66770c2128bae95549d14933b98319c0b424a470786656",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 79,
+          "filename": "accepted_ark_w_step_79.csv",
+          "csv_sha256": "c1e0595f403dfa710c614a1fcfa783f8db1880b2f8afc799b6f167c0a717e0b6",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 80,
+          "filename": "accepted_ark_w_step_80.csv",
+          "csv_sha256": "2befd55c3823a0cc146e73c4b140f61717455174100bbbb6ea9e77431afa79dc",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 81,
+          "filename": "accepted_ark_w_step_81.csv",
+          "csv_sha256": "427cf0dca07b561ff771c4d55ae8179153c54cde5459ce91edf62387181730a6",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 82,
+          "filename": "accepted_ark_w_step_82.csv",
+          "csv_sha256": "e2dfe4267f05949c0ac78162b42f2660e436110496e28ce7b04412ddc856f93e",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 83,
+          "filename": "accepted_ark_w_step_83.csv",
+          "csv_sha256": "ab9e3a946c8be66f9e3e67591f8a300359fba60e22cc4a5175216e2e503ac141",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 84,
+          "filename": "accepted_ark_w_step_84.csv",
+          "csv_sha256": "ae48d8d699842f1d4700a754f164cd2f0bd5dc4444c3643f1bc1e5d0ee154d5f",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 85,
+          "filename": "accepted_ark_w_step_85.csv",
+          "csv_sha256": "093858b2b007e9a1f11aac0a184a1cb6d58ff8e7f880cb0fdf337cde7cf7f8ff",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 86,
+          "filename": "accepted_ark_w_step_86.csv",
+          "csv_sha256": "7eb1c05bedaf5ea0fd7b0705071bb5ad133ca36c07f34c4bfb263fdbe3cf2041",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 87,
+          "filename": "accepted_ark_w_step_87.csv",
+          "csv_sha256": "49e3e4ab08b712f385fcf11434a78711e033c56c5da031eaf9a4267eafca7cf7",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 88,
+          "filename": "accepted_ark_w_step_88.csv",
+          "csv_sha256": "e1a6a43fc5ecaa9184f35c512a51a5af82dcc6b4c9302c382a81181089834963",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 89,
+          "filename": "accepted_ark_w_step_89.csv",
+          "csv_sha256": "ec4f8c1b252b1a3acca3910448071817b776268fe55c28e13016868d371899be",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 90,
+          "filename": "accepted_ark_w_step_90.csv",
+          "csv_sha256": "08f74227b0c1a3c20cb79eb9e35311211aa2743daa85823d4dad37d745bd8f3e",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 91,
+          "filename": "accepted_ark_w_step_91.csv",
+          "csv_sha256": "fa3ebf2627f1a2c419b3911c575921b29caf34c65c2ec012f238cd054999d462",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 92,
+          "filename": "accepted_ark_w_step_92.csv",
+          "csv_sha256": "7dba15a021e5d81d15752fb7714abb87aefdf6b52a1243918d820e23201a9ee8",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 93,
+          "filename": "accepted_ark_w_step_93.csv",
+          "csv_sha256": "57df5098b8bd9f575efaa7e4b95d1b2c1c6ec2f467049a689a6173e51645151f",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 94,
+          "filename": "accepted_ark_w_step_94.csv",
+          "csv_sha256": "20742c21dfa07d44848a89b09e776cc465f42d1684b8c5499cd3fd52aeb26db4",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 95,
+          "filename": "accepted_ark_w_step_95.csv",
+          "csv_sha256": "660721f8fbf173cb75771369fa09e8588e2bd5090cc0ae38d7af5576659dcf5c",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 96,
+          "filename": "accepted_ark_w_step_96.csv",
+          "csv_sha256": "a8a493bf37fa97a118aafe7033c3e2fbed167b890e71f5d1992d9715d47cec69",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 97,
+          "filename": "accepted_ark_w_step_97.csv",
+          "csv_sha256": "ed8c704afb3bb035edb90cf62dae9ec29961fa460c286f0148987891cc5792d4",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 98,
+          "filename": "accepted_ark_w_step_98.csv",
+          "csv_sha256": "718f3e3aab9c2b68cca26d0c9365bf29e4dfa75f3a3bf330b360fd36c35b879f",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 99,
+          "filename": "accepted_ark_w_step_99.csv",
+          "csv_sha256": "fbbb5fc138b82f2719c3b2ac1485f868687ceacfc261b1c0062985fc8afe1b71",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 100,
+          "filename": "accepted_ark_w_step_100.csv",
+          "csv_sha256": "536cfbd79f3d0033f2ce11f23f280528b19db0aeb1c5db1542ba0c6f220b184e",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 101,
+          "filename": "accepted_ark_w_step_101.csv",
+          "csv_sha256": "05322fe00d3cfc1608d7ce7ecfaf7179ac60dbce6a1d6166e340b1a8338c3963",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 102,
+          "filename": "accepted_ark_w_step_102.csv",
+          "csv_sha256": "9447e6a0d17481902a7fe043ba726dd3fbc484f37440b813b8fdd409b71c9743",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 103,
+          "filename": "accepted_ark_w_step_103.csv",
+          "csv_sha256": "c8d9d1d600820c0f8eb04da4ddd248123912006ee9e65d7a081035c6eecd5053",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 104,
+          "filename": "accepted_ark_w_step_104.csv",
+          "csv_sha256": "48e25bd7ea942e6f160fbd36e47674c6785efec1d5e2a3365e2fd3748bdc5d2b",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 105,
+          "filename": "accepted_ark_w_step_105.csv",
+          "csv_sha256": "5203f5bf2b11fa3ec2e49a0f761faea959e8c68b21284c183b25658300617eb2",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 106,
+          "filename": "accepted_ark_w_step_106.csv",
+          "csv_sha256": "32c7acea32c166a301b3b0e3e5f0fd8f93cb1f9af7de8fa2482ad7f9d035ad27",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 107,
+          "filename": "accepted_ark_w_step_107.csv",
+          "csv_sha256": "51316a0f4aa9db28f0d5251cfe3b330a0feee98f55ccf3aa0f5df7efb2e52953",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 108,
+          "filename": "accepted_ark_w_step_108.csv",
+          "csv_sha256": "3aac4e8110b9d05113bfcec0c0e694cf51597d053a2c9255985e8635c3215286",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 109,
+          "filename": "accepted_ark_w_step_109.csv",
+          "csv_sha256": "443a63946f27e8a11a93afd087cd57062f679af2d24019f1b79b71691970f70c",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 110,
+          "filename": "accepted_ark_w_step_110.csv",
+          "csv_sha256": "aaf7ad9744ee0ef574fbc6bdb636be7d5ba8a5f8241809f27e9d3f6c9a97c4fe",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 111,
+          "filename": "accepted_ark_w_step_111.csv",
+          "csv_sha256": "7d5d41a337833c25432af24a8676549082226742d36edd71997d14dbcf75f0d3",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 112,
+          "filename": "accepted_ark_w_step_112.csv",
+          "csv_sha256": "6d6887b02fa0ac98e5b1c87c7a69a10b905fe031b9074ee9b3a4199ccd2ec759",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 113,
+          "filename": "accepted_ark_w_step_113.csv",
+          "csv_sha256": "e76fc001aa044783661fddde58fc508c49070e579856389fac8852d3f01db8a9",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 114,
+          "filename": "accepted_ark_w_step_114.csv",
+          "csv_sha256": "b4521a3dab26de93c80028a5de5f18319735f5bde7a111093130e2b95623961e",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 115,
+          "filename": "accepted_ark_w_step_115.csv",
+          "csv_sha256": "3cf48c0861bec7a1d79c1f54a74f5e7e2fc98bf73717e326624348109cfc0048",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 116,
+          "filename": "accepted_ark_w_step_116.csv",
+          "csv_sha256": "8e382c09920ded0573959f4b39d9aa5240a90180e83eeacf40c8fd632441ab8e",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 117,
+          "filename": "accepted_ark_w_step_117.csv",
+          "csv_sha256": "1abc93c502813f1a4ef3a877e3988ab59e8bd6504084a282600de3ea3de52d8b",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 118,
+          "filename": "accepted_ark_w_step_118.csv",
+          "csv_sha256": "7bd8c7a4b12dbe69bddddb143ba39cae878478f9146ea3126d7dc373e4a22011",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 119,
+          "filename": "accepted_ark_w_step_119.csv",
+          "csv_sha256": "39ef8351864bf09aaddbac0c809a1a84ee66bcb55671ecd804f62fa6fd4c7cc8",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 120,
+          "filename": "accepted_ark_w_step_120.csv",
+          "csv_sha256": "3487271065261d50826ca2a7c864a205c1129ce5bf0de54d2dcd9d0b74ceb125",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 121,
+          "filename": "accepted_ark_w_step_121.csv",
+          "csv_sha256": "995017aef04060e80085bfece53203aed55c4fcd7d5c9cc54e4b233b179ce55b",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 122,
+          "filename": "accepted_ark_w_step_122.csv",
+          "csv_sha256": "e997d3ba67626fd0a1de9963a4e4bf05d16503fdd41cb9d29c404104ef3bfefd",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 123,
+          "filename": "accepted_ark_w_step_123.csv",
+          "csv_sha256": "804fec149f8fc165adfcf6fb564da6ddfd6d3e77e773a2293a87824cbe54ab5e",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 124,
+          "filename": "accepted_ark_w_step_124.csv",
+          "csv_sha256": "6d723119e00d56b7579a1720f7d16d5429449712697f0506d9eb7bc9a8216e2a",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 125,
+          "filename": "accepted_ark_w_step_125.csv",
+          "csv_sha256": "d09638b27dd43427c481792c45f2d67a5a3ac1f6d3ee07195c766b149e750f00",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 126,
+          "filename": "accepted_ark_w_step_126.csv",
+          "csv_sha256": "ee2889cbeb8b7faebba8fd2cce19f6059a6dc442f85596b78c43c4bf462f2d19",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 127,
+          "filename": "accepted_ark_w_step_127.csv",
+          "csv_sha256": "31c284e8281b3eb5c21ccc95f34f22f0612e637d43a9a591810229a4f732c61d",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        },
+        {
+          "step_seq": 128,
+          "filename": "accepted_ark_w_step_128.csv",
+          "csv_sha256": "9d198c7bfe22171d918a1a8f7e6e07cda4d251a1eddbb92ebefffb1ea8b1bd69",
+          "dt_seconds": 0.46875,
+          "accepted": "1",
+          "config": {
+            "newton_tol": 9.999999717180685e-10,
+            "krylov_tol": 1.0000000116860974e-07,
+            "effective_ewt_rtol": 9.999999974752427e-07
+          }
+        }
+      ]
+    }
+  ]
+}

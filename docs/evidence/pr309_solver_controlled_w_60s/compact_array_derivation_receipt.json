@@ -1,0 +1,121 @@
+{
+  "created_local_time": "2026-10-15T23:45:26+09:00",
+  "scope": "byte-preserving subset of independently parsed current native arrays; no model or additional scalar fit",
+  "source_npz": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/red_precision/pr309_red_pair_arrays.npz",
+  "source_npz_sha256": "7fc736e4b10175cef8afed0fd55fbcde4d35ed2ce199636bb4ae3948ecc2f9f7",
+  "derived_npz_sha256": "9c5f863a30056e8a7a5298fe6e0026123ef0839620754e61b0675589d6b0b35d",
+  "projected_W_aliases": {
+    "coarse_W_projected_m_s": "W_coarse_physical_trajectory",
+    "fine_W_projected_m_s": "W_fine_physical_trajectory",
+    "M0_kg": "M0",
+    "e1_dimensionless": "e1",
+    "owner_mask": "owner"
+  },
+  "array_shapes": {
+    "coarse_W_projected_m_s": [
+      65,
+      16,
+      16,
+      16
+    ],
+    "fine_W_projected_m_s": [
+      129,
+      16,
+      16,
+      16
+    ],
+    "M0_kg": [
+      16,
+      16,
+      16
+    ],
+    "e1_dimensionless": [
+      16,
+      16,
+      16
+    ],
+    "owner_mask": [
+      16,
+      16,
+      16
+    ],
+    "coarse_time_numerator": [
+      65
+    ],
+    "coarse_time_denominator": [],
+    "fine_time_numerator": [
+      129
+    ],
+    "fine_time_denominator": [],
+    "t60_U_coarse": [
+      16,
+      16,
+      16
+    ],
+    "t60_U_fine": [
+      16,
+      16,
+      16
+    ],
+    "t60_V_coarse": [
+      16,
+      17,
+      16
+    ],
+    "t60_V_fine": [
+      16,
+      17,
+      16
+    ],
+    "t60_W_coarse": [
+      16,
+      16,
+      16
+    ],
+    "t60_W_fine": [
+      16,
+      16,
+      16
+    ],
+    "t60_PH_coarse": [
+      16,
+      16,
+      16
+    ],
+    "t60_PH_fine": [
+      16,
+      16,
+      16
+    ],
+    "t60_T_coarse": [
+      16,
+      16,
+      16
+    ],
+    "t60_T_fine": [
+      16,
+      16,
+      16
+    ],
+    "t60_MU_coarse": [
+      16,
+      16
+    ],
+    "t60_MU_fine": [
+      16,
+      16
+    ]
+  },
+  "units": {
+    "coarse_W_projected_m_s": "m/s",
+    "fine_W_projected_m_s": "m/s",
+    "M0_kg": "kg",
+    "e1_dimensionless": "dimensionless M0 RMS1",
+    "t60_T_*": "physical potential temperature K",
+    "t60_MU_*": "total dry column mass Pa",
+    "t60_PH_*": "geopotential perturbation m^2/s^2"
+  },
+  "source_array_bytes_exact": true,
+  "source_array_bytes_directly_reverified": true,
+  "reverified_local_time": "2026-10-15T23:56:25+09:00"
+}

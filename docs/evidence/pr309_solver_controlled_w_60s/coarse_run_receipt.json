@@ -1,0 +1,1177 @@
+{
+  "schema": "pr309_solver_controlled_w_60s_native_run_receipt_v1",
+  "label": "h0p9375_0_60s_newton_tol1e-9",
+  "status": "completed",
+  "created_local_time": "2026-10-15T23:29:25+09:00",
+  "working_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9",
+  "launch_authorization": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/pr309_root_launch_binding.json",
+    "sha256": "700cc2afbc07a77bb919718db1e7658ca17359c72a611ef63681bc85508e5242",
+    "expected_sha256": "700cc2afbc07a77bb919718db1e7658ca17359c72a611ef63681bc85508e5242",
+    "binding_status": "authorized_for_exactly_the_two_preregistered_0_60s_runs",
+    "red_pass_statement": "RedAcceptance final review: protocol PASS; launch receipt must bind final protocol, preflight and pass. This file supplies that binding before the sole executor launches."
+  },
+  "protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_analysis_protocol_v3_frozen.json",
+    "sha256": "2497c354ebb3ff74fc78ea4376999f007c47e30a6e7ee0cf5d23c7353a2dde99",
+    "expected_sha256": "2497c354ebb3ff74fc78ea4376999f007c47e30a6e7ee0cf5d23c7353a2dde99",
+    "status": "frozen_before_pr309_native_outputs; v3 is final pre-run protocol",
+    "scope": "one existing-source, existing-executable paired 0-60 s W trajectory at h=.9375/.46875 with Newton tolerance 1e-9; offline analysis only"
+  },
+  "preflight": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/pr309_preflight_manifest.json",
+    "sha256": "18e2519f7b9562203fb89f63a2977a6c1b3bc527257da4f49ac6279f71f2e119",
+    "expected_sha256": "18e2519f7b9562203fb89f63a2977a6c1b3bc527257da4f49ac6279f71f2e119",
+    "status": "prepared_protocol_v3_frozen_awaiting_red_pass_and_root_launch_authorization"
+  },
+  "producer": {
+    "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/libwrf_sdirk3_libtorch.a",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "fortran_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/libwrflib.a",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/pr307_v2_build_receipt.json",
+    "build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8",
+    "build_receipt_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "committed_source_snapshot_commit": "18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc",
+    "current_target_head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+    "source_checks": [
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_globals.cpp",
+        "expected": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+        "actual": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_operator_contract.cpp",
+        "expected": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+        "actual": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_interface.cpp",
+        "expected": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+        "actual": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "expected": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+        "actual": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_zero_copy_interface.cpp",
+        "expected": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+        "actual": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.cpp",
+        "expected": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+        "actual": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "expected": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "actual": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+        "expected": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+        "actual": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_autograd.cpp",
+        "expected": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+        "actual": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp",
+        "expected": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "actual": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp",
+        "expected": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "actual": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp",
+        "expected": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+        "actual": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_tile_boundary_optimizer.cpp",
+        "expected": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+        "actual": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp",
+        "expected": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "actual": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_preconditioner.cpp",
+        "expected": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+        "actual": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs_extended.cpp",
+        "expected": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+        "actual": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_cache_utils.cpp",
+        "expected": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+        "actual": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_boundary_ad.cpp",
+        "expected": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+        "actual": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_rayleigh_damping_ad.cpp",
+        "expected": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+        "actual": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_mpi_safety_impl.cpp",
+        "expected": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+        "actual": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_halo_exchange.cpp",
+        "expected": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+        "actual": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_ad_halo_exchange.cpp",
+        "expected": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+        "actual": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_rhs_run_close.cpp",
+        "expected": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+        "actual": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_u_slow_diagnostics.cpp",
+        "expected": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+        "actual": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "expected": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "actual": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "expected": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "actual": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/dyn_em/module_implicit_sdirk3.F",
+        "expected": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+        "actual": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+        "match": true
+      },
+      {
+        "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/dyn_em/solve_em.F",
+        "expected": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+        "actual": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+        "match": true
+      }
+    ]
+  },
+  "inputs": {
+    "wrfinput_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/wrfinput_d01",
+    "wrfinput_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "diagnostics_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/diagnostics.txt",
+    "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+    "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/namelist.input",
+    "namelist_sha256": "0aa49bb19a528e28bd5bb28535cd6163ead2bb17195766c7bb0baf5f3cf59961",
+    "namelist_diff_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/namelist.diff",
+    "namelist_diff_sha256": "8dd72bbbafded5ec380448e48c2202b3abc752e05d962ceb233836db3dd7e152"
+  },
+  "command": {
+    "argv": [
+      "/usr/bin/time",
+      "-l",
+      "-o",
+      "time.log",
+      "/opt/homebrew/bin/mpirun",
+      "-np",
+      "1",
+      "--bind-to",
+      "none",
+      "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe"
+    ],
+    "cwd": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9",
+    "explicit_environment": {
+      "OMP_NUM_THREADS": "1",
+      "WRF_SDIRK3_RHS_COUNT": "1",
+      "WRF_SDIRK3_STAGE_OPERAND_DIAG": "1"
+    },
+    "cleared_environment_prefixes": [
+      "WRF_SDIRK3_",
+      "WRF_PARITY_"
+    ],
+    "inherited_environment_note": "All other host variables are inherited unchanged."
+  },
+  "case": {
+    "duration_s": 60,
+    "time_step_numerator_s": 15,
+    "time_step_denominator": 16,
+    "dt_s": 0.9375,
+    "expected_macrosteps": 64,
+    "expected_solver_implicit_stage_calls": 192,
+    "history_interval_s": 15,
+    "expected_wrf_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15",
+      "0001-01-01_00:00:30",
+      "0001-01-01_00:00:45",
+      "0001-01-01_00:01:00"
+    ],
+    "expected_csv_count": 64,
+    "expected_carry_host_inputs": 1,
+    "expected_carry_internal_inputs": 63,
+    "expected_carry_publications": 64,
+    "newton_tol": 1e-09,
+    "krylov_tol": 1e-07,
+    "effective_ewt": 1e-06,
+    "scheme": 6,
+    "imex_mode": 3,
+    "debug_level": 2,
+    "mpi_ranks": 1,
+    "omp_threads": 1,
+    "stage_operand_diag": true,
+    "rhs_count": true
+  },
+  "process_result": {
+    "return_code": 0,
+    "application_success_marker": true
+  },
+  "actual": {
+    "status": "completed",
+    "return_code": 0,
+    "application_success_marker": true,
+    "netcdf_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15",
+      "0001-01-01_00:00:30",
+      "0001-01-01_00:00:45",
+      "0001-01-01_00:01:00"
+    ],
+    "netcdf_times_match_expected": true,
+    "netcdf_files": [
+      {
+        "path": "wrfout_d01_0001-01-01_00:00:00",
+        "bytes": 1040888,
+        "sha256": "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf",
+        "times": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:00:15"
+        ]
+      },
+      {
+        "path": "wrfout_d01_0001-01-01_00:00:30",
+        "bytes": 1079765,
+        "sha256": "d8f80633e95a3636e11fe4610e9699f9fa8892fe6a37636b43e84dfeb76d5600",
+        "times": [
+          "0001-01-01_00:00:30",
+          "0001-01-01_00:00:45"
+        ]
+      },
+      {
+        "path": "wrfout_d01_0001-01-01_00:01:00",
+        "bytes": 984442,
+        "sha256": "af2a83cd29a92e1b045088e77d17666ae5b4308b92a94c83db3b1db058f08217",
+        "times": [
+          "0001-01-01_00:01:00"
+        ]
+      }
+    ],
+    "all_eight_fields_finite": true,
+    "solver_summaries": [
+      {
+        "steps": 192,
+        "failed": 0,
+        "dt": 0.9375
+      }
+    ],
+    "rhs_count_lines": [
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=3",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=65 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=1 total=68",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=1 total=130 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=2 total=130",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=2 total=192 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=3 total=192",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=3 total=254 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=4 total=254",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=4 total=316 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=5 total=316",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=5 total=378 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=6 total=378",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=6 total=440 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=7 total=440",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=7 total=502 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=8 total=502",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=8 total=564 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=9 total=564",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=9 total=626 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=10 total=626",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=10 total=688 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=11 total=688",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=11 total=750 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=12 total=750",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=12 total=812 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=13 total=812",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=13 total=874 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=14 total=874",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=14 total=936 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=15 total=936",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=15 total=998 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=16 total=998",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=16 total=1060 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=17 total=1060",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=17 total=1122 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=18 total=1122",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=18 total=1184 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=19 total=1184",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=19 total=1246 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=20 total=1246",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=20 total=1308 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=21 total=1308",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=21 total=1370 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=22 total=1370",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=22 total=1432 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=23 total=1432",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=23 total=1494 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=24 total=1494",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=24 total=1556 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=25 total=1556",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=25 total=1618 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=26 total=1618",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=26 total=1680 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=27 total=1680",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=27 total=1742 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=28 total=1742",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=28 total=1804 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=29 total=1804",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=29 total=1866 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=30 total=1866",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=30 total=1928 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=31 total=1928",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=31 total=1990 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=32 total=1990",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=32 total=2052 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=33 total=2052",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=33 total=2114 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=34 total=2114",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=34 total=2176 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=35 total=2176",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=35 total=2238 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=36 total=2238",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=36 total=2300 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=37 total=2300",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=37 total=2362 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=38 total=2362",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=38 total=2424 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=39 total=2424",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=39 total=2486 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=40 total=2486",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=40 total=2548 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=41 total=2548",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=41 total=2610 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=42 total=2610",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=42 total=2672 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=43 total=2672",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=43 total=2734 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=44 total=2734",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=44 total=2796 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=45 total=2796",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=45 total=2858 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=46 total=2858",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=46 total=2920 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=47 total=2920",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=47 total=2982 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=48 total=2982",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=48 total=3044 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=49 total=3044",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=49 total=3106 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=50 total=3106",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=50 total=3168 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=51 total=3168",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=51 total=3230 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=52 total=3230",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=52 total=3292 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=53 total=3292",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=53 total=3354 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=54 total=3354",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=54 total=3416 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=55 total=3416",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=55 total=3478 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=56 total=3478",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=56 total=3540 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=57 total=3540",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=57 total=3602 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=58 total=3602",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=58 total=3664 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=59 total=3664",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=59 total=3726 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=60 total=3726",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=60 total=3788 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=61 total=3788",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=61 total=3850 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=62 total=3850",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=62 total=3912 delta=62",
+      "SDIRK3_RHS_CALLS phase=begin sweep_seq=63 total=3912",
+      "SDIRK3_RHS_CALLS phase=end sweep_seq=63 total=3974 delta=62"
+    ],
+    "stage_csv_count": 64,
+    "stage_csvs": [
+      {
+        "filename": "accepted_ark_w_step_1.csv",
+        "step_seq": 1,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 28607385,
+        "sha256": "8e61145c438cf0e2d15fa75a0fedfb0eecd2d5395f8766c26a797de14e3bfbdb"
+      },
+      {
+        "filename": "accepted_ark_w_step_2.csv",
+        "step_seq": 2,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30144836,
+        "sha256": "ad7640516b86c1ac0971f8c40e15201a02c2902a73581e1ae306c94e8e462022"
+      },
+      {
+        "filename": "accepted_ark_w_step_3.csv",
+        "step_seq": 3,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30133270,
+        "sha256": "efc7d937eea500b268527031374ffac921721148904df1dd34fafbdb47505c7d"
+      },
+      {
+        "filename": "accepted_ark_w_step_4.csv",
+        "step_seq": 4,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30128138,
+        "sha256": "6c2058bf27ea50b4f4883048d0695b2734f337080b64b0641a1f35218536a5cc"
+      },
+      {
+        "filename": "accepted_ark_w_step_5.csv",
+        "step_seq": 5,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30125458,
+        "sha256": "7f27f99f904c153729bf9638bbdc1ebc59ccdf166fea0ddb0cd6a93e879be57b"
+      },
+      {
+        "filename": "accepted_ark_w_step_6.csv",
+        "step_seq": 6,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30118380,
+        "sha256": "89b239da81b166edf2768deb88c58332099baf2585756695a453a8062d75ffdb"
+      },
+      {
+        "filename": "accepted_ark_w_step_7.csv",
+        "step_seq": 7,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30117125,
+        "sha256": "211648b8da720a5e546d853d58373b90b51dff95b23c221d9b03f29558ef75f5"
+      },
+      {
+        "filename": "accepted_ark_w_step_8.csv",
+        "step_seq": 8,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30118202,
+        "sha256": "5d5678f824750cdefe3eedd47ae8551e74fd57fa63bb8cf12ad5112a967b9a0e"
+      },
+      {
+        "filename": "accepted_ark_w_step_9.csv",
+        "step_seq": 9,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30114592,
+        "sha256": "b752d5978636076a9c02f346b752745b60226973af7720a917b2857647a1c739"
+      },
+      {
+        "filename": "accepted_ark_w_step_10.csv",
+        "step_seq": 10,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30116419,
+        "sha256": "89e91b827612510d7c8a64933afe8165941c8df92f26a10a6f6cbac48c601d69"
+      },
+      {
+        "filename": "accepted_ark_w_step_11.csv",
+        "step_seq": 11,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30105053,
+        "sha256": "f4e5340c4f5355660346fc8116770dd08cd87f38e4f0dbb9889cc2618c4f3559"
+      },
+      {
+        "filename": "accepted_ark_w_step_12.csv",
+        "step_seq": 12,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30095675,
+        "sha256": "2caab8d3b31343ce1b54c382de9ef597fdb988432e2a3b09fdecafb481fcae1f"
+      },
+      {
+        "filename": "accepted_ark_w_step_13.csv",
+        "step_seq": 13,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30093196,
+        "sha256": "f8bb1d1934549a1bd42980d96bbb17c3e2b29f685a2a8ef47a3457977ce8b4b4"
+      },
+      {
+        "filename": "accepted_ark_w_step_14.csv",
+        "step_seq": 14,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30092991,
+        "sha256": "8658c950bc9eccbc01d54648fc770c2684737e805c49b7dae332d8bd2e839da1"
+      },
+      {
+        "filename": "accepted_ark_w_step_15.csv",
+        "step_seq": 15,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30087818,
+        "sha256": "e51ff343fa029a7676f35b4cd7ba99bbaa5a4406dbb6c9ab9f21cca9a861eb77"
+      },
+      {
+        "filename": "accepted_ark_w_step_16.csv",
+        "step_seq": 16,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30081644,
+        "sha256": "004420238f88df5320d8d69e5f3cf14a03ca8b97ee070bd1fbefaca2d4ab55c3"
+      },
+      {
+        "filename": "accepted_ark_w_step_17.csv",
+        "step_seq": 17,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30074825,
+        "sha256": "6c3eddbb59f9db6a77b96afe24b326a82fbfa61c8e25f2b9a7a1c1bc072fc3b4"
+      },
+      {
+        "filename": "accepted_ark_w_step_18.csv",
+        "step_seq": 18,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30069867,
+        "sha256": "b48825dcf7063e1100bbd79b33e4f4bc00157870aa0fbcc92cd3962d4ded5f42"
+      },
+      {
+        "filename": "accepted_ark_w_step_19.csv",
+        "step_seq": 19,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30071898,
+        "sha256": "ccb7614fff1eab2ff34e7b213e02637d281a2db896138022698b0908c8d6bc92"
+      },
+      {
+        "filename": "accepted_ark_w_step_20.csv",
+        "step_seq": 20,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30074634,
+        "sha256": "281a099658c407544f4c97f2783ce5012e97ba6d946048a7facda0975363142f"
+      },
+      {
+        "filename": "accepted_ark_w_step_21.csv",
+        "step_seq": 21,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30075892,
+        "sha256": "f834008867aaa9aa4fe05a0eac31065067b02a51fd04dab862e31fb5ac7b3816"
+      },
+      {
+        "filename": "accepted_ark_w_step_22.csv",
+        "step_seq": 22,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30072653,
+        "sha256": "e7f5fd531fb24af6a2e7969829acc1ba9f41bc8fef80385bd7083de63f43a1c3"
+      },
+      {
+        "filename": "accepted_ark_w_step_23.csv",
+        "step_seq": 23,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30069357,
+        "sha256": "ed9271f06b3b67dbb1959f837789e8748c508a11a2ff621c1e1a5354e7370d3a"
+      },
+      {
+        "filename": "accepted_ark_w_step_24.csv",
+        "step_seq": 24,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30071289,
+        "sha256": "46d537f1992e31623614bb9cdcee84ef96c3925bdf9b7d9ac15cb0a9d45caa05"
+      },
+      {
+        "filename": "accepted_ark_w_step_25.csv",
+        "step_seq": 25,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30071504,
+        "sha256": "ea630b8dac8cad1fbd7fb5f5a6f54813c56e5390f40900018a2a6708b9a2c12d"
+      },
+      {
+        "filename": "accepted_ark_w_step_26.csv",
+        "step_seq": 26,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30067745,
+        "sha256": "cbbba321b7767177f42e02ff1446df8eef45394199962bd458a162e4a7108723"
+      },
+      {
+        "filename": "accepted_ark_w_step_27.csv",
+        "step_seq": 27,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30061284,
+        "sha256": "059300dcc9f5bc735bf93a22926acf6039431f6e5cb6badb03da026709af620e"
+      },
+      {
+        "filename": "accepted_ark_w_step_28.csv",
+        "step_seq": 28,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30059100,
+        "sha256": "13315fca6ac50d1b47a17ae8da4e8f0a8dde95c13d04b9eaaa301bff7c744b3a"
+      },
+      {
+        "filename": "accepted_ark_w_step_29.csv",
+        "step_seq": 29,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30055127,
+        "sha256": "5f66c9074a37e29755cc09f2f3012186de3158d15234c1839b4dbf6ad85eb601"
+      },
+      {
+        "filename": "accepted_ark_w_step_30.csv",
+        "step_seq": 30,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30057449,
+        "sha256": "d255160c839e17707076295ec917ab7f3805d6228758033997fd5174e6a4dbb3"
+      },
+      {
+        "filename": "accepted_ark_w_step_31.csv",
+        "step_seq": 31,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30057657,
+        "sha256": "e125cc44ef49de7348a55b12f8b2f80f0f438b5394c69bccfa25a73e9f96e15a"
+      },
+      {
+        "filename": "accepted_ark_w_step_32.csv",
+        "step_seq": 32,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30057858,
+        "sha256": "69c4416e81247c27577588953bdd4b08241afc05f746ce9ca8c2366e69198c12"
+      },
+      {
+        "filename": "accepted_ark_w_step_33.csv",
+        "step_seq": 33,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30057523,
+        "sha256": "ee2e1936c38f0d69ff2d2877f01de1fb9c8d3a62e3ed6228522921e4c6f2fb21"
+      },
+      {
+        "filename": "accepted_ark_w_step_34.csv",
+        "step_seq": 34,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30061036,
+        "sha256": "c98e064b9d10db5daf9fbeb88ebaeb3de411a379890356a0e71b86c21bd1141a"
+      },
+      {
+        "filename": "accepted_ark_w_step_35.csv",
+        "step_seq": 35,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30061569,
+        "sha256": "5c4d0dda13b4c6f3ce776a0e12d20bb45276969a827b701d7ffb303ab084de2a"
+      },
+      {
+        "filename": "accepted_ark_w_step_36.csv",
+        "step_seq": 36,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30063005,
+        "sha256": "4dc742390fdb1908ffa8ca1703cbe2743fa3c2ad3a2cb9bd2d691c519edc76f4"
+      },
+      {
+        "filename": "accepted_ark_w_step_37.csv",
+        "step_seq": 37,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30066256,
+        "sha256": "94ea6afbd4b3f1283bb34a2387582c3793632b63b474c44684ad62b9558665a6"
+      },
+      {
+        "filename": "accepted_ark_w_step_38.csv",
+        "step_seq": 38,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30068040,
+        "sha256": "bb21a67c6dec28ae33f4e7ee8d7304c037454d94d7dd38f96a89fd6643cc1b97"
+      },
+      {
+        "filename": "accepted_ark_w_step_39.csv",
+        "step_seq": 39,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30063973,
+        "sha256": "742e29e16365f9bb3b2920c326a32e1904bda8c112b1e4798fb63e2a4b3ee3fc"
+      },
+      {
+        "filename": "accepted_ark_w_step_40.csv",
+        "step_seq": 40,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30059699,
+        "sha256": "5068ed73aaf54ad3dbad07d553f8a2fbcbc1ea2524938af3486a5b0dff3a5307"
+      },
+      {
+        "filename": "accepted_ark_w_step_41.csv",
+        "step_seq": 41,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30056711,
+        "sha256": "02243252e468523d2d3e19481496047c19e82db376c7189d58c63a08b0526a41"
+      },
+      {
+        "filename": "accepted_ark_w_step_42.csv",
+        "step_seq": 42,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30058706,
+        "sha256": "0af6dc17368eb99f9ac9f65d7b4c91a3f384d2d555d6102a28488d4e389b7afa"
+      },
+      {
+        "filename": "accepted_ark_w_step_43.csv",
+        "step_seq": 43,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30062459,
+        "sha256": "fc3e965186e29d21c91c4c49b52d0ebf8b4d43dc6e6f085728874dd7412125ed"
+      },
+      {
+        "filename": "accepted_ark_w_step_44.csv",
+        "step_seq": 44,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30061415,
+        "sha256": "625facf6c750d9dc12d59d6de22a3716200443515293f8a2433455783d7d1f06"
+      },
+      {
+        "filename": "accepted_ark_w_step_45.csv",
+        "step_seq": 45,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30062051,
+        "sha256": "f04ceabe96bc9402e6abba1a2e7aa330b498174dfb9d155113b439f437a12b4a"
+      },
+      {
+        "filename": "accepted_ark_w_step_46.csv",
+        "step_seq": 46,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30057916,
+        "sha256": "4d3ad692a25f85f37c50a0dcc0d9661cf068270edbe69632a05e8e24ab68df67"
+      },
+      {
+        "filename": "accepted_ark_w_step_47.csv",
+        "step_seq": 47,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30054007,
+        "sha256": "6f0b9f238cf84539d60b65f64c6d9ceb0663c7a74fc05a7ab67088932ce01f2a"
+      },
+      {
+        "filename": "accepted_ark_w_step_48.csv",
+        "step_seq": 48,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30053265,
+        "sha256": "9585febcc23539fc9ca4a8438dd7490771293e733a77a1792555188bd2328a84"
+      },
+      {
+        "filename": "accepted_ark_w_step_49.csv",
+        "step_seq": 49,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30055012,
+        "sha256": "60aacdb9e8c2bbe7bafb6fde92db37a6278a0d90d0f49876e4c46268dc3057ea"
+      },
+      {
+        "filename": "accepted_ark_w_step_50.csv",
+        "step_seq": 50,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30055859,
+        "sha256": "e3e73a9142310019e8824d8e75fd3e0993c484b27625ce383bf0d1837b179cb1"
+      },
+      {
+        "filename": "accepted_ark_w_step_51.csv",
+        "step_seq": 51,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30050756,
+        "sha256": "f26603f672dbc9173582b5b3de6089065a8ddd4bbcaeb166872850e21a42a94e"
+      },
+      {
+        "filename": "accepted_ark_w_step_52.csv",
+        "step_seq": 52,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30052437,
+        "sha256": "0eed6a92edefd1c08f0a137035e61dab98621fd26a0a7c752d80e19d4eb131d1"
+      },
+      {
+        "filename": "accepted_ark_w_step_53.csv",
+        "step_seq": 53,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30050731,
+        "sha256": "900d37dc36d8fd9d08d68166dafa5a8fcb98395f20c6c8198cd08d5e49816596"
+      },
+      {
+        "filename": "accepted_ark_w_step_54.csv",
+        "step_seq": 54,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30049516,
+        "sha256": "344717a8d038f0ca9a2a1944f26759c3a7d8ee528b3850f877bd3ace2f16d73e"
+      },
+      {
+        "filename": "accepted_ark_w_step_55.csv",
+        "step_seq": 55,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30051084,
+        "sha256": "2b393b7235f1ab37c139f1b4177cc9a6b5e740c9f7366e180d76aff01019a003"
+      },
+      {
+        "filename": "accepted_ark_w_step_56.csv",
+        "step_seq": 56,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30050685,
+        "sha256": "63443b9f3931df5de054d54053bcca44ec8aaf7c7ba5772af3b0d2e154fb7624"
+      },
+      {
+        "filename": "accepted_ark_w_step_57.csv",
+        "step_seq": 57,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30050317,
+        "sha256": "b93c01ecbaf854b4797cbd206fbd86e8fb3d119e10b32f26d1a62808795d3fb8"
+      },
+      {
+        "filename": "accepted_ark_w_step_58.csv",
+        "step_seq": 58,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30046028,
+        "sha256": "fb829856f6dc1e973c2dce2ed9ca91c9cf3927c3547f1b8cc149d9fd5f95ab2e"
+      },
+      {
+        "filename": "accepted_ark_w_step_59.csv",
+        "step_seq": 59,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30045165,
+        "sha256": "aca35312b6e2df20fb3556000dc01e2e67444c97c902b63533b7c6b5601b124c"
+      },
+      {
+        "filename": "accepted_ark_w_step_60.csv",
+        "step_seq": 60,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30049620,
+        "sha256": "2eaf6f2d231245a2ee626fe8648ed851e5a4e9a7af567b80ef80b59a5a538e36"
+      },
+      {
+        "filename": "accepted_ark_w_step_61.csv",
+        "step_seq": 61,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30049291,
+        "sha256": "28cdd2d43df594636d5fdce798b4b8eee58039bac57a18c0d9f2edfa26cb146d"
+      },
+      {
+        "filename": "accepted_ark_w_step_62.csv",
+        "step_seq": 62,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30046071,
+        "sha256": "42571a8d0aadaa2a336edb6c412c7d48559d44e35150a74fc7bf7ef637b1e628"
+      },
+      {
+        "filename": "accepted_ark_w_step_63.csv",
+        "step_seq": 63,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30040430,
+        "sha256": "b8a743ba492073f8ef9e0de877d072bb67e175820551fbb6a16ef2e0efde1963"
+      },
+      {
+        "filename": "accepted_ark_w_step_64.csv",
+        "step_seq": 64,
+        "dt_seconds": 0.9375,
+        "accepted": "1",
+        "newton_tol_config": "9.9999997171806854e-10",
+        "krylov_tol_config": "1.0000000116860974e-07",
+        "effective_ewt_rtol_config": "9.9999999747524271e-07",
+        "bytes": 30042332,
+        "sha256": "f598d0c9f371c0cf9049aac126bbc0d2afda164b2636cfc1ae6d1cedfe4a5e2b"
+      }
+    ],
+    "step_sequence_contiguous": true,
+    "all_csvs_accepted": true,
+    "all_csv_dt_exact": true,
+    "all_csv_newton_tol_present": true,
+    "wall_seconds": 76.7,
+    "logs": {
+      "run.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "time.log": "7c08db6430a42dc14cc34e08d3ac741bda816d4c46bc38a6fe60d9bb4bae6d58",
+      "rsl.error.0000": "76ca9160e954b409efe3e34e9cffd291d97d2874868be742003b4397f03d3596",
+      "rsl.out.0000": "ac86273d796c5c77fd32ebb37bd571606d35a42a9334bbf76ff723d658aa76ea",
+      "namelist.output": "4e7650ad4fa9d7ea80803a96243c43cf345fbac5f82dc097f90d7c2db217f9b3"
+    }
+  }
+}

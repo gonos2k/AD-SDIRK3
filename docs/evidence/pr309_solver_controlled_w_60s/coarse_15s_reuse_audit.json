@@ -1,0 +1,800 @@
+{
+  "schema": "pr309_coarse_15s_newton_tol_counterfactual_reuse_audit_v1",
+  "worktree": "/private/tmp/pr309-solver-controlled-w-60s-20261015",
+  "head": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+  "source_hashes": {
+    "wrf_sdirk3_newton_solver.cpp": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+    "wrf_sdirk3_config.h": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+    "wrf_sdirk3_tile_unified_impl.cpp": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "build_source_matches": {
+      "wrf_sdirk3_tile_unified_impl.cpp": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "wrf_sdirk3_newton_solver.cpp": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9"
+    }
+  },
+  "existing_run": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s",
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/run_receipt.json",
+    "receipt_sha256": "7669e1c022fa2edbcfc7ce49dd539d32d66f8efd6b8719829d80948370c4d25b",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "target_head": "e717aa30c55e8cd12dde0de35459c3aabec953c4",
+    "history_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15"
+    ],
+    "exact_t0_t15_only": true,
+    "accepted_steps": 16,
+    "step_dt_s": 0.9375,
+    "rsl_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/rsl.error.0000",
+    "rsl_sha256": "7811132b13f412c3ac3b8dc364bab770605fb52bee9f3412b145c02b9273db18",
+    "csv_step_hashes": [
+      {
+        "step": 1,
+        "path": "accepted_ark_w_step_1.csv",
+        "sha256": "0f51cf06d2761dfb0228144c98adf3049d55d80e2fd0348a45de31777ebecfc9"
+      },
+      {
+        "step": 2,
+        "path": "accepted_ark_w_step_2.csv",
+        "sha256": "54d35caee6c17463f625a3575c5893668a4ec12ad608cc32dc56f2495ce6824d"
+      },
+      {
+        "step": 3,
+        "path": "accepted_ark_w_step_3.csv",
+        "sha256": "684fd68b3be879c34a3b3e865a4e12e2df77c42d2c081e25f7c7e4b0fa15e5d4"
+      },
+      {
+        "step": 4,
+        "path": "accepted_ark_w_step_4.csv",
+        "sha256": "daf38e8827701556d99e3532f6900040e4b4d60986f9812bfebe90dc1a69fa34"
+      },
+      {
+        "step": 5,
+        "path": "accepted_ark_w_step_5.csv",
+        "sha256": "1cfa6b1429eb933ac81f32f7aa6256769a0a1e60668badf72d75563b3a2333de"
+      },
+      {
+        "step": 6,
+        "path": "accepted_ark_w_step_6.csv",
+        "sha256": "4b8e29a7f867149b6889e04d7627da223c4f6d14001fa6ce1b068d7a5aae96fe"
+      },
+      {
+        "step": 7,
+        "path": "accepted_ark_w_step_7.csv",
+        "sha256": "3c8cfa551f678f50ce72841709ad07706f098254fba1a14a29f23863c648d885"
+      },
+      {
+        "step": 8,
+        "path": "accepted_ark_w_step_8.csv",
+        "sha256": "54e9278faa661652bb16dc9ea3c9728634d5f39bbb6d9561cd843d79bca35629"
+      },
+      {
+        "step": 9,
+        "path": "accepted_ark_w_step_9.csv",
+        "sha256": "89ab286a847eb382213bf8030214d63e03178aca625b7b1b97772528bf153ff7"
+      },
+      {
+        "step": 10,
+        "path": "accepted_ark_w_step_10.csv",
+        "sha256": "b6a5a7daaadd7c3d8569cb644c45bd0a93575e74161852179ee82758d4da05bb"
+      },
+      {
+        "step": 11,
+        "path": "accepted_ark_w_step_11.csv",
+        "sha256": "bd40135358b7378e8b5a3da9a8bfeb106f54821db56e09c4629e7c5db704e3ef"
+      },
+      {
+        "step": 12,
+        "path": "accepted_ark_w_step_12.csv",
+        "sha256": "9b56d55b62aa16251f6d780352d0a1ec914904b2fc0f62fdbade8da87c8b4e6d"
+      },
+      {
+        "step": 13,
+        "path": "accepted_ark_w_step_13.csv",
+        "sha256": "4a6f3a6b6e9b12adea970b90f4ba8f3079306931c24a4d133780b8dca3de90aa"
+      },
+      {
+        "step": 14,
+        "path": "accepted_ark_w_step_14.csv",
+        "sha256": "17de3be0a06b2fdbfdabc601aeeeee2a2ec03d9e50e9192f84c944d157afb697"
+      },
+      {
+        "step": 15,
+        "path": "accepted_ark_w_step_15.csv",
+        "sha256": "0b27e4bbc6663cf0326c47fc323edfa74622ff1e40bb9dd02612d6926a96553c"
+      },
+      {
+        "step": 16,
+        "path": "accepted_ark_w_step_16.csv",
+        "sha256": "d265388e6b5b2c4917335d068b13f5b6669f3682cafb20b269504cab83a8ed5b"
+      }
+    ],
+    "csv_metadata_unique": {
+      "dt_seconds": [
+        "0.9375"
+      ],
+      "newton_tol_config": [
+        "1.0000000116860974e-07"
+      ],
+      "newton_rtol_config": [
+        "0"
+      ],
+      "krylov_tol_config": [
+        "1.0000000116860974e-07"
+      ],
+      "effective_ewt_rtol_config": [
+        "9.9999999747524271e-07"
+      ]
+    }
+  },
+  "stage_newton_metrics": {
+    "2": {
+      "calls": 16,
+      "initial_scaled_rms_min": 1e-06,
+      "initial_scaled_rms_max": 1.1e-06,
+      "initial_gt_1e-7_all": true,
+      "final_scaled_rms_min": 4.3e-15,
+      "final_scaled_rms_max": 6.7e-15,
+      "final_lt_1e-9_all": true,
+      "iterations_reported_counts": {
+        "2": 16
+      },
+      "actual_atol_rtol_counts": {
+        "1e-07/0.0": 16
+      },
+      "entry_print_counts": {
+        "1e-07": 1,
+        "0.0": 15
+      }
+    },
+    "3": {
+      "calls": 16,
+      "initial_scaled_rms_min": 3e-07,
+      "initial_scaled_rms_max": 1.1e-06,
+      "initial_gt_1e-7_all": true,
+      "final_scaled_rms_min": 4.3e-15,
+      "final_scaled_rms_max": 6.9e-15,
+      "final_lt_1e-9_all": true,
+      "iterations_reported_counts": {
+        "2": 16
+      },
+      "actual_atol_rtol_counts": {
+        "1e-07/0.0": 16
+      },
+      "entry_print_counts": {
+        "1e-07": 16
+      }
+    },
+    "4": {
+      "calls": 16,
+      "initial_scaled_rms_min": 4.1e-07,
+      "initial_scaled_rms_max": 4.6e-07,
+      "initial_gt_1e-7_all": true,
+      "final_scaled_rms_min": 4.1e-15,
+      "final_scaled_rms_max": 4.3e-15,
+      "final_lt_1e-9_all": true,
+      "iterations_reported_counts": {
+        "2": 16
+      },
+      "actual_atol_rtol_counts": {
+        "1e-07/0.0": 16
+      },
+      "entry_print_counts": {
+        "1e-07": 16
+      }
+    }
+  },
+  "step_gate_telemetry": {
+    "count": 16,
+    "gate_fail_all_zero": true,
+    "gate_retry_all_zero": true,
+    "gate_abort_all_zero": true,
+    "explicit_fallback_all_zero": true,
+    "stage2_gate_fail_all_zero": true,
+    "stage3_gate_fail_all_zero": true,
+    "stage4_preclip_all_zero": true,
+    "stage2_soft_continue_all_zero": true
+  },
+  "newton_damp_log_count": 0,
+  "source_contract": {
+    "newton_scaled_rms": "newton_solver.cpp:4715-4726",
+    "effective_atol": "newton_solver.cpp:6441-6455",
+    "convergence_exit": "newton_solver.cpp:6768-6792",
+    "ewt_floor": "wrf_sdirk3_config.h:109-111",
+    "ewt_stage_metric": "wrf_sdirk3_tile_unified_impl.cpp:14325-14331",
+    "stage2_retry_resid_cap": "wrf_sdirk3_tile_unified_impl.cpp:9969-9980, only inside retry/failure branch",
+    "newton_best_effort_k_damping": "wrf_sdirk3_tile_unified_impl.cpp:14669-14683, only on non-converged result"
+  },
+  "counterfactual": {
+    "requested_newton_tol": 1e-09,
+    "requested_newton_rtol": 0.0,
+    "relative_rtol_source": 0.0,
+    "current_krylov_tol": 1e-07,
+    "nk_adaptive_tol": false,
+    "current_effective_ewt_rtol": 1e-06,
+    "raw_ewt_rtol": 0.0,
+    "same_newton_iteration_count_source_supported": true,
+    "same_accepted_trajectory_bitwise_proven": false,
+    "reason": "All 48 implicit stage calls have initial global scaled-RMS > 1e-7 and final global scaled-RMS < 1e-9. Thus current tol=1e-7 and counterfactual tol=1e-9 both evaluate one correction then satisfy the exit test. Relative tol is 0. EWT remains at its 1e-6 floor for both tolerances, Krylov tol stays 1e-7 with adaptive NK off. The tolerance-sensitive fallback/retry consumers are not entered in these 16 steps. No strict-tol h=.9375 15s run was made, so this is iteration-count/source-path equivalence rather than observed bitwise equivalence."
+  },
+  "all_48_stage_residual_records": [
+    {
+      "coarse_step": 1,
+      "stage": 2,
+      "rsl_line": 1224,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 1,
+      "stage": 3,
+      "rsl_line": 3453,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "3.0e-07",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 1,
+      "stage": 4,
+      "rsl_line": 5657,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.6e-07",
+      "final_scaled_rms_log": "4.2e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 2,
+      "stage": 2,
+      "rsl_line": 8709,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.1e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 2,
+      "stage": 3,
+      "rsl_line": 10920,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "4.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 2,
+      "stage": 4,
+      "rsl_line": 13124,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.6e-07",
+      "final_scaled_rms_log": "4.2e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 3,
+      "stage": 2,
+      "rsl_line": 15869,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "6.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 3,
+      "stage": 3,
+      "rsl_line": 18080,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "6.1e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 3,
+      "stage": 4,
+      "rsl_line": 20284,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.6e-07",
+      "final_scaled_rms_log": "4.1e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 4,
+      "stage": 2,
+      "rsl_line": 23030,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "6.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 4,
+      "stage": 3,
+      "rsl_line": 25241,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "6.9e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 4,
+      "stage": 4,
+      "rsl_line": 27445,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.4e-07",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 5,
+      "stage": 2,
+      "rsl_line": 30218,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 5,
+      "stage": 3,
+      "rsl_line": 32429,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.9e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 5,
+      "stage": 4,
+      "rsl_line": 34633,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.2e-07",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 6,
+      "stage": 2,
+      "rsl_line": 37379,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 6,
+      "stage": 3,
+      "rsl_line": 39590,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.8e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 6,
+      "stage": 4,
+      "rsl_line": 41794,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.1e-07",
+      "final_scaled_rms_log": "4.2e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 7,
+      "stage": 2,
+      "rsl_line": 44540,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "5.1e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 7,
+      "stage": 3,
+      "rsl_line": 46751,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.9e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 7,
+      "stage": 4,
+      "rsl_line": 48955,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.3e-07",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 8,
+      "stage": 2,
+      "rsl_line": 51701,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.2e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 8,
+      "stage": 3,
+      "rsl_line": 53912,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 8,
+      "stage": 4,
+      "rsl_line": 56116,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.5e-07",
+      "final_scaled_rms_log": "4.2e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 9,
+      "stage": 2,
+      "rsl_line": 58862,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "4.9e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 9,
+      "stage": 3,
+      "rsl_line": 61073,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.1e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 9,
+      "stage": 4,
+      "rsl_line": 63277,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.6e-07",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 10,
+      "stage": 2,
+      "rsl_line": 66050,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "4.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 10,
+      "stage": 3,
+      "rsl_line": 68261,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "4.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 10,
+      "stage": 4,
+      "rsl_line": 70465,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.5e-07",
+      "final_scaled_rms_log": "4.2e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 11,
+      "stage": 2,
+      "rsl_line": 73211,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "4.6e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 11,
+      "stage": 3,
+      "rsl_line": 75422,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "4.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 11,
+      "stage": 4,
+      "rsl_line": 77626,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.3e-07",
+      "final_scaled_rms_log": "4.1e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 12,
+      "stage": 2,
+      "rsl_line": 80372,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.8e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 12,
+      "stage": 3,
+      "rsl_line": 82583,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 12,
+      "stage": 4,
+      "rsl_line": 84787,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.1e-07",
+      "final_scaled_rms_log": "4.1e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 13,
+      "stage": 2,
+      "rsl_line": 87533,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.7e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 13,
+      "stage": 3,
+      "rsl_line": 89744,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.8e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 13,
+      "stage": 4,
+      "rsl_line": 91948,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.1e-07",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 14,
+      "stage": 2,
+      "rsl_line": 94694,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.9e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 14,
+      "stage": 3,
+      "rsl_line": 96905,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.0e-06",
+      "final_scaled_rms_log": "4.8e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 14,
+      "stage": 4,
+      "rsl_line": 99109,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.3e-07",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 15,
+      "stage": 2,
+      "rsl_line": 101882,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.0e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 15,
+      "stage": 3,
+      "rsl_line": 104093,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.0e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 15,
+      "stage": 4,
+      "rsl_line": 106297,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.4e-07",
+      "final_scaled_rms_log": "4.2e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 16,
+      "stage": 2,
+      "rsl_line": 109043,
+      "entry_print_tolerance": "0.0",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "4.9e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 16,
+      "stage": 3,
+      "rsl_line": 111254,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "1.1e-06",
+      "final_scaled_rms_log": "5.0e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    },
+    {
+      "coarse_step": 16,
+      "stage": 4,
+      "rsl_line": 113458,
+      "entry_print_tolerance": "1e-07",
+      "actual_tolerance_header": "1e-07",
+      "initial_scaled_rms_log": "4.4e-07",
+      "final_scaled_rms_log": "4.3e-15",
+      "newton_iterations_reported": 2,
+      "initial_gt_1e-7": true,
+      "final_lt_1e-9": true
+    }
+  ],
+  "rsl_numeric_precision_note": "Initial/final values preserve the exact formatted log tokens; source logs round display to about two significant digits, sufficient to separate every value from the 1e-7 and 1e-9 thresholds."
+}

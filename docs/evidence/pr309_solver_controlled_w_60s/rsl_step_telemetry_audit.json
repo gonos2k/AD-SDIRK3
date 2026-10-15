@@ -1,0 +1,226 @@
+{
+  "schema": "pr309_rsl_step_telemetry_offline_audit_v1",
+  "created_local_time": "2026-10-15T23:42:43+09:00",
+  "scope": "Offline parse of completed RSL logs only. Run receipts and raw logs are unmodified.",
+  "run_index_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/pr309_run_index.json",
+  "run_index_sha256": "d17cf4a5e6705fb065f1ad1c18244aff4041eb230a4f16a73a2f402ea5bc2ffd",
+  "step_telemetry_event_definition": "One line beginning with [STEP TELEMETRY]; counter aggregates and rows-with-nonzero are reported separately.",
+  "cases": [
+    {
+      "case": "h0p9375_0_60s_newton_tol1e-9",
+      "rsl_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/rsl.error.0000",
+      "rsl_sha256": "76ca9160e954b409efe3e34e9cffd291d97d2874868be742003b4397f03d3596",
+      "step_telemetry_expected": 64,
+      "step_telemetry_rows": 64,
+      "step_telemetry_count_matches_csv": true,
+      "gate": {
+        "counter_names": [
+          "gate_fail",
+          "gate_retry",
+          "gate_continue",
+          "gate_abort",
+          "gate_catastrophic",
+          "gate_severe",
+          "stage2_gate_fail",
+          "stage2_retry",
+          "stage2_abort",
+          "stage3_gate_fail",
+          "stage3_retry"
+        ],
+        "sum_by_counter": {
+          "gate_fail": 0,
+          "gate_retry": 0,
+          "gate_continue": 0,
+          "gate_abort": 0,
+          "gate_catastrophic": 0,
+          "gate_severe": 0,
+          "stage2_gate_fail": 0,
+          "stage2_retry": 0,
+          "stage2_abort": 0,
+          "stage3_gate_fail": 0,
+          "stage3_retry": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "retry": {
+        "counter_names": [
+          "gate_retry",
+          "stage2_retry",
+          "stage3_retry",
+          "stage2_nonfinite_retryable",
+          "stage2_nonfinite_retry_exhaust",
+          "retry_sanitize",
+          "retry_handoff_clip"
+        ],
+        "sum_by_counter": {
+          "gate_retry": 0,
+          "stage2_retry": 0,
+          "stage3_retry": 0,
+          "stage2_nonfinite_retryable": 0,
+          "stage2_nonfinite_retry_exhaust": 0,
+          "retry_sanitize": 0,
+          "retry_handoff_clip": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "fallback": {
+        "counter_names": [
+          "explicit_fallback",
+          "retry_sanitize",
+          "retry_handoff_clip",
+          "stage4_preclip"
+        ],
+        "sum_by_counter": {
+          "explicit_fallback": 0,
+          "retry_sanitize": 0,
+          "retry_handoff_clip": 0,
+          "stage4_preclip": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "soft_continue": {
+        "counter_names": [
+          "stage2_soft_continue"
+        ],
+        "sum_by_counter": {
+          "stage2_soft_continue": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "nonfinite_step_counters": {
+        "counter_names": [
+          "stage2_nonfinite",
+          "stage2_nonfinite_retryable",
+          "stage2_nonfinite_retry_exhaust",
+          "stage2_nonfinite_catastrophic",
+          "stage2_kfast_nonfinite"
+        ],
+        "sum_by_counter": {
+          "stage2_nonfinite": 0,
+          "stage2_nonfinite_retryable": 0,
+          "stage2_nonfinite_retry_exhaust": 0,
+          "stage2_nonfinite_catastrophic": 0,
+          "stage2_kfast_nonfinite": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "newton_damp_line_count": 0,
+      "stage_gate_line_count": 0,
+      "diagnostic_nan_yes_lines": 0,
+      "diagnostic_inf_yes_lines": 0,
+      "explicit_nonfinite_lines": 0,
+      "nonfinite_event_count_by_step_telemetry": 0,
+      "field_checks_nan_no_lines": 794,
+      "field_checks_inf_no_lines": 602,
+      "runtime_effective_config_warning": "The RSL entry-format audit is separate; no conclusions about configured tolerance are inferred from a printed `newton_tol: 0.0` line."
+    },
+    {
+      "case": "h0p46875_0_60s_newton_tol1e-9",
+      "rsl_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/rsl.error.0000",
+      "rsl_sha256": "6af5166b99812a95f0f904bc3228450997d0bf0cfad39508834e8ad0dd172908",
+      "step_telemetry_expected": 128,
+      "step_telemetry_rows": 128,
+      "step_telemetry_count_matches_csv": true,
+      "gate": {
+        "counter_names": [
+          "gate_fail",
+          "gate_retry",
+          "gate_continue",
+          "gate_abort",
+          "gate_catastrophic",
+          "gate_severe",
+          "stage2_gate_fail",
+          "stage2_retry",
+          "stage2_abort",
+          "stage3_gate_fail",
+          "stage3_retry"
+        ],
+        "sum_by_counter": {
+          "gate_fail": 0,
+          "gate_retry": 0,
+          "gate_continue": 0,
+          "gate_abort": 0,
+          "gate_catastrophic": 0,
+          "gate_severe": 0,
+          "stage2_gate_fail": 0,
+          "stage2_retry": 0,
+          "stage2_abort": 0,
+          "stage3_gate_fail": 0,
+          "stage3_retry": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "retry": {
+        "counter_names": [
+          "gate_retry",
+          "stage2_retry",
+          "stage3_retry",
+          "stage2_nonfinite_retryable",
+          "stage2_nonfinite_retry_exhaust",
+          "retry_sanitize",
+          "retry_handoff_clip"
+        ],
+        "sum_by_counter": {
+          "gate_retry": 0,
+          "stage2_retry": 0,
+          "stage3_retry": 0,
+          "stage2_nonfinite_retryable": 0,
+          "stage2_nonfinite_retry_exhaust": 0,
+          "retry_sanitize": 0,
+          "retry_handoff_clip": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "fallback": {
+        "counter_names": [
+          "explicit_fallback",
+          "retry_sanitize",
+          "retry_handoff_clip",
+          "stage4_preclip"
+        ],
+        "sum_by_counter": {
+          "explicit_fallback": 0,
+          "retry_sanitize": 0,
+          "retry_handoff_clip": 0,
+          "stage4_preclip": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "soft_continue": {
+        "counter_names": [
+          "stage2_soft_continue"
+        ],
+        "sum_by_counter": {
+          "stage2_soft_continue": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "nonfinite_step_counters": {
+        "counter_names": [
+          "stage2_nonfinite",
+          "stage2_nonfinite_retryable",
+          "stage2_nonfinite_retry_exhaust",
+          "stage2_nonfinite_catastrophic",
+          "stage2_kfast_nonfinite"
+        ],
+        "sum_by_counter": {
+          "stage2_nonfinite": 0,
+          "stage2_nonfinite_retryable": 0,
+          "stage2_nonfinite_retry_exhaust": 0,
+          "stage2_nonfinite_catastrophic": 0,
+          "stage2_kfast_nonfinite": 0
+        },
+        "rows_with_nonzero": 0
+      },
+      "newton_damp_line_count": 0,
+      "stage_gate_line_count": 0,
+      "diagnostic_nan_yes_lines": 0,
+      "diagnostic_inf_yes_lines": 0,
+      "explicit_nonfinite_lines": 0,
+      "nonfinite_event_count_by_step_telemetry": 0,
+      "field_checks_nan_no_lines": 1588,
+      "field_checks_inf_no_lines": 1204,
+      "runtime_effective_config_warning": "The RSL entry-format audit is separate; no conclusions about configured tolerance are inferred from a printed `newton_tol: 0.0` line."
+    }
+  ]
+}

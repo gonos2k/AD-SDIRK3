@@ -1,0 +1,111 @@
+{
+  "schema": "pr309_evidence_package_receipt_v1",
+  "created_local_time": "2026-10-15T23:50:28+09:00",
+  "native_run_index": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/pr309_run_index.json",
+    "sha256": "d17cf4a5e6705fb065f1ad1c18244aff4041eb230a4f16a73a2f402ea5bc2ffd"
+  },
+  "raw_csv_zstd_manifest": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/raw_csv_zstd/pr309_all_192_stage_csv_manifest.json",
+    "sha256": "3831815d8117665d727bf0fc8813690e2d8d7403f039600469a68883fe0116e4",
+    "csv_count": 192,
+    "original_bytes": 5770713345,
+    "compressed_bytes": 1950804585,
+    "all_roundtrips_verified": true,
+    "loose_originals_retained": true
+  },
+  "per_run_raw_archives": {
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/bundles/pr309_raw_zip_package_receipt.json",
+    "receipt_sha256": "efab1a474e4021c3a74e5c149c25345b58a878d8b64054ccaa58368d0410c5da",
+    "archives": [
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/bundles/PR309_coarse_h0p9375_0_60s_newton_tol1e-9_raw_csv_evidence.zip",
+        "sha256": "6f7a6c9f0d5fc645f6d44ca17fa4ae1af070f6dd91cd4300fc502add9ef6d6bb",
+        "bytes": 653180657,
+        "crc": "pass",
+        "member_count": 125
+      },
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/bundles/PR309_fine_h0p46875_0_60s_newton_tol1e-9_raw_csv_evidence.zip",
+        "sha256": "d1affba7a29a449865d4ac9bce0b083899c092541b4b96b6b41b6d0c09f9dd87",
+        "bytes": 1305788251,
+        "crc": "pass",
+        "member_count": 189
+      }
+    ]
+  },
+  "compact_review_archive": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/bundles/PR309_solver_controlled_w_60s_compact_review.zip",
+    "sha256": "dd9cb3be400ad07f8398e1f6da4dc0ecd33862b0abacbec60274cbf0e0ff5792",
+    "bytes": 81757649,
+    "crc": "pass",
+    "member_count": 102
+  },
+  "fresh_unpack_verifier": {
+    "script_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/verify_pr309_compact_review.py",
+    "script_sha256": "f7059b84c4ab59b7047820bc1a4194c3e86135f97040c1748565408f6f8fc3cd",
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/fresh_unpack_review_retry_20261015/fresh_unpack_verification_receipt.json",
+    "receipt_sha256": "cdcacbb5d25d3353177fec95adf6b7fa3f02c1452bc00869571549981ee97f5f",
+    "all_members_sha_verified": true,
+    "selected_csvs_roundtrip_verified": 5,
+    "compact_metrics_recomputed": {
+      "common_W_samples": 65,
+      "W_owners": 4096,
+      "initial_six_state_values": 24531,
+      "initial_packed_state_exact_equal": true,
+      "all_65_W_metrics_recomputed": true,
+      "all_6_official_t60_metrics_recomputed": true,
+      "all_6_official_t60_screen_pass": true
+    },
+    "crc": "pass"
+  },
+  "final_green_outputs": {
+    "analysis_json": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_60s_analysis.json",
+      "sha256": "f34dc64b71a038b05a4a39ed0b9984a3996caa33408763c50737d782fe7a8823",
+      "bytes": 373585
+    },
+    "compact_npz": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_60s_compact.npz",
+      "sha256": "f86e2faf170cec91bddd8adf6b1654d3ff805a7310c413d2ad209e5585de4bcb",
+      "bytes": 12734037
+    },
+    "trajectory_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_60s_w_trajectory.csv",
+      "sha256": "c1cef4ce007801cdd8a82355fa9d2c4d2dc5ab6117d576cac033a5926839660b",
+      "bytes": 16115
+    },
+    "step_summary_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_192_step_summary.csv",
+      "sha256": "e32af04228d665536b0270bc620b108b4c66e5b89f4e07b63e1c04a45baa6fb2",
+      "bytes": 107581
+    },
+    "green_red_crosscheck": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/green_red_validation.json",
+      "sha256": "2ededdd3581191b6067290faa907fa4b12aaec1801f877b5486195a0911155e4",
+      "bytes": 69650
+    },
+    "selected_details_manifest": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_selected_five_details.json",
+      "sha256": "4697239b030b7722d6764a232111d38889dddcf443938c121df375c170326b6e",
+      "bytes": 3290
+    }
+  },
+  "builder_scripts": {
+    "raw_zip": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/package_pr309_raw_zips.py",
+      "sha256": "fd2746210e861c8129c395bd63b274a4180541f53a7ca85fb10d19f112f9d265"
+    },
+    "compact_review": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/package_pr309_compact_review.py",
+      "sha256": "f182d2126fea9f5d6b2d27c586178df316ebb5cfcbe6ce7ee5bd8780f3c4e33d"
+    },
+    "compression": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/preflight/compress_pr309_csvs.py",
+      "sha256": "2851d2bc618c78e7dd542e2d3bd983725dcf86eb3033b07346fcd32ffa7f50c5"
+    }
+  },
+  "model_runs_during_packaging": 0,
+  "builds_during_packaging": 0,
+  "ci_claim": "none"
+}

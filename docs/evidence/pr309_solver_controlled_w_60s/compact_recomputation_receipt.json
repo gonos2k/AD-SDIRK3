@@ -1,0 +1,79 @@
+{
+  "created_local_time": "2026-10-15T23:49:45+09:00",
+  "scope": "recompute from byte-preserved public compact arrays; no new model run",
+  "npz_sha256": "9c5f863a30056e8a7a5298fe6e0026123ef0839620754e61b0675589d6b0b35d",
+  "all_65_W_rows_match_red": true,
+  "official_six_field_RMS_exact_matches_root_netcdf": {
+    "U": 2.3350212277406657e-08,
+    "V": 5.27999998338641e-09,
+    "W": 1.7984436497264701e-06,
+    "PH": 0.0001028908077946562,
+    "T": 0.0,
+    "MU": 0.0
+  },
+  "internal_to_published_W_parity_all_five_times_both_runs": [
+    {
+      "run": "coarse",
+      "time_s": 0,
+      "accepted_step": 0,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "coarse",
+      "time_s": 15,
+      "accepted_step": 16,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "coarse",
+      "time_s": 30,
+      "accepted_step": 32,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "coarse",
+      "time_s": 45,
+      "accepted_step": 48,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "coarse",
+      "time_s": 60,
+      "accepted_step": 64,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "fine",
+      "time_s": 0,
+      "accepted_step": 0,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "fine",
+      "time_s": 15,
+      "accepted_step": 32,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "fine",
+      "time_s": 30,
+      "accepted_step": 64,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "fine",
+      "time_s": 45,
+      "accepted_step": 96,
+      "bitwise_cast_parity": true
+    },
+    {
+      "run": "fine",
+      "time_s": 60,
+      "accepted_step": 128,
+      "bitwise_cast_parity": true
+    }
+  ],
+  "max_internal_W_rms_m_s": 1.9683104921731626e-06,
+  "max_internal_W_time_s": 56.25,
+  "numpy_version": "2.2.6"
+}
