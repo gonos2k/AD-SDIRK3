@@ -267,6 +267,9 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+#include "tests/native_terminal_adjoint_test.h"
+#endif
 #include "wrf_sdirk3_phi_horizontal.h"
 #include "wrf_sdirk3_nonhydrostatic_pressure.h"
 #include "wrf_sdirk3_boundary_ad.h"
@@ -817,6 +820,10 @@ static torch::Tensor wrf_vert_adv3(const torch::Tensor& q, const torch::Tensor& 
     const auto boundary = torch::zeros_like(q.slice(1, 0, 1));
     const auto flux = torch::cat({boundary, interior, boundary}, 1);
     if (flux_out) *flux_out = flux;
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+    if (sign_delta == 0.0f)
+        wrf::sdirk3::native_terminal_test::capture_theta_omega(omega);
+#endif
     return (flux.slice(1, 1, nz + 1) - flux.slice(1, 0, nz))
            * rdnw_pos.slice(0, 0, nz).view({1, nz, 1});
 }

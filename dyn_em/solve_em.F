@@ -81,6 +81,11 @@ SUBROUTINE solve_em ( grid , config_flags  &
 #ifdef USE_SDIRK3
    USE module_implicit_sdirk3  ! Sole SDIRK3 Fortran bridge; advance_implicit is zero-copy (v2 C ABI)
 #endif
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+   USE module_native_terminal_adjoint_test, ONLY : &
+        native_terminal_test_prepare, native_terminal_test_before_step, &
+        native_terminal_test_after_step
+#endif
 
 #if (WRF_CMAQ == 1)
    use twoway_data_module
@@ -730,6 +735,15 @@ SUBROUTINE solve_em ( grid , config_flags  &
       ! This prevents double-application of periodic BC by C++ when WRF handles it
       CALL sdirk3_set_timestep_i4(grid%itimestep)
 
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+      ! Test-only derivative control starts after WRF initialization and CQ setup,
+      ! at the exact prognostic state packed for the first native solver entry.
+      IF (grid%itimestep == 1) &
+           CALL native_terminal_test_prepare(grid, kds, kde)
+      IF (grid%itimestep >= 1 .AND. grid%itimestep <= 256) &
+           CALL native_terminal_test_before_step(grid%itimestep)
+#endif
+
       ! Perform all 3 SDIRK3 stages with halo exchanges between stages
       DO rk_step = 1, 3
          CALL advance_implicit(grid, config_flags, rk_step, grid%dt, &
@@ -756,6 +770,13 @@ SUBROUTINE solve_em ( grid , config_flags  &
 #endif
          END IF
       END DO
+
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+      ! Capture the accepted native endpoint before later WRF boundary/physics
+      ! processing; the objective is defined on the internal FP64 solver state.
+      IF (grid%itimestep >= 1 .AND. grid%itimestep <= 256) &
+           CALL native_terminal_test_after_step(grid, grid%itimestep, kds, kde)
+#endif
       
       ! Apply physics tendencies (placeholder for future integration)
       CALL sdirk3_apply_physics_tendencies(grid, config_flags, grid%dt)

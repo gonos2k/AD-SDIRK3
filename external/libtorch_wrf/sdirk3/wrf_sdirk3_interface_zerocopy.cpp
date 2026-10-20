@@ -17,6 +17,9 @@
 #include "wrf_sdirk3_profiler.h"
 #include "wrf_sdirk3_halo_exchange.h"
 #include "wrf_sdirk3_autograd_utils.h"
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+#include "tests/native_terminal_adjoint_test.h"
+#endif
 // FIX 2025-01-11 Round72: Removed <atomic> - no longer needed after Round70 switch to per-solver state
 // FIX Round108: Re-added <atomic> for TLS cache generation counter
 #include <atomic>
@@ -961,8 +964,14 @@ extern "C" int sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
         auto terminal_fp32 = torch::from_blob(const_cast<float*>(lambda_terminal), {expected_size}, wrf::sdirk3::make_cpu_from_blob_opts()).clone();
         auto terminal = wrf::sdirk3::g_sdirk3_config.internal_fp64_state_carry
             ? terminal_fp32.to(torch::kFloat64) : terminal_fp32;
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+        const auto initial_fp64 = unified_solver->pullbackFixedTrajectory(terminal).detach();
+        wrf::sdirk3::native_terminal_test::capture_gradient64(initial_fp64);
+        auto initial = initial_fp64.to(torch::kCPU, torch::kFloat32).contiguous();
+#else
         auto initial = unified_solver->pullbackFixedTrajectory(terminal)
                            .detach().to(torch::kCPU, torch::kFloat32).contiguous();
+#endif
         if (!initial.defined() || initial.numel() != expected_size ||
             !wrf::sdirk3::guarded_item<bool>(torch::isfinite(initial).all())) return 0;
         std::memcpy(lambda_initial, initial.data_ptr<float>(),
