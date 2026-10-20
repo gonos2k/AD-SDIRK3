@@ -1,0 +1,139 @@
+{
+  "actions_by_red": {
+    "builds": 0,
+    "manifest_files_modified": 0,
+    "model_runs": 0,
+    "production_source_edits": 0
+  },
+  "coarse_receipt_and_namelist": {
+    "actual_environment": {
+      "mpi_ranks": 1,
+      "omp_threads": 1,
+      "rhs_count": true,
+      "stage_operand_diag": true
+    },
+    "all_compiled_source_pins_match": true,
+    "compiled_source_pin_count": 28,
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "dt_s": 0.9375,
+    "duration_s": 240,
+    "ewt_tolerance": 1e-06,
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "expected_implicit_stage_calls": 768,
+    "expected_macrosteps": 256,
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "history_time_count": 17,
+    "history_times_match_expected": true,
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "krylov_tolerance": 1e-07,
+    "label": "h0p9375_0_240s_newton_tol1e-9",
+    "namelist_byte_identical_to_archived_coarse": true,
+    "namelist_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/namelist.input",
+    "namelist_sha256": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "newton_tolerance": 1e-09,
+    "process_return_code": 0,
+    "receipt_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/coarse_run_receipt.json",
+    "receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+    "receipt_status": "completed",
+    "success_marker": true
+  },
+  "direct_forward_evidence": {
+    "candidate_h09375_vs_h3_pass_count": 24,
+    "csv_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/direct_h09375_vs_h0234375_full_epsilon.csv",
+    "csv_sha256": "1952c9883d10c2910c36d4ac7eb34d952c7fada2e2dc204c706fd23463f522b2",
+    "epsilon_source": "root-final original full epsilon; the triangle bound is not the direct pass criterion",
+    "json_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/direct_h09375_vs_h0234375_full_epsilon.json",
+    "json_sha256": "a209bd2d7f224cdd283566b2ad25dff3da37fc449be767a1b43eeea74fd0bdae",
+    "maximum_direct_ratio": 0.5025718510754528,
+    "maximum_triangle_upper_bound_ratio": 0.5029398053871652,
+    "most_restrictive_row": "W at 180 s"
+  },
+  "fresh_folder_recomputation": {
+    "all_24_rows_reproduced": true,
+    "input_hashes_pinned": {
+      "coarse_receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+      "h3_checkpoint_npz_sha256": "28f4fee625a6fedfb27ffdb376586df6cd6d5c8e5f2ca6c023f37bfec7ad0029",
+      "h3_receipt_sha256": "ef6fb87deba873141306d78fe23a834b3533519750e46a3babf5c9d378194e95",
+      "middle_receipt_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+      "old_checkpoint_npz_sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+      "protocol_sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0",
+      "script_sha256": "fed2a888a69ec92e7c5c9cdd2279359718463b914a04cefa04514ef336c32d7e"
+    },
+    "maximum_triangle_ratio": 0.5029398053871652,
+    "pass_count": 24,
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/fresh_folder_direct_candidate_test.json",
+    "sha256": "e2de41fc3bd80518368c4f0a85bdb3ac4f4ffa5a480668aeebe3f66266484998",
+    "status": "pass",
+    "temporary_test_tree_removed": true
+  },
+  "independent_agreement": {
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/independent_agreement.json",
+    "red_green_exact_matches": 24,
+    "red_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/research-forward-setting-20261020/red_validator/direct_coarse_h09375_vs_h3_receipt.json",
+    "red_receipt_sha256": "fc9d973fb20b4b9ee71127666161c3e7e04773ab3d1b9691003e0e5f4b09f853",
+    "red_root_exact_matches": 24,
+    "root_green_red_direct_values_and_triangle_bounds_match": true,
+    "row_count": 24,
+    "sha256": "c34c14022a9abdad5152261f3bb5fcc9b5c2d729df065a6865a3688b1aed7bc8"
+  },
+  "limitations": [
+    "The map is forward-only for this named dry e71 240 s case. It does not certify a continuous-truth bound, general timestep policy, adjoint, observation window, or efficiency gain.",
+    "The archived stock RK3 comparison is explicitly secondary; no cost claim is used."
+  ],
+  "manifest": {
+    "declared_bytes": 87648,
+    "declared_file_count": 12,
+    "exclusions": [
+      "manifest.json (self-hash)",
+      "green_closing_review.json/red_closing_review.json (review this manifest, avoid cycles)"
+    ],
+    "expected_sha256": "80fe087fc58f041a9890d29aa453cdb4d1047d9da3f8db840218d0009d8e421e",
+    "hash_mismatches": [],
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/manifest.json",
+    "sha256": "80fe087fc58f041a9890d29aa453cdb4d1047d9da3f8db840218d0009d8e421e",
+    "verified_file_count": 12
+  },
+  "preserved_prior_results": {
+    "h15_candidate_full_epsilon": "20/24, W fails all four checkpoints; unchanged archived setting includes Newton1e-7.",
+    "old_h09375_h046875_epsilon_over_3": "Original .9375/.46875 strict epsilon/3 result22/24 remains unchanged."
+  },
+  "problem_definition_update": {
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/PROBLEM_DEFINITION.md",
+    "scope_note": "The update fixes a named forward setting; it leaves observation-window derivatives and broad claims open.",
+    "sha256": "58fd97cc4cb3603423fb943fce37a71bd7d00608c05a80d0f93c9a20d34c8d80",
+    "updated_section_present": false
+  },
+  "registration": {
+    "case_id": "dry_em_b_wave_e71_240s_h15over16_strict_v1",
+    "implicit_stages": 768,
+    "model_steps": 256,
+    "new_model_runs": 0,
+    "observation_derivative_status": "open_not_certified_by_forward_acceptance",
+    "observation_problem_selected": false,
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/research_forward_map.json",
+    "production_default_changes": false,
+    "schema": "named_research_forward_map_v1",
+    "selected_h_seconds": 0.9375,
+    "selected_timestep_fraction": "15/16",
+    "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7",
+    "status": "selected_for_named_case_forward_research_use"
+  },
+  "report": {
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/(202610201926)_research_forward_setting_h09375.md",
+    "sha256": "94e6af8584a369ac2961e045a33ffddc7f167ef06b8d8bf2c34b21db46c478fb"
+  },
+  "review_findings": [],
+  "reviewed_scope": "Read-only final close of current research-forward-setting registration, existing h=.9375 coarse receipt/namelist, direct full-epsilon evidence, fresh-folder recomputation, PROBLEM_DEFINITION update, and final evidence manifest.",
+  "schema": "research_forward_setting_red_final_closing_review_v1",
+  "source_graph_receipt": {
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/source_graph_receipt.json",
+    "sha256": "36c9b7feeb2a4f551bd8c3443b6debff4178419cb7a44692cd8dc180329ed63b"
+  },
+  "status": "PASS",
+  "workspace": {
+    "branch": "codex/research-forward-setting-20261020",
+    "expected_main_base": "cb17e73c83c25d3827c3742a971dfa88d182bc01",
+    "head": "cb17e73c83c25d3827c3742a971dfa88d182bc01",
+    "worktree": "/private/tmp/pr310-strict-reference-240s-20261020"
+  }
+}

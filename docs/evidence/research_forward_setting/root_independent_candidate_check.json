@@ -1,0 +1,279 @@
+{
+  "schema": "root_direct_coarse_candidate_v1",
+  "input_hashes": {
+    "old": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+    "new": "28f4fee625a6fedfb27ffdb376586df6cd6d5c8e5f2ca6c023f37bfec7ad0029",
+    "protocol": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0"
+  },
+  "rows": [
+    {
+      "time_seconds": 60,
+      "field": "U",
+      "rms": 2.3961546506728882e-08,
+      "max_abs": 4.76837158203125e-07,
+      "limit": 0.0007744417040064484,
+      "ratio": 3.094041343947222e-05,
+      "pass": true,
+      "triangle_upper_bound": 2.8717439218782346e-08,
+      "triangle_ratio": 3.7081473105357495e-05
+    },
+    {
+      "time_seconds": 60,
+      "field": "V",
+      "rms": 6.018881408963696e-09,
+      "max_abs": 2.5436747819185257e-08,
+      "limit": 0.00010122007244795247,
+      "ratio": 5.9463318523691184e-05,
+      "pass": true,
+      "triangle_upper_bound": 6.036728494389607e-09,
+      "triangle_ratio": 5.9639638150760096e-05
+    },
+    {
+      "time_seconds": 60,
+      "field": "W",
+      "rms": 2.041602559140273e-06,
+      "max_abs": 6.642323569394648e-06,
+      "limit": 7.79443985679733e-06,
+      "ratio": 0.26193063217491425,
+      "pass": true,
+      "triangle_upper_bound": 2.0435561486211843e-06,
+      "triangle_ratio": 0.26218127102989336
+    },
+    {
+      "time_seconds": 60,
+      "field": "PH",
+      "rms": 0.00010842987600204403,
+      "max_abs": 0.00048828125,
+      "limit": 0.010249750539744869,
+      "ratio": 0.010578781950018367,
+      "pass": true,
+      "triangle_upper_bound": 0.00013710366621341095,
+      "triangle_ratio": 0.013376292982133754
+    },
+    {
+      "time_seconds": 60,
+      "field": "T",
+      "rms": 0.0,
+      "max_abs": 0.0,
+      "limit": 3.619571391542998e-05,
+      "ratio": 0.0,
+      "pass": true,
+      "triangle_upper_bound": 0.0,
+      "triangle_ratio": 0.0
+    },
+    {
+      "time_seconds": 60,
+      "field": "MU",
+      "rms": 0.0,
+      "max_abs": 0.0,
+      "limit": 0.014590900457561187,
+      "ratio": 0.0,
+      "pass": true,
+      "triangle_upper_bound": 0.0,
+      "triangle_ratio": 0.0
+    },
+    {
+      "time_seconds": 120,
+      "field": "U",
+      "rms": 2.683725017057592e-08,
+      "max_abs": 4.76837158203125e-07,
+      "limit": 0.0007744417040064484,
+      "ratio": 3.465367377781667e-05,
+      "pass": true,
+      "triangle_upper_bound": 3.394389200558791e-08,
+      "triangle_ratio": 4.3830144773950964e-05
+    },
+    {
+      "time_seconds": 120,
+      "field": "V",
+      "rms": 1.0294244553048123e-08,
+      "max_abs": 5.4249539971351624e-08,
+      "limit": 0.00010122007244795247,
+      "ratio": 0.00010170161218113572,
+      "pass": true,
+      "triangle_upper_bound": 1.0328523263220472e-08,
+      "triangle_ratio": 0.00010204026744331186
+    },
+    {
+      "time_seconds": 120,
+      "field": "W",
+      "rms": 2.820696627854614e-06,
+      "max_abs": 1.0060004569822922e-05,
+      "limit": 7.79443985679733e-06,
+      "ratio": 0.3618857390239219,
+      "pass": true,
+      "triangle_upper_bound": 2.8259943646546866e-06,
+      "triangle_ratio": 0.3625654205529868
+    },
+    {
+      "time_seconds": 120,
+      "field": "PH",
+      "rms": 0.000146372697897063,
+      "max_abs": 0.00048828125,
+      "limit": 0.010249750539744869,
+      "ratio": 0.014280610765060282,
+      "pass": true,
+      "triangle_upper_bound": 0.00018844188238623729,
+      "triangle_ratio": 0.018385021338375704
+    },
+    {
+      "time_seconds": 120,
+      "field": "T",
+      "rms": 0.0,
+      "max_abs": 0.0,
+      "limit": 3.619571391542998e-05,
+      "ratio": 0.0,
+      "pass": true,
+      "triangle_upper_bound": 0.0,
+      "triangle_ratio": 0.0
+    },
+    {
+      "time_seconds": 120,
+      "field": "MU",
+      "rms": 0.0,
+      "max_abs": 0.0,
+      "limit": 0.014590900457561187,
+      "ratio": 0.0,
+      "pass": true,
+      "triangle_upper_bound": 0.0,
+      "triangle_ratio": 0.0
+    },
+    {
+      "time_seconds": 180,
+      "field": "U",
+      "rms": 3.4318652887962326e-08,
+      "max_abs": 4.76837158203125e-07,
+      "limit": 0.0007744417040064484,
+      "ratio": 4.4314055803581275e-05,
+      "pass": true,
+      "triangle_upper_bound": 4.215769260094737e-08,
+      "triangle_ratio": 5.443623759264435e-05
+    },
+    {
+      "time_seconds": 180,
+      "field": "V",
+      "rms": 1.4188000713251096e-08,
+      "max_abs": 5.960464477539063e-08,
+      "limit": 0.00010122007244795247,
+      "ratio": 0.00014016983361226685,
+      "pass": true,
+      "triangle_upper_bound": 1.4227293150148526e-08,
+      "triangle_ratio": 0.00014055802180406682
+    },
+    {
+      "time_seconds": 180,
+      "field": "W",
+      "rms": 3.917266066926922e-06,
+      "max_abs": 1.4757330063730478e-05,
+      "limit": 7.79443985679733e-06,
+      "ratio": 0.5025718510754528,
+      "pass": true,
+      "triangle_upper_bound": 3.920134064679613e-06,
+      "triangle_ratio": 0.5029398053871652
+    },
+    {
+      "time_seconds": 180,
+      "field": "PH",
+      "rms": 0.00014954148497053505,
+      "max_abs": 0.00048828125,
+      "limit": 0.010249750539744869,
+      "ratio": 0.014589768247594576,
+      "pass": true,
+      "triangle_upper_bound": 0.0001948431496673797,
+      "triangle_ratio": 0.019009550418992893
+    },
+    {
+      "time_seconds": 180,
+      "field": "T",
+      "rms": 0.0,
+      "max_abs": 0.0,
+      "limit": 3.619571391542998e-05,
+      "ratio": 0.0,
+      "pass": true,
+      "triangle_upper_bound": 0.0,
+      "triangle_ratio": 0.0
+    },
+    {
+      "time_seconds": 180,
+      "field": "MU",
+      "rms": 5.960464477539063e-08,
+      "max_abs": 9.5367431640625e-07,
+      "limit": 0.014590900457561187,
+      "ratio": 4.085055953109649e-06,
+      "pass": true,
+      "triangle_upper_bound": 5.960464477539063e-08,
+      "triangle_ratio": 4.085055953109649e-06
+    },
+    {
+      "time_seconds": 240,
+      "field": "U",
+      "rms": 2.7849924217655264e-08,
+      "max_abs": 2.384185791015625e-07,
+      "limit": 0.0007744417040064484,
+      "ratio": 3.5961291952096853e-05,
+      "pass": true,
+      "triangle_upper_bound": 3.648419942528714e-08,
+      "triangle_ratio": 4.7110323781043895e-05
+    },
+    {
+      "time_seconds": 240,
+      "field": "V",
+      "rms": 1.3067780613126102e-08,
+      "max_abs": 6.332993507385254e-08,
+      "limit": 0.00010122007244795247,
+      "ratio": 0.00012910266014525505,
+      "pass": true,
+      "triangle_upper_bound": 1.3143278425039917e-08,
+      "triangle_ratio": 0.000129848538014021
+    },
+    {
+      "time_seconds": 240,
+      "field": "W",
+      "rms": 3.8181237461078005e-06,
+      "max_abs": 1.3710232451558113e-05,
+      "limit": 7.79443985679733e-06,
+      "ratio": 0.48985223008400186,
+      "pass": true,
+      "triangle_upper_bound": 3.821528188389271e-06,
+      "triangle_ratio": 0.4902890083957238
+    },
+    {
+      "time_seconds": 240,
+      "field": "PH",
+      "rms": 0.00015131298563716102,
+      "max_abs": 0.0009765625,
+      "limit": 0.010249750539744869,
+      "ratio": 0.014762601787275051,
+      "pass": true,
+      "triangle_upper_bound": 0.0001972021605044323,
+      "triangle_ratio": 0.019239703419098135
+    },
+    {
+      "time_seconds": 240,
+      "field": "T",
+      "rms": 0.0,
+      "max_abs": 0.0,
+      "limit": 3.619571391542998e-05,
+      "ratio": 0.0,
+      "pass": true,
+      "triangle_upper_bound": 0.0,
+      "triangle_ratio": 0.0
+    },
+    {
+      "time_seconds": 240,
+      "field": "MU",
+      "rms": 6.664001874625056e-08,
+      "max_abs": 9.5367431640625e-07,
+      "limit": 0.014590900457561187,
+      "ratio": 4.567231401521684e-06,
+      "pass": true,
+      "triangle_upper_bound": 6.664001874625056e-08,
+      "triangle_ratio": 4.567231401521684e-06
+    }
+  ],
+  "pass_count": 24,
+  "all_triangle_pass": true,
+  "maximum_direct_ratio": 0.5025718510754528,
+  "maximum_triangle_ratio": 0.5029398053871652,
+  "scope": "Same discrete reference, public FP32 fields already promoted and transformed; no continuous truth bound; zero model runs."
+}

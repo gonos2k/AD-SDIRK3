@@ -1,0 +1,165 @@
+{
+  "baseline": {
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_file": "namelist.input",
+    "namelist_sha256": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "producer": {
+      "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+      "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+      "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+      "pr307_build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8"
+    },
+    "receipt_file": "../pr310_strict_reference_240s/coarse_run_receipt.json",
+    "receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+    "source_binding": "Reuse the 28 compiled-source pin records (27 unique paths) in the baseline receipt; the old dirty HEAD label alone is not producer evidence."
+  },
+  "case_id": "dry_em_b_wave_e71_240s_h15over16_strict_v1",
+  "derivative_and_observation_connection": {
+    "existing_entrypoints": [
+      "SDIRK3Solver::beginFixedTrajectory / requestFixedTrajectory",
+      "SDIRK3Solver::pullbackFixedTrajectory (terminal or accepted-endpoint cotangent vector)",
+      "SDIRK3Solver::closeFixedTrajectory",
+      "sdirk3_begin_fixed_trajectory / sdirk3_pullback_fixed_trajectory / sdirk3_close_fixed_trajectory"
+    ],
+    "observation_problem_selected": false,
+    "observer_default_changes": false,
+    "remaining_evidence": [
+      "Same .9375s strict native input/auxiliary context connected to the derivative harness, including the known small standalone-versus-integrated U/V difference.",
+      "Declare observation H, physical sampling, times, fixed R, controls/prior and derivative budgets before a new observation-window test; forecast epsilon is not R.",
+      "Connect the actual Fortran window objective/observation cotangents to fixed-trajectory pullback; wrappers do not differentiate caller-side maps.",
+      "JVP/VJP/FD and replay evidence for that exact map/objective; do not promote unrelated short CI fixtures to 240s window certification."
+    ],
+    "same_map_requirements": [
+      "Use the same numerical/auxiliary state, native PH/THM/CF options, boundaries, precision, handoff and fixed timestep.",
+      "Differentiate accepted converged stage roots under declared tolerances; separately check finite-solver forward sensitivity and branch/sign consistency.",
+      "Preserve carried checkpoints and observation injection at exact accepted endpoints; validation checkpoint indices are not automatically observation times."
+    ],
+    "status": "open_not_certified_by_forward_acceptance"
+  },
+  "efficiency_target": "Not adopted; larger-step accuracy/cost is separate and no speed advantage is claimed.",
+  "forward_acceptance": {
+    "candidate_limits": {
+      "MU": 0.014590900457561187,
+      "PH": 0.010249750539744869,
+      "T": 3.619571391542998e-05,
+      "U": 0.0007744417040064484,
+      "V": 0.00010122007244795247,
+      "W": 7.79443985679733e-06
+    },
+    "data_representation": "Public FP32 fields promoted to FP64, owner crops/T+300/MU+MUB already applied in NPZ; PH remains perturbation geopotential.",
+    "direct_candidate_pass_count": 24,
+    "direct_table": {
+      "file": "direct_h09375_vs_h0234375_full_epsilon.json",
+      "sha256": "a209bd2d7f224cdd283566b2ad25dff3da37fc449be767a1b43eeea74fd0bdae"
+    },
+    "evaluation_step_indices": [
+      64,
+      128,
+      192,
+      256
+    ],
+    "evaluation_times_seconds": [
+      60,
+      120,
+      180,
+      240
+    ],
+    "maximum_direct_ratio": 0.5025718510754528,
+    "maximum_triangle_upper_bound_ratio": 0.5029398053871652,
+    "not_certified": "No continuous-truth bound, order proof or all-internal-time accuracy claim.",
+    "owner_counts": {
+      "MU": 256,
+      "PH": 4096,
+      "T": 4096,
+      "U": 4096,
+      "V": 4352,
+      "W": 4096
+    },
+    "reference_h_seconds": 0.234375,
+    "reference_npz": "../three_level_w_reference/h3_published_physical_fields.npz",
+    "reference_npz_sha256": "28f4fee625a6fedfb27ffdb376586df6cd6d5c8e5f2ca6c023f37bfec7ad0029",
+    "reference_screen": "The separate .46875/.234375 epsilon/3 empirical screen passed24/24 and is closed."
+  },
+  "new_builds": 0,
+  "new_model_runs": 0,
+  "numerics": {
+    "INN_warmstart": false,
+    "effective_ewt_relative_tolerance": 1e-06,
+    "failure_policy": "Existing checked mode-3/stage_fail_action=1 rules and no-failure archived realization; do not infer semantics from an early default print. No branch differentiation claim.",
+    "gmres_restart": 30,
+    "gmres_warmstart": false,
+    "krylov_tolerance": 1e-07,
+    "max_krylov_iter_namelist": 100,
+    "max_newton_iter": 40,
+    "newton_absolute_tolerance": 1e-09,
+    "newton_relative_tolerance": 0.0,
+    "preconditioner_type": 2,
+    "residual_interpretation": "Scaled whole-state Newton residual; not a W physical state-error bound. Archived 768 stages each used one correction (Newton count 2).",
+    "use_autograd_from_namelist": true
+  },
+  "operator": {
+    "buoyancy_uses_current_w": true,
+    "diff_opt": 2,
+    "effective_omega_ww_cp": true,
+    "geometry": "Fixed 16x16x16 dry grid, dx=dy=100000m; prescribed geometry/base arrays from pinned input/solver context",
+    "implicit_divergence": true,
+    "kdamp": 0.2,
+    "khdif": 1000.0,
+    "kvdif": 10.0,
+    "mass_coordinate_mode": 1,
+    "native_cf": [
+      2.095576286315918,
+      -1.7350879907608032,
+      0.6395117044448853
+    ],
+    "non_hydrostatic": true,
+    "omega_w_blend": 1.0,
+    "phi_adv_z": 1,
+    "split_explicit": false,
+    "stock_filter_note": "Namelist smdiv/emdiv/epssm are not stock acoustic-child filters in this native mode-3 path; active native divergence/diffusion terms are retained.",
+    "v_sca_adv_order": 3,
+    "vertical_boundary": "Fixed W/PH bottom excluded from accuracy owners; dynamic top retained",
+    "x_boundary": "periodic; drop only the duplicate U closing face for accuracy",
+    "y_boundary": "symmetric physical walls; retain both V wall faces"
+  },
+  "preserved_results": {
+    "h15_current_candidate": "20/24, W fails all four checkpoints; unchanged archived setting includes Newton1e-7.",
+    "prior_reference_pair": "Original .9375/.46875 strict epsilon/3 result22/24 remains unchanged."
+  },
+  "production_default_changes": false,
+  "registered_at_jst": "2026-10-20T19:26:31+09:00",
+  "runtime": {
+    "MPI_ranks": 1,
+    "OMP_threads": 1,
+    "archived_explicit_environment": {
+      "OMP_NUM_THREADS": "1",
+      "WRF_SDIRK3_RHS_COUNT": "1",
+      "WRF_SDIRK3_STAGE_OPERAND_DIAG": "1"
+    },
+    "cleared_environment_prefixes": [
+      "WRF_SDIRK3_",
+      "WRF_PARITY_"
+    ],
+    "observation_capture_note": "The archived baseline used stage diagnostics. This registration does not launch a new observer-on/off test or infer new physical G arrays."
+  },
+  "schema": "named_research_forward_map_v1",
+  "scope": "Dry single-domain single-rank single-tile CPU em_b_wave; original e71 initial field; 240s output-based forward accuracy only. No operational/general-adjoint acceptance.",
+  "status": "selected_for_named_case_forward_research_use",
+  "time_map": {
+    "duration_seconds": 240,
+    "final_publication": "FP32 at the Fortran boundary; archived internal FP64 state remains the carry source",
+    "first_input": "Promoted FP32 host state",
+    "fixed_schedule": true,
+    "following_inputs": "255 internal FP64 carries with matching host publication/context fingerprint",
+    "h_fraction_seconds": "15/16",
+    "h_seconds": 0.9375,
+    "implicit_stages": 768,
+    "internal_fp64": true,
+    "internal_fp64_state_carry": true,
+    "method": "IMEX ARK324L2SA mode 3",
+    "model_steps": 256,
+    "scheme": 6,
+    "start": "Original e71 cold initialization, then uninterrupted carried FP64 integration; no state-only restart.",
+    "state_control_boundary": "The solver-entry prognostic state after WRF initialization. File-input derivatives would additionally require the initialization-map derivative; they are not certified here."
+  }
+}

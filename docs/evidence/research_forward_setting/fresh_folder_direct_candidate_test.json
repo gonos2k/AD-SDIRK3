@@ -1,0 +1,27 @@
+{
+  "all_24_direct_rows_identical": true,
+  "command": [
+    "/opt/homebrew/opt/python@3.10/bin/python3.10",
+    "check_existing_coarse_candidate.py"
+  ],
+  "fresh_outputs": {
+    "direct_h09375_vs_h0234375_full_epsilon.csv": "1952c9883d10c2910c36d4ac7eb34d952c7fada2e2dc204c706fd23463f522b2",
+    "direct_h09375_vs_h0234375_full_epsilon.json": "ddba54f80b2e1353aa6314fed571893ab49175d31f993fc3dd4f83df7e2edee7"
+  },
+  "inputs": {
+    "coarse_receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+    "h3_checkpoint_npz_sha256": "28f4fee625a6fedfb27ffdb376586df6cd6d5c8e5f2ca6c023f37bfec7ad0029",
+    "h3_receipt_sha256": "ef6fb87deba873141306d78fe23a834b3533519750e46a3babf5c9d378194e95",
+    "middle_receipt_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+    "old_checkpoint_npz_sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+    "protocol_sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0",
+    "script_sha256": "fed2a888a69ec92e7c5c9cdd2279359718463b914a04cefa04514ef336c32d7e"
+  },
+  "maximum_triangle_bound_ratio": 0.5029398053871652,
+  "pass_count": 24,
+  "schema": "research_forward_setting_fresh_folder_test_v1",
+  "status": "pass",
+  "stdout": "{\n  \"json\": \"direct_h09375_vs_h0234375_full_epsilon.json\",\n  \"json_sha256\": \"ddba54f80b2e1353aa6314fed571893ab49175d31f993fc3dd4f83df7e2edee7\",\n  \"csv\": \"direct_h09375_vs_h0234375_full_epsilon.csv\",\n  \"csv_sha256\": \"1952c9883d10c2910c36d4ac7eb34d952c7fada2e2dc204c706fd23463f522b2\",\n  \"rows\": 24,\n  \"pass_count\": 24,\n  \"all_24_pass\": true,\n  \"maximum_triangle_bound_ratio\": 0.5029398053871652\n}",
+  "temporary_test_tree_removed": true,
+  "working_directory_relative": "docs/evidence/research_forward_setting"
+}
