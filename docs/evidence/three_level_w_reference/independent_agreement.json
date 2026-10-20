@@ -1,0 +1,312 @@
+{
+  "schema": "three_level_independent_agreement_v1",
+  "inputs": {
+    "root": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/root_official_screen.json",
+      "sha256": "924c6f61ce455f6991be50be34fdfe67b9e8343c5462dd5114a47ac42252f7b2"
+    },
+    "green": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/analysis/pr311_three_level_public_field_analysis.json",
+      "sha256": "fcdea8746e494034529a5d49da992aaffbe1e663a5a2f4ae8ccdbf1a875d1bae"
+    },
+    "red": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/h3/pr311_h3_red_analysis.json",
+      "sha256": "d0bec36a0b23be6351ed720dcbe50b443136797778e7df4046a779136f622712"
+    }
+  },
+  "rows_compared": 48,
+  "all_RMS_ratio_pass_exact": true,
+  "three_level_q_exact": true,
+  "cosine_absolute_tolerance": 1e-14,
+  "all_cosine_within_tolerance": true,
+  "rows": [
+    {
+      "group": "reference",
+      "field": "U",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "V",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "W",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "PH",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "T",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "MU",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "U",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "V",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "W",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "PH",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "T",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "MU",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "U",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "V",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "W",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "PH",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "T",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "MU",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "U",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "V",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "W",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "PH",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "T",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "reference",
+      "field": "MU",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "U",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "V",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "W",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "PH",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "T",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "MU",
+      "time_seconds": 60,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "U",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "V",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "W",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "PH",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "T",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "MU",
+      "time_seconds": 120,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "U",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "V",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "W",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "PH",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "T",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "MU",
+      "time_seconds": 180,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "U",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "V",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "W",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "PH",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "T",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    },
+    {
+      "group": "candidate",
+      "field": "MU",
+      "time_seconds": 240,
+      "RMS_ratio_pass_bit_exact": true
+    }
+  ]
+}

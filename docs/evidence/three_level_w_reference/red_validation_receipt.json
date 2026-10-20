@@ -1,0 +1,146 @@
+{
+  "analyzer_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/h3_validator_binding.json",
+  "analyzer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/analyze_pr311_h3_independent.py",
+  "analyzer_sha256": "ff57362ed57bed947bd8bd4dd05ce5919186b4ec76e333fd9d1c7c8013c06fd6",
+  "conditional_h15_full_epsilon": {
+    "evaluated_after_all24_pass": true,
+    "failed_rows": [
+      {
+        "field": "W",
+        "full_epsilon": 7.79443985679733e-06,
+        "ratio": 4.567329252089048,
+        "rms": 3.559977316159922e-05,
+        "time_seconds": 60
+      },
+      {
+        "field": "W",
+        "full_epsilon": 7.79443985679733e-06,
+        "ratio": 8.353374382778092,
+        "rms": 6.510987422787537e-05,
+        "time_seconds": 120
+      },
+      {
+        "field": "W",
+        "full_epsilon": 7.79443985679733e-06,
+        "ratio": 5.139824983807577,
+        "rms": 4.006205671075247e-05,
+        "time_seconds": 180
+      },
+      {
+        "field": "W",
+        "full_epsilon": 7.79443985679733e-06,
+        "ratio": 6.99431737450715,
+        "rms": 5.451678611494859e-05,
+        "time_seconds": 240
+      }
+    ],
+    "pass_count": 20,
+    "red_green_rows_exact": true,
+    "rows": 24
+  },
+  "h3_capture_audit_sha256": "da56311a03a231330f3cb83ca011108bf7673e440af07a52f845c3d94bf1ffaa",
+  "h3_run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_execution/h0p234375_0_240s_newton_tol1e-9/run_receipt.json",
+  "h3_run_receipt_sha256": "ef6fb87deba873141306d78fe23a834b3533519750e46a3babf5c9d378194e95",
+  "interpretation_limits": [
+    "Named-case empirical V3 screen; not truth, order, or propagated-error claim.",
+    "q/RMS ratio and cosine are descriptive, not additional gates.",
+    "h3 has only public FP32 history promoted to FP64; no h3 internal W trajectory or G_W is claimed.",
+    "No extra model run, build, source edit, old stage CSV read, or automatic smaller-timestep escalation."
+  ],
+  "official_screen": {
+    "all_24_pass": true,
+    "criterion": "unchanged V3 epsilon/3 only",
+    "green_analysis_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/analysis/pr311_three_level_public_field_analysis.json",
+    "green_analysis_sha256": "fcdea8746e494034529a5d49da992aaffbe1e663a5a2f4ae8ccdbf1a875d1bae",
+    "pass_count": 24,
+    "red_analysis_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/h3/pr311_h3_red_analysis.json",
+    "red_analysis_sha256": "d0bec36a0b23be6351ed720dcbe50b443136797778e7df4046a779136f622712",
+    "root_json_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/root_official_screen.json",
+    "root_json_sha256": "924c6f61ce455f6991be50be34fdfe67b9e8343c5462dd5114a47ac42252f7b2",
+    "rows": 24,
+    "screen_three_way_exact": true
+  },
+  "outputs": {
+    "pr311_h3_comparison_fields.npz": {
+      "bytes": 310655,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/h3/pr311_h3_comparison_fields.npz",
+      "sha256": "580ad2eda205b56d5f7fa26a8c1d4e2d5cc42afa1e0ad9457463a5aeeb0843d1"
+    },
+    "pr311_h3_official_24row_screen.csv": {
+      "bytes": 2934,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/h3/pr311_h3_official_24row_screen.csv",
+      "sha256": "a69172b43eb2b68ccf0d58e305aa189eed80a8cca00de87ca99671bde7680ffa"
+    },
+    "pr311_h3_red_analysis.json": {
+      "bytes": 65567,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/h3/pr311_h3_red_analysis.json",
+      "sha256": "d0bec36a0b23be6351ed720dcbe50b443136797778e7df4046a779136f622712"
+    },
+    "pr311_h3_three_level_shape_24rows.csv": {
+      "bytes": 2569,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/h3/pr311_h3_three_level_shape_24rows.csv",
+      "sha256": "0970d5570270cda9a466ff506cba1c495f643de7d50b6bb074ff80b7759b0441"
+    }
+  },
+  "preflight_sha256": "1bc909c58882ec9f37ac20c88cf41ac2b52aec39de5f07b68c0462611fd47237",
+  "root_final_protocol_sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0",
+  "schema": "pr311_red_independent_final_receipt_v1",
+  "source_clock_health": {
+    "RHS_digest_records": 63494,
+    "RSL_main_step_sum_seconds_for_clock_only": 1479.2615500000004,
+    "RSL_main_step_timings": 1024,
+    "actual_newton_iteration_distribution": {
+      "2": 3072
+    },
+    "carry_inputs_host": 1,
+    "carry_inputs_internal": 1023,
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "h3_initial_eight_fields_bitwise_equal_to_h46875": true,
+    "history_times_count": 17,
+    "history_times_exact": true,
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_sha256": "5cef187866c678929bc84f98a59fd770321f7480bd40d1ece9d461f76e024ffe",
+    "netcdf_file_count": 9,
+    "netcdf_files_sha_bytes_verified": true,
+    "physical_minima": {
+      "minimum_layer_depth_m": 942.6494508951324,
+      "minimum_total_dry_mass_Pa": 89088.63067150116,
+      "minimum_total_theta_K": 302.2530450820923
+    },
+    "printed_newton_stage_label_distribution": {
+      "2": 1024,
+      "3": 1024,
+      "4": 1024
+    },
+    "published_carry_tokens": 1024,
+    "residuals_are_not_physical_G_W": true,
+    "scaled_residuals_printed_summary": {
+      "count": 3072,
+      "max_abs": 1.1e-15,
+      "mean": 1.050908203125e-15,
+      "rms": 1.0520967563087611e-15
+    },
+    "solver_failures": 0,
+    "solver_implicit_records": 3072,
+    "source_check_count": 28,
+    "stage_csv_count": 0,
+    "step_telemetry_rows": 1024,
+    "unscaled_L2_residuals_printed_summary": {
+      "count": 3072,
+      "max_abs": 1.7e-12,
+      "mean": 1.65625e-12,
+      "rms": 1.656992757980553e-12
+    },
+    "zero_retry_fallback_nonfinite_soft_continue_handoff_counters": true
+  },
+  "status": "complete_three_level_h3_validation",
+  "three_level_descriptive": {
+    "D1": "h=.46875 minus h=.9375",
+    "D2": "h=.234375 minus h=.46875",
+    "RMS_D2_over_D1_is_not_order": true,
+    "no_threshold_or_acceptance_rule": true,
+    "red_green_rows_exact": true,
+    "rows": 24,
+    "spatial_cosine_unweighted": true
+  }
+}

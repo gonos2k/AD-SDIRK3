@@ -1,0 +1,35 @@
+{
+  "amplitude_time_shift_fit": {
+    "basis": "For each selected interior time use the same fine run at the exact common fine index; d_t W_f = (W_f[n+1]-W_f[n-1])/(2*(15/32 s)). No refitting of spatial direction or metric.",
+    "fit": "Flatten the same 4096 owners, normalize each of the two columns by its Euclidean norm, solve the 2-column least-squares system using NumPy SVD. Record column norms, normalized-column Gram matrix, singular values, SVD rank (tol = eps*max(shape)*largest singular value), condition number, alpha (dimensionless), beta (seconds), orthogonal residual RMS/max, and residual fraction of ||D||_2.",
+    "interpretation": "Descriptive projection only; no causal or physical correction claim and no pass/fail threshold.",
+    "model": "D \u2248 alpha*W_f + beta*d_t(W_f)",
+    "terminal_240s": "Do not fit a time-shift coefficient at the terminal endpoint because a centered stencil requires unavailable W_f at 240+15/32 s; report fit as unavailable at 240 s. Do not substitute a one-sided derivative."
+  },
+  "comparand": "D = W_fine - W_coarse at exact common time; only precomputed internal FP64 projected W endpoints are used. No time alignment or post hoc shift correction is applied to D.",
+  "endpoint_mapping": "coarse j = t/(15/16) and fine n = 2*j = t/(15/32), exact integer indices; array axes are [k,j,i] and all 4096 frozen physical W owners are included, with fixed bottom already excluded and dynamic top retained.",
+  "frozen_before_analysis_at_jst": "2026-10-20T17:18:18+09:00",
+  "input": {
+    "npz_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/published_fields_and_W.npz",
+    "npz_sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+    "source_analysis_protocol_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/protocol_final.json",
+    "source_analysis_protocol_sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+    "source_final_green_analysis_json": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/green_final_analysis_receipt.json"
+  },
+  "input_limits": "No native run, model rerun, data mutation, timestep correction, fitted time translation, source changes, or production claims. Results are diagnostics of the two stored trajectories and cannot establish cause, error bound, or acceptance.",
+  "schema": "pr310_w_spatial_structure_protocol_v1",
+  "spatial_diagnostics": {
+    "finite_gate": "Require every compared W, M0, and e1 element finite; require positive M0 and owner mask exactly all 4096.",
+    "fixed_metric": "Separately compute frozen M0-weighted RMS sqrt(sum(M0*D^2)/sum(M0)) and fixed-e1 projection sum(M0*D*e1)/sum(M0); do not replace the unweighted diagnostics.",
+    "horizontal_regions_disjoint": "Treat axes [k,j,i]: region A physical y-wall rows j=0 or j=15 for all i; region B remaining j=1..14 with periodic-x seam-adjacent columns i=0 or i=15; region C remaining interior j=1..14,i=1..14. Report squared-norm shares and cell counts; additionally report y-wall and x-seam shares as overlapping marginal diagnostics. Seam-adjacent columns are diagnostics, not duplicated owners.",
+    "maximum_location": "Report zero-based (k,j,i) array index and signed D at max-abs. Do not report geographic coordinates because the compact NPZ contains no coordinate arrays and no geometry mapping is bound by this protocol.",
+    "vertical_layers": "For each retained k=0..15 compute sum(D^2) and share of total sum(D^2); dynamic top is retained physical k=15, report its share explicitly.",
+    "whole_field": "Compute unweighted RMS, max absolute value, signed mean, and sum of squared values for D."
+  },
+  "time_selection_seconds": [
+    81.5625,
+    170.625,
+    180.0,
+    240.0
+  ]
+}

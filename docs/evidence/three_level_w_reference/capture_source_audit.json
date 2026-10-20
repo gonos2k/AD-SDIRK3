@@ -1,0 +1,385 @@
+{
+  "analysis_protocol_binding": {
+    "note": "Internal trajectory explicitly not required by the current protocol.",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/pr311_three_level_reference_protocol_v2.json",
+    "requested_h3_history_times_seconds": [
+      0,
+      15,
+      30,
+      45,
+      60,
+      75,
+      90,
+      105,
+      120,
+      135,
+      150,
+      165,
+      180,
+      195,
+      210,
+      225,
+      240
+    ],
+    "sha256": "3b76874ba07b5bca137a19be96656307e79ffda285feb5b0c6425373dee8cd88"
+  },
+  "capture_source_audit": {
+    "availability_of_other_writer": "No existing lightweight binary writer for internal FP64 W endpoints or per-stage physical-owner G_W was found in the relevant audited sources. Fixed adjoint trajectory retains in-memory tensors; stage_operand_diag is the large CSV writer. Use public WRF history fields instead.",
+    "history_output": {
+      "actual_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:00:15",
+        "0001-01-01_00:00:30",
+        "0001-01-01_00:00:45",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:01:15",
+        "0001-01-01_00:01:30",
+        "0001-01-01_00:01:45",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:02:15",
+        "0001-01-01_00:02:30",
+        "0001-01-01_00:02:45",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:03:15",
+        "0001-01-01_00:03:30",
+        "0001-01-01_00:03:45",
+        "0001-01-01_00:04:00"
+      ],
+      "cadence_seconds": 15,
+      "coverage": "0..240 s inclusive; contains 60,120,180,240 s.",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/run_receipt.json",
+      "source_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8"
+    },
+    "rhs_count": {
+      "existing_h0p46875_log_counts": {
+        "fp64_carry_input_lines": 512,
+        "fp64_carry_publish_lines": 512,
+        "newton_krylov_lines": 1536,
+        "rhs_digest_lines": 31750,
+        "rhs_sweep_begin_lines": 512,
+        "rhs_sweep_end_lines": 512,
+        "stage_metric_telemetry_lines": 1536,
+        "step_telemetry_lines": 512
+      },
+      "overhead_limit": "The existing 512-step log has 31,750 digest records. h3 count/log volume and runtime overhead are not measured; RHS_COUNT is still much smaller in storage than stage-operand CSV, but is not a zero-cost counter-only mode.",
+      "records": "one begin/end RHS sweep count record per host ARK call, plus whole-run count; it also computes/emits one RHS input digest per RHS evaluation (tile_unified_impl.cpp:15391-15397).",
+      "source": "stage_history_diag.h:156-160, 646-707; tile_unified_impl.cpp:9525, 15388-15397",
+      "switch": "WRF_SDIRK3_RHS_COUNT=1, independent of stage_operand_diag"
+    },
+    "solver_and_step_telemetry": {
+      "expected_h3_records_if_no_retry": "1024 carry inputs and accepted publications; 3072 implicit solve records, including [Newton] CONVERGED on successful stages and Newton-Krylov debug lines at level 2; 1024 step telemetry records; stage metric lines may be 3072. These are expected counts, not measured h3 output.",
+      "limits": "Normal-success Newton lines do not publish the full NewtonTerminationReason enum or an internal FP64 W stage tensor; FIRST_FAILURE diagnostics are failure-focused. RSL stats provide iteration counts, residual, and converged status.",
+      "settings": "The PR310 namelist has sdirk3_solver_telemetry=true and debug_level=2; existing run receipt binds the same values. Debug-level condition is >1 for Newton line output.",
+      "source": "tile_unified_impl.cpp:12714+ emits per-step telemetry; 15127+ emits per-stage metric telemetry; 14597-14601 (debug_level>1) prints iterations/Krylov/residual/converged. newton_solver.cpp:6832-6837 always emits [Newton] CONVERGED with per-stage iterations and scaled-RMS/unscaled-L2 residual on successful solve."
+    },
+    "stage_operand_diag": {
+      "effect": "Gates stage trace capture/diagnostic records and the accepted_ark_w_step_<seq>.csv tensor-array writer. No solver option, stage timestep, Newton/Krylov setting, or RHS evaluation is selected by this switch. Existing source comments around 10254 explicitly avoid a diagnostic RHS re-evaluation. With it off, the large per-step CSV side channel is absent.",
+      "recommended_h3_value": "WRF_SDIRK3_STAGE_OPERAND_DIAG=0 explicitly; current config parser accepts false and the option is independent of RHS_COUNT.",
+      "relevant_source": "tile_unified_impl.cpp:9432-9439, 10254-10353, 13119-13145",
+      "switch": "WRF_SDIRK3_STAGE_OPERAND_DIAG / config bool; default false in current source",
+      "volume": "The PR310 h=0.46875 run produced 512 stage CSVs totaling 15354749763 bytes; prior per-file measurements were about 28.6-30.1 MB. For h3, 1024 such files would be roughly 30 GB. Do not enable this observer for the proposed run."
+    }
+  },
+  "final_root_capture_plan_update": "Parent confirmed explicit WRF_SDIRK3_STAGE_OPERAND_DIAG=0 with RHS_COUNT=1 and existing namelist/17-history path. No source, graph, build, or model change.",
+  "manual_call_navigation": [
+    {
+      "evidence": "The scheme-6 path loops rk_step=1..3 and calls advance_implicit with the current host timestep.",
+      "from": "dyn_em/solve_em.F:734-735",
+      "to": "advance_implicit"
+    },
+    {
+      "evidence": "The Fortran C-ABI bridge passes caller state pointers to the zero-copy solver entry.",
+      "from": "dyn_em/module_implicit_sdirk3.F:1427-1429",
+      "to": "sdirk3_tile_unified_step_zerocopy_v2"
+    },
+    {
+      "evidence": "C++ interface forwards into the current solver.",
+      "from": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp:566",
+      "to": "TileSDIRK3UnifiedSolver::advanceZeroCopy"
+    },
+    {
+      "evidence": "Each rk_step=1 carried entry logs host/internal input timestep; only accepted advances publish and log the next carried state.",
+      "from": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:6151-6163,13069-13074",
+      "to": "FP64 carry log records"
+    }
+  ],
+  "minimum_capture_recommendation": {
+    "not_sufficient_for": "Full internal FP64 W trajectory, per-stage physical W G(Y), or exact normal-stage termination-reason enum. Make no such claims.",
+    "same_executable_reusable_without_build": true,
+    "same_file_noninterference_basis": "The explicit stage observer false value is parsed independently from RHS_COUNT; source branches show it gates observer capture/writing, not stage timestep, RHS computation/control, carry option, or solver tolerances. The executable is unchanged and all 28 build source-pin records match the current target.",
+    "settings": "Keep frozen h3 run controls and same executable/source/input/physics; set WRF_SDIRK3_STAGE_OPERAND_DIAG=0 explicitly; use existing WRF_SDIRK3_RHS_COUNT=1, solver_telemetry=true, debug_level=2; retain 15 s history cadence.",
+    "sufficient_for": "Count/verify 1024 FP64-carry inputs/publications; collect 3072 implicit Newton iteration/Krylov/residual/converged records; use 17 public NetCDF time records for the 24-row V3 screen and D1/D2 W q/cosine comparisons at 60/120/180/240 s."
+  },
+  "schema": "pr311_h3_existing_capture_source_audit_v1",
+  "scope_limits": [
+    "Source-only audit; no new observer, option, build, executable, model run, or full graph was created.",
+    "History values are public-output precision (FP32 NetCDF promoted for analysis); they are not internal FP64 carry snapshots.",
+    "The existing PR310 RSL counts demonstrate source output shape at 512 steps only; h3 expected counts are not observed results."
+  ],
+  "source_and_executable_binding": {
+    "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/pr307_v2_build_receipt.json",
+    "build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8",
+    "coarse_all_28_match_current_worktree": true,
+    "compiled_source_snapshot_commit": "18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc",
+    "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "existing_graph_navigation": [
+      {
+        "available": true,
+        "current_file_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+        "hash_still_matches": true,
+        "name": "pr307_v2_cpp",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+        "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5",
+        "hash_still_matches": true,
+        "name": "pr307_accepted_parser",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+        "sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257",
+        "hash_still_matches": true,
+        "name": "pr305_read_payload",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_graph/graphify-out/graph.json",
+        "sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257"
+      },
+      {
+        "available": false,
+        "current_file_sha256": null,
+        "hash_still_matches": null,
+        "name": "pr299_benchmark_helpers",
+        "path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+        "sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9",
+        "hash_still_matches": true,
+        "name": "pr308_fine_pair_analyzer",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_fine_pair_analyzer_graph/graphify-out/graph.json",
+        "sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9"
+      }
+    ],
+    "fine_all_28_match_current_worktree": true,
+    "graph_limit": "Reused graphs are navigation aids. Fortran extraction/call edges are not relied on; direct Fortran-to-C++ calls were manually followed in source.",
+    "relevant_source_bindings": [
+      {
+        "explicit_28_record_pin_matches_both_runs": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/dyn_em/solve_em.F",
+        "sha256": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8"
+      },
+      {
+        "explicit_28_record_pin_matches_both_runs": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/dyn_em/module_implicit_sdirk3.F",
+        "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+      },
+      {
+        "explicit_28_record_pin_matches_both_runs": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "sha256": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0"
+      },
+      {
+        "explicit_28_record_pin_matches_both_runs": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076"
+      },
+      {
+        "explicit_28_record_pin_matches_both_runs": false,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_stage_history_diag.h",
+        "sha256": "66000e5c623c6b54de7595914afbbdda41fb7b62a326225b47f619d7d6899bfd"
+      },
+      {
+        "explicit_28_record_pin_matches_both_runs": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp",
+        "sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5"
+      },
+      {
+        "explicit_28_record_pin_matches_both_runs": false,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h",
+        "sha256": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367"
+      }
+    ],
+    "source_bindings": [
+      {
+        "actual": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+        "expected": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_globals.cpp"
+      },
+      {
+        "actual": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+        "expected": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_operator_contract.cpp"
+      },
+      {
+        "actual": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+        "expected": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_interface.cpp"
+      },
+      {
+        "actual": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+        "expected": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp"
+      },
+      {
+        "actual": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+        "expected": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_zero_copy_interface.cpp"
+      },
+      {
+        "actual": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+        "expected": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.cpp"
+      },
+      {
+        "actual": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "expected": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp"
+      },
+      {
+        "actual": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+        "expected": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp"
+      },
+      {
+        "actual": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+        "expected": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_autograd.cpp"
+      },
+      {
+        "actual": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "expected": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp"
+      },
+      {
+        "actual": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "expected": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp"
+      },
+      {
+        "actual": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+        "expected": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp"
+      },
+      {
+        "actual": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+        "expected": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_tile_boundary_optimizer.cpp"
+      },
+      {
+        "actual": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "expected": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp"
+      },
+      {
+        "actual": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+        "expected": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_preconditioner.cpp"
+      },
+      {
+        "actual": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+        "expected": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs_extended.cpp"
+      },
+      {
+        "actual": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+        "expected": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_cache_utils.cpp"
+      },
+      {
+        "actual": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+        "expected": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_boundary_ad.cpp"
+      },
+      {
+        "actual": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+        "expected": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_rayleigh_damping_ad.cpp"
+      },
+      {
+        "actual": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+        "expected": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_mpi_safety_impl.cpp"
+      },
+      {
+        "actual": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+        "expected": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_halo_exchange.cpp"
+      },
+      {
+        "actual": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+        "expected": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_ad_halo_exchange.cpp"
+      },
+      {
+        "actual": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+        "expected": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_rhs_run_close.cpp"
+      },
+      {
+        "actual": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+        "expected": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_u_slow_diagnostics.cpp"
+      },
+      {
+        "actual": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "expected": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h"
+      },
+      {
+        "actual": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "expected": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp"
+      },
+      {
+        "actual": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+        "expected": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/dyn_em/module_implicit_sdirk3.F"
+      },
+      {
+        "actual": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+        "expected": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+        "match": true,
+        "path": "/private/tmp/pr310-strict-reference-240s-20261020/dyn_em/solve_em.F"
+      }
+    ],
+    "source_pin_count": 28,
+    "source_pin_unique_paths": 27
+  },
+  "target_head": "8cfb6787f095cd778671ba873bd4f29ac8f96a97",
+  "target_tree": "1cee8a60fb65e0951afd4e3f207099a85aef272b",
+  "target_worktree": "/private/tmp/pr310-strict-reference-240s-20261020",
+  "task": "Bounded source audit for a possible one-run h=0.234375, 0-240 s capture using the existing executable and existing diagnostics only.",
+  "tracked_status": "clean"
+}

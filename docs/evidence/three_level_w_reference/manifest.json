@@ -1,0 +1,180 @@
+{
+  "exclusions": [
+    "manifest.json (self-hash)",
+    "green_closing_review.json and red_closing_review.json (review this manifest; avoid hash cycles)"
+  ],
+  "external_reference": {
+    "bytes": 24901006,
+    "copied_into_this_folder": false,
+    "file": "../pr310_strict_reference_240s/published_fields_and_W.npz",
+    "sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e"
+  },
+  "files": {
+    "README.md": {
+      "bytes": 2485,
+      "file": "README.md",
+      "sha256": "6e0264a3597e711257585b0085053b76eb320aa7cea50988d98e8fa9c4af09f0"
+    },
+    "archived_h15_full_epsilon_screen.csv": {
+      "bytes": 2597,
+      "file": "archived_h15_full_epsilon_screen.csv",
+      "sha256": "2248b0ea6ca87dd762cd31343121f591a5e7ca008e5ebb8f8244f883b3cbc6c6"
+    },
+    "archived_h15_npz": {
+      "bytes": 310415,
+      "file": "archived_h15_published_physical_fields.npz",
+      "sha256": "8956a81bdb39dc6aab67dad3f456ef9e75ae9151c4be2939557621eff9ddcf3f"
+    },
+    "capture_source_audit.json": {
+      "bytes": 22742,
+      "file": "capture_source_audit.json",
+      "sha256": "da56311a03a231330f3cb83ca011108bf7673e440af07a52f845c3d94bf1ffaa"
+    },
+    "final_helper_graph_binding.json": {
+      "bytes": 10349,
+      "file": "final_helper_graph_binding.json",
+      "sha256": "0614946dbfc7166125516a8758ad7d8b9630d87e593acb52b70701af61001aeb"
+    },
+    "fresh_folder_recompute_receipt.json": {
+      "bytes": 1909,
+      "file": "fresh_folder_recompute_receipt.json",
+      "sha256": "d6eb2bf46dc4e1566ef48a71e515ec5cde29468a0113f4c8baf4923bbb86a899"
+    },
+    "h3_npz": {
+      "bytes": 310511,
+      "file": "h3_published_physical_fields.npz",
+      "sha256": "28f4fee625a6fedfb27ffdb376586df6cd6d5c8e5f2ca6c023f37bfec7ad0029"
+    },
+    "h3_vs_middle_reference_screen.csv": {
+      "bytes": 2402,
+      "file": "h3_vs_middle_reference_screen.csv",
+      "sha256": "41fa02aa5587a561e6d26a22c2504f258014266b0cbde28db258695b298131f5"
+    },
+    "independent_agreement.json": {
+      "bytes": 7080,
+      "file": "independent_agreement.json",
+      "sha256": "035baeb93358e88545d6d2b6e64a90930b09ebd6fbd2a938c2a6739565817e89"
+    },
+    "new_run_receipt.json": {
+      "bytes": 164019,
+      "file": "new_run_receipt.json",
+      "sha256": "ef6fb87deba873141306d78fe23a834b3533519750e46a3babf5c9d378194e95"
+    },
+    "old_pair_spatial_protocol.json": {
+      "bytes": 3859,
+      "file": "old_pair_spatial_protocol.json",
+      "sha256": "2c7ac76fef65e917bf02dc08a2dba15ee5531ac49b2756aa4e628c3dd48df94e"
+    },
+    "old_pair_w_spatial_analysis.json": {
+      "bytes": 39889,
+      "file": "old_pair_w_spatial_analysis.json",
+      "sha256": "0d25288e10a8e3280074db4c28c12314044cad176b23e9a7aed1be400abdab6b"
+    },
+    "old_pair_w_spatial_analysis.py": {
+      "bytes": 11939,
+      "file": "old_pair_w_spatial_analysis.py",
+      "sha256": "49c266ff95c71c8c76732a56bd7d6f7e79c0e96742058b932b47b364290c1033"
+    },
+    "old_pair_w_spatial_differences.npz": {
+      "bytes": 467772,
+      "file": "old_pair_w_spatial_differences.npz",
+      "sha256": "ba43b8c98231181bea6538af0a24f010a6e9e00a8e2afce0c259b795b05abbbb"
+    },
+    "portable_recomputed_results.json": {
+      "bytes": 39097,
+      "file": "portable_recomputed_results.json",
+      "sha256": "a1c97b0850eeaf3796201b8ab9a094e5e25e5e4d0ed6539cc34c85cc40717f62"
+    },
+    "preflight_manifest.json": {
+      "bytes": 13954,
+      "file": "preflight_manifest.json",
+      "sha256": "1bc909c58882ec9f37ac20c88cf41ac2b52aec39de5f07b68c0462611fd47237"
+    },
+    "recompute_script": {
+      "bytes": 6459,
+      "file": "recompute_three_level_numpy.py",
+      "sha256": "3f8a3a4a2de61ab0abeb84e8dd6a3ba24c2befb6e7609c758ba0a348c03568e3"
+    },
+    "red_independent_analysis.json": {
+      "bytes": 65567,
+      "file": "red_independent_analysis.json",
+      "sha256": "d0bec36a0b23be6351ed720dcbe50b443136797778e7df4046a779136f622712"
+    },
+    "red_parser_execution_note.json": {
+      "bytes": 2057,
+      "file": "red_parser_execution_note.json",
+      "sha256": "d1328a5924295b214e024d5823e2dc458e1872f23621d1cfc6943172b68cba76"
+    },
+    "red_spatial_review.json": {
+      "bytes": 11438,
+      "file": "red_spatial_review.json",
+      "sha256": "ba2f9a2e9f2f1d1982eb8810bea0c1c6cba11c993486add632614d9279c7d724"
+    },
+    "red_validation_receipt.json": {
+      "bytes": 6450,
+      "file": "red_validation_receipt.json",
+      "sha256": "54f96e9f729db77f8cfce5ab4fdabd790e21c360b13e564b4674484512df6e59"
+    },
+    "root_direct_netcdf_analysis.json": {
+      "bytes": 16096,
+      "file": "root_direct_netcdf_analysis.json",
+      "sha256": "924c6f61ce455f6991be50be34fdfe67b9e8343c5462dd5114a47ac42252f7b2"
+    },
+    "root_direct_netcdf_analysis.py": {
+      "bytes": 5141,
+      "file": "root_direct_netcdf_analysis.py",
+      "sha256": "21a013de02f1584d7b806aef203982ece09f23e2f6da7c3f9ac948f3d3f57086"
+    },
+    "root_final_protocol.json": {
+      "bytes": 14016,
+      "file": "root_final_protocol.json",
+      "sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0"
+    },
+    "root_newton_log_summary.json": {
+      "bytes": 373,
+      "file": "root_newton_log_summary.json",
+      "sha256": "956c7418e3eba485016469afc9320621261d803aca21ef189523442275061751"
+    },
+    "run_provenance": {
+      "bytes": 7699,
+      "file": "run_provenance.json",
+      "sha256": "b98805ce4b92e77be3314a2bf43467809354b37add4d7ab76d1c389d32e0dccc"
+    },
+    "stock_rk3_secondary_comparison.json": {
+      "bytes": 5455,
+      "file": "stock_rk3_secondary_comparison.json",
+      "sha256": "a0b6ce0133d48de3897da89fe7d176e607a8c004662a26632296c8b629db3591"
+    },
+    "three_level_d1_d2_shape.csv": {
+      "bytes": 2471,
+      "file": "three_level_d1_d2_shape.csv",
+      "sha256": "907bf611ccbd492fec42e52c1e972731b0ad4e8194f8144cc449a6f7c81acc08"
+    }
+  },
+  "fresh_test_note": "fresh_folder_recompute_receipt.json binds the final script, four data inputs, and the smaller pre-inventory manifest used for that test; final manifest extends the hashed inventory without changing recomputation inputs.",
+  "method_note": "The two field NPZs contain only the 24 physical-owner checkpoints each (six fields at t=60,120,180,240), FP32 NetCDF values promoted to FP64 with V3 owner masks/transforms. The old h=.9375/.46875 arrays remain referenced at the relative path above to avoid duplicating the 25 MB source file.",
+  "portable_outputs": {
+    "archived_h15_full_epsilon_screen.csv": {
+      "bytes": 2597,
+      "sha256": "2248b0ea6ca87dd762cd31343121f591a5e7ca008e5ebb8f8244f883b3cbc6c6"
+    },
+    "h3_vs_middle_reference_screen.csv": {
+      "bytes": 2402,
+      "sha256": "41fa02aa5587a561e6d26a22c2504f258014266b0cbde28db258695b298131f5"
+    },
+    "portable_recomputed_results.json": {
+      "bytes": 39097,
+      "sha256": "a1c97b0850eeaf3796201b8ab9a094e5e25e5e4d0ed6539cc34c85cc40717f62"
+    },
+    "three_level_d1_d2_shape.csv": {
+      "bytes": 2471,
+      "sha256": "907bf611ccbd492fec42e52c1e972731b0ad4e8194f8144cc449a6f7c81acc08"
+    }
+  },
+  "portable_test_pending": false,
+  "protocol": {
+    "file": "root_final_protocol.json",
+    "sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0"
+  },
+  "schema": "three_level_w_reference_portable_manifest_v1"
+}

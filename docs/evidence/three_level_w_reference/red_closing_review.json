@@ -1,0 +1,65 @@
+{
+  "schema": "pr311_final_red_closing_review_v1",
+  "reviewed_jst": "2026-10-20T18:11:27+09:00",
+  "status": "PASS_no_actionable_P0_P1_P2",
+  "scope": "Bounded final review of the PR311 three-level reference report, project-status update, and curated evidence manifest. No model, build, source edit, native rerun, stage-CSV read, or test was performed by Red.",
+  "reviewed_document_hashes": {
+    "three_level_report": {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/(202610201802)_three_level_w_reference_and_h15_accuracy.md",
+      "sha256": "2f4b46c6d0edd2e7992736e4d4c0b5be82988de3d0d0e9c7a3ba8f750c210306"
+    },
+    "problem_definition": {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/PROBLEM_DEFINITION.md",
+      "sha256": "f977de43d39bdc3ca4c0a362975569b77055874e86ed0dbea19642bd51359d44"
+    }
+  },
+  "frozen_contract": {
+    "root_final_protocol_sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0",
+    "only_new_native_run": "h=0.234375 s, 240 s, original e71 initial state, observer off",
+    "official_screen": "Unchanged V3 epsilon/3 screen for h=0.234375 versus retained h=0.46875 at 60/120/180/240 s; q/cos and D1/D2 diagnostics are descriptive only and add no gate.",
+    "conditional_candidate": "Only after 24/24 reference rows pass, evaluate the existing archived h=15 s candidate with the original full epsilon. No new candidate run.",
+    "internal_h3_limit": "Observer was off; report makes no h3 internal FP64 W trajectory or physical G_W claim."
+  },
+  "results_and_scope": {
+    "h3_reference_rows": 24,
+    "h3_reference_passes": 24,
+    "empirical_named_case_screen_closed": true,
+    "true_error_or_order_claim": false,
+    "project_wide_acceptance_claim": false,
+    "archived_h15_candidate_rows": 24,
+    "archived_h15_candidate_passes": 20,
+    "archived_h15_candidate_W_failures": [60, 120, 180, 240],
+    "candidate_accuracy_accepted": false,
+    "prior_pr310_22_of_24_record_preserved": true
+  },
+  "evidence_manifest": {
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/three_level_w_reference/manifest.json",
+    "sha256": "5f8ffe649a28dea20e17c6c4e000f9dbf03cc5ebbe943622562f6054abc66e10",
+    "curated_file_count": 28,
+    "curated_bytes": 1554241,
+    "manifest_entries_hash_checked": 28,
+    "manifest_entry_hash_mismatches": 0,
+    "external_pr310_NPZ_sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e"
+  },
+  "portable_recomputation": {
+    "receipt_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/three_level_w_reference/fresh_folder_recompute_receipt.json",
+    "receipt_sha256": "d6eb2bf46dc4e1566ef48a71e515ec5cde29468a0113f4c8baf4923bbb86a899",
+    "result": "24/24 h3 reference; 20/24 archived h15 candidate",
+    "scope_note": "The fresh-folder check exercises the four declared NumPy inputs; the final expanded 28-file manifest was separately SHA-256 checked and is not described as a full-package fresh-unpack test."
+  },
+  "red_final_validation_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/pr311_red_final_validation_receipt.json",
+    "sha256": "54f96e9f729db77f8cfce5ab4fdabd790e21c360b13e564b4674484512df6e59",
+    "claims": [
+      "Green, Red and Root agree exactly on the 24 official reference rows and the 24 conditional candidate rows.",
+      "h3 source/input/config/runtime health, canonical 17 history times, initial state, carry, and 3,072 solver records are validated.",
+      "No additional h3 internal W/G or order claim is made."
+    ]
+  },
+  "remaining_limits": [
+    "The h=15 s candidate fails its named-case W budget at all four evaluation times.",
+    "The h3 pair qualifies only the frozen empirical reference sensitivity screen for this dry case; it is not truth or a propagated-error bound.",
+    "The broader project-level integrated AD and other open operator goals remain separate."
+  ],
+  "finding": "The final report keeps the reference result, archived-candidate result, and project scope separate. No actionable P0/P1/P2 issue remains."
+}

@@ -1,0 +1,58 @@
+{
+  "schema": "pr311_green_closing_review_v1",
+  "reviewed_local_time": "2026-10-20T18:20:00+09:00",
+  "status": "PASS",
+  "scope": "Final read-only review of the PR311 report, updated PROBLEM_DEFINITION section, final evidence inventory, and referenced portable recomputation / graph receipts. No model, build, source edit, or additional test was performed.",
+  "reviewed_artifacts": {
+    "report": {
+      "path": "docs/(202610201802)_three_level_w_reference_and_h15_accuracy.md",
+      "sha256": "2f4b46c6d0edd2e7992736e4d4c0b5be82988de3d0d0e9c7a3ba8f750c210306"
+    },
+    "problem_definition": {
+      "path": "docs/PROBLEM_DEFINITION.md",
+      "sha256": "f977de43d39bdc3ca4c0a362975569b77055874e86ed0dbea19642bd51359d44"
+    },
+    "manifest": {
+      "path": "docs/evidence/three_level_w_reference/manifest.json",
+      "sha256": "5f8ffe649a28dea20e17c6c4e000f9dbf03cc5ebbe943622562f6054abc66e10",
+      "declared_files": 28,
+      "declared_bytes": 1554241,
+      "portable_test_pending": false,
+      "all_declared_file_hashes_verified": true
+    },
+    "fresh_folder_recompute": {
+      "path": "docs/evidence/three_level_w_reference/fresh_folder_recompute_receipt.json",
+      "sha256": "d6eb2bf46dc4e1566ef48a71e515ec5cde29468a0113f4c8baf4923bbb86a899",
+      "status": "pass",
+      "h3_reference_rows": 24,
+      "archived_h15_candidate_rows": 24,
+      "matched_packaged_csvs": true,
+      "script_sha256": "3f8a3a4a2de61ab0abeb84e8dd6a3ba24c2befb6e7609c758ba0a348c03568e3"
+    },
+    "graph_binding": {
+      "path": "docs/evidence/three_level_w_reference/final_helper_graph_binding.json",
+      "sha256": "0614946dbfc7166125516a8758ad7d8b9630d87e593acb52b70701af61001aeb",
+      "bounded_helper_ast_files": 6,
+      "nodes": 55,
+      "edges": 187
+    },
+    "independent_agreement": {
+      "path": "docs/evidence/three_level_w_reference/independent_agreement.json",
+      "sha256": "035baeb93358e88545d6d2b6e64a90930b09ebd6fbd2a938c2a6739565817e89",
+      "rows": 48,
+      "all_rms_ratio_results_exact": true,
+      "three_level_q_exact": true,
+      "cosine_tolerance": 1e-14,
+      "all_cosines_within_tolerance": true
+    }
+  },
+  "scientific_review": {
+    "reference_screen": "Root direct-NetCDF analysis and Green/Red public-field analyses agree: the fixed h=.46875 vs h=.234375 named-case screen passes all 24 epsilon/3 rows over 60/120/180/240 s and six fields.",
+    "candidate_screen": "The conditionally evaluated archived h=15 s candidate passes 20/24 rows; W fails all four times against the original full epsilon, while the other five fields pass at all four times.",
+    "units_and_owners": "Reported owner counts U/V/W/PH/T/MU = 4096/4352/4096/4096/4096/256; W/PH include dynamic top and exclude fixed bottom. Report explicitly states NetCDF FP32 promotion/transform limits.",
+    "scope_limits": "Report preserves that the screen is empirical for this case, not a truth/error bound, formal order or 3rd-order claim, full internal trajectory/physical G_W proof, integrated adjoint qualification, or general forecast accuracy claim. D1/D2 and stock-RK3 comparisons remain descriptive.",
+    "provenance": "Report ties the one h=.234375 run to the frozen protocol, executable/archive/input hashes and actual 17 output times; h15 is archived and not rerun. Source/ABI/tableau/default-settings unchanged claim is consistent with the captured-source audit and the staged change set limited to docs/evidence."
+  },
+  "findings": [],
+  "limitations": "Review verifies final report consistency and packaged evidence hashes; it does not re-run the native model or independently reconstruct NetCDF analyses."
+}
