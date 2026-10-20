@@ -1,0 +1,6 @@
+# PR309 prior-CI baseline binding
+
+- W309 base HEAD is `9570dd638a1a82b926a5a31fe0a5c6fb2115aecc`, tree `47b9496b61e99eba52cb72198fcc924d60169627`, the PR308 merge tree. No PR309 is visible yet.
+- Production C++ source hashes remain the PR307/308 pins: header `a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e`; implementation `a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076`. No production code change is present in W309 at preflight.
+- Reusable CI is PR308 run `38665243924`, head `9d7b7b722a4c13189610d591f6209395844d79e4`, synthetic tree `47b9496b61e99eba52cb72198fcc924d60169627`. Five minimal CTests and the 16-step replay passed; retained/replay 8480 FP64 pullbacks were byte-identical within that run. Artifact SHA-256 `5277e19103d4029aabf2faa255fad7d2969bfb2243cb607eff73ff7c60a4315b`; complete receipt at `/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/remote_ci/pr308_remote_ci_receipt.json`.
+- PR308 vs PR307 replay pullbacks differed by at most `8.88e-16` despite same recorded Torch/compiler fingerprints and identical input state; therefore reuse is a baseline source/CI binding, not a new PR309 pass or cross-run bitwise claim. No PR309 CI, build or model run has been started.

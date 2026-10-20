@@ -1,0 +1,2747 @@
+{
+  "W_65point_recalculation": {
+    "W_internal_t60_rms_m_s": 1.7984438422489106e-06,
+    "crossing": false,
+    "frozen_trigger_m_s": 2.5981466189324436e-06,
+    "max_abs_metric_difference_green_red": 0.0,
+    "max_rms_sample_time_s": 56.25,
+    "maximum_W_rms_m_s": 1.9683104921731626e-06,
+    "selected_interval": {
+      "coarse_step_seq": 64,
+      "end_seconds": 60.0,
+      "fine_step_seq": [
+        127,
+        128
+      ],
+      "rule": "frozen last-interval fallback; no crossing",
+      "start_seconds": 59.0625
+    }
+  },
+  "accepted_step_recalculation": {
+    "bound_scope": "Per-step local implicit-stage K\u2212FI increment sum; not a global/propagated error bound.",
+    "compared_stage_G_rows": 576,
+    "max_G_rms_or_max_difference_green_red_m_s": 3.1554436208840472e-30,
+    "max_direct_local_bound_difference_green_red_m_s": 1.262177448353619e-29,
+    "steps": 192
+  },
+  "checks": [
+    {
+      "absolute_difference": 0.0,
+      "field": "MU",
+      "green_limit": 0.004863633485853729,
+      "green_rms": 0.0,
+      "kind": "official_t60",
+      "pass_equal": true,
+      "red_limit": 0.004863633485853729,
+      "red_rms": 0.0
+    },
+    {
+      "absolute_difference": 0.0,
+      "field": "PH",
+      "green_limit": 0.0034165835132482897,
+      "green_rms": 0.0001028908077946562,
+      "kind": "official_t60",
+      "pass_equal": true,
+      "red_limit": 0.0034165835132482897,
+      "red_rms": 0.0001028908077946562
+    },
+    {
+      "absolute_difference": 0.0,
+      "field": "T",
+      "green_limit": 1.2065237971809995e-05,
+      "green_rms": 0.0,
+      "kind": "official_t60",
+      "pass_equal": true,
+      "red_limit": 1.2065237971809995e-05,
+      "red_rms": 0.0
+    },
+    {
+      "absolute_difference": 0.0,
+      "field": "U",
+      "green_limit": 0.00025814723466881614,
+      "green_rms": 2.3350212277406657e-08,
+      "kind": "official_t60",
+      "pass_equal": true,
+      "red_limit": 0.00025814723466881614,
+      "red_rms": 2.3350212277406657e-08
+    },
+    {
+      "absolute_difference": 0.0,
+      "field": "V",
+      "green_limit": 3.374002414931749e-05,
+      "green_rms": 5.27999998338641e-09,
+      "kind": "official_t60",
+      "pass_equal": true,
+      "red_limit": 3.374002414931749e-05,
+      "red_rms": 5.27999998338641e-09
+    },
+    {
+      "absolute_difference": 0.0,
+      "field": "W",
+      "green_limit": 2.5981466189324436e-06,
+      "green_rms": 1.7984436497264701e-06,
+      "kind": "official_t60",
+      "pass_equal": true,
+      "red_limit": 2.5981466189324436e-06,
+      "red_rms": 1.7984436497264701e-06
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 0.0,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 0.0,
+      "sample": 0
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 0.0,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 0.0,
+      "sample": 0
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 0.0,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 0.0,
+      "sample": 0
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 0.0,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 0.0,
+      "sample": 0
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 0.0,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 0.0,
+      "sample": 0
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.2138305034026466e-08,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 3.2138305034026466e-08,
+      "sample": 1
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4715775510301468e-07,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.4715775510301468e-07,
+      "sample": 1
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.3941357742489875e-08,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 3.3941357742489875e-08,
+      "sample": 1
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.9252812311253434e-08,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 2.9252812311253434e-08,
+      "sample": 1
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.7213039745677027e-08,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.7213039745677027e-08,
+      "sample": 1
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.733603817850828e-08,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 6.733603817850828e-08,
+      "sample": 2
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.0843505798609204e-07,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.0843505798609204e-07,
+      "sample": 2
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.874111592049804e-08,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 7.874111592049804e-08,
+      "sample": 2
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.524351444807676e-08,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 7.524351444807676e-08,
+      "sample": 2
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.3207258991689946e-08,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 2.3207258991689946e-08,
+      "sample": 2
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.70832348729334e-08,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 9.70832348729334e-08,
+      "sample": 3
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.9578016252549376e-07,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.9578016252549376e-07,
+      "sample": 3
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.104859431070738e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.104859431070738e-07,
+      "sample": 3
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0392977471780185e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 1.0392977471780185e-07,
+      "sample": 3
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.749327341492744e-08,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 3.749327341492744e-08,
+      "sample": 3
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1846290742405356e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.1846290742405356e-07,
+      "sample": 4
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.2254953908502e-07,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 5.2254953908502e-07,
+      "sample": 4
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1314870434564414e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.1314870434564414e-07,
+      "sample": 4
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.566758357634371e-08,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 8.566758357634371e-08,
+      "sample": 4
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.39168074208306e-08,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 7.39168074208306e-08,
+      "sample": 4
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4273281113788454e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.4273281113788454e-07,
+      "sample": 5
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.089249006544195e-07,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 8.089249006544195e-07,
+      "sample": 5
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1229321661459345e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.1229321661459345e-07,
+      "sample": 5
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0450292258392698e-08,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 1.0450292258392698e-08,
+      "sample": 5
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1180589380424533e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.1180589380424533e-07,
+      "sample": 5
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.8221592935203857e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.8221592935203857e-07,
+      "sample": 6
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.005309104847561e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.005309104847561e-06,
+      "sample": 6
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.675521666078115e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.675521666078115e-07,
+      "sample": 6
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -1.0466220068754204e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -1.0466220068754204e-07,
+      "sample": 6
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.308417069676657e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.308417069676657e-07,
+      "sample": 6
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.293952457107461e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 2.293952457107461e-07,
+      "sample": 7
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.003999776465658e-07,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 9.003999776465658e-07,
+      "sample": 7
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.520670165522483e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 2.520670165522483e-07,
+      "sample": 7
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -2.1944577709986244e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -2.1944577709986244e-07,
+      "sample": 7
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.240214971147701e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.240214971147701e-07,
+      "sample": 7
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.6606453037463093e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 2.6606453037463093e-07,
+      "sample": 8
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.078145152407712e-07,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 8.078145152407712e-07,
+      "sample": 8
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.072497279255664e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 3.072497279255664e-07,
+      "sample": 8
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -2.848242850206059e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -2.848242850206059e-07,
+      "sample": 8
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1522813012817338e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.1522813012817338e-07,
+      "sample": 8
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.832156509624576e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 2.832156509624576e-07,
+      "sample": 9
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.605237597990856e-07,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 9.605237597990856e-07,
+      "sample": 9
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.0241511877471333e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 3.0241511877471333e-07,
+      "sample": 9
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -2.6246295066306283e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -2.6246295066306283e-07,
+      "sample": 9
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.502268404539036e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.502268404539036e-07,
+      "sample": 9
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.912617737430151e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 2.912617737430151e-07,
+      "sample": 10
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2964893768348414e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.2964893768348414e-06,
+      "sample": 10
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.5471374850740765e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 2.5471374850740765e-07,
+      "sample": 10
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -1.4214915250224234e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -1.4214915250224234e-07,
+      "sample": 10
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.113592016487316e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 2.113592016487316e-07,
+      "sample": 10
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.1405701662046796e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 3.1405701662046796e-07,
+      "sample": 11
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.5837656086996896e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.5837656086996896e-06,
+      "sample": 11
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.574070841354673e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 2.574070841354673e-07,
+      "sample": 11
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.0112918664528986e-08,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 5.0112918664528986e-08,
+      "sample": 11
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.52481885183959e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 2.52481885183959e-07,
+      "sample": 11
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.6123033175871033e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 3.6123033175871033e-07,
+      "sample": 12
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4874866576998372e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.4874866576998372e-06,
+      "sample": 12
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.605674218304273e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 3.605674218304273e-07,
+      "sample": 12
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.5723208377294644e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 2.5723208377294644e-07,
+      "sample": 12
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.526668176933196e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 2.526668176933196e-07,
+      "sample": 12
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.1480213159695985e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 4.1480213159695985e-07,
+      "sample": 13
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2726751163330945e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.2726751163330945e-06,
+      "sample": 13
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.6860373295763977e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 4.6860373295763977e-07,
+      "sample": 13
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.085486699277143e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 4.085486699277143e-07,
+      "sample": 13
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.295156701450481e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 2.295156701450481e-07,
+      "sample": 13
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.515861201942442e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 4.515861201942442e-07,
+      "sample": 14
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3467824142126734e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.3467824142126734e-06,
+      "sample": 14
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.056062011634142e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 5.056062011634142e-07,
+      "sample": 14
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.441998663298544e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 4.441998663298544e-07,
+      "sample": 14
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.4150384967415826e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 2.4150384967415826e-07,
+      "sample": 14
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.640950156610714e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 4.640950156610714e-07,
+      "sample": 15
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.6955238397516188e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.6955238397516188e-06,
+      "sample": 15
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.573089261094173e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 4.573089261094173e-07,
+      "sample": 15
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.378849310301232e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 3.378849310301232e-07,
+      "sample": 15
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.0816428618858067e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 3.0816428618858067e-07,
+      "sample": 15
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.6656761167328086e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 4.6656761167328086e-07,
+      "sample": 16
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.8566815799761044e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.8566815799761044e-06,
+      "sample": 16
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.881809140412885e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 3.881809140412885e-07,
+      "sample": 16
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0961328151030867e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 1.0961328151030867e-07,
+      "sample": 16
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.7238333816441364e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 3.7238333816441364e-07,
+      "sample": 16
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.858550446329221e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 4.858550446329221e-07,
+      "sample": 17
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.981478031937595e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.981478031937595e-06,
+      "sample": 17
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.2697384385992207e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 4.2697384385992207e-07,
+      "sample": 17
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -1.7690259953625103e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -1.7690259953625103e-07,
+      "sample": 17
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.88602796719007e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 3.88602796719007e-07,
+      "sample": 17
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.347049579806798e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 5.347049579806798e-07,
+      "sample": 18
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.6537475948305704e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.6537475948305704e-06,
+      "sample": 18
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.625143543258793e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 5.625143543258793e-07,
+      "sample": 18
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -4.323936188296453e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -4.323936188296453e-07,
+      "sample": 18
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.598029422031793e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 3.598029422031793e-07,
+      "sample": 18
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.956654809291495e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 5.956654809291495e-07,
+      "sample": 19
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.8297865488926056e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.8297865488926056e-06,
+      "sample": 19
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.67223423965847e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 6.67223423965847e-07,
+      "sample": 19
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -5.704203892068141e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -5.704203892068141e-07,
+      "sample": 19
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.461324559555998e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 3.461324559555998e-07,
+      "sample": 19
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.399383742728198e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 6.399383742728198e-07,
+      "sample": 20
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.931451470118525e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 1.931451470118525e-06,
+      "sample": 20
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.724675007264e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 6.724675007264e-07,
+      "sample": 20
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -5.368083176093809e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -5.368083176093809e-07,
+      "sample": 20
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.0503008490554954e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 4.0503008490554954e-07,
+      "sample": 20
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.532634174485693e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 6.532634174485693e-07,
+      "sample": 21
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.329944459960676e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.329944459960676e-06,
+      "sample": 21
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.919447900806622e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 5.919447900806622e-07,
+      "sample": 21
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -3.3006998187747274e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -3.3006998187747274e-07,
+      "sample": 21
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.913781044847684e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 4.913781044847684e-07,
+      "sample": 21
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.490432384941188e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 6.490432384941188e-07,
+      "sample": 22
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.783784036958963e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.783784036958963e-06,
+      "sample": 22
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.320090280337547e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 5.320090280337547e-07,
+      "sample": 22
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -5.327800326872358e-09,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -5.327800326872358e-09,
+      "sample": 22
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.319823497571112e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 5.319823497571112e-07,
+      "sample": 22
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.621753078047153e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 6.621753078047153e-07,
+      "sample": 23
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.8185169165085384e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.8185169165085384e-06,
+      "sample": 23
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.09080090468799e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 6.09080090468799e-07,
+      "sample": 23
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.4048651970070464e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 3.4048651970070464e-07,
+      "sample": 23
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.050222633781426e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 5.050222633781426e-07,
+      "sample": 23
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.135033358882147e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 7.135033358882147e-07,
+      "sample": 24
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.6093203142434334e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.6093203142434334e-06,
+      "sample": 24
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.549379125079673e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 7.549379125079673e-07,
+      "sample": 24
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.981337191879622e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 5.981337191879622e-07,
+      "sample": 24
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.6061622389171607e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 4.6061622389171607e-07,
+      "sample": 24
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.801457373118609e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 7.801457373118609e-07,
+      "sample": 25
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.233597896916212e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.233597896916212e-06,
+      "sample": 25
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.399697891396236e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 8.399697891396236e-07,
+      "sample": 25
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.811162183052969e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 6.811162183052969e-07,
+      "sample": 25
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.915586880818554e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 4.915586880818554e-07,
+      "sample": 25
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.216160917829903e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 8.216160917829903e-07,
+      "sample": 26
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.3933946933981927e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.3933946933981927e-06,
+      "sample": 26
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.133715908113494e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 8.133715908113494e-07,
+      "sample": 26
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.548825589716312e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 5.548825589716312e-07,
+      "sample": 26
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.947089124000744e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 5.947089124000744e-07,
+      "sample": 26
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.246640284622786e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 8.246640284622786e-07,
+      "sample": 27
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.5862400843607632e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.5862400843607632e-06,
+      "sample": 27
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.19193435622095e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 7.19193435622095e-07,
+      "sample": 27
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.502982086977084e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 2.502982086977084e-07,
+      "sample": 27
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.742329008322205e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 6.742329008322205e-07,
+      "sample": 27
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.222829839107983e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 8.222829839107983e-07,
+      "sample": 28
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.9541891507039665e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 3.9541891507039665e-06,
+      "sample": 28
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.877403315436237e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 6.877403315436237e-07,
+      "sample": 28
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -1.436511983786854e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -1.436511983786854e-07,
+      "sample": 28
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.725705143968928e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 6.725705143968928e-07,
+      "sample": 28
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.641460176077146e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 8.641460176077146e-07,
+      "sample": 29
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.788878836223015e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.788878836223015e-06,
+      "sample": 29
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.956311439091785e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 7.956311439091785e-07,
+      "sample": 29
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -5.062776375938548e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -5.062776375938548e-07,
+      "sample": 29
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.13768580843475e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 6.13768580843475e-07,
+      "sample": 29
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.467005665602617e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 9.467005665602617e-07,
+      "sample": 30
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.802914565184787e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.802914565184787e-06,
+      "sample": 30
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.381503004497134e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 9.381503004497134e-07,
+      "sample": 30
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -7.227503526417452e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -7.227503526417452e-07,
+      "sample": 30
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.981286767829482e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 5.981286767829482e-07,
+      "sample": 30
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.006825380321091e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.006825380321091e-06,
+      "sample": 31
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.034086440579882e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.034086440579882e-06,
+      "sample": 31
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.950676390178237e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 9.950676390178237e-07,
+      "sample": 31
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -7.209404587950613e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -7.209404587950613e-07,
+      "sample": 31
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.858603801743271e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 6.858603801743271e-07,
+      "sample": 31
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.94331328923477e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 9.94331328923477e-07,
+      "sample": 32
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.814522430903914e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.814522430903914e-06,
+      "sample": 32
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.357062296152073e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 9.357062296152073e-07,
+      "sample": 32
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -4.956077414480308e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -4.956077414480308e-07,
+      "sample": 32
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.936744387703869e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 7.936744387703869e-07,
+      "sample": 32
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.334101211111727e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 9.334101211111727e-07,
+      "sample": 33
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.9258200438062737e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 2.9258200438062737e-06,
+      "sample": 33
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.33745468767653e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 8.33745468767653e-07,
+      "sample": 33
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -1.1180343757380893e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -1.1180343757380893e-07,
+      "sample": 33
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.262151644924419e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 8.262151644924419e-07,
+      "sample": 33
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.313093952669923e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 9.313093952669923e-07,
+      "sample": 34
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.495087973784351e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 3.495087973784351e-06,
+      "sample": 34
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.353454948924883e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 8.353454948924883e-07,
+      "sample": 34
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.1409124040414745e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 3.1409124040414745e-07,
+      "sample": 34
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.740470195915492e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 7.740470195915492e-07,
+      "sample": 34
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0564038245903818e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.0564038245903818e-06,
+      "sample": 35
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.106559437470363e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 5.106559437470363e-06,
+      "sample": 35
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.757630976990725e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 9.757630976990725e-07,
+      "sample": 35
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.50083937763146e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 6.50083937763146e-07,
+      "sample": 35
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.276705962821721e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 7.276705962821721e-07,
+      "sample": 35
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.214612934547582e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.214612934547582e-06,
+      "sample": 36
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.082200100653197e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.082200100653197e-06,
+      "sample": 36
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1189845100407539e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.1189845100407539e-06,
+      "sample": 36
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.899416132786013e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 7.899416132786013e-07,
+      "sample": 36
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.925393247795009e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 7.925393247795009e-07,
+      "sample": 36
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2681161601278778e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.2681161601278778e-06,
+      "sample": 37
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.797404710375441e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 5.797404710375441e-06,
+      "sample": 37
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.148612741339222e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.148612741339222e-06,
+      "sample": 37
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.871068206924894e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 6.871068206924894e-07,
+      "sample": 37
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.204322063708232e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 9.204322063708232e-07,
+      "sample": 37
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.162773640125192e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.162773640125192e-06,
+      "sample": 38
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.1489865437713594e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.1489865437713594e-06,
+      "sample": 38
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.051102803888133e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.051102803888133e-06,
+      "sample": 38
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.7024651281277276e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 3.7024651281277276e-07,
+      "sample": 38
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.83735037543889e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 9.83735037543889e-07,
+      "sample": 38
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.897103315861363e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 9.897103315861363e-07,
+      "sample": 39
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.3884752084160225e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 3.3884752084160225e-06,
+      "sample": 39
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.31715601424593e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 9.31715601424593e-07,
+      "sample": 39
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -6.475387896015803e-08,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -6.475387896015803e-08,
+      "sample": 39
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.294626926873419e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 9.294626926873419e-07,
+      "sample": 39
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.9202190463668e-07,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 9.9202190463668e-07,
+      "sample": 40
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.3606687098857455e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 3.3606687098857455e-06,
+      "sample": 40
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 9.606695953914958e-07,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 9.606695953914958e-07,
+      "sample": 40
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -4.840875593413582e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -4.840875593413582e-07,
+      "sample": 40
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.297863016467476e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 8.297863016467476e-07,
+      "sample": 40
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2387870280050333e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.2387870280050333e-06,
+      "sample": 41
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.955726462617935e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.955726462617935e-06,
+      "sample": 41
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1387105950151007e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.1387105950151007e-06,
+      "sample": 41
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -7.575551387154921e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -7.575551387154921e-07,
+      "sample": 41
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.501600031790465e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 8.501600031790465e-07,
+      "sample": 41
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.480806532774724e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.480806532774724e-06,
+      "sample": 42
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.448600003650093e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.448600003650093e-06,
+      "sample": 42
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2922395596355639e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.2922395596355639e-06,
+      "sample": 42
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -7.993080181432545e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -7.993080181432545e-07,
+      "sample": 42
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0153766648978192e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.0153766648978192e-06,
+      "sample": 42
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.517129709332695e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.517129709332695e-06,
+      "sample": 43
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.8585444311996e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.8585444311996e-06,
+      "sample": 43
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3005117409242437e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.3005117409242437e-06,
+      "sample": 43
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -5.94952700622031e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -5.94952700622031e-07,
+      "sample": 43
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1564437177417496e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.1564437177417496e-06,
+      "sample": 43
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3097904249563994e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.3097904249563994e-06,
+      "sample": 44
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.651627275349089e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 5.651627275349089e-06,
+      "sample": 44
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1665901940485532e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.1665901940485532e-06,
+      "sample": 44
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -2.0641164552424944e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -2.0641164552424944e-07,
+      "sample": 44
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1481841809754271e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.1481841809754271e-06,
+      "sample": 44
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0307201294205542e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.0307201294205542e-06,
+      "sample": 45
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.821865494738611e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 3.821865494738611e-06,
+      "sample": 45
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0316342889370457e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.0316342889370457e-06,
+      "sample": 45
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 2.470707955199513e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 2.470707955199513e-07,
+      "sample": 45
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0016113658060106e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.0016113658060106e-06,
+      "sample": 45
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0694004834973854e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.0694004834973854e-06,
+      "sample": 46
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.327714648905668e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 3.327714648905668e-06,
+      "sample": 46
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0885052136740885e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.0885052136740885e-06,
+      "sample": 46
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.258725521740071e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 6.258725521740071e-07,
+      "sample": 46
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.905768628427688e-07,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 8.905768628427688e-07,
+      "sample": 46
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4280548845869353e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.4280548845869353e-06,
+      "sample": 47
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.984462481712898e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.984462481712898e-06,
+      "sample": 47
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2966348747863624e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.2966348747863624e-06,
+      "sample": 47
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 8.133296148122477e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 8.133296148122477e-07,
+      "sample": 47
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0098301521452043e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.0098301521452043e-06,
+      "sample": 47
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.7096806824691982e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.7096806824691982e-06,
+      "sample": 48
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.4881935069952814e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.4881935069952814e-06,
+      "sample": 48
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.447583424493779e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.447583424493779e-06,
+      "sample": 48
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.519034916738083e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 7.519034916738083e-07,
+      "sample": 48
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2369878374817887e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.2369878374817887e-06,
+      "sample": 48
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.7014043312959445e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.7014043312959445e-06,
+      "sample": 49
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.072882348201396e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 7.072882348201396e-06,
+      "sample": 49
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.422856017527025e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.422856017527025e-06,
+      "sample": 49
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.608951533188254e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 4.608951533188254e-07,
+      "sample": 49
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3461407445954833e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.3461407445954833e-06,
+      "sample": 49
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.410801603494235e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.410801603494235e-06,
+      "sample": 50
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.401411715124513e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.401411715124513e-06,
+      "sample": 50
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.253891235817978e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.253891235817978e-06,
+      "sample": 50
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.023699313076815e-08,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 3.023699313076815e-08,
+      "sample": 50
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2535266074190632e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.2535266074190632e-06,
+      "sample": 50
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1058048191210038e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.1058048191210038e-06,
+      "sample": 51
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.197613806178086e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.197613806178086e-06,
+      "sample": 51
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1288571907462316e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.1288571907462316e-06,
+      "sample": 51
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -4.0759894630297655e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -4.0759894630297655e-07,
+      "sample": 51
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0527020737474478e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.0527020737474478e-06,
+      "sample": 51
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.232625066499597e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.232625066499597e-06,
+      "sample": 52
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 3.37780650389865e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 3.37780650389865e-06,
+      "sample": 52
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2384691894191566e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.2384691894191566e-06,
+      "sample": 52
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -7.187148385180089e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -7.187148385180089e-07,
+      "sample": 52
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.0085905581724307e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.0085905581724307e-06,
+      "sample": 52
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.6366084005199612e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.6366084005199612e-06,
+      "sample": 53
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.846089530020795e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.846089530020795e-06,
+      "sample": 53
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4699426281727472e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.4699426281727472e-06,
+      "sample": 53
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -8.090612164128879e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -8.090612164128879e-07,
+      "sample": 53
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2272535509078397e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.2272535509078397e-06,
+      "sample": 53
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.880720311499899e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.880720311499899e-06,
+      "sample": 54
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.450710894155684e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.450710894155684e-06,
+      "sample": 54
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.594568718689807e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.594568718689807e-06,
+      "sample": 54
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -6.530636482210938e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -6.530636482210938e-07,
+      "sample": 54
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.454701780433436e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.454701780433436e-06,
+      "sample": 54
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.7972437080844876e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.7972437080844876e-06,
+      "sample": 55
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.115375917011633e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 7.115375917011633e-06,
+      "sample": 55
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.5174747178123452e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.5174747178123452e-06,
+      "sample": 55
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -3.0084634509436834e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -3.0084634509436834e-07,
+      "sample": 55
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4873536888860755e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.4873536888860755e-06,
+      "sample": 55
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4711834201133925e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.4711834201133925e-06,
+      "sample": 56
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.3211758432651834e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.3211758432651834e-06,
+      "sample": 56
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3180584948179417e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.3180584948179417e-06,
+      "sample": 56
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3796392610760778e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 1.3796392610760778e-07,
+      "sample": 56
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3108181227213456e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.3108181227213456e-06,
+      "sample": 56
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2606870833454735e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.2606870833454735e-06,
+      "sample": 57
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.570346823174257e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.570346823174257e-06,
+      "sample": 57
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2335747364578653e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.2335747364578653e-06,
+      "sample": 57
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.285818439119292e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 5.285818439119292e-07,
+      "sample": 57
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1145886526937895e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.1145886526937895e-06,
+      "sample": 57
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4856862804993056e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.4856862804993056e-06,
+      "sample": 58
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.329418683313908e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.329418683313908e-06,
+      "sample": 58
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4037593672179487e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.4037593672179487e-06,
+      "sample": 58
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.527267131594559e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 7.527267131594559e-07,
+      "sample": 58
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.1848809460651726e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.1848809460651726e-06,
+      "sample": 58
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.839704309183386e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.839704309183386e-06,
+      "sample": 59
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.0682582980600305e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 5.0682582980600305e-06,
+      "sample": 59
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.63265209945607e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.63265209945607e-06,
+      "sample": 59
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.446571602469118e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 7.446571602469118e-07,
+      "sample": 59
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.4529413586071939e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.4529413586071939e-06,
+      "sample": 59
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.9683104921731626e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.9683104921731626e-06,
+      "sample": 60
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.441503582447106e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.441503582447106e-06,
+      "sample": 60
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.7021553384641753e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.7021553384641753e-06,
+      "sample": 60
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.10555927349013e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 5.10555927349013e-07,
+      "sample": 60
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.623781217193647e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.623781217193647e-06,
+      "sample": 60
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.7996446615100572e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.7996446615100572e-06,
+      "sample": 61
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 7.295323569764993e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 7.295323569764993e-06,
+      "sample": 61
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.5683597676956408e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.5683597676956408e-06,
+      "sample": 61
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2555109965923163e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": 1.2555109965923163e-07,
+      "sample": 61
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.5633263518218715e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.5633263518218715e-06,
+      "sample": 61
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.528537118529089e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.528537118529089e-06,
+      "sample": 62
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 6.281299103156864e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 6.281299103156864e-06,
+      "sample": 62
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.379919577894183e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.379919577894183e-06,
+      "sample": 62
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -2.9035435151469365e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -2.9035435151469365e-07,
+      "sample": 62
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3490264608272668e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.3490264608272668e-06,
+      "sample": 62
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.5187506720615121e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.5187506720615121e-06,
+      "sample": 63
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 4.525493670129828e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 4.525493670129828e-06,
+      "sample": 63
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.3906527634685385e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.3906527634685385e-06,
+      "sample": 63
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -6.097029508824098e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -6.097029508824098e-07,
+      "sample": 63
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.2498709614308049e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.2498709614308049e-06,
+      "sample": 63
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.7984438422489106e-06,
+      "kind": "W_trajectory",
+      "metric": "unweighted_rms",
+      "red": 1.7984438422489106e-06,
+      "sample": 64
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 5.851036324578025e-06,
+      "kind": "W_trajectory",
+      "metric": "max_abs",
+      "red": 5.851036324578025e-06,
+      "sample": 64
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.6116069056565491e-06,
+      "kind": "W_trajectory",
+      "metric": "M0_rms",
+      "red": 1.6116069056565491e-06,
+      "sample": 64
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": -7.366471058713781e-07,
+      "kind": "W_trajectory",
+      "metric": "projection",
+      "red": -7.366471058713781e-07,
+      "sample": 64
+    },
+    {
+      "absolute_difference": 0.0,
+      "green": 1.433397313996088e-06,
+      "kind": "W_trajectory",
+      "metric": "perpendicular",
+      "red": 1.433397313996088e-06,
+      "sample": 64
+    }
+  ],
+  "first_prefix_comparison": {
+    "coarse": {
+      "fields": [
+        "U",
+        "V",
+        "W",
+        "PH",
+        "T",
+        "MU"
+      ],
+      "input_exact": true,
+      "projected_exact": true,
+      "steps": 16
+    },
+    "fine": {
+      "fields": {
+        "MU": true,
+        "PH": true,
+        "T": true,
+        "U": true,
+        "V": true,
+        "W": true
+      },
+      "input_exact": true,
+      "projected_exact": true,
+      "steps": 32
+    }
+  },
+  "green_analyzer": {
+    "matches_analysis_json": true,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/analyze_pr309_60s.py",
+    "sha256": "15dda05c41ecdebd78416bddbb468a651222e6f4518656a48c3fdde0e7d0b54e"
+  },
+  "green_json": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_60s_analysis.json",
+    "sha256": "f34dc64b71a038b05a4a39ed0b9984a3996caa33408763c50737d782fe7a8823"
+  },
+  "hashes": {
+    "pr309_192_step_summary.csv": "e32af04228d665536b0270bc620b108b4c66e5b89f4e07b63e1c04a45baa6fb2",
+    "pr309_60s_compact.npz": "f86e2faf170cec91bddd8adf6b1654d3ff805a7310c413d2ad209e5585de4bcb",
+    "pr309_60s_w_trajectory.csv": "c1cef4ce007801cdd8a82355fa9d2c4d2dc5ab6117d576cac033a5926839660b",
+    "pr309_analysis_plan_v3.json": "c1f8b87c8cd78115d88bd7ac9212b836f11ebc01a40533fb0c341a2e50034075"
+  },
+  "limitations": [
+    "No true-error, order, forecast-accuracy, or cost claim.",
+    "All planned work stops at t=60 regardless of screen outcome.",
+    "The W crossing is only a frozen diagnostic selector."
+  ],
+  "official_t60_six_field": {
+    "all_six_green_pass": true,
+    "all_six_green_red_boolean_equal": true,
+    "max_rms_difference": 0.0
+  },
+  "red_json": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/red_precision/pr309_red_pair_analysis.json",
+    "sha256": "1aa1821491d18589a1bc83a3105e2bd3474b2b342f5002ed9f9412bcbe6de538"
+  },
+  "schema": "pr309_green_red_validation_v1"
+}

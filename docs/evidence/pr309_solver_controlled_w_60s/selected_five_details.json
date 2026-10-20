@@ -1,0 +1,75 @@
+{
+  "analysis_json_sha256": "f34dc64b71a038b05a4a39ed0b9984a3996caa33408763c50737d782fe7a8823",
+  "detail_interval": {
+    "coarse_step_seq": 64,
+    "end_seconds": 60.0,
+    "fine_step_seq": [
+      127,
+      128
+    ],
+    "rule": "frozen last-interval fallback; no crossing",
+    "start_seconds": 59.0625
+  },
+  "not_an_additional_run": true,
+  "plan_sha256": "c1f8b87c8cd78115d88bd7ac9212b836f11ebc01a40533fb0c341a2e50034075",
+  "protocol_sha256": "2497c354ebb3ff74fc78ea4376999f007c47e30a6e7ee0cf5d23c7353a2dde99",
+  "schema": "pr309_selected_five_stage_detail_manifest_v1",
+  "selected": [
+    {
+      "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/accepted_ark_w_step_1.csv",
+      "csv_sha256": "8e61145c438cf0e2d15fa75a0fedfb0eecd2d5395f8766c26a797de14e3bfbdb",
+      "elapsed_interval_seconds": [
+        0.0,
+        0.9375
+      ],
+      "reason": "first accepted step: solver/startup diagnostic",
+      "role": "coarse",
+      "step_seq": 1
+    },
+    {
+      "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/accepted_ark_w_step_64.csv",
+      "csv_sha256": "f598d0c9f371c0cf9049aac126bbc0d2afda164b2636cfc1ae6d1cedfe4a5e2b",
+      "elapsed_interval_seconds": [
+        59.0625,
+        60.0
+      ],
+      "reason": "last fixed fallback interval selected by frozen protocol because no common W epsilon/3 crossing; inspect adjacent final accepted map",
+      "role": "coarse",
+      "step_seq": 64
+    },
+    {
+      "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/accepted_ark_w_step_1.csv",
+      "csv_sha256": "b7211499534a056d01e22e55576189df34934c890e3d3cc5abbe265d79d6296d",
+      "elapsed_interval_seconds": [
+        0.0,
+        0.46875
+      ],
+      "reason": "first accepted step: solver/startup diagnostic",
+      "role": "fine",
+      "step_seq": 1
+    },
+    {
+      "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/accepted_ark_w_step_127.csv",
+      "csv_sha256": "31c284e8281b3eb5c21ccc95f34f22f0612e637d43a9a591810229a4f732c61d",
+      "elapsed_interval_seconds": [
+        59.0625,
+        59.53125
+      ],
+      "reason": "last fixed fallback interval selected by frozen protocol because no common W epsilon/3 crossing; inspect adjacent final accepted map",
+      "role": "fine",
+      "step_seq": 127
+    },
+    {
+      "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/accepted_ark_w_step_128.csv",
+      "csv_sha256": "9d198c7bfe22171d918a1a8f7e6e07cda4d251a1eddbb92ebefffb1ea8b1bd69",
+      "elapsed_interval_seconds": [
+        59.53125,
+        60.0
+      ],
+      "reason": "last fixed fallback interval selected by frozen protocol because no common W epsilon/3 crossing; inspect adjacent final accepted map",
+      "role": "fine",
+      "step_seq": 128
+    }
+  ],
+  "selection_rule": "first accepted macrostep in each run plus exactly the coarse/fine macrosteps spanning the frozen no-crossing final detail interval [59.0625,60.0] s"
+}

@@ -1,0 +1,99 @@
+{
+  "schema": "pr309_root_official_netcdf_t60_screen_v1",
+  "created_local_time": "2026-10-15T23:35:12+09:00",
+  "scope": "FP32 NetCDF fields promoted FP64 before physical transform/difference; unchanged V3 owners and limits; single 60s screen not reference qualification",
+  "source_budget_sha256": "f1d03774f6b231d49c4f090f3a105835eff6e98755af3c9715bf90a5c7ad2f9c",
+  "rows": {
+    "U": {
+      "owners": 4096,
+      "rms_difference": 2.3350212277406657e-08,
+      "maximum_absolute_difference": 4.76837158203125e-07,
+      "fixed_limit": 0.00025814723466881614,
+      "ratio_to_limit": 9.04530792567399e-05,
+      "screen_pass": true
+    },
+    "V": {
+      "owners": 4352,
+      "rms_difference": 5.27999998338641e-09,
+      "maximum_absolute_difference": 2.2351741790771484e-08,
+      "fixed_limit": 3.374002414931749e-05,
+      "ratio_to_limit": 0.00015649069959225906,
+      "screen_pass": true
+    },
+    "W": {
+      "owners": 4096,
+      "rms_difference": 1.7984436497264701e-06,
+      "maximum_absolute_difference": 5.851034075021744e-06,
+      "fixed_limit": 2.5981466189324436e-06,
+      "ratio_to_limit": 0.6922025249157938,
+      "screen_pass": true
+    },
+    "PH": {
+      "owners": 4096,
+      "rms_difference": 0.0001028908077946562,
+      "maximum_absolute_difference": 0.00048828125,
+      "fixed_limit": 0.0034165835132482897,
+      "ratio_to_limit": 0.030115115698381854,
+      "screen_pass": true
+    },
+    "T": {
+      "owners": 4096,
+      "rms_difference": 0.0,
+      "maximum_absolute_difference": 0.0,
+      "fixed_limit": 1.2065237971809995e-05,
+      "ratio_to_limit": 0.0,
+      "screen_pass": true
+    },
+    "MU": {
+      "owners": 256,
+      "rms_difference": 0.0,
+      "maximum_absolute_difference": 0.0,
+      "fixed_limit": 0.004863633485853729,
+      "ratio_to_limit": 0.0,
+      "screen_pass": true
+    }
+  },
+  "pass_count": 6,
+  "physical_minima_all_five_frames": {
+    "coarse": {
+      "theta_K": 302.2530450820923,
+      "mu_Pa": 89091.65737581253,
+      "depth_m": 942.6521386818297
+    },
+    "fine": {
+      "theta_K": 302.2530450820923,
+      "mu_Pa": 89091.65737581253,
+      "depth_m": 942.6521386818297
+    }
+  },
+  "netcdf_files": {
+    "coarse": [
+      {
+        "file": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf"
+      },
+      {
+        "file": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:00:30",
+        "sha256": "d8f80633e95a3636e11fe4610e9699f9fa8892fe6a37636b43e84dfeb76d5600"
+      },
+      {
+        "file": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:01:00",
+        "sha256": "af2a83cd29a92e1b045088e77d17666ae5b4308b92a94c83db3b1db058f08217"
+      }
+    ],
+    "fine": [
+      {
+        "file": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "5072b2699a2413d2c30e5f94b357454a27cb9e33201733dbaa99989a2f8e5ab9"
+      },
+      {
+        "file": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:00:30",
+        "sha256": "a63fd4c079cb6f34136ee12cd2112c3a6c3a0fa33929e6cca7ae2b9db016eeb8"
+      },
+      {
+        "file": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:01:00",
+        "sha256": "89c52efe052aee1ea77fb01a6fd3549536a56f72e51f4b70edca33cc51646876"
+      }
+    ]
+  }
+}

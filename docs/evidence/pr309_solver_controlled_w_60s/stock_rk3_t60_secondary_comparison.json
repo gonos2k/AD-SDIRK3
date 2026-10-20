@@ -1,0 +1,320 @@
+{
+  "candidates": [
+    {
+      "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+      "dt_s": 0.9375,
+      "duration_s": 60,
+      "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+      "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "strict_h0p9375",
+      "namelist_sha256": "0aa49bb19a528e28bd5bb28535cd6163ead2bb17195766c7bb0baf5f3cf59961",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "ca4c91645e4165ae33f802d33a1114f858cf178362c250cf7240306ea49450b5",
+      "solver_summary": [
+        {
+          "dt": 0.9375,
+          "failed": 0,
+          "steps": 192
+        }
+      ],
+      "source_commit": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+      "source_impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "t60_output": {
+        "available_timestamps": [
+          "0001-01-01_00:01:00"
+        ],
+        "file": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:01:00",
+        "grid": {
+          "dx_m": 100000.0,
+          "dy_m": 100000.0,
+          "nx": 16,
+          "ny": 16,
+          "nz": 16
+        },
+        "sha256": "af2a83cd29a92e1b045088e77d17666ae5b4308b92a94c83db3b1db058f08217",
+        "time_index": 0,
+        "timestamp": "0001-01-01_00:01:00"
+      },
+      "v3_owned_mask_comparison_at_t60": {
+        "MU_total_plus_MUB": {
+          "max_abs": 0.032097816467285156,
+          "reference_signal_rms_from_initial": 0.11205678919487708,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.11071608453607072,
+          "rms": 0.012406488945340667
+        },
+        "PH": {
+          "max_abs": 0.025390625,
+          "reference_signal_rms_from_initial": 0.09291401041197472,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.042312165896360485,
+          "rms": 0.00393139302264764
+        },
+        "THM_T_plus_300": {
+          "max_abs": 0.00048828125,
+          "reference_signal_rms_from_initial": 0.000872506918448746,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.04883584109798512,
+          "rms": 4.2609609226255616e-05
+        },
+        "U": {
+          "max_abs": 0.001764535903930664,
+          "reference_signal_rms_from_initial": 0.02127950794756396,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.048813564445562785,
+          "rms": 0.0010387286325682788
+        },
+        "V": {
+          "max_abs": 0.0016891984269022942,
+          "reference_signal_rms_from_initial": 0.0029347135161592822,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.14791838741727872,
+          "rms": 0.000434098090841973
+        },
+        "W": {
+          "max_abs": 0.00031943226349540055,
+          "reference_signal_rms_from_initial": 0.00023807775662040704,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.22887556825306724,
+          "rms": 5.44901818349111e-05
+        }
+      }
+    },
+    {
+      "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+      "dt_s": 0.46875,
+      "duration_s": 60,
+      "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+      "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "strict_h0p46875",
+      "namelist_sha256": "5b7b8cc23649868e79a570a2194444765c0c0670d6e69aafc0dfeb8542ced133",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "6123eb09ebe8507a95fed5db2cc5a133bf8e9435ff2946a9ad06ac79c0b3ce89",
+      "solver_summary": [
+        {
+          "dt": 0.4688,
+          "failed": 0,
+          "steps": 300
+        },
+        {
+          "dt": 0.4688,
+          "failed": 0,
+          "steps": 384
+        }
+      ],
+      "source_commit": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+      "source_impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "t60_output": {
+        "available_timestamps": [
+          "0001-01-01_00:01:00"
+        ],
+        "file": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/wrfout_d01_0001-01-01_00:01:00",
+        "grid": {
+          "dx_m": 100000.0,
+          "dy_m": 100000.0,
+          "nx": 16,
+          "ny": 16,
+          "nz": 16
+        },
+        "sha256": "89c52efe052aee1ea77fb01a6fd3549536a56f72e51f4b70edca33cc51646876",
+        "time_index": 0,
+        "timestamp": "0001-01-01_00:01:00"
+      },
+      "v3_owned_mask_comparison_at_t60": {
+        "MU_total_plus_MUB": {
+          "max_abs": 0.032097816467285156,
+          "reference_signal_rms_from_initial": 0.11205678919487708,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.11071608453607072,
+          "rms": 0.012406488945340667
+        },
+        "PH": {
+          "max_abs": 0.025390625,
+          "reference_signal_rms_from_initial": 0.09291401041197472,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.042337572128031326,
+          "rms": 0.0039337536175216336
+        },
+        "THM_T_plus_300": {
+          "max_abs": 0.00048828125,
+          "reference_signal_rms_from_initial": 0.000872506918448746,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.04883584109798512,
+          "rms": 4.2609609226255616e-05
+        },
+        "U": {
+          "max_abs": 0.001764535903930664,
+          "reference_signal_rms_from_initial": 0.02127950794756396,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.048813572781747784,
+          "rms": 0.0010387288099581939
+        },
+        "V": {
+          "max_abs": 0.0016892114654183388,
+          "reference_signal_rms_from_initial": 0.0029347135161592822,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.14791838978575628,
+          "rms": 0.00043409809779277605
+        },
+        "W": {
+          "max_abs": 0.00032090485910885036,
+          "reference_signal_rms_from_initial": 0.00023807775662040704,
+          "relative_rms_status": "defined",
+          "relative_rms_to_reference_signal": 0.2302636040115457,
+          "rms": 5.4820642274398556e-05
+        }
+      }
+    }
+  ],
+  "comparison_time": {
+    "exact_no_interpolation": true,
+    "seconds": 60,
+    "timestamp": "0001-01-01_00:01:00"
+  },
+  "new_strict_pair_transport_context": {
+    "strict_h0p46875": {
+      "imex_mode": 3,
+      "native_dt_s": 0.46875,
+      "newton_tol": 1e-09,
+      "runtime_evidence": {
+        "first_grid_config_log_line": "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+        "interpretation": "namelist values are requested settings; startup Grid config is a separate runtime record. This comparison does not infer a matched EMDIV/acoustic filter policy from either alone.",
+        "namelist_output_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/namelist.output",
+        "namelist_output_sha256": "3e04c9c3e9fe32fc453226460ca244832e522ee83f7c885a662a8914a461eb88",
+        "requested_namelist_output": {
+          "DIFF_OPT": "3*2",
+          "EMDIV": "11*9.99999978E-03",
+          "EPSSM": "11*0.100000001",
+          "KHDIF": "3*1000.00000",
+          "KVDIF": "3*10.0000000",
+          "SDIRK3_IMEX_SPLIT_MODE": "3",
+          "SDIRK3_IMPLICIT_DIVERGENCE": "T",
+          "SDIRK3_KDAMP": "0.200000003",
+          "SDIRK3_KHDIF": "500.000000",
+          "SDIRK3_KVDIF": "100.000000",
+          "SDIRK3_SPLIT_EXPLICIT": "F",
+          "SMDIV": "11*0.100000001",
+          "TIME_INTEGRATION_SCHEME": "6"
+        },
+        "rsl_error_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/rsl.error.0000",
+        "rsl_error_sha256": "6af5166b99812a95f0f904bc3228450997d0bf0cfad39508834e8ad0dd172908",
+        "runtime_effective_log_lines": [
+          "[CONFIG EFFECTIVE] mass_coordinate_mode=1 (WRFParity) -> omega_ww_cp=ON, mu_horizontal_div_only=ON",
+          "[CONFIG EFFECTIVE] split_explicit=off (ARK324 implicit)"
+        ],
+        "runtime_imex_effective_line": "[CONFIG] IMEX effective: mode=3 (post-solve IMEX ARK324)"
+      },
+      "scheme": 6
+    },
+    "strict_h0p9375": {
+      "imex_mode": 3,
+      "native_dt_s": 0.9375,
+      "newton_tol": 1e-09,
+      "runtime_evidence": {
+        "first_grid_config_log_line": "[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=1000, kvdif=10",
+        "interpretation": "namelist values are requested settings; startup Grid config is a separate runtime record. This comparison does not infer a matched EMDIV/acoustic filter policy from either alone.",
+        "namelist_output_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/namelist.output",
+        "namelist_output_sha256": "4e7650ad4fa9d7ea80803a96243c43cf345fbac5f82dc097f90d7c2db217f9b3",
+        "requested_namelist_output": {
+          "DIFF_OPT": "3*2",
+          "EMDIV": "11*9.99999978E-03",
+          "EPSSM": "11*0.100000001",
+          "KHDIF": "3*1000.00000",
+          "KVDIF": "3*10.0000000",
+          "SDIRK3_IMEX_SPLIT_MODE": "3",
+          "SDIRK3_IMPLICIT_DIVERGENCE": "T",
+          "SDIRK3_KDAMP": "0.200000003",
+          "SDIRK3_KHDIF": "500.000000",
+          "SDIRK3_KVDIF": "100.000000",
+          "SDIRK3_SPLIT_EXPLICIT": "F",
+          "SMDIV": "11*0.100000001",
+          "TIME_INTEGRATION_SCHEME": "6"
+        },
+        "rsl_error_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/rsl.error.0000",
+        "rsl_error_sha256": "76ca9160e954b409efe3e34e9cffd291d97d2874868be742003b4397f03d3596",
+        "runtime_effective_log_lines": [
+          "[CONFIG EFFECTIVE] mass_coordinate_mode=1 (WRFParity) -> omega_ww_cp=ON, mu_horizontal_div_only=ON",
+          "[CONFIG EFFECTIVE] split_explicit=off (ARK324 implicit)"
+        ],
+        "runtime_imex_effective_line": "[CONFIG] IMEX effective: mode=3 (post-solve IMEX ARK324)"
+      },
+      "scheme": 6
+    }
+  },
+  "physical_field_semantics": {
+    "MU_total_plus_MUB": "MU+MUB Pa; V3 MU mass-point mask",
+    "PH": "perturbation geopotential m2/s2, fixed lower face excluded and top included",
+    "THM_T_plus_300": "WRF perturbation T plus 300 K; V3 T mass-point mask",
+    "U": "m/s, periodic duplicate x face omitted",
+    "V": "m/s, both physical y walls included",
+    "W": "m/s, fixed lower face excluded and top included"
+  },
+  "policy_difference": {
+    "native_pair": "native ARK scheme 6, IMEX mode 3, split-explicit off; namelist and startup runtime records are separately pinned per run. This is not a same-EMDIV/acoustic-filter comparison",
+    "qualification": "This does not qualify native ARK accuracy or establish stock RK3 as truth; it is a secondary distance to a historically archived stock-RK3 trajectory.",
+    "stock_rk3": "standard split-explicit RK3; old namelist requests smdiv=0.1, emdiv=0.01, epssm=0.1 and time_step_sound=4"
+  },
+  "reference": {
+    "analysis_path": "/Users/yhlee/AD-SDIRK3-review-evidence/WRF-accuracy-cost-20261011/analysis_after.json",
+    "analysis_sha256": "e51e1a257be01637f791ade97a330d2d6890e179827a8e187f435eca196dfa54",
+    "archived_h_s": 1.875,
+    "archived_label": "fortran_rk3_h1p875",
+    "archived_method": "RK3",
+    "endpoint_s": 240,
+    "executable_sha256": "2b629416618ddef4ceeea8ba51d07b8a7df514f5df6abab107c51e3f78fcc2de",
+    "grid": {
+      "dx_m": 100000.0,
+      "dy_m": 100000.0,
+      "nx": 16,
+      "ny": 16,
+      "nz": 16
+    },
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_sha256": "2c28bd65a49f43cd377ac90b9d01aa6712d976cf737e4d9dd47790e765f1e8bd",
+    "namelist_transport_context": {
+      "diff_opt": "2",
+      "emdiv": "0.01",
+      "epssm": "0.1",
+      "khdif": "1000.",
+      "kvdif": "10.",
+      "smdiv": "0.1",
+      "time_step": "1",
+      "time_step_fract_den": "8",
+      "time_step_fract_num": "7",
+      "time_step_sound": "4"
+    },
+    "source_revision": null,
+    "source_revision_availability": "not recorded in the archived run record",
+    "source_sha256": null,
+    "t0_t60_wrfout_path": "/Users/yhlee/AD-SDIRK3-review-evidence/WRF-accuracy-cost-20261011/after_fix/fortran_rk3_h1p875/wrfout_d01_0001-01-01_00:00:00",
+    "t0_t60_wrfout_sha256": "a3ee45fb07800f021afe884afdc7bfadf665d5a27820bcb975c61467681bc2e2",
+    "timestamps": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:01:00"
+    ]
+  },
+  "reference_role": "secondary historical cross-method comparator, not the strict pair's truth/reference qualification",
+  "runtime_context": {
+    "archived_rk3_run_wall_receipt_available": false,
+    "efficiency_ratio_reported": false,
+    "new_pair_runs_include_stage_observer_and_rhs_count": true,
+    "reason": "new 60-s observer runs and historical 240-s stock-RK3 timing receipts are not matched whole-path controls"
+  },
+  "schema": "pr309_stock_rk3_h1875_t60_secondary_comparison_v1",
+  "scope": "one exact 60-s comparison against the archived original e71 stock-RK3 h=1.875 240-s reference",
+  "v3_mask_helper": {
+    "counts": {
+      "MU": 256,
+      "PH": 4096,
+      "T": 4096,
+      "U": 4096,
+      "V": 4352,
+      "W": 4096
+    },
+    "path": "/private/tmp/pr309-solver-controlled-w-60s-20261015/tools/benchmark_wrf_accuracy_cost.py",
+    "policy": "benchmark_wrf_accuracy_cost._owned: U omit periodic duplicate x; V include both y walls; W/PH omit fixed lower z face and include top; T/MU all mass points",
+    "sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8"
+  }
+}
