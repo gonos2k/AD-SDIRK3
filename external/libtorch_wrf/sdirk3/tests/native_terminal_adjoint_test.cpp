@@ -40,7 +40,7 @@ struct RunState {
     std::string chain_name;
     std::string output_prefix;
     std::string reference_path;
-    int mode = -1;  // 0=baseline, 1=replay, 2=FD, 3=prefix.
+    int mode = -1;  // 0=baseline VJP, 2=FD, 3=prefix VJP, 4=state-only replay.
     int expected_steps = kSteps;
     int graph_start_step = kSteps - kWindowSteps + 1;
     float eta = 0.0f;
@@ -58,11 +58,9 @@ struct RunState {
     bool suffix_seed_matched = false;
     bool initial_control_seed_applied = false;
     torch::Tensor initial_seed64;
-    torch::Tensor lambda64_chain;
     torch::Tensor lambda64_in;
     torch::Tensor lambda32_wrapper;
     torch::Tensor wrapper_gradient64;
-    torch::Tensor direct_gradient64;
     torch::Tensor reference_checkpoints64;
     std::vector<torch::Tensor> endpoints64;
     torch::Tensor direction32;
@@ -91,7 +89,7 @@ std::size_t peak_rss_bytes() {
 
 int parse_mode(const std::string& value) {
     if (value == "baseline") return 0;
-    if (value == "replay") return 1;
+    if (value == "replay") return 4;
     if (value == "prefix") return 3;
     if (value == "plus001" || value == "minus001" ||
         value == "plus003" || value == "minus003" ||
@@ -346,7 +344,7 @@ void capture_accepted_state(const torch::Tensor& state) {
     TORCH_CHECK(run.endpoints64.size() == static_cast<std::size_t>(run.host_step),
                 "warm FP64 endpoint ledger is not consecutive");
     auto endpoint = state.detach().to(torch::kCPU, torch::kFloat64).contiguous().clone();
-    if (run.mode == 1 || run.mode == 3) {
+    if (run.mode == 4 || run.mode == 3) {
         TORCH_CHECK(run.reference_checkpoints64.defined() &&
                     run.host_step < run.reference_checkpoints64.size(0) &&
                     bitwise_equal(endpoint, run.reference_checkpoints64[run.host_step]),
@@ -453,21 +451,16 @@ extern "C" int sdirk3_native_terminal_prepare(
         make_direction(layout, nx, ny, nz, nx_u, ny_v, nz_w, x0, direction, scales);
         make_terminal(layout, nx, ny, nz_w, terminal);
 
-        torch::Tensor lambda64_chain = terminal.to(torch::kFloat64);
         torch::Tensor reference;
         std::string reference_path;
         int initial_reference_matches = 0;
         if (mode == 3) {
-            const auto f64_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA64_IN");
             const auto f32_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA32_IN");
-            auto f64_bytes = read_bytes(f64_path, static_cast<std::size_t>(n) * sizeof(double));
             auto f32_bytes = read_bytes(f32_path, static_cast<std::size_t>(n) * sizeof(float));
-            lambda64_chain = torch::from_blob(f64_bytes.data(), {n},
-                torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
             lambda_wrapper = torch::from_blob(f32_bytes.data(), {n},
                 torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)).clone();
         }
-        if (mode == 1 || mode == 3) {
+        if (mode == 4 || mode == 3) {
             reference_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_REFERENCE");
             auto reference_bytes = read_bytes(reference_path,
                 static_cast<std::size_t>(kSteps + 1) * n * sizeof(double));
@@ -527,8 +520,7 @@ extern "C" int sdirk3_native_terminal_prepare(
             run.initial_seed64 = seed64.detach().clone();
             run.endpoints64.clear();
             run.endpoints64.push_back(seed64.detach().clone());
-            run.lambda64_chain = lambda64_chain.detach().clone();
-            run.lambda64_in = lambda64_chain.detach().clone();
+            run.lambda64_in = lambda_wrapper.to(torch::kFloat64).detach().clone();
             run.lambda32_wrapper = lambda_wrapper.detach().clone();
             run.reference_checkpoints64 = reference;
             run.reference_path = reference_path;
@@ -563,6 +555,9 @@ extern "C" int sdirk3_native_terminal_prepare(
                  << "  \"warm_graph_flags\": \"retain_graph_for_adjoint=false,imex_slow_in_tangent=false\",\n"
                  << "  \"suffix_graph_flags\": \"retain_graph_for_adjoint=true,imex_slow_in_tangent=true\",\n"
                  << "  \"eta\": " << eta << ",\n"
+                 << "  \"cotangent_chain\": \"fortran_fp32_chain\",\n"
+                 << "  \"replay_role\": \""
+                 << (mode == 4 ? "state_only_replay" : "not_replay") << "\",\n"
                  << "  \"packed_size\": " << n << ",\n"
                  << "  \"dims\": [17,17,16,18,18,17],\n"
                  << "  \"steps\": " << expected_steps << ",\n"
@@ -681,7 +676,7 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                         "invalid retained FP64 checkpoint");
             auto c = checkpoint.to(torch::kCPU, torch::kFloat64).contiguous();
             const int absolute_endpoint = static_cast<int>(run.endpoints64.size());
-            if (run.mode == 1 || run.mode == 3) {
+            if (run.mode == 4 || run.mode == 3) {
                 TORCH_CHECK(run.reference_checkpoints64.defined() && absolute_endpoint <= host_step,
                             "prefix has no baseline endpoint reference");
                 TORCH_CHECK(bitwise_equal(c, run.reference_checkpoints64[absolute_endpoint]),
@@ -717,7 +712,7 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
             }
             const uint64_t actual_prefix_hash = fnv1a64(all.data(), all.size() * sizeof(double));
             uint64_t reference_prefix_hash = 0;
-            if (run.mode == 1 || run.mode == 3) {
+            if (run.mode == 4 || run.mode == 3) {
                 auto reference_prefix = run.reference_checkpoints64
                     .slice(0, 0, host_step + 1).contiguous();
                 reference_prefix_hash = fnv1a64(reference_prefix.data_ptr<double>(),
@@ -755,10 +750,10 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                 endpoint_meta << ",\n  \"local_terminal_c_dot\": " << local_terminal_c_dot << ",\n"
                     << "  \"reference_path\": \"" << run.reference_path << "\",\n"
                     << "  \"reference_checkpoints_expected\": "
-                    << ((run.mode == 1 || run.mode == 3) ? host_step + 1 : 0) << ",\n"
+                    << ((run.mode == 4 || run.mode == 3) ? host_step + 1 : 0) << ",\n"
                     << "  \"reference_checkpoints_matched\": " << run.reference_match_count << ",\n"
                     << "  \"endpoint_reference_exact\": "
-                    << ((run.mode == 1 || run.mode == 3) ? "true" : "null") << ",\n"
+                    << ((run.mode == 4 || run.mode == 3) ? "true" : "null") << ",\n"
                     << "  \"actual_prefix_fnv1a64\": \"" << std::hex << actual_prefix_hash << "\",\n"
                     << "  \"reference_prefix_fnv1a64\": \"" << reference_prefix_hash << std::dec << "\",\n"
                     << "  \"peak_rss_bytes\": " << peak_rss_bytes() << "\n}\n";
@@ -782,10 +777,10 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                  << "  \"window_endpoint_count\": " << checkpoints.size() << ",\n"
                  << "  \"local_terminal_c_dot\": " << local_terminal_c_dot << ",\n"
                  << "  \"reference_checkpoints_expected\": " <<
-                    ((run.mode == 1 || run.mode == 3) ? host_step + 1 : 0) << ",\n"
+                    ((run.mode == 4 || run.mode == 3) ? host_step + 1 : 0) << ",\n"
                  << "  \"reference_checkpoints_matched\": " << run.reference_match_count << ",\n"
                  << "  \"endpoint_reference_exact\": " <<
-                    ((run.mode == 1 || run.mode == 3) ? "true" : "null") << ",\n"
+                    ((run.mode == 4 || run.mode == 3) ? "true" : "null") << ",\n"
                  << "  \"window_endpoint_f64_fnv1a64\": \"" << std::hex
                  << fnv1a64(checkpoints.back().to(torch::kCPU, torch::kFloat64).contiguous().data_ptr<double>(),
                            static_cast<std::size_t>(n) * sizeof(double))
@@ -832,35 +827,11 @@ extern "C" int sdirk3_native_terminal_rearm_window() {
     }
 }
 
-extern "C" int sdirk3_native_terminal_pullback64(double* lambda_initial, int n) {
-    try {
-        TORCH_CHECK(lambda_initial && n == 24531 && run.prepared && run.endpoint_recorded &&
-                    !run.forward_active && run.lambda64_chain.defined(),
-                    "invalid exact FP64 chain pullback request");
-        std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
-        auto& solver = unique_solver_locked();
-        run.lambda64_in = run.lambda64_chain.detach().clone();
-        auto gradient = solver.pullbackFixedTrajectory(run.lambda64_chain)
-                            .detach().to(torch::kCPU, torch::kFloat64).contiguous();
-        TORCH_CHECK(gradient.numel() == n && torch::isfinite(gradient).all().item<bool>(),
-                    "exact FP64 window pullback is invalid");
-        std::copy(gradient.data_ptr<double>(), gradient.data_ptr<double>() + n, lambda_initial);
-        run.direct_gradient64 = gradient.clone();
-        run.lambda64_chain = gradient.clone();
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "NATIVE_TERMINAL_VJP64_ERROR: " << e.what() << '\n';
-        return 0;
-    }
-}
-
 extern "C" int sdirk3_native_terminal_finish(
     const float* direction, const float* terminal,
-    const float* initial_gradient_f32, const double* lambda_initial_f64,
-    int n, int mode, int have_gradient) {
+    const float* initial_gradient_f32, int n, int mode, int have_gradient) {
     try {
-        TORCH_CHECK(direction && terminal && initial_gradient_f32 &&
-                    lambda_initial_f64 && n == 24531,
+        TORCH_CHECK(direction && terminal && initial_gradient_f32 && n == 24531,
                     "invalid native terminal finish arguments");
         std::lock_guard<std::mutex> lock(run.mutex);
         TORCH_CHECK(run.prepared && run.endpoint_recorded && !run.forward_active && mode == run.mode,
@@ -869,10 +840,9 @@ extern "C" int sdirk3_native_terminal_finish(
         auto d32 = torch::from_blob(const_cast<float*>(direction), {n}, f32_options).clone();
         auto l32 = torch::from_blob(const_cast<float*>(terminal), {n}, f32_options).clone();
         auto g32 = torch::from_blob(const_cast<float*>(initial_gradient_f32), {n}, f32_options).clone();
-        auto g64 = torch::from_blob(const_cast<double*>(lambda_initial_f64), {n},
-            torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
+        auto g64 = run.wrapper_gradient64;
         auto d = d32.to(torch::kFloat64);
-        const bool vjp_expected = run.mode != 2;
+        const bool vjp_expected = run.mode == 0 || run.mode == 3;
         TORCH_CHECK(have_gradient == (vjp_expected ? 1 : 0),
                     "Fortran wrapper pullback gate disagrees with run role");
         TORCH_CHECK(run.lambda64_in.defined() && run.lambda32_wrapper.defined(),
@@ -884,9 +854,7 @@ extern "C" int sdirk3_native_terminal_finish(
         bool wrapper_cast_equal = false;
         if (vjp_expected) {
             TORCH_CHECK(torch::isfinite(g32).all().item<bool>() &&
-                        torch::isfinite(g64).all().item<bool>() &&
-                        run.direct_gradient64.defined() &&
-                        bitwise_equal(g64, run.direct_gradient64) &&
+                        g64.defined() && torch::isfinite(g64).all().item<bool>() &&
                         run.wrapper_gradient64.defined() &&
                         torch::isfinite(run.wrapper_gradient64).all().item<bool>(),
                         "one of the native terminal cotangents/pullbacks is non-finite");
@@ -908,7 +876,7 @@ extern "C" int sdirk3_native_terminal_finish(
             write_tensor(run.output_prefix + ".lambda_out_f64.bin", g64, torch::kFloat64);
             write_tensor(run.output_prefix + ".lambda_out_f32.bin", g32, torch::kFloat32);
         } else {
-            TORCH_CHECK(run.mode == 2, "unexpected non-VJP run mode");
+            TORCH_CHECK(run.mode == 2 || run.mode == 4, "unexpected non-VJP run mode");
         }
         TORCH_CHECK(peak_rss_bytes() <= kMemoryCapBytes,
                     "peak RSS exceeded the 18 GiB cap during finalization");
@@ -919,6 +887,15 @@ extern "C" int sdirk3_native_terminal_finish(
                  << "  \"mode\": \"" << run.mode_name << "\",\n"
                  << "  \"chain\": \"" << run.chain_name << "\",\n"
                  << "  \"eta\": " << run.eta << ",\n"
+                 << "  \"cotangent_chain\": \"fortran_fp32_chain\",\n"
+                 << "  \"lambda_in_f64_semantics\": "
+                 << "\"actual_fp32_cotangent_promoted_for_audit\",\n"
+                 << "  \"gradient_scope\": "
+                 << (vjp_expected ? "\"local_32_step_window\"" : "null") << ",\n"
+                 << "  \"gradient_f64_semantics\": "
+                 << (vjp_expected ? "\"local_precast_fp64\"" : "\"not_computed\"") << ",\n"
+                 << "  \"replay_role\": "
+                 << (run.mode == 4 ? "\"state_only_replay\"" : "\"not_replay\"") << ",\n"
                  << "  \"expected_steps\": " << run.expected_steps << ",\n"
                  << "  \"warm_steps\": " << (run.expected_steps - kWindowSteps) << ",\n"
                  << "  \"graph_start_step\": " << run.graph_start_step << ",\n"
@@ -933,15 +910,15 @@ extern "C" int sdirk3_native_terminal_finish(
                  << "  \"wrapper_gradient_f32_equals_cast_f64\": "
                  << (wrapper_cast_equal ? "true" : (vjp_expected ? "false" : "null")) << ",\n"
                  << "  \"reference_checkpoints_expected\": "
-                 << ((run.mode == 1 || run.mode == 3) ? run.expected_steps + 1 : 0) << ",\n"
+                 << ((run.mode == 4 || run.mode == 3) ? run.expected_steps + 1 : 0) << ",\n"
                  << "  \"reference_checkpoints_matched\": " << run.reference_match_count << ",\n"
                  << "  \"endpoint_reference_exact\": "
-                 << ((run.mode == 1 || run.mode == 3) ? "true" : "null") << ",\n"
-                 << "  \"directional_vjp_f64\": ";
+                 << ((run.mode == 4 || run.mode == 3) ? "true" : "null") << ",\n"
+                 << "  \"directional_local_precast_f64\": ";
             if (vjp_expected && run.mode == 3 && run.expected_steps == kWindowSteps)
                 meta << directional64;
             else meta << "null";
-            meta << ",\n  \"directional_vjp_f32_abi\": ";
+            meta << ",\n  \"directional_vjp_f32_chain\": ";
             if (vjp_expected && run.mode == 3 && run.expected_steps == kWindowSteps)
                 meta << directional32;
             else meta << "null";
@@ -950,8 +927,8 @@ extern "C" int sdirk3_native_terminal_finish(
         }
         std::cerr << "NATIVE_TERMINAL_FINISH mode=" << run.mode_name
                   << " expected_steps=" << run.expected_steps
-                  << " directional_vjp_f64=" << directional64
-                  << " directional_vjp_f32_abi=" << directional32 << '\n';
+                  << " directional_local_precast_f64=" << directional64
+                  << " directional_vjp_f32_chain=" << directional32 << '\n';
         run.prepared = false;
         return 1;
     } catch (const std::exception& e) {

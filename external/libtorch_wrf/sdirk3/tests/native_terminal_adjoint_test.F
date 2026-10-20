@@ -52,19 +52,11 @@ MODULE module_native_terminal_adjoint_test
       IMPORT :: C_INT
     END FUNCTION native_terminal_rearm_window_c
 
-    INTEGER(C_INT) FUNCTION native_terminal_pullback64_c(lambda_initial, n) BIND(C, &
-         NAME="sdirk3_native_terminal_pullback64")
-      IMPORT :: C_INT, C_DOUBLE
-      INTEGER(C_INT), VALUE :: n
-      REAL(C_DOUBLE), INTENT(OUT) :: lambda_initial(*)
-    END FUNCTION native_terminal_pullback64_c
-
     INTEGER(C_INT) FUNCTION native_terminal_finish_c(direction, terminal, &
-         initial_gradient, lambda_initial_f64, n, mode, have_gradient) BIND(C, &
+         initial_gradient, n, mode, have_gradient) BIND(C, &
          NAME="sdirk3_native_terminal_finish")
-      IMPORT :: C_INT, C_FLOAT, C_DOUBLE
+      IMPORT :: C_INT, C_FLOAT
       REAL(C_FLOAT), INTENT(IN) :: direction(*), terminal(*), initial_gradient(*)
-      REAL(C_DOUBLE), INTENT(IN) :: lambda_initial_f64(*)
       INTEGER(C_INT), VALUE :: n, mode, have_gradient
     END FUNCTION native_terminal_finish_c
   END INTERFACE
@@ -209,7 +201,6 @@ CONTAINS
     INTEGER :: ierr, its, ite, jts, jte, kts, kte, i, j, k, q
     REAL(C_FLOAT), TARGET :: schedule(window_steps)
     REAL(C_FLOAT), ALLOCATABLE :: gradient(:), endpoint(:)
-    REAL(C_DOUBLE), ALLOCATABLE :: gradient64(:)
     IF (.NOT. active) RETURN
     c_status = native_terminal_after_step_c(INT(host_step,C_INT))
     IF (c_status /= 1_C_INT) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: after_step failed")
@@ -273,23 +264,21 @@ CONTAINS
          INT(host_step,C_INT))
     IF (c_status /= 1_C_INT) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: endpoint capture failed")
 
-    ALLOCATE(gradient(packed_size),gradient64(packed_size))
-    gradient = 0.0_C_FLOAT; gradient64 = 0.0_C_DOUBLE
-    IF (run_mode /= 2_C_INT) THEN
-      c_status = native_terminal_pullback64_c(gradient64, INT(packed_size,C_INT))
-      IF (c_status /= 1_C_INT) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: FP64 pullback failed")
+    ALLOCATE(gradient(packed_size))
+    gradient = 0.0_C_FLOAT
+    IF (run_mode == 0_C_INT .OR. run_mode == 3_C_INT) THEN
       CALL sdirk3_pullback_fixed_trajectory(1, lambda_wrapper, gradient, ierr)
       IF (ierr /= 0) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: checked Fortran pullback failed")
-      c_status = native_terminal_finish_c(direction, terminal, gradient, gradient64, &
+      c_status = native_terminal_finish_c(direction, terminal, gradient, &
            INT(packed_size,C_INT), run_mode, 1_C_INT)
     ELSE
-      c_status = native_terminal_finish_c(direction, terminal, gradient, gradient64, &
+      c_status = native_terminal_finish_c(direction, terminal, gradient, &
            INT(packed_size,C_INT), run_mode, 0_C_INT)
     END IF
     IF (c_status /= 1_C_INT) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: finish failed")
     CALL sdirk3_close_fixed_trajectory(1, ierr)
     IF (ierr /= 0) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: fixed trajectory close failed")
-    DEALLOCATE(endpoint, gradient, gradient64, direction, terminal, lambda_wrapper)
+    DEALLOCATE(endpoint, gradient, direction, terminal, lambda_wrapper)
     active = .FALSE.
   END SUBROUTINE native_terminal_test_after_step
 

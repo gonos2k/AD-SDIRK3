@@ -26,11 +26,9 @@ int sdirk3_native_terminal_after_step(int host_step);
 int sdirk3_native_terminal_record_endpoint(const float* packed_terminal, int n,
                                           int host_step);
 int sdirk3_native_terminal_rearm_window();
-int sdirk3_native_terminal_pullback64(double* lambda_initial, int n);
 int sdirk3_native_terminal_finish(const float* direction,
                                   const float* terminal,
                                   const float* initial_gradient_f32,
-                                  const double* lambda_initial_f64,
                                   int n, int mode, int have_gradient);
 }
 
