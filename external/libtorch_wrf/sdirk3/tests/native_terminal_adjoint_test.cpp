@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -29,27 +30,39 @@ extern std::unordered_map<void*, std::unique_ptr<TileSDIRK3UnifiedSolver>> g_til
 
 namespace {
 constexpr int kSteps = 256;
+constexpr int kWindowSteps = 32;
 constexpr std::size_t kMemoryCapBytes = 18ULL * 1024ULL * 1024ULL * 1024ULL;
 
 struct RunState {
     std::mutex mutex;
     std::string mode_name;
+    std::string chain_name;
     std::string output_prefix;
-    int mode = -1;  // 0=baseline, 1=replay, 2=FD; only 0/1 pull back.
+    std::string reference_path;
+    int mode = -1;  // 0=baseline, 1=replay, 2=FD, 3=prefix.
+    int expected_steps = kSteps;
     float eta = 0.0f;
     int host_step = 0;
+    int window_start_step = 0;
+    int reference_match_count = 0;
     int omega_ordinal = 0;
     int nx = 0, ny = 0, nz = 0, nx_u = 0, ny_v = 0, nz_w = 0;
     bool prepared = false;
     bool forward_active = false;
     bool endpoint_recorded = false;
     torch::Tensor initial_seed64;
-    torch::Tensor gradient64;
+    torch::Tensor lambda64_chain;
+    torch::Tensor lambda64_in;
+    torch::Tensor lambda32_wrapper;
+    torch::Tensor wrapper_gradient64;
+    torch::Tensor direct_gradient64;
+    torch::Tensor reference_checkpoints64;
+    std::vector<torch::Tensor> endpoints64;
     torch::Tensor direction32;
     torch::Tensor terminal32;
     std::ofstream omega_binary;
     std::ofstream omega_csv;
-    std::size_t rss_step4 = 0;
+    std::size_t rss_window_step4 = 0;
 };
 RunState run;
 
@@ -72,11 +85,22 @@ std::size_t peak_rss_bytes() {
 int parse_mode(const std::string& value) {
     if (value == "baseline") return 0;
     if (value == "replay") return 1;
+    if (value == "prefix") return 3;
     if (value == "plus001" || value == "minus001" ||
         value == "plus003" || value == "minus003" ||
         value == "plus_0p01" || value == "minus_0p01" ||
         value == "plus_0p03" || value == "minus_0p03" || value == "fd") return 2;
-    throw std::runtime_error("mode must name baseline/replay or one of the four frozen FD runs");
+    throw std::runtime_error("mode must be baseline, replay, prefix, or one of the four frozen FD runs");
+}
+
+int parse_steps() {
+    const char* value = std::getenv("WRF_SDIRK3_NATIVE_TERMINAL_STEPS");
+    if (!value || !*value) return kSteps;
+    char* end = nullptr;
+    const long steps = std::strtol(value, &end, 10);
+    if (!end || *end || steps < kWindowSteps || steps > kSteps || steps % kWindowSteps != 0)
+        throw std::runtime_error("STEPS must be a multiple of 32 in [32,256]");
+    return static_cast<int>(steps);
 }
 
 float parse_eta(const std::string& value) {
@@ -101,6 +125,29 @@ void write_bytes(const std::string& path, const void* data, std::size_t bytes) {
     if (!out) throw std::runtime_error("cannot create " + path);
     out.write(static_cast<const char*>(data), static_cast<std::streamsize>(bytes));
     if (!out.good()) throw std::runtime_error("failed writing " + path);
+}
+
+std::vector<uint8_t> read_bytes(const std::string& path, std::size_t expected_size) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw std::runtime_error("cannot open " + path);
+    in.seekg(0, std::ios::end);
+    const auto size = in.tellg();
+    TORCH_CHECK(size >= 0 && static_cast<std::size_t>(size) == expected_size,
+                "wrong byte size for ", path, ": got ", size, " expected ", expected_size);
+    in.seekg(0, std::ios::beg);
+    std::vector<uint8_t> data(expected_size);
+    in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(expected_size));
+    TORCH_CHECK(in.good() || in.eof(), "failed reading ", path);
+    return data;
+}
+
+bool bitwise_equal(const torch::Tensor& left, const torch::Tensor& right) {
+    if (!left.defined() || !right.defined() || left.sizes() != right.sizes() ||
+        left.scalar_type() != right.scalar_type()) return false;
+    const auto a = left.detach().to(torch::kCPU).contiguous();
+    const auto b = right.detach().to(torch::kCPU).contiguous();
+    return a.nbytes() == b.nbytes() &&
+        std::memcmp(a.const_data_ptr(), b.const_data_ptr(), static_cast<std::size_t>(a.nbytes())) == 0;
 }
 
 void write_tensor(const std::string& path, const torch::Tensor& value, torch::ScalarType dtype) {
@@ -265,7 +312,7 @@ void capture_gradient64(const torch::Tensor& gradient) {
                 "native terminal FP64 gradient is invalid");
     TORCH_CHECK(peak_rss_bytes() <= kMemoryCapBytes,
                 "peak RSS exceeded the 18 GiB cap during reverse");
-    run.gradient64 = gradient.detach().to(torch::kCPU, torch::kFloat64).contiguous().clone();
+    run.wrapper_gradient64 = gradient.detach().to(torch::kCPU, torch::kFloat64).contiguous().clone();
 }
 
 void capture_theta_omega(const torch::Tensor& omega) {
@@ -314,20 +361,29 @@ void capture_theta_omega(const torch::Tensor& omega) {
 extern "C" int sdirk3_native_terminal_prepare(
     float* packed_x0, int n, int nx, int ny, int nz,
     int nx_u, int ny_v, int nz_w, float* direction_out,
-    float* terminal_out, int* mode_out) {
+    float* terminal_out, float* lambda_wrapper_out,
+    int* mode_out, int* expected_steps_out) {
     try {
-        TORCH_CHECK(packed_x0 && direction_out && terminal_out && mode_out,
+        TORCH_CHECK(packed_x0 && direction_out && terminal_out && lambda_wrapper_out &&
+                    mode_out && expected_steps_out,
                     "null native terminal prepare buffer");
         TORCH_CHECK(nx == 17 && ny == 17 && nz == 16 && nx_u == 18 &&
                     ny_v == 18 && nz_w == 17 && n == 24531,
                     "native terminal probe expects the registered 17x17x16 tile layout");
         const auto mode_name = required_env("WRF_SDIRK3_NATIVE_TERMINAL_MODE");
         const int mode = parse_mode(mode_name);
+        const int expected_steps = parse_steps();
         const float eta = parse_eta(required_env("WRF_SDIRK3_NATIVE_TERMINAL_ETA"));
-        if ((mode < 2 && eta != 0.0f) ||
+        if ((mode != 2 && eta != 0.0f) ||
             (mode == 2 && eta != 0.01f && eta != -0.01f && eta != 0.03f && eta != -0.03f))
             throw std::runtime_error("mode/eta is outside the frozen baseline/replay/±.01/±.03 set");
         const std::string prefix = required_env("WRF_SDIRK3_NATIVE_TERMINAL_OUT");
+        const std::string chain_name = mode == 3 ? required_env("WRF_SDIRK3_NATIVE_TERMINAL_CHAIN") : mode_name;
+        TORCH_CHECK(mode == 3 || expected_steps == kSteps,
+                    "only prefix mode may shorten the frozen timestep horizon");
+        TORCH_CHECK(mode != 3 || (expected_steps < kSteps &&
+                    (chain_name == "baseline" || chain_name == "replay")),
+                    "prefix mode requires baseline/replay chain and a shortened horizon");
 
         auto x0 = torch::from_blob(packed_x0, {n}, torch::TensorOptions().dtype(torch::kFloat32)
                                                     .device(torch::kCPU)).clone();
@@ -338,9 +394,40 @@ extern "C" int sdirk3_native_terminal_prepare(
                     "StateLayout disagrees with Fortran pack");
         auto direction = torch::zeros({n}, torch::kFloat32);
         auto terminal = torch::zeros({n}, torch::kFloat32);
+        auto lambda_wrapper = torch::zeros({n}, torch::kFloat32);
         std::array<double, 6> scales{};
         make_direction(layout, nx, ny, nz, nx_u, ny_v, nz_w, x0, direction, scales);
         make_terminal(layout, nx, ny, nz_w, terminal);
+
+        torch::Tensor lambda64_chain = terminal.to(torch::kFloat64);
+        torch::Tensor reference;
+        std::string reference_path;
+        int initial_reference_matches = 0;
+        if (mode == 3) {
+            const auto f64_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA64_IN");
+            const auto f32_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA32_IN");
+            const auto f64_bytes = read_bytes(f64_path, static_cast<std::size_t>(n) * sizeof(double));
+            const auto f32_bytes = read_bytes(f32_path, static_cast<std::size_t>(n) * sizeof(float));
+            lambda64_chain = torch::from_blob(f64_bytes.data(), {n},
+                torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
+            lambda_wrapper = torch::from_blob(f32_bytes.data(), {n},
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)).clone();
+        }
+        if (mode == 1 || mode == 3) {
+            reference_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_REFERENCE");
+            const auto reference_bytes = read_bytes(reference_path,
+                static_cast<std::size_t>(kSteps + 1) * n * sizeof(double));
+            reference = torch::from_blob(reference_bytes.data(),
+                {kSteps + 1, n}, torch::TensorOptions().dtype(torch::kFloat64)
+                                      .device(torch::kCPU)).clone();
+            TORCH_CHECK(bitwise_equal(x0.to(torch::kFloat64),
+                                      reference[0]),
+                        "replay/prefix initial state differs from baseline reference seed");
+            initial_reference_matches = 1;
+        }
+        if (mode != 3) {
+            lambda_wrapper.copy_(terminal);
+        }
 
         auto seed64 = eta == 0.0f
             ? x0.to(torch::kFloat64)
@@ -348,6 +435,7 @@ extern "C" int sdirk3_native_terminal_prepare(
         auto publication = seed64.to(torch::kFloat32).contiguous();
         auto dcontig = direction.contiguous();
         auto lcontig = terminal.contiguous();
+        auto lincontig = lambda_wrapper.contiguous();
 
         std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
         auto& solver = unique_solver_locked();
@@ -357,22 +445,35 @@ extern "C" int sdirk3_native_terminal_prepare(
                     wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint,
                     "native terminal case requires FP64 carry and retained graph from test namelist");
         solver.cancelFixedTrajectoryRequest();
-        solver.requestFixedTrajectory(kSteps, std::vector<float>(kSteps, 0.9375f), seed64);
+        solver.requestFixedTrajectory(kWindowSteps,
+            std::vector<float>(kWindowSteps, 0.9375f), seed64);
 
         std::copy(publication.data_ptr<float>(), publication.data_ptr<float>() + n, packed_x0);
         std::copy(dcontig.data_ptr<float>(), dcontig.data_ptr<float>() + n, direction_out);
         std::copy(lcontig.data_ptr<float>(), lcontig.data_ptr<float>() + n, terminal_out);
+        std::copy(lincontig.data_ptr<float>(), lincontig.data_ptr<float>() + n, lambda_wrapper_out);
 
         {
             std::lock_guard<std::mutex> lock(run.mutex);
             TORCH_CHECK(!run.prepared, "native terminal support file reused in one process");
             run.mode_name = mode_name;
+            run.chain_name = chain_name;
             run.output_prefix = prefix;
             run.mode = mode;
+            run.expected_steps = expected_steps;
             run.eta = eta;
             run.nx = nx; run.ny = ny; run.nz = nz;
             run.nx_u = nx_u; run.ny_v = ny_v; run.nz_w = nz_w;
             run.initial_seed64 = seed64.detach().clone();
+            run.endpoints64.clear();
+            run.endpoints64.push_back(seed64.detach().clone());
+            run.lambda64_chain = lambda64_chain.detach().clone();
+            run.lambda64_in = lambda64_chain.detach().clone();
+            run.lambda32_wrapper = lambda_wrapper.detach().clone();
+            run.reference_checkpoints64 = reference;
+            run.reference_path = reference_path;
+            run.reference_match_count = initial_reference_matches;
+            run.window_start_step = 0;
             run.direction32 = direction.detach().clone();
             run.terminal32 = terminal.detach().clone();
             run.prepared = true;
@@ -383,6 +484,7 @@ extern "C" int sdirk3_native_terminal_prepare(
             run.omega_csv << "host_step,ordinal,shape_j,shape_k,shape_i,k_first,k_last,positive,negative,zero,min_abs\n";
         }
         *mode_out = mode;
+        *expected_steps_out = expected_steps;
         write_tensor(prefix + ".x0_published_f32.bin", publication, torch::kFloat32);
         write_tensor(prefix + ".x0_internal_f64.bin", seed64, torch::kFloat64);
         write_tensor(prefix + ".direction_f32.bin", direction, torch::kFloat32);
@@ -392,10 +494,12 @@ extern "C" int sdirk3_native_terminal_prepare(
             TORCH_CHECK(meta, "cannot create prepare metadata");
             meta << std::setprecision(17) << "{\n"
                  << "  \"mode\": \"" << mode_name << "\",\n"
+                 << "  \"chain\": \"" << chain_name << "\",\n"
+                 << "  \"expected_steps\": " << expected_steps << ",\n"
                  << "  \"eta\": " << eta << ",\n"
                  << "  \"packed_size\": " << n << ",\n"
                  << "  \"dims\": [17,17,16,18,18,17],\n"
-                 << "  \"steps\": 256,\n"
+                 << "  \"steps\": " << expected_steps << ",\n"
                  << "  \"dt_seconds\": 0.9375,\n"
                  << "  \"terminal\": \"normalized W physical owners, scale 0.001, FP32 cotangent\",\n"
                  << "  \"input_scales\": [";
@@ -419,7 +523,7 @@ extern "C" int sdirk3_native_terminal_before_step(int host_step) {
         std::lock_guard<std::mutex> lock(run.mutex);
         TORCH_CHECK(run.prepared && run.forward_active,
                     "native terminal before_step outside active forward");
-        TORCH_CHECK(host_step == run.host_step + 1 && host_step <= kSteps,
+        TORCH_CHECK(host_step == run.host_step + 1 && host_step <= run.expected_steps,
                     "native terminal host timestep is not consecutive");
         run.host_step = host_step;
         run.omega_ordinal = 0;
@@ -435,18 +539,22 @@ extern "C" int sdirk3_native_terminal_after_step(int host_step) {
         std::lock_guard<std::mutex> lock(run.mutex);
         TORCH_CHECK(run.prepared && run.forward_active && host_step == run.host_step,
                     "native terminal after_step does not match the completed host step");
-        if (host_step == 1 || host_step == 2 || host_step == 4 || host_step == 8 ||
-            host_step % 16 == 0) {
+        const int window_step = host_step - run.window_start_step;
+        TORCH_CHECK(window_step >= 1 && window_step <= kWindowSteps,
+                    "native terminal completed step is outside its 32-step window");
+        if (window_step == 1 || window_step == 2 || window_step == 4 || window_step == 8 ||
+            window_step == 16 || window_step == kWindowSteps) {
             const auto rss = peak_rss_bytes();
             TORCH_CHECK(rss <= kMemoryCapBytes, "peak RSS exceeded the 18 GiB cap");
             std::cerr << "NATIVE_TERMINAL_PROGRESS step=" << host_step
+                      << " window_step=" << window_step
                       << " peak_rss_bytes=" << rss << '\n';
-            if (host_step == 4) run.rss_step4 = rss;
-            if (host_step == 8) {
-                TORCH_CHECK(run.rss_step4 > 0, "missing step-4 RSS sample");
+            if (window_step == 4) run.rss_window_step4 = rss;
+            if (window_step == 8) {
+                TORCH_CHECK(run.rss_window_step4 > 0, "missing window-step-4 RSS sample");
                 const double growth_per_step =
-                    std::max(0.0, static_cast<double>(rss) - run.rss_step4) / 4.0;
-                const double projected = rss + 1.5 * growth_per_step * (kSteps - host_step);
+                    std::max(0.0, static_cast<double>(rss) - run.rss_window_step4) / 4.0;
+                const double projected = rss + 1.5 * growth_per_step * (kWindowSteps - window_step);
                 std::cerr << "NATIVE_TERMINAL_MEMORY_ESTIMATE step=8 projected_peak_bytes="
                           << std::fixed << std::setprecision(0) << projected << std::defaultfloat << '\n';
                 TORCH_CHECK(projected <= static_cast<double>(kMemoryCapBytes),
@@ -460,73 +568,135 @@ extern "C" int sdirk3_native_terminal_after_step(int host_step) {
     }
 }
 
-extern "C" int sdirk3_native_terminal_record_endpoint(const float* packed_terminal, int n) {
+extern "C" int sdirk3_native_terminal_record_endpoint(
+    const float* packed_terminal, int n, int host_step) {
     try {
         std::lock_guard<std::mutex> run_lock(run.mutex);
-        TORCH_CHECK(packed_terminal && n == 24531 && run.prepared && run.forward_active && run.host_step == kSteps,
-                    "terminal endpoint requested before all 256 accepted host steps");
-        run.forward_active = false;
-        run.omega_binary.flush(); run.omega_csv.flush();
-        TORCH_CHECK(run.omega_binary.good() && run.omega_csv.good(), "Omega trace write failed");
+        TORCH_CHECK(packed_terminal && n == 24531 && run.prepared && run.forward_active &&
+                    host_step == run.host_step && host_step > 0 &&
+                    host_step % kWindowSteps == 0 && host_step <= run.expected_steps &&
+                    host_step - run.window_start_step == kWindowSteps,
+                    "native terminal endpoint is not a complete 32-step window");
 
         std::vector<torch::Tensor> checkpoints;
         {
             std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
             auto& solver = unique_solver_locked();
             checkpoints = solver.getFixedTrajectoryFp64Checkpoints();
-            TORCH_CHECK(checkpoints.size() == kSteps,
-                        "fixed trajectory did not retain all 256 endpoint states");
+            TORCH_CHECK(checkpoints.size() == kWindowSteps,
+                        "fixed trajectory did not retain exactly 32 endpoint states");
         }
         TORCH_CHECK(!checkpoints.empty(), "native terminal trajectory has no endpoints");
-        std::vector<double> all;
-        all.reserve(static_cast<std::size_t>(kSteps + 1) * 24531);
-        auto seed = run.initial_seed64.to(torch::kCPU, torch::kFloat64).contiguous();
-        const double* seed_ptr = seed.data_ptr<double>();
-        all.insert(all.end(), seed_ptr, seed_ptr + seed.numel());
         for (const auto& checkpoint : checkpoints) {
             TORCH_CHECK(checkpoint.scalar_type() == torch::kFloat64 &&
                         checkpoint.numel() == 24531 &&
                         torch::isfinite(checkpoint).all().item<bool>(),
                         "invalid retained FP64 checkpoint");
             auto c = checkpoint.to(torch::kCPU, torch::kFloat64).contiguous();
-            const double* p = c.data_ptr<double>();
-            all.insert(all.end(), p, p + c.numel());
+            const int absolute_endpoint = run.endpoints64.size();
+            if (run.mode == 1 || run.mode == 3) {
+                TORCH_CHECK(run.reference_checkpoints64.defined() && absolute_endpoint <= host_step,
+                            "prefix has no baseline endpoint reference");
+                TORCH_CHECK(bitwise_equal(c, run.reference_checkpoints64[absolute_endpoint]),
+                            "prefix endpoint differs from the full baseline before pullback at step ",
+                            absolute_endpoint);
+                ++run.reference_match_count;
+            }
+            run.endpoints64.push_back(c.detach().clone());
         }
+        TORCH_CHECK(run.endpoints64.size() == static_cast<std::size_t>(host_step + 1),
+                    "native endpoint ledger is not contiguous");
         TORCH_CHECK(peak_rss_bytes() <= kMemoryCapBytes,
                     "peak RSS exceeded the 18 GiB cap while copying retained endpoints");
-        auto terminal_state64 = checkpoints.back().to(torch::kCPU, torch::kFloat64).contiguous();
-        auto lambda64 = run.terminal32.to(torch::kFloat64);
-        const double objective = torch::dot(terminal_state64, lambda64).item<double>();
-        TORCH_CHECK(std::isfinite(objective), "non-finite terminal objective");
+        auto terminal_state64 = run.endpoints64.back().to(torch::kCPU, torch::kFloat64).contiguous();
+        const double local_terminal_c_dot = torch::dot(
+            terminal_state64, run.terminal32.to(torch::kFloat64)).item<double>();
+        TORCH_CHECK(std::isfinite(local_terminal_c_dot), "non-finite terminal linear diagnostic");
         auto published = torch::from_blob(const_cast<float*>(packed_terminal), {n},
             torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)).clone();
         const auto expected_published = terminal_state64.to(torch::kFloat32).contiguous();
         TORCH_CHECK(torch::equal(published, expected_published),
                     "Fortran endpoint publication differs from FP64 checkpoint cast");
-        write_bytes(run.output_prefix + ".checkpoints_f64.bin", all.data(), all.size() * sizeof(double));
-        write_tensor(run.output_prefix + ".terminal_state_f64.bin", terminal_state64, torch::kFloat64);
-        write_tensor(run.output_prefix + ".terminal_state_published_f32.bin", published, torch::kFloat32);
+        if (host_step == run.expected_steps) {
+            run.forward_active = false;
+            run.omega_binary.flush(); run.omega_csv.flush();
+            TORCH_CHECK(run.omega_binary.good() && run.omega_csv.good(), "Omega trace write failed");
+            std::vector<double> all;
+            all.reserve(run.endpoints64.size() * static_cast<std::size_t>(n));
+            for (const auto& state : run.endpoints64) {
+                const auto c = state.to(torch::kCPU, torch::kFloat64).contiguous();
+                const double* data = c.data_ptr<double>();
+                all.insert(all.end(), data, data + c.numel());
+            }
+            const uint64_t actual_prefix_hash = fnv1a64(all.data(), all.size() * sizeof(double));
+            uint64_t reference_prefix_hash = 0;
+            if (run.mode == 1 || run.mode == 3) {
+                auto reference_prefix = run.reference_checkpoints64
+                    .slice(0, 0, host_step + 1).contiguous();
+                reference_prefix_hash = fnv1a64(reference_prefix.data_ptr<double>(),
+                    static_cast<std::size_t>(reference_prefix.numel()) * sizeof(double));
+                TORCH_CHECK(run.reference_match_count == host_step + 1 &&
+                            actual_prefix_hash == reference_prefix_hash,
+                            "endpoint reference count/hash mismatch before any VJP");
+            }
+            write_bytes(run.output_prefix + ".checkpoints_f64.bin", all.data(), all.size() * sizeof(double));
+            write_tensor(run.output_prefix + ".terminal_state_f64.bin", terminal_state64, torch::kFloat64);
+            write_tensor(run.output_prefix + ".terminal_state_published_f32.bin", published, torch::kFloat32);
+            {
+                std::ofstream endpoint_meta(run.output_prefix + ".endpoint.json", std::ios::trunc);
+                TORCH_CHECK(endpoint_meta, "cannot create final endpoint metadata");
+                endpoint_meta << std::setprecision(17) << "{\n"
+                    << "  \"mode\": \"" << run.mode_name << "\",\n"
+                    << "  \"chain\": \"" << run.chain_name << "\",\n"
+                    << "  \"eta\": " << run.eta << ",\n"
+                    << "  \"host_steps\": " << host_step << ",\n"
+                    << "  \"expected_steps\": " << run.expected_steps << ",\n"
+                    << "  \"endpoint_count_including_seed\": " << run.endpoints64.size() << ",\n"
+                    << "  \"objective_is_registered_terminal\": " <<
+                        (run.mode == 3 ? "false" : "true") << ",\n"
+                    << "  \"objective\": ";
+                if (run.mode == 3) endpoint_meta << "null";
+                else endpoint_meta << local_terminal_c_dot;
+                endpoint_meta << ",\n  \"local_terminal_c_dot\": " << local_terminal_c_dot << ",\n"
+                    << "  \"reference_path\": \"" << run.reference_path << "\",\n"
+                    << "  \"reference_checkpoints_expected\": "
+                    << ((run.mode == 1 || run.mode == 3) ? host_step + 1 : 0) << ",\n"
+                    << "  \"reference_checkpoints_matched\": " << run.reference_match_count << ",\n"
+                    << "  \"endpoint_reference_exact\": "
+                    << ((run.mode == 1 || run.mode == 3) ? "true" : "null") << ",\n"
+                    << "  \"actual_prefix_fnv1a64\": \"" << std::hex << actual_prefix_hash << "\",\n"
+                    << "  \"reference_prefix_fnv1a64\": \"" << reference_prefix_hash << std::dec << "\",\n"
+                    << "  \"peak_rss_bytes\": " << peak_rss_bytes() << "\n}\n";
+            }
+        }
         {
-            std::ofstream meta(run.output_prefix + ".endpoint.json", std::ios::trunc);
+            std::ofstream meta(run.output_prefix + ".window_" + std::to_string(host_step) + ".json",
+                               std::ios::trunc);
             TORCH_CHECK(meta, "cannot create endpoint metadata");
             meta << std::setprecision(17) << "{\n"
                  << "  \"mode\": \"" << run.mode_name << "\",\n"
+                 << "  \"chain\": \"" << run.chain_name << "\",\n"
                  << "  \"eta\": " << run.eta << ",\n"
-                 << "  \"host_steps\": " << run.host_step << ",\n"
-                 << "  \"endpoint_count_including_seed\": " << checkpoints.size() + 1 << ",\n"
-                 << "  \"objective\": " << objective << ",\n"
-                 << "  \"terminal_f64_fnv1a64\": \"" << std::hex
-                 << fnv1a64(terminal_state64.data_ptr<double>(),
-                            static_cast<std::size_t>(terminal_state64.numel()) * sizeof(double))
+                 << "  \"expected_steps\": " << run.expected_steps << ",\n"
+                 << "  \"window_start\": " << (host_step - kWindowSteps) << ",\n"
+                 << "  \"window_end\": " << host_step << ",\n"
+                 << "  \"window_endpoint_count\": " << checkpoints.size() << ",\n"
+                 << "  \"local_terminal_c_dot\": " << local_terminal_c_dot << ",\n"
+                 << "  \"reference_checkpoints_expected\": " <<
+                    ((run.mode == 1 || run.mode == 3) ? host_step + 1 : 0) << ",\n"
+                 << "  \"reference_checkpoints_matched\": " << run.reference_match_count << ",\n"
+                 << "  \"endpoint_reference_exact\": " <<
+                    ((run.mode == 1 || run.mode == 3) ? "true" : "null") << ",\n"
+                 << "  \"window_endpoint_f64_fnv1a64\": \"" << std::hex
+                 << fnv1a64(checkpoints.back().to(torch::kCPU, torch::kFloat64).contiguous().data_ptr<double>(),
+                           static_cast<std::size_t>(n) * sizeof(double))
                  << std::dec << "\",\n"
-                 << "  \"trajectory_f64_fnv1a64\": \"" << std::hex
-                 << fnv1a64(all.data(), all.size() * sizeof(double)) << std::dec << "\",\n"
                  << "  \"peak_rss_bytes\": " << peak_rss_bytes() << "\n}\n";
         }
-        run.endpoint_recorded = true;
-        std::cerr << "NATIVE_TERMINAL_ENDPOINT mode=" << run.mode_name
-                  << " objective=" << std::setprecision(17) << objective
-                  << " endpoints=" << checkpoints.size() + 1
+        if (host_step == run.expected_steps) run.endpoint_recorded = true;
+        std::cerr << "NATIVE_TERMINAL_WINDOW mode=" << run.mode_name
+                  << " end_step=" << host_step
+                  << " local_terminal_c_dot=" << std::setprecision(17) << local_terminal_c_dot
                   << " peak_rss_bytes=" << peak_rss_bytes() << '\n';
         return 1;
     } catch (const std::exception& e) {
@@ -535,11 +705,57 @@ extern "C" int sdirk3_native_terminal_record_endpoint(const float* packed_termin
     }
 }
 
+extern "C" int sdirk3_native_terminal_rearm_window() {
+    try {
+        std::lock_guard<std::mutex> run_lock(run.mutex);
+        TORCH_CHECK(run.prepared && run.forward_active && run.host_step < run.expected_steps &&
+                    run.host_step % kWindowSteps == 0 &&
+                    run.endpoints64.size() == static_cast<std::size_t>(run.host_step + 1),
+                    "rearm requested outside a completed forward window");
+        std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
+        auto& solver = unique_solver_locked();
+        TORCH_CHECK(solver.fixedTrajectoryRequested(), "Fortran did not request the next trajectory window");
+        solver.cancelFixedTrajectoryRequest();
+        solver.requestFixedTrajectory(kWindowSteps,
+            std::vector<float>(kWindowSteps,0.9375f), run.endpoints64.back());
+        run.window_start_step = run.host_step;
+        run.rss_window_step4 = 0;
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "NATIVE_TERMINAL_REARM_ERROR: " << e.what() << '\n';
+        return 0;
+    }
+}
+
+extern "C" int sdirk3_native_terminal_pullback64(double* lambda_initial, int n) {
+    try {
+        TORCH_CHECK(lambda_initial && n == 24531 && run.prepared && run.endpoint_recorded &&
+                    !run.forward_active && run.lambda64_chain.defined(),
+                    "invalid exact FP64 chain pullback request");
+        std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
+        auto& solver = unique_solver_locked();
+        run.lambda64_in = run.lambda64_chain.detach().clone();
+        auto gradient = solver.pullbackFixedTrajectory(run.lambda64_chain)
+                            .detach().to(torch::kCPU, torch::kFloat64).contiguous();
+        TORCH_CHECK(gradient.numel() == n && torch::isfinite(gradient).all().item<bool>(),
+                    "exact FP64 window pullback is invalid");
+        std::copy(gradient.data_ptr<double>(), gradient.data_ptr<double>() + n, lambda_initial);
+        run.direct_gradient64 = gradient.clone();
+        run.lambda64_chain = gradient.clone();
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "NATIVE_TERMINAL_VJP64_ERROR: " << e.what() << '\n';
+        return 0;
+    }
+}
+
 extern "C" int sdirk3_native_terminal_finish(
     const float* direction, const float* terminal,
-    const float* initial_gradient_f32, int n, int mode, int have_gradient) {
+    const float* initial_gradient_f32, const double* lambda_initial_f64,
+    int n, int mode, int have_gradient) {
     try {
-        TORCH_CHECK(direction && terminal && n == 24531,
+        TORCH_CHECK(direction && terminal && initial_gradient_f32 &&
+                    lambda_initial_f64 && n == 24531,
                     "invalid native terminal finish arguments");
         std::lock_guard<std::mutex> lock(run.mutex);
         TORCH_CHECK(run.prepared && run.endpoint_recorded && !run.forward_active && mode == run.mode,
@@ -547,48 +763,78 @@ extern "C" int sdirk3_native_terminal_finish(
         const auto f32_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
         auto d32 = torch::from_blob(const_cast<float*>(direction), {n}, f32_options).clone();
         auto l32 = torch::from_blob(const_cast<float*>(terminal), {n}, f32_options).clone();
+        auto g32 = torch::from_blob(const_cast<float*>(initial_gradient_f32), {n}, f32_options).clone();
+        auto g64 = torch::from_blob(const_cast<double*>(lambda_initial_f64), {n},
+            torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
         auto d = d32.to(torch::kFloat64);
-        auto l = l32.to(torch::kFloat64);
-        write_tensor(run.output_prefix + ".direction_f32.bin", d, torch::kFloat32);
-        write_tensor(run.output_prefix + ".terminal_f32.bin", l, torch::kFloat32);
+        const bool vjp_expected = run.mode != 2;
+        TORCH_CHECK(have_gradient == (vjp_expected ? 1 : 0),
+                    "Fortran wrapper pullback gate disagrees with run role");
+        TORCH_CHECK(run.lambda64_in.defined() && run.lambda32_wrapper.defined(),
+                    "run has no incoming cotangent");
+        write_tensor(run.output_prefix + ".direction_f32.bin", d32, torch::kFloat32);
+        write_tensor(run.output_prefix + ".terminal_f32.bin", l32, torch::kFloat32);
         double directional64 = std::numeric_limits<double>::quiet_NaN();
         double directional32 = std::numeric_limits<double>::quiet_NaN();
-        if (run.mode < 2) {
-            TORCH_CHECK(have_gradient == 1, "baseline/replay did not request checked pullback");
-            TORCH_CHECK(initial_gradient_f32 && run.gradient64.defined(),
-                        "baseline/replay missing checked FP32 or captured FP64 pullback");
-            auto g32 = torch::from_blob(const_cast<float*>(initial_gradient_f32), {n}, torch::kFloat32).clone();
-            TORCH_CHECK(torch::isfinite(g32).all().item<bool>(), "Fortran pullback contains non-finite values");
-            auto g64 = run.gradient64;
-            TORCH_CHECK(g64.numel() == n && torch::isfinite(g64).all().item<bool>(),
-                        "captured FP64 pullback is invalid");
-            TORCH_CHECK(torch::equal(g32, g64.to(torch::kFloat32).contiguous()),
-                        "Fortran FP32 pullback differs from captured FP64 gradient cast");
+        bool wrapper_cast_equal = false;
+        if (vjp_expected) {
+            TORCH_CHECK(torch::isfinite(g32).all().item<bool>() &&
+                        torch::isfinite(g64).all().item<bool>() &&
+                        run.direct_gradient64.defined() &&
+                        bitwise_equal(g64, run.direct_gradient64) &&
+                        run.wrapper_gradient64.defined() &&
+                        torch::isfinite(run.wrapper_gradient64).all().item<bool>(),
+                        "one of the native terminal cotangents/pullbacks is non-finite");
+            wrapper_cast_equal = bitwise_equal(g32,
+                run.wrapper_gradient64.to(torch::kFloat32).contiguous());
+            TORCH_CHECK(wrapper_cast_equal,
+                        "Fortran FP32 pullback differs bytewise from captured wrapper FP64 cast");
             directional64 = torch::dot(d, g64).item<double>();
             directional32 = torch::dot(d, g32.to(torch::kFloat64)).item<double>();
+            write_tensor(run.output_prefix + ".lambda_in_f64.bin", run.lambda64_in, torch::kFloat64);
+            write_tensor(run.output_prefix + ".lambda_in_f32.bin", run.lambda32_wrapper, torch::kFloat32);
+            write_tensor(run.output_prefix + ".gradient_f64.bin", g64, torch::kFloat64);
+            write_tensor(run.output_prefix + ".gradient_f32.bin", g32, torch::kFloat32);
+            write_tensor(run.output_prefix + ".wrapper_gradient_f64.bin",
+                         run.wrapper_gradient64, torch::kFloat64);
+            // Keep v2 aliases for the primary-case consumer; these have the same dtype and content.
             write_tensor(run.output_prefix + ".gradient64.bin", g64, torch::kFloat64);
             write_tensor(run.output_prefix + ".gradient32.bin", g32, torch::kFloat32);
+            write_tensor(run.output_prefix + ".lambda_out_f64.bin", g64, torch::kFloat64);
+            write_tensor(run.output_prefix + ".lambda_out_f32.bin", g32, torch::kFloat32);
         } else {
-            TORCH_CHECK(have_gradient == 0, "FD run unexpectedly requested a pullback");
+            TORCH_CHECK(run.mode == 2, "unexpected non-VJP run mode");
         }
+        TORCH_CHECK(peak_rss_bytes() <= kMemoryCapBytes,
+                    "peak RSS exceeded the 18 GiB cap during finalization");
         {
             std::ofstream meta(run.output_prefix + ".result.json", std::ios::trunc);
             TORCH_CHECK(meta, "cannot create result metadata");
             meta << std::setprecision(17) << "{\n"
                  << "  \"mode\": \"" << run.mode_name << "\",\n"
+                 << "  \"chain\": \"" << run.chain_name << "\",\n"
                  << "  \"eta\": " << run.eta << ",\n"
-                 << "  \"steps\": 256,\n"
-                 << "  \"pullback_checked_by_fortran\": " << (run.mode < 2 ? "true" : "false") << ",\n"
+                 << "  \"expected_steps\": " << run.expected_steps << ",\n"
+                 << "  \"gradient_control_step\": " << (run.expected_steps - kWindowSteps) << ",\n"
+                 << "  \"pullback_checked_by_fortran\": " << (vjp_expected ? "true" : "false") << ",\n"
+                 << "  \"wrapper_gradient_f32_equals_cast_f64\": "
+                 << (wrapper_cast_equal ? "true" : (vjp_expected ? "false" : "null")) << ",\n"
+                 << "  \"reference_checkpoints_expected\": "
+                 << ((run.mode == 1 || run.mode == 3) ? run.expected_steps + 1 : 0) << ",\n"
+                 << "  \"reference_checkpoints_matched\": " << run.reference_match_count << ",\n"
+                 << "  \"endpoint_reference_exact\": "
+                 << ((run.mode == 1 || run.mode == 3) ? "true" : "null") << ",\n"
                  << "  \"directional_vjp_f64\": ";
-            if (run.mode < 2) meta << directional64;
+            if (vjp_expected && run.expected_steps == kWindowSteps) meta << directional64;
             else meta << "null";
             meta << ",\n  \"directional_vjp_f32_abi\": ";
-            if (run.mode < 2) meta << directional32;
+            if (vjp_expected && run.expected_steps == kWindowSteps) meta << directional32;
             else meta << "null";
             meta << ",\n"
                  << "  \"peak_rss_bytes\": " << peak_rss_bytes() << "\n}\n";
         }
         std::cerr << "NATIVE_TERMINAL_FINISH mode=" << run.mode_name
+                  << " expected_steps=" << run.expected_steps
                   << " directional_vjp_f64=" << directional64
                   << " directional_vjp_f32_abi=" << directional32 << '\n';
         run.prepared = false;
