@@ -47,6 +47,8 @@ struct RunState {
     int host_step = 0;
     int window_start_step = 0;
     int reference_match_count = 0;
+    int control_input64_calls = 0;
+    int warm_capture_count = 0;
     int omega_ordinal = 0;
     int nx = 0, ny = 0, nz = 0, nx_u = 0, ny_v = 0, nz_w = 0;
     bool prepared = false;
@@ -54,6 +56,7 @@ struct RunState {
     bool warm_forward = false;
     bool endpoint_recorded = false;
     bool suffix_seed_matched = false;
+    bool initial_control_seed_applied = false;
     torch::Tensor initial_seed64;
     torch::Tensor lambda64_chain;
     torch::Tensor lambda64_in;
@@ -310,12 +313,14 @@ namespace wrf::sdirk3::native_terminal_test {
 torch::Tensor control_input64(const torch::Tensor& packed) {
     std::lock_guard<std::mutex> lock(run.mutex);
     if (!run.prepared || !run.forward_active) return packed;
+    ++run.control_input64_calls;
     TORCH_CHECK(packed.defined() && packed.numel() == 24531 && packed.is_cpu(),
                 "native terminal control input has an invalid packed tensor");
     if (run.warm_forward && run.host_step == 1) {
         auto published = run.initial_seed64.to(torch::kFloat32).contiguous();
         TORCH_CHECK(bitwise_equal(packed.to(torch::kFloat32).contiguous(), published),
                     "warm-forward initial FP32 publication differs from frozen FP64 seed");
+        run.initial_control_seed_applied = true;
         return run.initial_seed64;
     }
     if (!run.warm_forward && run.expected_steps > kWindowSteps &&
@@ -349,6 +354,7 @@ void capture_accepted_state(const torch::Tensor& state) {
         ++run.reference_match_count;
     }
     run.endpoints64.push_back(std::move(endpoint));
+    ++run.warm_capture_count;
 }
 
 void capture_gradient64(const torch::Tensor& gradient) {
@@ -553,6 +559,7 @@ extern "C" int sdirk3_native_terminal_prepare(
                  << "  \"expected_steps\": " << expected_steps << ",\n"
                  << "  \"warm_steps\": " << std::max(0, expected_steps - kWindowSteps) << ",\n"
                  << "  \"graph_start_step\": " << (expected_steps - kWindowSteps + 1) << ",\n"
+                 << "  \"warm_endpoint_capture_target\": " << std::max(0, expected_steps - kWindowSteps) << ",\n"
                  << "  \"warm_graph_flags\": \"retain_graph_for_adjoint=false,imex_slow_in_tangent=false\",\n"
                  << "  \"suffix_graph_flags\": \"retain_graph_for_adjoint=true,imex_slow_in_tangent=true\",\n"
                  << "  \"eta\": " << eta << ",\n"
@@ -651,6 +658,12 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                     host_step == run.expected_steps && !run.warm_forward &&
                     host_step - run.window_start_step == kWindowSteps,
                     "native terminal endpoint is not the final retained 32-step window");
+        TORCH_CHECK(run.expected_steps == kWindowSteps || run.suffix_seed_matched,
+                    "suffix FP64 seed was not byte-verified before retained steps");
+        TORCH_CHECK(run.control_input64_calls == run.expected_steps &&
+                    run.warm_capture_count == run.expected_steps - kWindowSteps &&
+                    run.initial_control_seed_applied == (run.expected_steps > kWindowSteps),
+                    "control/accepted-state hook counts do not match the warm-plus-suffix schedule");
 
         std::vector<torch::Tensor> checkpoints;
         {
@@ -727,6 +740,12 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                     << "  \"expected_steps\": " << run.expected_steps << ",\n"
                     << "  \"warm_steps\": " << (run.expected_steps - kWindowSteps) << ",\n"
                     << "  \"graph_start_step\": " << run.graph_start_step << ",\n"
+                    << "  \"suffix_seed_bitwise_match\": "
+                    << (run.expected_steps == kWindowSteps || run.suffix_seed_matched ? "true" : "false") << ",\n"
+                    << "  \"control_input64_calls\": " << run.control_input64_calls << ",\n"
+                    << "  \"initial_control_seed_applied\": "
+                    << (run.initial_control_seed_applied ? "true" : "false") << ",\n"
+                    << "  \"warm_endpoint_capture_count\": " << run.warm_capture_count << ",\n"
                     << "  \"endpoint_count_including_seed\": " << run.endpoints64.size() << ",\n"
                     << "  \"objective_is_registered_terminal\": " <<
                         (run.mode == 3 ? "false" : "true") << ",\n"
@@ -754,6 +773,10 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                  << "  \"chain\": \"" << run.chain_name << "\",\n"
                  << "  \"eta\": " << run.eta << ",\n"
                  << "  \"expected_steps\": " << run.expected_steps << ",\n"
+                 << "  \"warm_steps\": " << (run.expected_steps - kWindowSteps) << ",\n"
+                 << "  \"graph_start_step\": " << run.graph_start_step << ",\n"
+                 << "  \"suffix_seed_bitwise_match\": "
+                 << (run.expected_steps == kWindowSteps || run.suffix_seed_matched ? "true" : "false") << ",\n"
                  << "  \"window_start\": " << (host_step - kWindowSteps) << ",\n"
                  << "  \"window_end\": " << host_step << ",\n"
                  << "  \"window_endpoint_count\": " << checkpoints.size() << ",\n"
@@ -795,6 +818,8 @@ extern "C" int sdirk3_native_terminal_rearm_window() {
         wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint = true;
         wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent = true;
         solver.resetInternalFp64Carry();
+        write_tensor(run.output_prefix + ".suffix_seed_f64.bin",
+                     run.endpoints64.back(), torch::kFloat64);
         solver.requestFixedTrajectory(kWindowSteps,
             std::vector<float>(kWindowSteps,0.9375f), run.endpoints64.back());
         run.window_start_step = run.host_step;
@@ -897,6 +922,12 @@ extern "C" int sdirk3_native_terminal_finish(
                  << "  \"expected_steps\": " << run.expected_steps << ",\n"
                  << "  \"warm_steps\": " << (run.expected_steps - kWindowSteps) << ",\n"
                  << "  \"graph_start_step\": " << run.graph_start_step << ",\n"
+                 << "  \"suffix_seed_bitwise_match\": "
+                 << (run.expected_steps == kWindowSteps || run.suffix_seed_matched ? "true" : "false") << ",\n"
+                 << "  \"control_input64_calls\": " << run.control_input64_calls << ",\n"
+                 << "  \"initial_control_seed_applied\": "
+                 << (run.initial_control_seed_applied ? "true" : "false") << ",\n"
+                 << "  \"warm_endpoint_capture_count\": " << run.warm_capture_count << ",\n"
                  << "  \"gradient_control_step\": " << (run.expected_steps - kWindowSteps) << ",\n"
                  << "  \"pullback_checked_by_fortran\": " << (vjp_expected ? "true" : "false") << ",\n"
                  << "  \"wrapper_gradient_f32_equals_cast_f64\": "
