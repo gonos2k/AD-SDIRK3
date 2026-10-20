@@ -32931,6 +32931,20 @@ void TileSDIRK3UnifiedSolver::advanceZeroCopy(const wrf::sdirk3::ZeroCopyConfig&
                                                int rk_step, float dt) {
     // Zero-copy interface for SDIRK3 solver
 
+    // Validate every call, including compatibility stages, before publishing any
+    // caller-owned views. unifiedStep already completes the step at rk_step=1;
+    // later calls must preserve the RHS context retained for its pullback.
+    // Before any graph exists, legacy setup-only calls may publish the views.
+    validateCallGeometry(config.nx, config.ny, config.nz,
+                         config.nx_u, config.ny_v, config.nz_w);
+    if (rk_step != 1 &&
+        (fixed_trajectory_open_ || last_step_output_graph_.defined())) {
+        setLastStepOutcome(
+            static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_SKIPPED),
+            false, 0.0f, false);
+        return;
+    }
+
     // Store the SDIRK stage timestep for use in RHS computation (especially vertical diffusion)
     dt_stage_ = dt;
 
@@ -33767,16 +33781,6 @@ boundary_tensors_done:
         ; // OPT 2025-01-25: Label for spec_bdy_width==0 skip optimization
     }
 
-    // PER-CALL GEOMETRY VALIDATION (review rounds 3g/3h/3j — ONE contract).
-    // validateCallGeometry() is the single implementation: int64 arithmetic
-    // (no overflow UB), all six call dims positive/sane, stagger shape, init
-    // geometry itself valid (subsumes the old staggered-member corruption
-    // check; NO "uninitialized => allow" escape — a zero/negative base member
-    // previously disabled the equality check), and strict equality with init.
-    // The v2 ABI entry calls the same method BEFORE setWRFIndices; this call
-    // is defense in depth for any other entry path.
-    validateCallGeometry(config.nx, config.ny, config.nz,
-                         config.nx_u, config.ny_v, config.nz_w);
     auto safe_config = config;  // validated caller values, verbatim
 
 

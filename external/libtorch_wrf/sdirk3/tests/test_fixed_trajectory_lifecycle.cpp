@@ -98,6 +98,56 @@ static void config_mutation_rejects() {
   t.solver.closeFixedTrajectory();
   std::cout << "FIXED_TRAJECTORY_MUTATION_REJECT passed\n";
 }
+static void skipped_zero_copy_preserves_trajectory() {
+  auto& config = wrf::sdirk3::g_sdirk3_config;
+  config.kdamp = 0.2f;
+  TileCase t(100000.0f, 0.0f, true); t.set(x0());
+  const auto grid = t.solver.getGridInfo();
+  TORCH_CHECK(grid, "fixture has no grid context");
+  grid->kdamp = 0.2f;
+  t.solver.beginFixedTrajectory(2, {.1f, .1f});
+  t.step(.1f);
+
+  const auto before = t.state().clone();
+  const float kdamp = grid->kdamp, khdif = grid->khdif, kvdif = grid->kvdif;
+  wrf::sdirk3::ZeroCopyConfig compatibility{};
+  compatibility.nx = wrf::sdirk3::test::nx;
+  compatibility.ny = wrf::sdirk3::test::ny;
+  compatibility.nz = wrf::sdirk3::test::nz;
+  compatibility.nx_u = wrf::sdirk3::test::nu;
+  compatibility.ny_v = wrf::sdirk3::test::nv;
+  compatibility.nz_w = wrf::sdirk3::test::nw;
+
+  for (const int rk_step : {2, 3}) {
+    t.solver.advanceZeroCopy(compatibility, rk_step, .75f);
+    TORCH_CHECK(t.solver.getLastStepOutcomeCode() ==
+                    static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_SKIPPED),
+                "compatibility RK call was not recorded as skipped");
+    TORCH_CHECK(grid->kdamp == kdamp && grid->khdif == khdif && grid->kvdif == kvdif,
+                "skipped compatibility call changed GridInfo RHS coefficients");
+    TORCH_CHECK(torch::equal(t.state(), before),
+                "skipped compatibility call changed the packed state");
+  }
+
+  auto invalid = compatibility;
+  ++invalid.nx;
+  expect_rejected([&]{t.solver.advanceZeroCopy(invalid, 2, .75f);},
+                  "per-call geometry validation failed");
+  TORCH_CHECK(grid->kdamp == kdamp && grid->khdif == khdif && grid->kvdif == kvdif,
+              "invalid geometry changed GridInfo RHS coefficients");
+  TORCH_CHECK(torch::equal(t.state(), before),
+              "invalid geometry changed the packed state");
+
+  // A skipped RK call with a different dt must not consume or alter the tape's
+  // fixed .1 s schedule; the legitimate second native step and VJP still pass.
+  t.step(.1f);
+  const auto lambda = t.solver.pullbackFixedTrajectory(terminal());
+  TORCH_CHECK(lambda.defined() && torch::isfinite(lambda).all().item<bool>() &&
+              lambda.norm().item<double>() > 1e-8,
+              "compatibility RK call damaged the retained pullback");
+  t.solver.closeFixedTrajectory();
+  std::cout << "FIXED_TRAJECTORY_SKIPPED_ZERO_COPY_RK2_RK3 passed\n";
+}
 static void expect_rejected(const std::function<void()>& call, const char* message) {
   bool rejected=false;
   try { call(); }
@@ -313,5 +363,6 @@ int main() {
     configure(top_lid); run("constant_dt", timestep_mutation_rejects);
     configure(top_lid); run("nonuniform_dt", scheduled_timestep_record_accepts);
   }
+  configure(false); run("skipped_zero_copy", skipped_zero_copy_preserves_trajectory);
   return failures == 0 ? 0 : 1;
 }
