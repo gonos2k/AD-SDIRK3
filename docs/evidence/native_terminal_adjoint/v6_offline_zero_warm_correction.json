@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-21T02:18:16.647998+09:00",
+  "preserved_stop": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/v6_stop_offline_zero_warm_20261021021311.json",
+  "reason": "Only offline-reader schema: no warm suffix seed file exists for warm_steps=0; audit uses actual checkpoint0 and verifies x0_internal and all33 baseline endpoints, no raw file fabricated. All native calculations already completed, no model rerun or numeric criterion change.",
+  "final_case_gate": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v6_case_gates_final/baseline_prefix_032_gate.json",
+  "final_case_gate_sha256": "cd00cde4699ddc0f12a550f088e8ca505d73fec6b7ad90783e85027dde31f28b",
+  "final_analyzer_sha256": "e1ab7c2c115d99465f5dcfb9abc2d10860512025a09b4241ff020465528107cc",
+  "aggregate_sha256": "2da325ac2a49d20428f16461a8c5734d36c58e6e4f8f7c7d25f07f331cc335e3"
+}

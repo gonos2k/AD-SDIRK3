@@ -1,0 +1,175 @@
+{
+  "J_f64": [
+    -11.718318303682182,
+    -11.718318303682182,
+    -122.24746142001815,
+    98.80549138025435,
+    -343.32174763085965,
+    319.83709848266585
+  ],
+  "N": 24531,
+  "actual_eta_f32": [
+    0.0,
+    0.0,
+    0.009999999776482582,
+    -0.009999999776482582,
+    0.029999999329447746,
+    -0.029999999329447746
+  ],
+  "case_order": [
+    "baseline",
+    "replay",
+    "plus_0p01",
+    "minus_0p01",
+    "plus_0p03",
+    "minus_0p03"
+  ],
+  "checks": {
+    "all_outputs_equal_local_precast_cast": true,
+    "eight_block_fp32_chain": true,
+    "perturbed_seed_formula": true,
+    "zero_eta_bytecopy": true
+  },
+  "directional_vjp_chained_f32_promoted": -11052.647841641348,
+  "finite_difference": {
+    "central_width_agreement_relative_shared_signal": 1.852842958163774e-08,
+    "central_widths_agree_at_frozen_1_percent": true,
+    "classical_directional_derivative_status": "not_unresolved_by_frozen_one_sided_gap_rule",
+    "formula": "frozen v3 full_fd; actual float32 eta promoted to float64",
+    "one_sided_gap_over_1_percent_at_both_widths": false,
+    "relative_denominator": "max(abs(dFD),abs(dAD)); no floor",
+    "signal_floor_scale": "max(abs(Jplus),abs(Jminus),norm(lambda)*norm(ZN_baseline))",
+    "widths": {
+      "0p01": {
+        "J0": -11.718318303682182,
+        "J_minus": 98.80549138025435,
+        "J_plus": -122.24746142001815,
+        "central_agrees_with_vjp_at_frozen_1_percent": true,
+        "central_fd": -11052.647887059558,
+        "central_vs_vjp_relative_shared_signal": 4.1092605552111064e-09,
+        "directional_vjp_chained_f32_promoted": -11052.647841641348,
+        "eta_minus_actual": -0.009999999776482582,
+        "eta_plus_actual": 0.009999999776482582,
+        "one_sided_minus": -11052.381215433625,
+        "one_sided_plus": -11052.91455868549,
+        "one_sided_relative_gap": 4.8253630210722184e-05,
+        "signal_above_frozen_floor": true,
+        "signal_abs_Jplus_minus_Jminus": 221.05295280027252,
+        "signal_floor": 5.917330365791284e-06
+      },
+      "0p03": {
+        "J0": -11.718318303682182,
+        "J_minus": 319.83709848266585,
+        "J_plus": -343.32174763085965,
+        "central_agrees_with_vjp_at_frozen_1_percent": true,
+        "central_fd": -11052.64768227135,
+        "central_vs_vjp_relative_shared_signal": 1.4419169085678755e-08,
+        "directional_vjp_chained_f32_promoted": -11052.647841641348,
+        "eta_minus_actual": -0.029999999329447746,
+        "eta_plus_actual": 0.029999999329447746,
+        "one_sided_minus": -11051.847473239643,
+        "one_sided_plus": -11053.447891303062,
+        "one_sided_relative_gap": 0.00014478903588791307,
+        "signal_above_frozen_floor": true,
+        "signal_abs_Jplus_minus_Jminus": 663.1588461135254,
+        "signal_floor": 5.917330365791284e-06
+      }
+    }
+  },
+  "packet": {
+    "all_3N_stage_counts_verified": true,
+    "manifest_sha256": "4f47146ae7fd3dcfaa282d92d209eceb7572bf67729cfa2001ddff7689a5cff4",
+    "npz_sha256": "c642672fb329fa60be5b29bd105d0476bbbc16cb00eb872fb15b874d0d816c36",
+    "receipt_checkpoint_sha256": {
+      "baseline": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50",
+      "baseline_prefix_032": "e1cd536e5b0f5d19d90473edfcafc059dfe3b04a41a4cc1b1bc5ede26fe16095",
+      "baseline_prefix_064": "79acdd520a3bc63f69eaf6e514068059f97347caa32a61d8b0e6bb1f6e2416ec",
+      "baseline_prefix_096": "fca8701b8e447e89af980a4b7ed1ba2262752c1394d4bf60bd80a32d817f1f21",
+      "baseline_prefix_128": "4c5005ef8a24cf2713ec71784e90e6f67232c1c862668b5dce3e6c3a29eed272",
+      "baseline_prefix_160": "68d8ae43f05beee656cc58f44797ed98c461821dabf3f54771d636a3a3715cce",
+      "baseline_prefix_192": "2208e71a8c6c74642628aa6463f77aa56340a914f2cf6267d2f0205bfa2faa1c",
+      "baseline_prefix_224": "b181832610e5b6785ceda7c55f64841729a6711362b8d73693b25c75a5804b20",
+      "minus_0p01": "ef7568494046116e21affb00082a8dd3e35de818cc586e4887fe370b88933b6c",
+      "minus_0p03": "e7223bb439acae168c1a446d7e06f53e1884c74451401e6d9cc3558ef1c543ee",
+      "plus_0p01": "d334ee2aad1ed1dba279f9ac01257fe8322d0f59b463e0b7a1a3da8ac2173562",
+      "plus_0p03": "bd8217a47c17f619a4f071e6c0ef9d35e2f464aefb47803cadb3a705c46a16d2",
+      "replay": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+    },
+    "receipt_count": 13,
+    "receipt_pinned_replay_ledger_sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+  },
+  "per_block_local_narrowing": [
+    {
+      "block": 0,
+      "max_abs": 7.583210589245937e-06,
+      "relative_l2": 2.1724625319303738e-08,
+      "rms": 4.393590560312112e-07
+    },
+    {
+      "block": 1,
+      "max_abs": 3.0482532110909233e-05,
+      "relative_l2": 2.9062356200323358e-08,
+      "rms": 1.32208808779616e-06
+    },
+    {
+      "block": 2,
+      "max_abs": 1.5118828343929636e-05,
+      "relative_l2": 2.0764361965785318e-08,
+      "rms": 7.629676963691419e-07
+    },
+    {
+      "block": 3,
+      "max_abs": 3.81002406868447e-06,
+      "relative_l2": 2.4106638740084588e-08,
+      "rms": 2.8591534257509646e-07
+    },
+    {
+      "block": 4,
+      "max_abs": 3.811210589788061e-06,
+      "relative_l2": 2.376464256932065e-08,
+      "rms": 2.553859861853351e-07
+    },
+    {
+      "block": 5,
+      "max_abs": 1.4759315774881543e-05,
+      "relative_l2": 2.4878808390039368e-08,
+      "rms": 7.069296548852309e-07
+    },
+    {
+      "block": 6,
+      "max_abs": 3.0073356811044505e-05,
+      "relative_l2": 2.9050358763936507e-08,
+      "rms": 1.265964503203632e-06
+    },
+    {
+      "block": 7,
+      "max_abs": 1.5201009603060811e-05,
+      "relative_l2": 2.5547800351827024e-08,
+      "rms": 7.403630779991779e-07
+    }
+  ],
+  "schema": "native_terminal_adjoint_offline_recompute_v1",
+  "scope": {
+    "actual_initial_gradient_chain_computed": true,
+    "all_directions_certified": false,
+    "global_exact_fp64_chain_certified": false,
+    "local_precast_f64_is_per_block_diagnostic": true,
+    "replay_is_state_only_receipt_ledger_check": true
+  },
+  "seed_sha256": [
+    "d2684934e033e879fab865ab4bd37b0aa1507b41408f7601bf30e75022cd5994",
+    "d2684934e033e879fab865ab4bd37b0aa1507b41408f7601bf30e75022cd5994",
+    "b966774c0a98542b65bc01cc12a628aeb3c3c302f23faffe91df7acb2c3b31a7",
+    "fa0ff6dd281c8e37147898bed4d851e63d63f0f2205703a2a73bef195f27e4a5",
+    "09510eab852fe4906c98d735f22118bdb0fc2daa060684c74351959d49e040bb",
+    "38bec80eb5ffcda8466d2a118879b0376840e874c14d1afb89e3dd16d70b65b5"
+  ],
+  "terminal_state_sha256": [
+    "75b5c79ba0a6ab8c5fe9754b9a8eb8bd4295c95e5bb0ed7f001038f89e3e2b15",
+    "75b5c79ba0a6ab8c5fe9754b9a8eb8bd4295c95e5bb0ed7f001038f89e3e2b15",
+    "5414f1ade5fbcb0c9f00d60e376358c2625a89272824ef2484adedd26fef7d54",
+    "11860184e928096c37c60e5cf617d54d7dc936f06b1188d9180f0ad656e6c486",
+    "8339c3d34e115d88097e7b8e108335660ad1ad11e4f5e7d430b136e7dbe1a5af",
+    "1ecc6e3fb26451976da8928beed441e33b45262686c1d7aa689d3cebf4e7a61d"
+  ]
+}

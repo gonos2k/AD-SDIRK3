@@ -1,0 +1,137 @@
+{
+  "schema": "native_terminal_adjoint_v6_final_actual_red_review_v1",
+  "reviewed_at_local": "2026-10-21T02:16:43+09:00",
+  "scope": "Independent read-only audit of the 13 completed native receipts and raw binary outputs; no model run, source/build change, or result packet creation.",
+  "decision": "RAW_SCIENCE_RECOMPUTE_PASS_WITH_ONE_PENDING_OFFLINE_AUDIT_GATE",
+  "provenance": {
+    "target": "dry em_b_wave, 256 steps, h=0.9375 s, 240 s, Newton abs tol 1e-9, solver-entry prognostic state after first_rk_step initialization/CQ",
+    "protocol_v6_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+    "launch_binding_v6_sha256": "714b5e500da2e0bd40e49e77498b99e503ed61be39700d0103f02562dbfb7439",
+    "p6_source_head": "a9c256e487574e01c3bf0231a94fec0630c69d7f",
+    "p6_executable_sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+    "p6_runner_sha256": "69f84d75f2c368e9f82502e2025eb2733180965e763ee69f8a9b2ac532a3de94",
+    "p5_baseline_receipt_sha256": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689",
+    "p5_forward_gate_sha256": "6c29682d99fc62e52000247ec15a611b68a291c20d89316ff11640e7fdc5d855",
+    "p5_forward_scope": "PASS for 256-step forward: 768 Newton convergence records, 136/136 archived public arrays byte-equal, 257/257 packed FP64 states byte-equal to preserved completed V4 forward ledger, last32 actual Fortran wrapper cast valid. V4's first-VJP failure remains recorded; this does not promote it."
+  },
+  "case_receipts": {
+    "baseline_p5": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689",
+    "baseline_prefix_224": "39a34dbce4d8ea4b9c51683503ca2db2a1108ea318851ed572edc75c23fbc1b6",
+    "baseline_prefix_192": "e38597716c2994c7c5b7d3e6c6d98078323dc81010c86a589c92a9e6eff60d44",
+    "baseline_prefix_160": "3795857f798fcf828a7fd6353b26cc413c89955f2fc2d0405757e4d2241ffcd0",
+    "baseline_prefix_128": "0b11333c7ccf8cf843fff67cf1447ff410567d94a46c083b4fbcc205eb26d1bc",
+    "baseline_prefix_096": "6ba0d9bd72646866be60ac250f90899ca5c3a6f7cb9b6e73e067fae0b978483a",
+    "baseline_prefix_064": "dfe95800444941b9415b45ceb9c897fabfaa7eef2c6d074c40c9dc07548080fa",
+    "baseline_prefix_032": "a7776b973d526c82d4ad6ec2b0cb820b54762bb23c5f97ca4ac26d4fd5e0650e",
+    "replay_state_only": "9fd6db916906d15c7df29fb0d094835e71982391bd2bfa3439da6b238f76bd7b",
+    "plus_0p01": "8a10d696fddeecf6a326eb014f9dd3be8a608dacef61028acaf1e6ce6ab9d4c1",
+    "minus_0p01": "2590bf2f1d4a3c13e9a7dbe5e0364f8aac648264db157481fdf9d5ddb517cc39",
+    "plus_0p03": "cbf0f969249e487ebb17818a2479df6edf17322fc3430c975d66f087632c423f",
+    "minus_0p03": "8e6bc906eb55bb40dab6d156a60f3bad02952725727e99c0403c35e23f7f6db0"
+  },
+  "receipt_and_state_audit": {
+    "all_13_receipts_completed": true,
+    "all_13_output_file_hashes_and_sizes_match_receipts": true,
+    "all_13_step_counts_and_3N_stage_counts_match": true,
+    "all_13_exact_time_schedules_match": true,
+    "all_13_eight_packed_fields_finite": true,
+    "all_13_recorded_trajectory_physical_minima_finite_and_positive": true,
+    "all_12_p6_receipts_match_p6_source_executable_input_protocol_pins": true,
+    "six_primary_case_namelists_match_baseline": true,
+    "seven_prefix_ledgers_bitwise_equal_to_baseline_from_step_0_through_each_horizon": {
+      "224": 225,
+      "192": 193,
+      "160": 161,
+      "128": 129,
+      "96": 97,
+      "64": 65,
+      "32": 33
+    },
+    "state_only_replay_all_257_checkpoints_bitwise_equal_to_baseline": true,
+    "replay_is_not_gradient_replay": true,
+    "six_primary_solver_entry_seed_admissibility": "Existing Green report: all six seeds finite and positive for the checked thermodynamic, dry mass, and geopotential metrics. Independent raw checks confirm baseline/replay/prefix032 x0 equals baseline checkpoint 0, and each FD x0 equals x0 + actual transmitted FP32 eta times v, with published FP32 seed equal to cast of saved FP64 seed."
+  },
+  "fortran_cotangent_chain": {
+    "meaning": "Eight actual checked Fortran FP32 pullbacks: baseline's last 32 steps from lambda256 to lambda224, then seven native prefix windows from 224..32 down to solver-entry step 0. Each returned FP32 cotangent is the next window's exact FP32 input.",
+    "window_order": ["baseline_256_to_224", "224_to_192", "192_to_160", "160_to_128", "128_to_096", "096_to_064", "064_to_032", "032_to_000"],
+    "window_count": 8,
+    "all_8_actual_FP32_inputs_match_preceding_FP32_outputs_bytewise": true,
+    "all_8_saved_FP64_inputs_equal_promoted_actual_FP32_inputs_bytewise": true,
+    "all_8_fortran_FP32_outputs_equal_cast_of_captured_local_precast_FP64_bytewise": true,
+    "lambda256_f32_sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+    "g0_fortran_f32_sha256": "9c5477d4629073e946c6465a1f2686d8e76378e19c121b7c0d32e786838e96c0",
+    "direction_v_f32_sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+    "directional_ad_dot_v_g0_f32_promoted_f64": -11052.647841641348,
+    "local_precast_cast_loss_diagnostics": [
+      {"window": "baseline_256_to_224", "max_abs": 7.583210589245937e-06, "rms": 4.393590560312112e-07, "relative_l2": 2.1724625319303738e-08, "different_elements": 20992},
+      {"window": "224_to_192", "max_abs": 3.0482532110909233e-05, "rms": 1.32208808779616e-06, "relative_l2": 2.9062356200323358e-08, "different_elements": 20992},
+      {"window": "192_to_160", "max_abs": 1.5118828343929636e-05, "rms": 7.629676963691419e-07, "relative_l2": 2.0764361965785318e-08, "different_elements": 20992},
+      {"window": "160_to_128", "max_abs": 3.81002406868447e-06, "rms": 2.8591534257509646e-07, "relative_l2": 2.4106638740084588e-08, "different_elements": 20992},
+      {"window": "128_to_096", "max_abs": 3.811210589788061e-06, "rms": 2.553859861853351e-07, "relative_l2": 2.376464256932061e-08, "different_elements": 20992},
+      {"window": "096_to_064", "max_abs": 1.4759315774881543e-05, "rms": 7.069296548852309e-07, "relative_l2": 2.4878808390039368e-08, "different_elements": 20992},
+      {"window": "064_to_032", "max_abs": 3.0073356811044505e-05, "rms": 1.265964503203632e-06, "relative_l2": 2.9050358763936507e-08, "different_elements": 20992},
+      {"window": "032_to_000", "max_abs": 1.5201009603060811e-05, "rms": 7.403630779991779e-07, "relative_l2": 2.5547800351827024e-08, "different_elements": 20992}
+    ],
+    "precision_boundary": "Per-window FP64 vectors are local pre-cast diagnostics for their actual FP32 inputs. The only global dAD used is dot(v,g0_fortran_f32 promoted to FP64); no exact-global-FP64 chain is claimed."
+  },
+  "independent_raw_recomputation": {
+    "method": "Loaded raw little-endian FP32/FP64 output binaries directly; independently recomputed J=lambda32 promoted to FP64 dot terminal_state64 for all five objective cases, dAD, central FD at both widths using actual transmitted FP32 eta promoted to FP64, width agreement, one-sided slopes, signal floor, FP32 chain continuity, and local cast metrics. No runner/analyzer scalar result was used as the numeric input.",
+    "objectives": {
+      "J0": -11.718318303682182,
+      "J_plus_0p01": -122.24746142001814,
+      "J_minus_0p01": 98.80549138025435,
+      "J_plus_0p03": -343.3217476308596,
+      "J_minus_0p03": 319.83709848266585
+    },
+    "actual_eta_fp32_promoted_f64": {
+      "plus_0p01": 0.009999999776482582,
+      "minus_0p01": -0.009999999776482582,
+      "plus_0p03": 0.029999999329447746,
+      "minus_0p03": -0.029999999329447746
+    },
+    "central_FD": {
+      "eta_0p01": -11052.647887059557,
+      "eta_0p03": -11052.64768227135
+    },
+    "relative_FD_AD_errors_using_max_abs_shared_signal": {
+      "eta_0p01": 4.109260390636119e-09,
+      "eta_0p03": 1.4419169085678755e-08
+    },
+    "relative_difference_between_central_widths": 1.852842941706275e-08,
+    "one_sided_slopes": {
+      "eta_0p01": {"plus": -11052.914558685488, "minus": -11052.381215433625, "relative_gap": 4.825363021105133e-05},
+      "eta_0p03": {"plus": -11053.44789130306, "minus": -11051.847473239643, "relative_gap": 0.000144789035887584}
+    },
+    "signal_floor": {
+      "required": 5.917330365791284e-06,
+      "observed_eta_0p01": 221.0529528002725,
+      "observed_eta_0p03": 663.1588461135254,
+      "both_pass": true
+    },
+    "frozen_acceptance": "Both FD-vs-AD and mutual central-width differences are far below the frozen 1% tolerance. Both signal differences exceed the frozen floor. One-sided gaps are below 1% at both widths."
+  },
+  "nonsmoothness_limit": {
+    "hard_omega_sign_diagnostic": "Matching-step/ordinal diagnostics show 55,956 to 166,302 sign disagreements versus baseline across the four perturbed cases, with 9,984 zero-membership changes. Baseline and replay sign traces match exactly.",
+    "interpretation": "These are branch diagnostics, not proof that physical evaluations align or that a derivative fails. The raw one-sided and central FD checks for the one frozen direction and two finite widths agree with the FP32 Fortran chain. Limit conclusions to this direction/setup/finite-width evidence; do not claim general smoothness or all-direction differentiability."
+  },
+  "remaining_audit_gate": {
+    "status_at_review": "GREEN_OFFLINE_CASE_ANALYZER_BLOCKED_BY_EXPECTED_WARM_ZERO_SUFFIX_FILE_ABSENCE",
+    "evidence": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v6_case_gates/baseline_prefix_032_stdout.log",
+    "detail": "The n=32 final prefix has warm_steps=0, so the native producer has no warm-to-suffix transition and emits no terminal.suffix_seed_f64.bin. The raw x0_internal_f64 exists, equals baseline checkpoint 0 bytewise, and the prefix checkpoint ledger contains that same step-0 state; the published x0 is its FP32 cast. The offline analyzer currently requires the absent suffix file unconditionally. Green is adjusting only this derived audit to use the already-recorded checkpoint-0 seed when warm_steps=0. No raw file or result was fabricated. Re-run the analyzer and pin its final gate before calling the evidence package fully closed."
+  },
+  "implementation_review": {
+    "production_guard_source": "wrf_sdirk3_tile_unified_impl.cpp SHA 1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4; prior Red source review and focused Fixed_Trajectory_Lifecycle test source 990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2 found no remaining source defect.",
+    "focused_lifecycle_test": "PASS with marker FIXED_TRAJECTORY_SKIPPED_ZERO_COPY_RK2_RK3; 39.12 s; checks geometry-first skips, no packed state/RHS mutation, and subsequent accepted step/pullback.",
+    "source_ci": "Recorded required CI pass for W6 head a9c256e487574e01c3bf0231a94fec0630c69d7f, run 39448674758.",
+    "actual_forward_neutrality": "Completed V5 registered native baseline is byte-exact to both all 136 archived published arrays and all 257 states from the preserved V4 forward ledger. No production math/source change was made in P6."
+  },
+  "claims_excluded": [
+    "independent exact-global-FP64 initial gradient",
+    "second global VJP replay or gradient replay",
+    "general all-direction differentiability",
+    "initialization/input-file derivative",
+    "multi-time observation window",
+    "solver efficiency certification beyond the measured resource observations"
+  ],
+  "review_conclusion": "No new critical or production-repository-actionable finding in the completed raw scientific evidence. The actual Fortran FP32 chain and the requested one-direction two-width FD check independently agree. Keep the Green warm-zero conditional audit gate open until its corrected derived reader emits a hash-pinned pass; this is an evidence-reader closure item, not a missing native trajectory or numerical mismatch. The compact packet was not yet present and was not reviewed."
+}

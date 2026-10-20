@@ -1,0 +1,66 @@
+{
+  "schema": "native_terminal_adjoint_v6_recompute_red_unblock_review_v1",
+  "reviewed_at_local": "2026-10-21T01:05:11 JST +0900",
+  "worktree": "/private/tmp/pr312-native-fortran-chain-20261020",
+  "head": "a9c256e487574e01c3bf0231a94fec0630c69d7f",
+  "scope": "Follow-up read-only review of the compact NumPy recompute implementation after producer, prefix, and input pin fixes. Synthetic packet tests only; no real P6 output or model run inspected.",
+  "source_pins": {
+    "docs/evidence/native_terminal_adjoint/recompute.py": "73b6a2d220c9162641ed248e8fea9e4a24ac14ea668a19129487aaef9ae7bd3a",
+    "docs/evidence/native_terminal_adjoint/README.md": "1a56892dfb8d7b3635c943699d8354ee12a6981891e77021f30836eac9fa81d0"
+  },
+  "decision": "SOURCE_UNBLOCK_PASS",
+  "resolved_findings": [
+    {
+      "prior_priority": "P1",
+      "resolution": "Prefix receipts now require baseline primary role, prefix_reexecution=true, prefix mode/chain/zero eta and expected horizon; endpoint and result metadata must report exact matched parity for n+1 checkpoints; incoming files must bind the complete V5 baseline ledger and immediately preceding FP32 cotangent."
+    },
+    {
+      "prior_priority": "P2",
+      "resolution": "Offline result now reports per-window max-absolute, RMS, and relative-L2 difference between local pre-cast FP64 and promoted returned FP32. These are clearly local narrowing diagnostics, not a global FP64 gradient."
+    },
+    {
+      "added_fixed_provenance",
+      "resolution": "Each receipt role is hard-pinned to the frozen V5 baseline or P6 source/executable IDs and corresponding protocol SHA; all receipts must use the registered input hash, and all six primary cases must share the preserved baseline namelist hash."
+    }
+  ],
+  "synthetic_verification": {
+    "self_test": "passed",
+    "valid_13_receipt_packet": {
+      "path": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native_adj_input_pin_test_y78blm4c/valid/manifest.json",
+      "result": "accepted",
+      "expected_linear_dAD": 0.125,
+      "central_fd_0p01": 0.125,
+      "central_fd_0p03": 0.125,
+      "local_narrowing_rows": 8
+    },
+    "negative_fixtures": [
+      {
+        "path": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native_adj_packet_synth_cwo0eum_/manifest.json",
+        "mutation": "baseline_prefix_224 claimed plus_0p01/non-prefix role and false endpoint parity",
+        "result": "rejected"
+      },
+      {
+        "path": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native_adj_producer_protocol_neg_ml0dlo2k/wrong_producer/manifest.json",
+        "mutation": "P6 prefix receipt assigned V5 producer IDs",
+        "result": "rejected as wrong producer binding"
+      },
+      {
+        "path": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native_adj_producer_protocol_neg_ml0dlo2k/wrong_protocol/manifest.json",
+        "mutation": "P6 prefix receipt assigned V5 protocol SHA",
+        "result": "rejected as producer protocol mismatch"
+      },
+      {
+        "path": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native_adj_input_pin_test_y78blm4c/input_bad/manifest.json",
+        "mutation": "plus_0p01 registered WRF input hash changed",
+        "result": "rejected as registered input hash mismatch"
+      },
+      {
+        "path": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native_adj_wrong_producer_x4_9v_qm/manifest.json",
+        "mutation": "plus_0p01 primary namelist hash differs from preserved baseline",
+        "result": "rejected as primary namelist mismatch"
+      }
+    ]
+  },
+  "formula_and_scope": "FD equations, shared denominator, signal floor, one-sided slopes, signed-zero byte checks, FP32 chain cast equality, and no-global-FP64-gradient/replay disclaimers remain as reviewed. No actual P6 gradient or FD result is claimed.",
+  "remaining_boundary": "This unblocks recompute source/metadata review only. Final real-packet review must still check the completed receipts, NPZ/manifest hashes, and actual Fortran FP32 chain after g0 exists."
+}

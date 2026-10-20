@@ -1,0 +1,95 @@
+{
+  "schema": "native_terminal_adjoint_v5_skip_context_archive_update_v1",
+  "status": "passed",
+  "created_unix_time": 1792506318.131629,
+  "source_commit": "7d8e16187c6f55877c7a9ff19e1a5b62fe86bd6e",
+  "source_tileimpl_sha256": "c1f825c11bc2caa89f3b315611d6c02bd2568e9c0eca59b24365a58ef6755b2c",
+  "class_header_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+  "test_header_sha256": "c8dca051345288e3f69359f4e34ec22fdbdda889fac549af43d9abaffc7976b4",
+  "cpp_archive": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+    "sha256_before": "1e78af4dcb6fdc040c7610b094d05c1471593edf5784d03d0dd4877f19983860",
+    "sha256_after": "410e9ed80ed6ac73769691aa254c0cb2ac9dfd3c1a5f41613911b54e4bb41687",
+    "before_members": {
+      "wrf_sdirk3_unified_rhs_extended.o": "f6cfa7becae0129bea513b14e510f49ff77fe67a3689aa17c66a5ef5c9186493",
+      "wrf_sdirk3_newton_solver.o": "85201450feee74fac140f334da39a0391f328c5c25858c8dbfcf79ff47dd7616",
+      "wrf_sdirk3_config.o": "101196449dc85dc151c9000d72a430305d1e625028b5779012dcad0a00f3d90e",
+      "wrf_sdirk3_base_state_zerocopy.o": "7e50662ded300e5d9e905c4aa3a492b7138f1883b9ac64d425f443569fdc62de",
+      "wrf_sdirk3_mpi_safety_impl.o": "2bbe6a23e8dc124c24cde42b3714b96e39a11c298f08aef6ff0e84cfb10bdd52",
+      "wrf_hydrostatic_pressure.o": "d187a774decaa1efc44e20ff131be903fc12fde371c952c332b2c8a8508d7674",
+      "wrf_sdirk3_cache_utils.o": "7e2db9ef2c0faea8bf43f5ac46e1b48a86bef0d31c7cbcd7b606f0a267eab4cb",
+      "wrf_sdirk3_tile_unified_interface.o": "baa85ef009b29235e543d620ff1afcc3ac69714e19f0221baa3266279eeedeb4",
+      "wrf_sdirk3_zero_copy_interface.o": "e389769ac8c9f38af9cd00e5bc5d56d3c180dff5985fb81ddfff63dfa89eb453",
+      "wrf_sdirk3_rayleigh_damping_ad.o": "eb6e2a9d704ae44ef1b01839aa04da344381c2e9bbe759cdb58806bc1629a78f",
+      "wrf_tile_boundary_optimizer.o": "2ab63db9d7cb0c70999676f52c00731f66a8517f0e7b4ae3a5f890f57aa7b8f6",
+      "wrf_sdirk3_jvp_autograd.o": "5a09a88ee0d6393d6aaae693376b376019ee1fcdb097623694edd753fc300589",
+      "wrf_sdirk3_tile_unified_impl.o": "d4723850908806a5900bbab51f30416224216657f0cc5338e8413f62c3f569ce",
+      "wrf_sdirk3_unified_preconditioner.o": "b2a3c2c5b60efa7c0f620835ae2de956c2ca40c0d6985c42f80104f072184459",
+      "wrf_sdirk3_ad_halo_exchange.o": "611385d0ed55260183b55b11d7934d7e296bb3ed396b26ca1e4a2920bf69e595",
+      "wrf_sdirk3_globals.o": "83d02af58e377694cb0015125371cd020f503ab0115d32362490b5a85f4623c0",
+      "wrf_sdirk3_u_slow_diagnostics.o": "ac0c71550fb19c3f0fae4abf3f09d5ef1ae6a10cf0cb8afa4b6a14aee6a50b7e",
+      "wrf_sdirk3_halo_exchange.o": "0fcbf069d995de4cf278dd91fa774b19bbd3ab366728e3ee3e52cf98a7f1949b",
+      "native_terminal_adjoint_test.o": "36ce3a77ccf6e77398643f02124dd3b1947d3a89b7e48e1a24b0d88116e2eb14",
+      "wrf_sdirk3_tile_unified.o": "f82448d79574e24b39a8bff62dde119d2a81188c19fd0ca023f5497c435ba215",
+      "wrf_sdirk3_acoustic_substep.o": "51b1e3e168edafe0f01f0ea43d51d7ab882d2022e3dbdcc6df5d1ed567724e20",
+      "wrf_sdirk3_interface_zerocopy.o": "9f4d1da024545dc3cd79612b90c550c0b5746728fbfcc03b4c8b540e0e9f2753",
+      "wrf_sdirk3_rhs_run_close.o": "f1ee51efc081d6949b40a611f7e950a92aad3bdde9ec67405dd6c94ac97bda8b",
+      "wrf_sdirk3_boundary_ad.o": "1a36ba0b1c8a8bac98d061ecc5276844474439a31cf75dcc91f0db3a7219d34f",
+      "wrf_sdirk3_operator_contract.o": "e389769ac8c9f38af9cd00e5bc5d56d3c180dff5985fb81ddfff63dfa89eb453"
+    },
+    "after_members": {
+      "wrf_sdirk3_unified_rhs_extended.o": "f6cfa7becae0129bea513b14e510f49ff77fe67a3689aa17c66a5ef5c9186493",
+      "wrf_sdirk3_newton_solver.o": "85201450feee74fac140f334da39a0391f328c5c25858c8dbfcf79ff47dd7616",
+      "wrf_sdirk3_config.o": "101196449dc85dc151c9000d72a430305d1e625028b5779012dcad0a00f3d90e",
+      "wrf_sdirk3_base_state_zerocopy.o": "7e50662ded300e5d9e905c4aa3a492b7138f1883b9ac64d425f443569fdc62de",
+      "wrf_sdirk3_mpi_safety_impl.o": "2bbe6a23e8dc124c24cde42b3714b96e39a11c298f08aef6ff0e84cfb10bdd52",
+      "wrf_hydrostatic_pressure.o": "d187a774decaa1efc44e20ff131be903fc12fde371c952c332b2c8a8508d7674",
+      "wrf_sdirk3_cache_utils.o": "7e2db9ef2c0faea8bf43f5ac46e1b48a86bef0d31c7cbcd7b606f0a267eab4cb",
+      "wrf_sdirk3_tile_unified_interface.o": "baa85ef009b29235e543d620ff1afcc3ac69714e19f0221baa3266279eeedeb4",
+      "wrf_sdirk3_zero_copy_interface.o": "e389769ac8c9f38af9cd00e5bc5d56d3c180dff5985fb81ddfff63dfa89eb453",
+      "wrf_sdirk3_rayleigh_damping_ad.o": "eb6e2a9d704ae44ef1b01839aa04da344381c2e9bbe759cdb58806bc1629a78f",
+      "wrf_tile_boundary_optimizer.o": "2ab63db9d7cb0c70999676f52c00731f66a8517f0e7b4ae3a5f890f57aa7b8f6",
+      "wrf_sdirk3_jvp_autograd.o": "5a09a88ee0d6393d6aaae693376b376019ee1fcdb097623694edd753fc300589",
+      "wrf_sdirk3_tile_unified_impl.o": "10c54775314fe97aebab20c2e5b71132175c7520a88d298ed26dc4bdd365189d",
+      "wrf_sdirk3_unified_preconditioner.o": "b2a3c2c5b60efa7c0f620835ae2de956c2ca40c0d6985c42f80104f072184459",
+      "wrf_sdirk3_ad_halo_exchange.o": "611385d0ed55260183b55b11d7934d7e296bb3ed396b26ca1e4a2920bf69e595",
+      "wrf_sdirk3_globals.o": "83d02af58e377694cb0015125371cd020f503ab0115d32362490b5a85f4623c0",
+      "wrf_sdirk3_u_slow_diagnostics.o": "ac0c71550fb19c3f0fae4abf3f09d5ef1ae6a10cf0cb8afa4b6a14aee6a50b7e",
+      "wrf_sdirk3_halo_exchange.o": "0fcbf069d995de4cf278dd91fa774b19bbd3ab366728e3ee3e52cf98a7f1949b",
+      "native_terminal_adjoint_test.o": "36ce3a77ccf6e77398643f02124dd3b1947d3a89b7e48e1a24b0d88116e2eb14",
+      "wrf_sdirk3_tile_unified.o": "f82448d79574e24b39a8bff62dde119d2a81188c19fd0ca023f5497c435ba215",
+      "wrf_sdirk3_acoustic_substep.o": "51b1e3e168edafe0f01f0ea43d51d7ab882d2022e3dbdcc6df5d1ed567724e20",
+      "wrf_sdirk3_interface_zerocopy.o": "9f4d1da024545dc3cd79612b90c550c0b5746728fbfcc03b4c8b540e0e9f2753",
+      "wrf_sdirk3_rhs_run_close.o": "f1ee51efc081d6949b40a611f7e950a92aad3bdde9ec67405dd6c94ac97bda8b",
+      "wrf_sdirk3_boundary_ad.o": "1a36ba0b1c8a8bac98d061ecc5276844474439a31cf75dcc91f0db3a7219d34f",
+      "wrf_sdirk3_operator_contract.o": "e389769ac8c9f38af9cd00e5bc5d56d3c180dff5985fb81ddfff63dfa89eb453"
+    },
+    "ar_argv": [
+      "ar",
+      "ru",
+      "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+      "wrf_sdirk3_tile_unified_impl.o"
+    ],
+    "ranlib_argv": [
+      "ranlib",
+      "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a"
+    ],
+    "changed_members": [
+      "wrf_sdirk3_tile_unified_impl.o"
+    ],
+    "gate": "PASS: only guarded tile implementation member changed; 24 other object payload hashes unchanged; archive has 25 unique members."
+  },
+  "fortran_archive": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/main/libwrflib.a",
+    "sha256_unchanged": "752da799eac66b8756f2768b316a47615f84669377ed90972553d0ba268cd588",
+    "expected_sha256": "752da799eac66b8756f2768b316a47615f84669377ed90972553d0ba268cd588",
+    "gate": "PASS: Fortran archive not modified."
+  },
+  "reused_members": {
+    "native_terminal_adjoint_test.o": "36ce3a77ccf6e77398643f02124dd3b1947d3a89b7e48e1a24b0d88116e2eb14",
+    "module_native_terminal_adjoint_test.o": "53ac06e370b13a655d5d22df87b4b8396c58f1d7d33bb69e2aed6d9324ab22c4",
+    "interface": "9f4d1da024545dc3cd79612b90c550c0b5746728fbfcc03b4c8b540e0e9f2753",
+    "solve_em": "2385c5e43ef6f5d45ac028fd3e8445bc9f39a7328cb55750ca8cb0cfa6f77a4e"
+  },
+  "donor_archives_modified": false
+}

@@ -1,0 +1,89 @@
+{
+  "schema": "native_terminal_adjoint_v6_fortran_chain_symbol_receipt_v1",
+  "exe": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+  "sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+  "required_symbols": {
+    "sdirk3_native_terminal_prepare": [
+      "00000001004e9858 T _sdirk3_native_terminal_prepare"
+    ],
+    "sdirk3_native_terminal_before_step": [
+      "00000001004f5108 T _sdirk3_native_terminal_before_step"
+    ],
+    "sdirk3_native_terminal_after_step": [
+      "00000001004f5274 T _sdirk3_native_terminal_after_step"
+    ],
+    "sdirk3_native_terminal_record_endpoint": [
+      "00000001004f5744 T _sdirk3_native_terminal_record_endpoint"
+    ],
+    "sdirk3_native_terminal_rearm_window": [
+      "00000001004f7d1c T _sdirk3_native_terminal_rearm_window"
+    ],
+    "sdirk3_native_terminal_finish": [
+      "00000001004f8140 T _sdirk3_native_terminal_finish"
+    ],
+    "sdirk3_tile_solver_begin_fixed_trajectory_zerocopy": [
+      "0000000100004010 T _sdirk3_tile_solver_begin_fixed_trajectory_zerocopy"
+    ],
+    "sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy": [
+      "00000001000041f4 T _sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy"
+    ],
+    "sdirk3_tile_solver_close_fixed_trajectory_zerocopy": [
+      "0000000100004bb4 T _sdirk3_tile_solver_close_fixed_trajectory_zerocopy"
+    ],
+    "native_terminal_test_prepare": [
+      "0000000102bf6340 T ___module_native_terminal_adjoint_test_MOD_native_terminal_test_prepare"
+    ],
+    "native_terminal_test_before_step": [
+      "0000000102bf62e0 T ___module_native_terminal_adjoint_test_MOD_native_terminal_test_before_step"
+    ],
+    "native_terminal_test_after_step": [
+      "0000000102bf5460 T ___module_native_terminal_adjoint_test_MOD_native_terminal_test_after_step"
+    ],
+    "control_input64": [
+      "00000001004e7a28 T __ZN3wrf6sdirk320native_terminal_test15control_input64ERKN2at6TensorE"
+    ],
+    "capture_accepted_state": [
+      "00000001004e843c T __ZN3wrf6sdirk320native_terminal_test22capture_accepted_stateERKN2at6TensorE"
+    ],
+    "capture_gradient64": [
+      "00000001004e89b4 T __ZN3wrf6sdirk320native_terminal_test18capture_gradient64ERKN2at6TensorE"
+    ],
+    "capture_theta_omega": [
+      "00000001004e8d28 T __ZN3wrf6sdirk320native_terminal_test19capture_theta_omegaERKN2at6TensorE"
+    ]
+  },
+  "absent_private_helper_symbols": [
+    "sdirk3_native_terminal_pullback64"
+  ],
+  "nm_command": [
+    "nm",
+    "-gU",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe"
+  ],
+  "dynamic_dependencies": [
+    "\t/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch.dylib (compatibility version 0.0.0, current version 0.0.0)",
+    "\t/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch_cpu.dylib (compatibility version 0.0.0, current version 0.0.0)",
+    "\t/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libc10.dylib (compatibility version 0.0.0, current version 0.0.0)",
+    "\t/opt/homebrew/opt/gcc/lib/gcc/current/libgfortran.5.dylib (compatibility version 6.0.0, current version 6.0.0)",
+    "\t/opt/homebrew/opt/gcc/lib/gcc/current/libquadmath.0.dylib (compatibility version 1.0.0, current version 1.0.0)",
+    "\t/opt/homebrew/opt/open-mpi/lib/libmpi_usempif08.40.dylib (compatibility version 81.0.0, current version 81.3.0)",
+    "\t/opt/homebrew/opt/open-mpi/lib/libmpi_usempi_ignore_tkr.40.dylib (compatibility version 81.0.0, current version 81.1.0)",
+    "\t/opt/homebrew/opt/open-mpi/lib/libmpi_mpifh.40.dylib (compatibility version 81.0.0, current version 81.1.0)",
+    "\t/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib (compatibility version 81.0.0, current version 81.7.0)",
+    "\t/opt/homebrew/opt/netcdf/lib/libnetcdf.22.dylib (compatibility version 22.0.0, current version 22.0.0)",
+    "\t/opt/homebrew/opt/netcdf-fortran/lib/libnetcdff.7.dylib (compatibility version 7.0.0, current version 7.1.0)",
+    "\t/opt/homebrew/opt/hdf5/lib/libhdf5_hl_fortran.320.dylib (compatibility version 320.0.0, current version 320.0.0)",
+    "\t/opt/homebrew/opt/hdf5/lib/libhdf5_hl.320.dylib (compatibility version 320.0.0, current version 320.0.0)",
+    "\t/opt/homebrew/opt/hdf5/lib/libhdf5_fortran.320.dylib (compatibility version 320.0.0, current version 320.0.0)",
+    "\t/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib (compatibility version 320.0.0, current version 320.0.0)",
+    "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+    "\t/usr/lib/libz.1.dylib (compatibility version 1.0.0, current version 1.2.12)",
+    "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)"
+  ],
+  "otool_command": [
+    "otool",
+    "-L",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe"
+  ],
+  "model_run": false
+}

@@ -1,0 +1,133 @@
+{
+  "ci_run": {
+    "conclusion": "success",
+    "head_branch": "codex/native-terminal-adjoint-20261020",
+    "head_sha": "a9c256e487574e01c3bf0231a94fec0630c69d7f",
+    "repository": "gonos2k/AD-SDIRK3",
+    "run_id": 39448674758,
+    "run_started_at": "2026-10-20T15:28:08Z",
+    "status": "completed",
+    "updated_at": "2026-10-20T15:33:06Z"
+  },
+  "ctest": {
+    "all_passed": true,
+    "lifecycle_marker": {
+      "present": true,
+      "test": "Fixed_Trajectory_Lifecycle",
+      "text": "FIXED_TRAJECTORY_SKIPPED_ZERO_COPY_RK2_RK3 passed"
+    },
+    "records": [
+      {
+        "name": "Diagnostic_Observer_Noninterference_Contract",
+        "passed": true,
+        "seconds": 0.24
+      },
+      {
+        "name": "Fixed_Trajectory_Lifecycle",
+        "passed": true,
+        "seconds": 50.62
+      },
+      {
+        "name": "Fixed_Trajectory_Derivative",
+        "passed": true,
+        "seconds": 61.47
+      },
+      {
+        "name": "Full_Tile_Step_Adjoint",
+        "passed": true,
+        "seconds": 44.33
+      },
+      {
+        "name": "FP64_State_Handoff_Contract",
+        "passed": true,
+        "seconds": 124.08
+      }
+    ],
+    "selected_count": 5
+  },
+  "payload_sha256": {
+    "CMakeCache.txt": "9f52431ebd84847e505b0ba6d15e26705385bd507d9223363741c050787426a1",
+    "Testing/Temporary/CTestCostData.txt": "f5583a17bcfae7047facef9f56fdcf5bff5b301b6064412eda52a6df1e834fc8",
+    "Testing/Temporary/LastTest.log": "738a7ebef7d656fa600f9c3f84c312eaee82c04174781bc440934d3c86fd5f06",
+    "replay-smoke/initial_state.txt": "31d25b7ae25240bda21a62d02512cecf600f034e02533bfabcde6fbc6a15cc72",
+    "replay-smoke/observations.txt": "a7442e053a3c72218d81865746be866346bb5cd342185d7f2e68c5a46fffcce3",
+    "replay-smoke/result.csv": "96d8d5f26bbd9a72acf0b4175b1c39af2015988e608b7d3f4150fa492ad824fb",
+    "selected-tests.json": "e3cb0d7e8ef45845f7986b0799ff478d1346337a5558706397f77c8aa5308140"
+  },
+  "raw_archive": {
+    "all_payloads_decompressed": true,
+    "bytes": 361015,
+    "entries": [
+      {
+        "crc32": "28fee7d5",
+        "path": "Testing/Temporary/CTestCostData.txt",
+        "size_bytes": 206
+      },
+      {
+        "crc32": "8481d6a1",
+        "path": "Testing/Temporary/LastTest.log",
+        "size_bytes": 1808001
+      },
+      {
+        "crc32": "5c773664",
+        "path": "selected-tests.json",
+        "size_bytes": 3123
+      },
+      {
+        "crc32": "819a83c5",
+        "path": "replay-smoke/initial_state.txt",
+        "size_bytes": 133437
+      },
+      {
+        "crc32": "6d4a37db",
+        "path": "replay-smoke/observations.txt",
+        "size_bytes": 7957
+      },
+      {
+        "crc32": "74379d0d",
+        "path": "replay-smoke/result.csv",
+        "size_bytes": 755551
+      },
+      {
+        "crc32": "30ff8c71",
+        "path": "CMakeCache.txt",
+        "size_bytes": 19759
+      }
+    ],
+    "expected_artifact_bytes": 361015,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/ci_sourcea9/research-core-diagnostics.zip",
+    "sha256": "2674ac59a589b3a04e9891146dfcd996ae27a458870ad43a8758e363c826fa39",
+    "zip_crc_validation": "passed"
+  },
+  "retained_replay": {
+    "claim": "no_optimizer_or_960_step_gradient_claim",
+    "endpoint_parity": "all_16_bitwise_equal",
+    "gradient_relative_error": "0",
+    "initial_state": {
+      "binary64_le_sha256": "30b7d8ada48c6ae9c1e66ca85e8858bac89c172f8005c2c2f90fe84af131c882",
+      "count": 8480,
+      "encoding": "decimal values in result.csv; binary64 reconstructed independently",
+      "finite": true,
+      "reconstructed_binary64_bytes": 67840
+    },
+    "optimizer_run": "0",
+    "replay_steps_checked": "16",
+    "replayed_initial_pullback": {
+      "binary64_le_sha256": "5039f1dbbde1ff4bc6b1131fb65027e9f8036ca9ba5008898e1dc484c048b2df",
+      "count": 8480,
+      "encoding": "decimal values in result.csv; binary64 reconstructed independently",
+      "finite": true,
+      "reconstructed_binary64_bytes": 67840
+    },
+    "retained_binary64_equals_replayed_binary64": true,
+    "retained_initial_pullback": {
+      "binary64_le_sha256": "5039f1dbbde1ff4bc6b1131fb65027e9f8036ca9ba5008898e1dc484c048b2df",
+      "count": 8480,
+      "encoding": "decimal values in result.csv; binary64 reconstructed independently",
+      "finite": true,
+      "reconstructed_binary64_bytes": 67840
+    },
+    "retained_values_equal_replayed_values": true
+  },
+  "verification_scope": "Read-only verification of original raw GitHub Actions artifact ZIP; no tests rerun, no build/source edits."
+}

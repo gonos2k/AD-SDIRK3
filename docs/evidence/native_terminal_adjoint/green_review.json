@@ -1,0 +1,180 @@
+{
+  "artifacts": {
+    "final_analyzer": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/analyze_native_terminal_v6_final.py",
+      "sha256": "e1ab7c2c115d99465f5dcfb9abc2d10860512025a09b4241ff020465528107cc"
+    },
+    "final_prefix_gate": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v6_case_gates_final/baseline_prefix_032_gate.json",
+      "sha256": "cd00cde4699ddc0f12a550f088e8ca505d73fec6b7ad90783e85027dde31f28b"
+    },
+    "full_aggregate": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v6_full_final/analysis.json",
+      "sha256": "2da325ac2a49d20428f16461a8c5734d36c58e6e4f8f7c7d25f07f331cc335e3"
+    },
+    "portable_build_provenance": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/build_provenance.json",
+      "sha256": "fe15929d887ecb3aadd1d293c31e899fce4c5b25baf51cdcffe992835bbbb496"
+    },
+    "portable_ci_checks": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/ci_checks.json",
+      "sha256": "7276fc3bc9eee66c0961a9d39fb793f0f55d7cdf64947bdcccc5c2de0e9dbd4c"
+    },
+    "portable_manifest": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/manifest.json",
+      "sha256": "4f47146ae7fd3dcfaa282d92d209eceb7572bf67729cfa2001ddff7689a5cff4"
+    },
+    "portable_npz": {
+      "bytes": 4232280,
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/native_terminal_adjoint.npz",
+      "sha256": "c642672fb329fa60be5b29bd105d0476bbbc16cb00eb872fb15b874d0d816c36"
+    },
+    "portable_recomputed_json": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/recomputed.json",
+      "sha256": "3cd72e6fe99e26e2c0531907dd339774b4a4bbcd68b0944ca648f7127df82850"
+    }
+  },
+  "claims_excluded": [
+    "independent exact-global-FP64 initial gradient",
+    "second full-VJP or gradient replay certification",
+    "general all-direction differentiability or smoothness",
+    "input/initialization-map derivative",
+    "multitime observations",
+    "efficiency certification beyond recorded runtime/RSS observations"
+  ],
+  "cohort_and_runtime": {
+    "all_cases_completed_returned_zero_and_met_3N_stage_counts": true,
+    "expected_implicit_newton_convergence_records_total": 7296,
+    "maximum_rss_case": "baseline_prefix_224",
+    "maximum_sampled_native_rss_bytes": 4069195776,
+    "native_steps_total": 2432,
+    "new_v6_native_processes": 12,
+    "per_case_rss_cap_bytes": 19327352832,
+    "receipt_count_including_reused_baseline": 13,
+    "reused_v5_baseline": true,
+    "stage_csv_count_zero_all_cases": true
+  },
+  "created_at_local": "2026-10-21T02:20:22+09:00",
+  "finite_difference": {
+    "actual_eta_values": {
+      "minus_0p01": -0.009999999776482582,
+      "minus_0p03": -0.029999999329447746,
+      "plus_0p01": 0.009999999776482582,
+      "plus_0p03": 0.029999999329447746
+    },
+    "both_signals_above_frozen_floor": true,
+    "central_fd": {
+      "0p01": -11052.647887059555,
+      "0p03": -11052.64768227135
+    },
+    "central_vs_fp32_chain_relative_shared_signal": {
+      "0p01": 4.10926022606113e-09,
+      "0p03": 1.4419169085678755e-08
+    },
+    "central_width_plateau_relative": 1.8528429252487766e-08,
+    "frozen_1_percent_fd_checks_pass": true,
+    "interpretation": "One-direction, two finite-width checks agree with the actual Fortran FP32 chain. Finite-width one-sided/central agreement is not a general smoothness or classical-differentiability proof.",
+    "one_sided_relative_gaps": {
+      "0p01": 4.825363021105133e-05,
+      "0p03": 0.000144789035887584
+    },
+    "signal_differences": {
+      "0p01": 221.05295280027246,
+      "0p03": 663.1588461135254
+    },
+    "signal_floor": 5.917330365791284e-06
+  },
+  "fortran_adjoint_chain": {
+    "all_chain_inputs_equal_previous_fp32_outputs_bytewise": true,
+    "all_fortran_fp32_outputs_equal_cast_of_captured_window_fp64_bytewise": true,
+    "all_saved_fp64_inputs_equal_promoted_actual_fp32_inputs_bytewise": true,
+    "checked_actual_fortran_fp32_windows": 8,
+    "directional_ad_dot_v_g0_fp32_promoted_f64": -11052.647841641348,
+    "g0_fp32_sha256": "9c5477d4629073e946c6465a1f2686d8e76378e19c121b7c0d32e786838e96c0",
+    "gradient_precision_scope": "Actual Fortran FP32 chain over all 256 native steps; local FP64 captures are pre-cast window audits with upstream FP32 rounding already applied.",
+    "local_final_window_precast_dot_only": -11052.647829510655,
+    "window_sequence": [
+      "256_to_224 reused V5",
+      "224_to_192",
+      "192_to_160",
+      "160_to_128",
+      "128_to_096",
+      "096_to_064",
+      "064_to_032",
+      "032_to_000"
+    ]
+  },
+  "forward_and_state_evidence": {
+    "all_prefix_checkpoints_byte_equal_to_v5_baseline": true,
+    "archived_public_arrays_byte_equal": {
+      "all_equal": true,
+      "arrays": 136,
+      "fields_per_frame": 8,
+      "frames": 17
+    },
+    "final_prefix_gate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v6_case_gates_final/baseline_prefix_032_gate.json",
+    "final_prefix_gate_sha256": "cd00cde4699ddc0f12a550f088e8ca505d73fec6b7ad90783e85027dde31f28b",
+    "prefix_checkpoint_comparison_total": 903,
+    "prefix_checkpoint_comparisons": {
+      "032": 33,
+      "064": 65,
+      "096": 97,
+      "128": 129,
+      "160": 161,
+      "192": 193,
+      "224": 225
+    },
+    "state_only_replay_all_257_checkpoints_byte_equal": true,
+    "state_only_replay_public_17x8_byte_equal": true,
+    "v5_257_state_ledger_byte_equal_to_preserved_v4_primal_ledger": true,
+    "v5_internal_W_257_metrics": "retained as descriptive evidence, not promoted to a new acceptance gate",
+    "zero_warm_prefix_seed_source": "For baseline_prefix_032, no suffix artifact exists by design; final offline analyzer derives the audited seed from checkpoint 0, verifies checkpoint 0 equals recorded x0, and still requires exact reference equality and frozen warm=0 metadata."
+  },
+  "nonsmooth_branch_diagnostics": {
+    "baseline_replay_recorded_sign_traces_equal": true,
+    "interpretation": "Branch changes are descriptive diagnostics only; they do not by themselves imply failed FD agreement or differentiability.",
+    "perturbed_cases_sign_disagreements_vs_baseline": {
+      "minus_0p01": 55956,
+      "minus_0p03": 163707,
+      "plus_0p01": 63959,
+      "plus_0p03": 166302
+    },
+    "trace_alignment": "1796 records per primary, matching host_step/ordinal/layout; ordinal identity does not establish identical physical evaluation sites."
+  },
+  "overall": "The frozen one-direction V6 forward replay, eight-window actual Fortran FP32 chain, and two-width FD evidence satisfy the registered checks. Numerical claims remain limited to this setup and direction; exact global FP64 gradient and independent gradient replay are not certified.",
+  "protocol": {
+    "executable_sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+    "launch_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/launch_binding_v6.json",
+    "launch_binding_sha256": "714b5e500da2e0bd40e49e77498b99e503ed61be39700d0103f02562dbfb7439",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/protocol_v6.json",
+    "sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+    "source_head": "a9c256e487574e01c3bf0231a94fec0630c69d7f"
+  },
+  "schema": "native_terminal_adjoint_final_actual_green_review_v1",
+  "scope": "Compact synthesis of the hash-pinned actual V6 aggregate, zero-warm final prefix gate, portable recomputation packet, and frozen source/build/CI review evidence. No model, build, or raw-output reparse was performed for this record.",
+  "source_build_ci_review": {
+    "ci_conclusion": "success",
+    "ci_evidence_path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/ci_checks.json",
+    "ci_evidence_sha256": "7276fc3bc9eee66c0961a9d39fb793f0f55d7cdf64947bdcccc5c2de0e9dbd4c",
+    "ci_head": "a9c256e487574e01c3bf0231a94fec0630c69d7f",
+    "ci_run_id": 39448674758,
+    "focused_lifecycle_regression": "PASS; marker FIXED_TRAJECTORY_SKIPPED_ZERO_COPY_RK2_RK3; next accepted step and pullback pass.",
+    "focused_lifecycle_test_source_sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2",
+    "independent_final_actual_review_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/red_fortran_chain/final_actual_review.json",
+    "independent_final_actual_review_sha256": "fc2d53995669165c1192540851420c15647fdcee83d8da15d496d3c10b819798",
+    "independent_final_source_review_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/red_fortran_chain/final_source_v6_review.json",
+    "independent_final_source_review_sha256": "574cf5fcdc5fb541518e6a0c9c892451b8e99aa5117713f48b13b2c73a56af1f",
+    "p6_source_delta_vs_v5": "Three test-support files only; production core/interface/solver math source hashes are unchanged in P6.",
+    "p6_unchanged_core_source_hashes": {
+      "solve_em": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc",
+      "state_layout_class_header": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "zero_copy_interface": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    "production_guard_tile_impl_sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+    "review_finding": "No new critical or production-repository-actionable issue within the reviewed source/evidence scope.",
+    "selected_ctest_count": 5,
+    "selected_ctests_all_pass": true,
+    "source_fix_scope": "The earlier V5 production guard validates geometry then skips compatibility RK2/RK3 before active retained-graph context mutation; it preserves the fingerprint check and RK1 path."
+  },
+  "status": "GREEN_REVIEW_COMPLETE"
+}

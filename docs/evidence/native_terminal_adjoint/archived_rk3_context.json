@@ -1,0 +1,135 @@
+{
+  "comparison_time": {
+    "exact_no_interpolation": true,
+    "seconds": 240,
+    "timestamp": "0001-01-01_00:04:00"
+  },
+  "fields": {
+    "MU_plus_MUB": {
+      "count": 256,
+      "max_abs": 0.8391275405883789,
+      "rms": 0.5040889425314363
+    },
+    "PH": {
+      "count": 4096,
+      "max_abs": 0.81787109375,
+      "rms": 0.2572142185952081
+    },
+    "T_plus_300": {
+      "count": 4096,
+      "max_abs": 0.002105712890625,
+      "rms": 0.00011142287658533752
+    },
+    "U": {
+      "count": 4096,
+      "max_abs": 0.022851228713989258,
+      "rms": 0.013507233726523
+    },
+    "V": {
+      "count": 4352,
+      "max_abs": 0.010151378810405731,
+      "rms": 0.003571876572702095
+    },
+    "W": {
+      "count": 4096,
+      "max_abs": 0.0012972336262464523,
+      "rms": 0.0003198135924523252
+    }
+  },
+  "filter_policy_difference": "Stock RK3 requests split-explicit smdiv/emdiv/epssm settings; native ARK mode 3 is split-explicit off with an implicit-divergence pathway. This comparison is not a same-filter accuracy test.",
+  "helper": {
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/tools/benchmark_wrf_accuracy_cost.py",
+    "policy": "official benchmark_wrf_accuracy_cost._owned V3 physical-owner masks",
+    "sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8"
+  },
+  "interpretation": "descriptive cross-method distance; stock RK3 is not asserted as accuracy truth/reference",
+  "owner_counts": {
+    "MU": 256,
+    "PH": 4096,
+    "T": 4096,
+    "U": 4096,
+    "V": 4352,
+    "W": 4096
+  },
+  "runtime_interpretation": "The coarse run includes per-step observer capture; historical stock RK3 timing is an analysis value without a wall-receipt source. No speed ratio is reported.",
+  "saved_coarse": {
+    "analysis_json": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_240s_analysis.json",
+    "analysis_json_sha256": "6985f6d2f78b3d4c8822a9593ebf35963b7f7d23b18864f0b9e7ca8d69ea46fb",
+    "dt_s": 0.9375,
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "history_output_sha256_at_240": "88121016bd914ffe42c8b01fbee2a871ecc3e350b1e40185454da54b7bd54fee",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_sha256": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "npz": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_240s_compact.npz",
+    "npz_sha256": "ad23d954b4ca5ce34badbccb9b8454393a23f6651ad4beb859b9966b8f149d6c",
+    "run_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/corrected_full_run_receipt.json",
+    "run_receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+    "runtime_config": {
+      "buoyancy_use_current_w": 1.0,
+      "diffusion_option": 2.0,
+      "do_curvature": 1.0,
+      "effective_ewt_rtol_config": 9.999999974752427e-07,
+      "effective_wrf_omega_ww_cp": 1.0,
+      "gravity_rhs_value": 9.8100004196167,
+      "imex_split_mode": 3.0,
+      "kdamp_config": 0.20000000298023224,
+      "kdamp_grid": 0.20000000298023224,
+      "khdif": 1000.0,
+      "krylov_tol_config": 1.0000000116860974e-07,
+      "kvdif": 10.0,
+      "mass_coordinate_mode": 1.0,
+      "newton_rtol_config": 0.0,
+      "newton_tol_config": 9.999999717180685e-10,
+      "non_hydrostatic": 1.0,
+      "omega_update_ref_per_newton": 0.0,
+      "omega_w_blend": 1.0,
+      "raw_wrf_omega_ww_cp": 0.0,
+      "split_explicit": 0.0,
+      "split_explicit_top_lid": 0.0
+    },
+    "wall_seconds_with_step_observer": 872.94
+  },
+  "schema": "research_forward_saved_coarse_h09375_vs_stock_rk3_t240_secondary_v1",
+  "scope": "auxiliary t=240 field distance only, computed from the existing PR310 coarse NPZ and preserved RK3 NetCDF; no model run or new NPZ",
+  "stock_rk3": {
+    "analysis": "/Users/yhlee/AD-SDIRK3-review-evidence/WRF-accuracy-cost-20261011/analysis_after.json",
+    "analysis_sha256": "e51e1a257be01637f791ade97a330d2d6890e179827a8e187f435eca196dfa54",
+    "dt_s": 1.875,
+    "executable_sha256": "2b629416618ddef4ceeea8ba51d07b8a7df514f5df6abab107c51e3f78fcc2de",
+    "frame": {
+      "grid": {
+        "dx_m": 100000.0,
+        "dy_m": 100000.0,
+        "nx": 16,
+        "ny": 16,
+        "nz": 16
+      },
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/WRF-accuracy-cost-20261011/after_fix/fortran_rk3_h1p875/wrfout_d01_0001-01-01_00:04:00",
+      "sha256": "d1525eca6beae444287a5420734aed7878e40ce4927d7ec20530de173acaf807",
+      "timestamp": "0001-01-01_00:04:00"
+    },
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "label": "fortran_rk3_h1p875",
+    "method": "RK3",
+    "namelist_sha256": "2c28bd65a49f43cd377ac90b9d01aa6712d976cf737e4d9dd47790e765f1e8bd",
+    "namelist_transport": {
+      "diff_opt": "2",
+      "emdiv": "0.01",
+      "epssm": "0.1",
+      "khdif": "1000.",
+      "kvdif": "10.",
+      "smdiv": "0.1",
+      "time_step": "1",
+      "time_step_fract_den": "8",
+      "time_step_fract_num": "7",
+      "time_step_sound": "4"
+    },
+    "source_revision": null,
+    "wall_receipt_source": null,
+    "wall_seconds_in_analysis": 1.935781333129853
+  },
+  "transforms": {
+    "MU": "MU+MUB Pa; already applied in saved PR310 compact array",
+    "T": "T+300 K; already applied in saved PR310 compact array"
+  }
+}

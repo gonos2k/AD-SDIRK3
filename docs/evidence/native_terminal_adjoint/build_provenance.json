@@ -1,0 +1,181 @@
+{
+  "producers": [
+    {
+      "executable_bytes": 52799360,
+      "executable_id": "wrf_native_terminal_checked.exe",
+      "executable_sha256": "1a05828d1c5c941ed43cd9011bc52973ed950f469f537d1c6e48cd64d3b45853",
+      "id": "baseline_v5",
+      "launch_binding_sha256": "1279e2d15fc068cc8fd71fef8c81508c6ce35a0f56fba46b3d130c040cf9061b",
+      "receipts": [
+        {
+          "bytes": 7731,
+          "path": "build_provenance/v5/archive_update_receipt.json",
+          "sha256": "d13c5a42cac71f6a26b6cf49d854399627e43cc903af546eb4d29aaa0bea1968"
+        },
+        {
+          "bytes": 4731,
+          "path": "build_provenance/v5/build_receipt.json",
+          "sha256": "9519204069b4efce7b44adc7ff1e5d462eafce275866fd34612fb33822ddc5dc"
+        },
+        {
+          "bytes": 4667,
+          "path": "build_provenance/v5/candidate_link_final_receipt.json",
+          "sha256": "280f4edb6adbe6b9ba51d0796249671a356a948de15f2867c7ebddd38f74ee72"
+        },
+        {
+          "bytes": 7586,
+          "path": "build_provenance/v5/final_impl_archive_update_receipt.json",
+          "sha256": "2830aa42de582fc5caa4f069404acee4ed8133af2ca526a0957387f5433cf0ff"
+        },
+        {
+          "bytes": 5108,
+          "path": "build_provenance/v5/symbol_receipt.json",
+          "sha256": "1f402a22e02cf75eee55567795401cf10e97011da7ed563cad7a44fb7bc9fc3c"
+        },
+        {
+          "bytes": 2109,
+          "path": "build_provenance/v5/target_test_success_receipt.json",
+          "sha256": "43f34f306adb6a85597639b48e2b4986b8abb37984cca69c0844cf23fd321f2a"
+        }
+      ],
+      "source_head": "559b7a861105e5db5838f1a933a6661111aec1cb"
+    },
+    {
+      "executable_bytes": 52799256,
+      "executable_id": "wrf_native_terminal_fortran_chain.exe",
+      "executable_sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+      "id": "fortran_chain_v6",
+      "launch_binding_sha256": "714b5e500da2e0bd40e49e77498b99e503ed61be39700d0103f02562dbfb7439",
+      "receipts": [
+        {
+          "bytes": 2988,
+          "path": "build_provenance/v6/archive_copy_receipt.json",
+          "sha256": "9cdf5ce26245049f80f0fbf8a30064f28aa4a1c8905bdaceee89ee580da57c72"
+        },
+        {
+          "bytes": 114214,
+          "path": "build_provenance/v6/archive_update_receipt.json",
+          "sha256": "87e7e1fcad7032e419894b06918654369aba0cba3bcdf919e0e68a456f5b5636"
+        },
+        {
+          "bytes": 3341,
+          "path": "build_provenance/v6/build_receipt.json",
+          "sha256": "d166bd91298840df5cb626eb40da4e8b88cc94c6ad396ec074c6c00b3399d1bb"
+        },
+        {
+          "bytes": 4166,
+          "path": "build_provenance/v6/compile_commands.json",
+          "sha256": "814a9f5cc1d2cefb6ecd448e09d41184e3194cf5ed0272e47654c053f600e51b"
+        },
+        {
+          "bytes": 5272,
+          "path": "build_provenance/v6/link_receipt.json",
+          "sha256": "9677a9dca25b5aee687b694f14d955d5c42255614e36da845f1a6e83a2003d19"
+        },
+        {
+          "bytes": 5096,
+          "path": "build_provenance/v6/symbol_receipt.json",
+          "sha256": "06203664fc9605f736fef35d7f02136424d2cff03f7afa56e398685ef3a11af8"
+        }
+      ],
+      "source_head": "a9c256e487574e01c3bf0231a94fec0630c69d7f"
+    }
+  ],
+  "reuse": {
+    "basis": "Pinned v6 build/archive-copy receipts record the unchanged v5 archives; only test-support members were updated.",
+    "production_core_reused": true,
+    "v6_e5_archives_unchanged": {
+      "cpp": "da6e9cdc3dc820d697e234e949c1d5ad6b9ef9a42085bfeebad6ca5ee5bd60aa",
+      "fortran": "752da799eac66b8756f2768b316a47615f84669377ed90972553d0ba268cd588"
+    }
+  },
+  "schema": "native_terminal_build_provenance_v1",
+  "scope": "Pinned build receipts copied byte-for-byte from E/launch_binding_v5.json and v6.json. No model/build/test rerun; no executable/archive binaries copied.",
+  "toolchain": {
+    "cpp": {
+      "compiler": "g++ (Apple clang 21.0.0), arm64; one translation unit at a time",
+      "flags": [
+        "-std=c++17",
+        "-O3",
+        "-DMACOS",
+        "-DDMPARALLEL",
+        "-DUSE_SDIRK3",
+        "-DWRF_SDIRK3_NATIVE_TERMINAL_TEST",
+        "-D_GLIBCXX_USE_CXX11_ABI=0"
+      ],
+      "version_probe": "Apple clang version 21.0.0 (clang-2100.3.34.2)"
+    },
+    "fortran": {
+      "compiler": "mpif90 -> GNU Fortran 15.2.0; WRF FC flags -O2 -ftree-vectorize -funroll-loops -ffree-form -ffree-line-length-none -fconvert=big-endian -frecord-marker=4 -fallow-argument-mismatch -fallow-invalid-boz -DUSE_SDIRK3",
+      "flags": [
+        "-O2",
+        "-ftree-vectorize",
+        "-funroll-loops",
+        "-w",
+        "-ffree-form",
+        "-ffree-line-length-none",
+        "-fconvert=big-endian",
+        "-frecord-marker=4",
+        "-fallow-argument-mismatch",
+        "-fallow-invalid-boz",
+        "-DUSE_SDIRK3"
+      ],
+      "version_probe": "GNU Fortran (Homebrew GCC 15.2.0) 15.2.0"
+    },
+    "libtorch": {
+      "abi": "_GLIBCXX_USE_CXX11_ABI=0",
+      "link_prefix": "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch",
+      "version_probe": "2.10.0"
+    },
+    "link_driver": "g++",
+    "mpi": {
+      "link_prefix": "/opt/homebrew/opt/open-mpi",
+      "version_probe": "mpirun (Open MPI) 5.0.9"
+    },
+    "netcdf": {
+      "note": "Version labels are from exact pinned link-receipt paths; current nc-config/nf-config differ, so exact archived dylib payload versions are not independently asserted.",
+      "recorded_cellar_versions": {
+        "netcdf": "4.9.3_2",
+        "netcdf_fortran": "4.6.2"
+      },
+      "recorded_link_search_paths": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/external/io_netcdf",
+        "/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib",
+        "/opt/homebrew/Cellar/netcdf/4.9.3_2/lib"
+      ],
+      "runtime_dependency_evidence": {
+        "executable": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+        "note": "Explicit Homebrew probes match the pinned link-receipt Cellar versions. The prior unqualified PATH probes resolved to unrelated MacPorts tools and have been removed.",
+        "otool_L_entries": [
+          {
+            "compatibility_version": "22.0.0",
+            "current_version": "22.0.0",
+            "install_name": "/opt/homebrew/opt/netcdf/lib/libnetcdf.22.dylib",
+            "resolved_path": "/opt/homebrew/Cellar/netcdf/4.9.3_2/lib/libnetcdf.22.dylib",
+            "sha256": "4689109b96ac38d62e396f28064dbe56909bf736bbf5409321e4ea85b405a27a"
+          },
+          {
+            "compatibility_version": "7.0.0",
+            "current_version": "7.1.0",
+            "install_name": "/opt/homebrew/opt/netcdf-fortran/lib/libnetcdff.7.dylib",
+            "resolved_path": "/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib/libnetcdff.7.1.0.dylib",
+            "sha256": "792c2fc7f924362fa19e80661b071510d8f71f11c0215e7035e2bd10d1107d04"
+          }
+        ]
+      },
+      "version_probes": {
+        "nc_config": {
+          "output": "netCDF 4.9.3",
+          "path": "/opt/homebrew/bin/nc-config"
+        },
+        "nf_config": {
+          "output": "4.6.2",
+          "path": "/opt/homebrew/bin/nf-config"
+        }
+      }
+    },
+    "v6_cpp_command_sha256": "805add3b2c54ac31bba406bea528b5f33ce4a5c3ce57ccba6277f16b6e6e5a36",
+    "v6_fortran_command_sha256": "7aa6fa04d2b5d0fbf318c2deb7a9e67ca0815bbb00f8f7bf0b4673833b453284",
+    "v6_link_command_sha256": "90e445d8c3546dba6440f2d3000310d61264b73bebcdfd2f77c386fee67deedd"
+  }
+}

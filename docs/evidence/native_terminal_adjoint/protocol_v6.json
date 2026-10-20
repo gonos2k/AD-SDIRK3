@@ -1,0 +1,251 @@
+{
+  "base_revision": "efe803b1b616c8ef319d599f68816774e7e3fde8",
+  "baseline_case": {
+    "executable_sha256": "1a05828d1c5c941ed43cd9011bc52973ed950f469f537d1c6e48cd64d3b45853",
+    "gate": "MustcompleteV5baselineforward+last32checkedFortranVJP; all257F64bytesmatchV4failedforward, archived17x8publicparity, actualwrappercastbeforeP6downstream. Finalbindingpinscompletedreceipt.",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline",
+    "protocol_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/protocol_v5.json",
+    "protocol_sha256": "b96cbe382b1e992c64e21b2ef3f413cf3aa7ba6b7bfaa31e0a43b91390c9ce45",
+    "source_head": "559b7a861105e5db5838f1a933a6661111aec1cb"
+  },
+  "checks": {
+    "FD": "Forbothactualsymmetriceta, dFD=(Jplus-Jminus)/(2*eta_actual); dAD=dot(v,prefix032actualFortranFP32gradient promotedDouble). EachdFDvsdADandmutualFDplateau<=.01sharedsignalsameoriginalrule. No globalexactFP64dADclaim.",
+    "Fortran_precision": "PerblockactualFP32incomingexactbytesrecorded, lambda_in_f64=actualF32promotedonly. CaptureinternalDoubleVJPbeforeFortranreturn; returnedFP32mustbyteequalcast32(capture). Recordlocalnarrowing. FinalprecastDoubleg0alreadycontainsupstreamFloat32rounding; differencevsfinalg0F32measureONLYlastcast, notglobalprecisionerror.",
+    "baseline": "Return0, successmarker,256 acceptedsteps/768stages, exact actual times, finite/admissible physical states, carrysequence/options/source pins. Compare17 published8-state frames with archived same-map forward, and archived available internal W/full checkpoints without redoing forward accuracy screen.",
+    "baseline_fix_neutrality": "Inadditiontoarchived17\u00d78publicframes, compareall257V5FP64packedcheckpointsbytewise withpreservedV4completedforward ledger. Thisverifies productioncompatibilityfixdidnotchangeacceptedforwardmap; V4failedVJPstatus remains.",
+    "compatibility_regression": "ExistingFixed_Trajectory_Lifecycle regression: activefixedtape validgeometry nullunusedpayloadRK2/3 mustskip withoutpackedstate/RHScoefficient/schedule changes; badgeometrystillreject; nextacceptedstepandpullbackcomplete. UsesexistingFloat32fixture correctly; actualnativeFP64pathverifiedseparately. SamefiveCIselectedtests, noworkflowexpansion.",
+    "gradient_boundary": "Full256 primary tape yields cotangent at224 only. Prefix_032 reaches initialcontrolZ0; only its gradient dotoriginalv definesfull-map dAD. Perblockmetadata gradient_control_step=prefix_horizon-32, no partialVJP promotedtofullVJP.",
+    "no_new_claims": "No full Jacobian/all-directions differentiability/initialization-gradient/multi-observation window/efficiency certification; no changed epsilon/initial condition/diffusion/CF/PH/THM defaults",
+    "one_sided": "Report (Jplus-J0)/eta and (J0-Jminus)/eta from same runs. If an unresolved >1% one-sided gap persists at both widths, central-consistency alone cannot certify a classical directional derivative.",
+    "replay": "Onefreshactualnative256forwardreplay, every257packedDoublecheckpointbyteequalbaselinebeforefinish. Replaystate-only(role4), noVJP/gradientreplaycertificate. Prefixesreexecuteoriginalnativehistory andcompareeverycheckpointbeforeeachcheckedVJP.",
+    "signal_floor": "Require |Jplus-Jminus| >100*eps64*max(|Jplus|,|Jminus|,||lambda||2*||ZN||2) for each width; otherwise unresolved, not pass.",
+    "upwind": "Compile-only capture actual hard-sign interior theta vertical flux decisions step/ordinal/shape/min|omega|/zeros and signbits; ignore VJP re-evaluations. Compare base/replay/+/- traces, report flips/zero margins. Do not require universal stable signs as a new forward acceptance gate; limit differentiability claims when nonsmooth."
+  },
+  "direction": {
+    "block_balance": "Each Q-extended block normalized to packed L2=1/sqrt(6), then multiplied by D_b",
+    "block_scales": "D_b=max(RMS of original solver-entry raw packed block, registered full-epsilon numeric floor); frozen from initial baseline, not refit to results; floors are numerical scales, not R/prior",
+    "control": "seed internal FP64 x0+eta*v through existing requestFixedTrajectory initial-state overload, matching published FP32 seed; save actual seeds/direction/eta/rounding",
+    "eta_actual": "If float32 passed through test Fortran ABI, promote the actual transmitted float32 eta for seeding and FD denominator; do not assume the decimal is exact",
+    "eta_nominal": [
+      0.01,
+      0.03
+    ],
+    "fixed": "One deterministic mixed six-block sinusoidal direction, Q-extended periodicX/symmetricY boundaries, zero fixed W/PH bottom; exact support-file expression frozen by source hashes before build/launch"
+  },
+  "drafted_at_jst": "2026-10-21T00:13:18.655533+09:00",
+  "external_monitor_check": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/v4_runner_rss_filter_check.json",
+    "sha256": "c093324d00b0cb9cfabea3d31303ef43525721a64e9b10961877c074a6d4079c"
+  },
+  "frozen_at_jst": "2026-10-21T00:15:45.531247+09:00",
+  "frozen_source_files": [
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    }
+  ],
+  "memory": {
+    "at_step8": "Warmsteps monitor hardcap; at eighth retainedsuffixstep estimate RSS8+1.5*max(0,(RSS8-RSS4)/4)*24. Onlyone32windoweverallocated/process. Cap unchanged.",
+    "disk": "keep compact checkpoints/objective/VJP/sign traces; no multiGB stage CSVs",
+    "later": "Externalrunner matches actual wrf_native_terminal_* process name every0.5s includingreverse. Require actualnativePID sampled; no zeroRSS certificate.",
+    "rss_hard_cap_bytes": 19327352832,
+    "sample_steps": [
+      1,
+      2,
+      4,
+      8
+    ]
+  },
+  "objective": {
+    "J": "lambda32 promoted to FP64 dotted with internal final FP64 packed state",
+    "R_prior_optimizer": "none",
+    "W_scale_m_s": 0.001,
+    "c_formula": "sin(0.31*(i+1)+0.17*(j+1)+0.11*(k+1)), normalized to L2=1 over these4096 owners",
+    "count": 4096,
+    "lambda": "round32(H^T c / .001) ONCE; its exact promoted float values define the objective for every run",
+    "owners": "W only, physical i,j=0..15 and k=1..16; fixed bottom excluded, dynamic top included; other packed blocks/aliases zero"
+  },
+  "partial_v3_forward_parity": {
+    "all_bytes_equal": true,
+    "arrays": 104,
+    "completed_frames": 13,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/v3_resource_stopped_partial_forward_parity.json",
+    "scope": "not256/VJPacceptance",
+    "sha256": "7bec96d7da727c42c4be320b4a038a8e868fea9d8fa4912157c75e03bd8229a5"
+  },
+  "pre_edit_graph_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/pre_edit_binding.json",
+    "sha256": "bd4167ea05091f692ed6e32a12417e60272da2965f47649c6d57276e3a28f4a5"
+  },
+  "prelaunch_compile_correction": {
+    "preserved_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/protocol_v3_precompile.json",
+    "reason": "Before any V3 model output, LibTorch2.10 from_blob requires mutablevoid*; make three owning inputbyte vectors nonconst. Also explicitly restrict fullinitial-direction fields to prefix032. No objective/direction/FD widths/scientific budgets or physical changes.",
+    "sha256": "631f193b8740f7e3aaed63c721bbe6d72e8d6e14c63c563a1c5683cbfd9fedd8"
+  },
+  "production_fix": {
+    "root_cause": "Fortran DAMPCOEF\u2248.01 providedZeroCopyConfig.kdamp; actualRK1unifiedStepsyncusesSDIRK3_KDAMP=.2 beforeRHS/record. RK2/3previouslypublished.01 thenreturnedbeforethat sync, invalidatingrecordedfingerprint beforeVJP. Preservefingerprintcheck.",
+    "scope": "advanceZeroCopy earlyvalidates6dimensions, thenrk!=1 withactivefixedtapeorlaststepgraph returnsOK_SKIPPED beforedt/view/GridInfo writes; directunifiedStep compatibilityguard retained. Nonretainedlegacysetup canpublishviews; RK1mathematicalpathunchanged. No publicABI/options/default/equation changes."
+  },
+  "recording": {
+    "cotangent_chains": "OnlyactualFortranFP32chain: lambda_k32=cast32((DG_block)^T lambda_next32). ExistingbridgecapturesFloat64resultofactualpromotedFloat32incomingBEFOREcast. LocalF64capturesdoNOTconstituteindependentglobalFP64chain. V5baselineactualFortranlambda224 reused; P6prefix224..32getsactualprecedingFloat32output.",
+    "endpoints": "Macro-only capture_accepted_state afteracceptedU_new projection/unpack/carry publication records detachedFP64 at everyactualhoststep; same actualnative values, noadditionalRHS. Referenceeveryendpoint bytecomparedbeforeVJP.",
+    "full_native_forward_steps": 256,
+    "initial_control": "Macro-only control_input64 hook aftercarrybootstrap but beforefixedvalidation/inputleaf/Q supplies savedDouble x0+actualeta*v only forfirstwarmstep, verifies actualpackedpublication. No privatecarry/NextFp64field mutation or initialization-map derivative. Prefix032 starts existing retainedDoubleinitial API directly.",
+    "retained_windows_per_process": 1,
+    "reverse_replay": "Fresh original-initialization nativeprefix cases ending224,192,...32 per baseline/replay chain; sameh andallphysics/solvercriteria, onlyrun_seconds horizon differs. Each retains its final32 only and compares entireFP64prefix againstfullbaseline beforeVJP. No manual advance/halo/history snapshot surrogate.",
+    "suffix_begin": "AfterwarmstepN-32, preserveclone ofacceptedDoubleendpoint; existingFortranbegin32; setexistinggraph-onlyflagsTrue outsideunifiedStep; publicresetInternalFp64Carry; cancel/reissuependingCpprequest with exactDoublecheckpoint. Preserveallotherstate/numericalhistory. NextactualFortran nativeentryrequiresmatchingFP32publication andsamefixedprofile.",
+    "warm_steps": "expected_steps-32; original initialized Fortran native path, effective retain_graph_for_adjoint=false/imex_slow_in_tangent=false (registered forward policy). Newton object constructed under requested test graph-ready options; no solver recreation/history reset. Both RHS expressions numerically same; demonstrated parity required.",
+    "window_steps": 32
+  },
+  "red_protocol_review": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/red_protocol/root_proposal_review.json",
+    "sha256": "cb9205231fc6cf3528d9bdcaff53311c2fd1482933925041d0f6111f2441c061"
+  },
+  "red_resource_review": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/red_protocol/resource_plan_review.json",
+    "sha256": "abdedd6eef3edeca4a7f69ba3d1e030ed17054951ffd0f9ccbf4b4f3170a583b"
+  },
+  "red_suffix_plan_review": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/red_protocol/last32_only_plan_review.json",
+    "sha256": "defec63e20c88157b27f2339ae9784edbbdcca3512429f7408457d9c282f9ec5"
+  },
+  "registered_map": {
+    "name": "dry_em_b_wave_e71_240s_h15over16_strict_v1",
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/research_forward_map.json",
+    "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+  },
+  "resource_failure_v2": {
+    "full256_or_VJP_completed": false,
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs/baseline/run_receipt.json",
+    "receipt_sha256": "13ee278d0394bc799348daa1ec6d5df357b6eec32887c524ecf12de49f909cef",
+    "steps": 8
+  },
+  "resource_failure_v3": {
+    "accepted_steps": 200,
+    "external_RSS_filter_gap": "V3runner matched old *_test exe substring; new *_prefix executable omitted, so externalpeak0 is missingmeasurement. CPPguard stillenforcedandstopped; V4broadfiltercorrected.",
+    "full256_or_VJP_completed": false,
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v3/baseline/run_receipt.json",
+    "receipt_sha256": "bf770a7d9753f1fe52dfffe5a4c072eca389fe0580900610139230899616a810"
+  },
+  "resource_scope_review": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/red_fortran_chain/resource_scope_v6_review.json",
+    "sha256": "e42dcf91897d29f0dd0c8ec7de63661167ce845cd2b525a2b730a8934b1c87ef"
+  },
+  "run_scope": {
+    "after_failure": "Stopnewdownstreamatfirstrealcase/fingerprint/endpoint/FDgatefailure; preservefailedattempt, noautophysical/tolerance/epsilon substitution.",
+    "all_runs": "ReusecompletedV5baseline256withsamephysicalcoreobjects andexactcontrols; P6sevenbaselineprefixreexecutions224..32, one256state-onlyreplay, fourfrozenFD256runs. Fullprecision/sourcevariantandroleexplicit. No timestep/epsilon ladder.",
+    "concurrency": "Atmost2isolatedsingle-rankOMP1processes afterbaselinegate; independentstateReplay/FDmayoverlaponeprefix. Per-case18GiBcap/2hwallunchanged.",
+    "max_successful_new_prefix_reexecutions": 7,
+    "max_successful_new_processes": 12,
+    "max_successful_primary_256step_trajectories_including_reused_baseline": 6
+  },
+  "runs": [
+    {
+      "name": "baseline",
+      "pullback": "actualFortranlast32plusoriginalextraCppcapture224;notglobalF64",
+      "source": "reusedV5completed"
+    },
+    {
+      "name": "baseline_prefix_224..032",
+      "pullback": "checkedFortranFP32chainonly"
+    },
+    {
+      "name": "replay",
+      "pullback": false,
+      "role": "state_only_replay"
+    },
+    {
+      "name": "plus_0p01/minus_0p01/plus_0p03/minus_0p03",
+      "pullback": false
+    }
+  ],
+  "schema": "native_terminal_adjoint_frozen_protocol_v6",
+  "scope_decision": {
+    "basis": "Rootprioritizesoriginaluserrequest/fastcompletion; optionalpreferencequestionhadnoreplyafterreasonabletime. Thisisnotclaimeduserapprovalofextras orcriterionrelaxation.",
+    "not_claimed": [
+      "independentexactglobalFP64initialgradient",
+      "secondnativefullVJPgradientbitwisereplay",
+      "generalall-directionsdifferentiability",
+      "multitimeobservations",
+      "initialization-mapgradient"
+    ],
+    "required": "oneactualFortranFP32globalcotangentchainacross256native steps; localprecastFP64auditperblock; actualnative256forwardreplay; frozen4FDcases andsameFD/onesided/signalcriteria"
+  },
+  "shared_forward_map_binding": "V5andP6useIDENTICALproductioncoreobjects, classheaders, FortranSolveEm/moduleImplicit, physicalNML/input/stack andforwardseed/direction/terminalformulas. Onlytestdriverreversecallselection/inputprecisionauditandrolelabels differ. Everyprefix/replayDoublecheckpointmatchesbaseline. Preservebothsourceworktrees/exes; noeditingV5whileactive.",
+  "status": "frozen_before_any_P6_native_model_output; require completedV5baselinegate andfinalsource/build/graph/Redbinding",
+  "supersedes": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/protocol_v5.json",
+    "reason": "Measuredtransposematvec~1s, originalextra2globalprecisionchains+secondglobalVJPcostmanyhours. Prioritizeuserrequiredactual256FortrancheckedVJP, fullstateforwardreplay andindependentFD. NoFD/fullinitialgradientresultseenatdecision; no scientificerrorbudget/input/epsilon/tolerance changes. ExtraexactglobalFP64chain andsecondglobalVJP remainunverified, notreportedpassed.",
+    "sha256": "b96cbe382b1e992c64e21b2ef3f413cf3aa7ba6b7bfaa31e0a43b91390c9ce45"
+  },
+  "target": {
+    "N": 256,
+    "control_boundary": "Solver-entry prognostic state AFTER first_rk_step initialization/CQ; no input-file or initialization derivative claim",
+    "ewt": 1e-06,
+    "h_seconds": 0.9375,
+    "krylov": 1e-07,
+    "native": "Actual WRF em_b_wave Fortran256 steps with existing checked Fortran fixed-trajectory begin/pullback/close, same single native solver; no standalone substitute",
+    "newton_abs": 1e-09,
+    "newton_rel": 0,
+    "packed_dimension": 24531,
+    "packed_extents": {
+      "nx": 17,
+      "nx_u": 18,
+      "ny": 17,
+      "ny_v": 18,
+      "nz": 16,
+      "nz_w": 17
+    },
+    "physical_mass_extents": [
+      16,
+      16,
+      16
+    ],
+    "time_seconds": 240
+  },
+  "test_only_changes": {
+    "build": "Recompile macro-only tileimpl(two10linehooks), testCPP/testFortran; reuseunchangedinterface/solve_em/classABI. PreserveV2/V3executables andallfailedattempts; separateV4suffixexe.",
+    "clear_prefixes": [
+      "WRF_SDIRK3_",
+      "WRF_PARITY_"
+    ],
+    "macro": "WRF_SDIRK3_NATIVE_TERMINAL_TEST",
+    "observer_environment": {
+      "OMP_NUM_THREADS": "1",
+      "WRF_SDIRK3_RHS_COUNT": "1",
+      "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0"
+    },
+    "production_math_options_defaults_ABI": "unchanged; test support/capture compiled only for verification executable",
+    "recording_namelist_existing_keys": [
+      "retain_graph_for_adjoint=true, imex_slow_in_tangent=true atconstructor; testeffectivewarmFalse/False thenrecordedsuffixTrue/True, explicitmetadata"
+    ],
+    "tangent_flag_source": "Registry/Registry.EM_SDIRK3_OPTIMIZATIONS:73 false; archived namelist.output IMEX_SLOW_IN_TANGENT=F; tileimpl compute_k_slow retains or detaches same explicit values, checked profile requires true."
+  },
+  "v4_failed_forward": {
+    "VJP_completed": false,
+    "failure": "fixed trajectory fixed input changed",
+    "fp64_checkpoints": 257,
+    "objective": -11.718318303682183,
+    "primal_only_review": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v4_failed_primal_only.json",
+    "primal_only_review_sha256": "869bd8b6214a2ca017ceffb5ccc3354c0039b42ba3cc4c6fbe9dfe96be56a993",
+    "primary_native_steps": 256,
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v4/baseline/run_receipt.json",
+    "receipt_sha256": "7fbb1b75ce85a916ad8d569b562b53e35f01fa35ea380c937af0fd549bb6047a"
+  }
+}
