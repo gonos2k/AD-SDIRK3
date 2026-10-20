@@ -1,0 +1,18 @@
+{
+  "change_scope": "Receipt-schema aliases only: accept exact `history_times`/`history_times_exact`, `accepted_stage_csvs`/accepted count, and normalized contiguous/accepted/dt keys in the corrected fine runner receipt; all gates remain strict. Added no changes to _read_steps, state unpacking, G/K\u2212FI equations, W owner, time grid, V3 mask/budgets, comparison formulas, or selected-stage logic. Added a solver-summary CSV schema preflight that rejects missing/extra field handling before output writing; no numerical analysis changes.",
+  "coarse_compaction_source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/red_validator/analyze_pr310_240s_red.py",
+  "coarse_compaction_source_sha256": "16daf7b72a93986631877d8257a6fa263a12d8b570f62a759a32061e71c87b5b",
+  "final_analysis_source_ast_checked": true,
+  "final_analyzer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyze_pr310_240s_red.py",
+  "final_analyzer_sha256": "0a2f6ce72f5331b8a5aedaaaf05c1c3bae69fb3911456cb235cb107d05311917",
+  "previous_analyzer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/versions/analyze_pr310_240s_red_16daf7b.py",
+  "previous_analyzer_sha256": "16daf7b72a93986631877d8257a6fa263a12d8b570f62a759a32061e71c87b5b",
+  "recovery_authorization": {
+    "authorized_by": "/root",
+    "no_new_model_run": true,
+    "no_source_or_threshold_change": true,
+    "original_partial_products_preserved": true,
+    "scope": "one additional offline fine CSV read solely to recover independent solver G/K\u2212FI summary lost to the first serializer failure"
+  },
+  "schema": "pr310_red_analyzer_version_binding_v1"
+}

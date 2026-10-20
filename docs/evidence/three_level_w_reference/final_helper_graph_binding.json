@@ -1,0 +1,172 @@
+{
+  "current_bounded_ast_graph": {
+    "detected_words": 6018,
+    "edges": 187,
+    "extractor": "graphify update --no-cluster; AST-only",
+    "files": 6,
+    "graphify_input_tokens": 0,
+    "graphify_output_tokens": 0,
+    "llm_token_cost": 0,
+    "nodes": 55,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_final_helper_tools_ast_corpus/source/graphify-out/graph.json",
+    "sha256": "4d2d75cefe48a2ac60e42a8d6bf608e7a954f28c0651a3fe5852bbe064d0f415"
+  },
+  "current_status": "M docs/PROBLEM_DEFINITION.md",
+  "data_lineage_refs_not_evaluated": {
+    "green_analysis_json": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/analysis/pr311_three_level_public_field_analysis.json",
+      "sha256": "fcdea8746e494034529a5d49da992aaffbe1e663a5a2f4ae8ccdbf1a875d1bae"
+    },
+    "green_official_screen_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/analysis/pr311_h3_vs_middle_24row_screen.csv",
+      "sha256": "41fa02aa5587a561e6d26a22c2504f258014266b0cbde28db258695b298131f5"
+    },
+    "note": "Paths/hashes bind separately produced artifacts only; this graph task did not read their numeric contents or validate conclusions.",
+    "red_final_validation_receipt": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/pr311_red_final_validation_receipt.json",
+      "sha256": "54f96e9f729db77f8cfce5ab4fdabd790e21c360b13e564b4674484512df6e59"
+    }
+  },
+  "frozen_protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/root_final_protocol.json",
+    "sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0"
+  },
+  "head": "8cfb6787f095cd778671ba873bd4f29ac8f96a97",
+  "helper_sources": [
+    {
+      "copy_matches": true,
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_final_helper_tools_ast_corpus/source/evidence/green_metric/analyze_pr311_three_level_public_fields.py",
+      "name": "green_h3_analyzer",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/analyze_pr311_three_level_public_fields.py",
+      "sha256": "d39f9d6d348fbd9d13546e07dc37ab175bdb570ae334e927c3f58aa0e7ab35b8",
+      "tracked_in_W": null
+    },
+    {
+      "copy_matches": true,
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_final_helper_tools_ast_corpus/source/evidence/red_validator/analyze_pr311_h3_independent.py",
+      "name": "red_h3_analyzer",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/analyze_pr311_h3_independent.py",
+      "sha256": "ff57362ed57bed947bd8bd4dd05ce5919186b4ec76e333fd9d1c7c8013c06fd6",
+      "tracked_in_W": null
+    },
+    {
+      "copy_matches": true,
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_final_helper_tools_ast_corpus/source/evidence/green_metric/analyze_pr310_w_spatial_structure.py",
+      "name": "pr310_spatial_helper",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/analyze_pr310_w_spatial_structure.py",
+      "sha256": "49c266ff95c71c8c76732a56bd7d6f7e79c0e96742058b932b47b364290c1033",
+      "tracked_in_W": null
+    },
+    {
+      "copy_matches": true,
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_final_helper_tools_ast_corpus/source/evidence/preflight/run_pr311_h3_nocsv.py",
+      "name": "h3_nocsv_runner",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/preflight/run_pr311_h3_nocsv.py",
+      "sha256": "7177a8d283f64508c0d8bede177d0d98fd97b57a3daa941c278e4b35258e432a",
+      "tracked_in_W": null
+    },
+    {
+      "copy_matches": true,
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_final_helper_tools_ast_corpus/source/evidence/root_official_screen.py",
+      "name": "root_official_screen_copy",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/root_official_screen.py",
+      "sha256": "21a013de02f1584d7b806aef203982ece09f23e2f6da7c3f9ac948f3d3f57086",
+      "tracked_in_W": null
+    },
+    {
+      "copy_matches": true,
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_final_helper_tools_ast_corpus/source/worktree/docs/evidence/three_level_w_reference/recompute_three_level_numpy.py",
+      "name": "public_numpy_recompute",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/three_level_w_reference/recompute_three_level_numpy.py",
+      "sha256": "3f8a3a4a2de61ab0abeb84e8dd6a3ba24c2befb6e7609c758ba0a348c03568e3",
+      "tracked_in_W": false
+    }
+  ],
+  "limitations": [
+    "AST/import edges are navigation only, not mathematical proof.",
+    "No numerical outputs were inspected, no model/build/test run was performed, and no production code was edited.",
+    "The public recomputation helper was source-bound but not executed."
+  ],
+  "navigation_scope": [
+    "Green analyzer binds root protocol and public-field comparisons.",
+    "Red analyzer is the independent validator and binds the same frozen protocol/runner receipt.",
+    "Spatial helper remains the already frozen descriptive PR310 W analysis source.",
+    "Runner pins the existing executable, runtime libraries, source list, input, protocol, and capture audit; no invocation occurred.",
+    "Public recompute helper is a W docs/evidence file, currently outside tracked git files; its exact bytes are pinned here, and its referenced array input remains external."
+  ],
+  "reused_production_provenance": {
+    "28_pin_records_rechecked": true,
+    "current_base": "8cfb6787f095cd778671ba873bd4f29ac8f96a97",
+    "current_production_graph_refs": [
+      {
+        "available": true,
+        "current_file_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+        "hash_still_matches": true,
+        "name": "pr307_v2_cpp",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+        "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5",
+        "hash_still_matches": true,
+        "name": "pr307_accepted_parser",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+        "sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257",
+        "hash_still_matches": true,
+        "name": "pr305_read_payload",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_graph/graphify-out/graph.json",
+        "sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257"
+      },
+      {
+        "available": false,
+        "current_file_sha256": null,
+        "hash_still_matches": null,
+        "name": "pr299_benchmark_helpers",
+        "path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+        "sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9",
+        "hash_still_matches": true,
+        "name": "pr308_fine_pair_analyzer",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_fine_pair_analyzer_graph/graphify-out/graph.json",
+        "sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9"
+      }
+    ],
+    "previous_graph_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_helper_ast_source_binding_receipt.json",
+    "previous_graph_receipt_sha256": "f97d7e94b1bf684a69a06b561b8f11a036a70be34e7c4aa25fd6d91cb540ffd3",
+    "statement": "No C++/Fortran graph rebuild or extraction; existing compiled source pins and preserved graph references were rechecked. The unavailable PR299 scratch graph remains unavailable and was not reconstructed.",
+    "unique_source_paths": 27
+  },
+  "schema": "pr311_final_helper_ast_source_graph_binding_v1",
+  "source_binding_receipts": {
+    "green_tool_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/pr311_three_level_analysis_tool_binding.json",
+      "sha256": "cc0e3462dcf40137597e44162b983b1af7c9b0e69c6d24c89d4eecb260aeec90"
+    },
+    "prior_helper_graph_receipt_preserved": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_helper_ast_source_binding_receipt.json",
+      "sha256": "f97d7e94b1bf684a69a06b561b8f11a036a70be34e7c4aa25fd6d91cb540ffd3"
+    },
+    "red_final_validation_receipt": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/pr311_red_final_validation_receipt.json",
+      "sha256": "54f96e9f729db77f8cfce5ab4fdabd790e21c360b13e564b4674484512df6e59"
+    },
+    "red_validator_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/h3_validator_binding.json",
+      "sha256": "a8050fdc2f36417e89e21108d4231386d47bbd51ee6f733ce2fab4c05e9d1158"
+    },
+    "root_source_binding_capture_audit": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_h3_existing_capture_source_audit.json",
+      "sha256": "da56311a03a231330f3cb83ca011108bf7673e440af07a52f845c3d94bf1ffaa"
+    }
+  },
+  "tree": "1cee8a60fb65e0951afd4e3f207099a85aef272b",
+  "worktree": "/private/tmp/pr310-strict-reference-240s-20261020"
+}

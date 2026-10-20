@@ -1,0 +1,265 @@
+{
+  "W_optional_descriptives": {
+    "fixed_M0_e1": "If the pinned h=0.234375 public W uses exactly the same 4096 physical W owners, compute weighted RMS and projection with the existing frozen E308 M0/e1 basis. This is descriptive only and does not gate the 24-row screen.",
+    "unavailable_internal": "If h=0.234375 runs observer-off, there are no FP64 internal W endpoints for that run; report only public FP32-promoted W diagnostics and make no internal-trajectory claim."
+  },
+  "conditional_archived_candidate": {
+    "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-time-map-20261012/green_build/pr303_cf_bridge_build_receipt.json",
+    "build_receipt_sha256": "a1641b45680f788db9f70ba7a0288349c19f45cecd6df1444a94d8708fd965f3",
+    "candidate_name": "existing h=15 s native mode-3 ARK candidate from original e71 initial state",
+    "candidate_scope_note": "This is the existing h=15 s archive. Do not evaluate a new h=0.9375 candidate; no such candidate evaluation is requested.",
+    "comparison_gate": "Only after all 24 h=0.46875 versus h=0.234375 epsilon/3 reference rows pass, compare this pinned candidate against h=0.234375 at 60/120/180/240 s on the same six V3 physical-owner fields using the full epsilon limits (3 \u00d7 epsilon/3).",
+    "cpp_archive_sha256": "b04b827fc194a363fbf9cf6e618f4b3d51b1dbf3dea10b33b6bb8de99e077159",
+    "duration_seconds": 240,
+    "executable_sha256": "aecd20f900ca922775944df380ecbeb8b63655c7390e8a8a0faac9f821f95ef3",
+    "full_epsilon_limits": {
+      "MU": 0.014590900457561187,
+      "PH": 0.010249750539744869,
+      "T": 3.619571391542998e-05,
+      "U": 0.0007744417040064484,
+      "V": 0.00010122007244795247,
+      "W": 7.79443985679733e-06
+    },
+    "imex_split_mode": 3,
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_sha256": "6258b997543f95b6cdde538aa37e14084f17862210e94c02dd23fb7fd91a8e06",
+    "native_transport_tuple": {
+      "cf1_cf2_cf3": [
+        2.095576286315918,
+        -1.7350879907608032,
+        0.6395117044448853
+      ],
+      "phi_adv_z": 1,
+      "v_sca_adv_order": 3
+    },
+    "provenance_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_pressure/archive_candidate_provenance.json",
+    "provenance_sha256": "bc100e3009e3e1a82b38913e4f8f64f3ba00ba82ea5c246cd09f83f9eca7f7ff",
+    "raw_output_files": [
+      {
+        "exact_hash": true,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-time-map-20261012/green_execution/post_cf/postfix_240_e71/wrfout_d01_0001-01-01_00:00:00",
+        "receipt_sha256": "5ed6e806d334a3f0167dd6a71333743cf32b5e3995fdab0ab1307a28bfc820ed",
+        "sha256": "5ed6e806d334a3f0167dd6a71333743cf32b5e3995fdab0ab1307a28bfc820ed",
+        "times": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:01:00"
+        ]
+      },
+      {
+        "exact_hash": true,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-time-map-20261012/green_execution/post_cf/postfix_240_e71/wrfout_d01_0001-01-01_00:02:00",
+        "receipt_sha256": "c79bfcbfff752be53ee9ddb7475eb577d9668238b7f6946b499e5cb496fab488",
+        "sha256": "c79bfcbfff752be53ee9ddb7475eb577d9668238b7f6946b499e5cb496fab488",
+        "times": [
+          "0001-01-01_00:02:00",
+          "0001-01-01_00:03:00"
+        ]
+      },
+      {
+        "exact_hash": true,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-time-map-20261012/green_execution/post_cf/postfix_240_e71/wrfout_d01_0001-01-01_00:04:00",
+        "receipt_sha256": "1d338d391270defbca386543c1966ab6ba1d60d8a369ff93f1695a0bb5c5897f",
+        "sha256": "1d338d391270defbca386543c1966ab6ba1d60d8a369ff93f1695a0bb5c5897f",
+        "times": [
+          "0001-01-01_00:04:00"
+        ]
+      }
+    ],
+    "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-time-map-20261012/green_execution/post_cf/postfix_240_e71/run_receipt.json",
+    "run_receipt_sha256": "9d610c9cf68e5a37aa6c5229d9a0cb523af10c57375a176ff42b9fa67cbd22ba",
+    "scheme": 6,
+    "source_revision": "ebf0b19fd758e32d4d3dc3a5f5f7564db6a09b73",
+    "timestep_seconds": 15.0,
+    "wrfout_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/native-time-map-20261012/green_execution/post_cf/postfix_240_e71"
+  },
+  "execution": {
+    "MPI_ranks": 1,
+    "OMP_threads": 1,
+    "authorized_new_model_runs": 1,
+    "base_source_commit": "8cfb6787f095cd778671ba873bd4f29ac8f96a97",
+    "capture_limitations": [
+      "Only 17 public FP32 history states for h3, promoted to FP64 for the unchanged official comparison.",
+      "No new h3 internal FP64 W trajectory, per-stage physical G_W arrays, or full termination enum claim.",
+      "Read existing RSL Newton convergence, carry, stage/step telemetry and solver summaries; retain exact source/executable/config hashes."
+    ],
+    "capture_source_audit_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_h3_existing_capture_source_audit.json",
+    "capture_source_audit_sha256": "da56311a03a231330f3cb83ca011108bf7673e440af07a52f845c3d94bf1ffaa",
+    "clear_environment_prefixes": [
+      "WRF_SDIRK3_",
+      "WRF_PARITY_"
+    ],
+    "environment": {
+      "WRF_SDIRK3_RHS_COUNT": "1",
+      "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0"
+    },
+    "expected_implicit_stage_calls": 3072,
+    "expected_model_steps": 1024,
+    "fixed_numerical_settings": {
+      "cf1_cf2_cf3": [
+        2.095576286315918,
+        -1.7350879907608032,
+        0.6395117044448853
+      ],
+      "diff_opt": 2,
+      "effective_ewt_rtol": 1e-06,
+      "imex_mode": 3,
+      "implicit_divergence": true,
+      "internal_fp64": true,
+      "internal_fp64_state_carry": true,
+      "kdamp": 0.2,
+      "khdif": 1000,
+      "krylov_tolerance": 1e-07,
+      "kvdif": 10,
+      "newton_relative_tolerance": 0,
+      "newton_tolerance": 1e-09,
+      "phi_adv_z": 1,
+      "scheme": 6,
+      "split_explicit": false,
+      "v_sca_adv_order": 3
+    },
+    "h_seconds": 0.234375,
+    "history_interval_seconds": 15,
+    "new_builds": 0,
+    "preflight_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/preflight/pr311_preflight_manifest.json",
+    "preflight_sha256": "1bc909c58882ec9f37ac20c88cf41ac2b52aec39de5f07b68c0462611fd47237",
+    "required_completion_checks": [
+      "rc0 and SUCCESS COMPLETE WRF",
+      "exact 17 canonical NetCDF timestamps and finite eight state fields; positive total theta, column mass and layer depth",
+      "initial eight state fields equal to retained legacy middle run",
+      "1024 input carry tokens, first host and1023 internal;1024 published tokens, monotone exact sequence",
+      "3072 Newton convergence records and zero failed solver stages;record actual iterations and printed residuals,not physical W G",
+      "unchanged effective namelist/source/executable/input pins;0 stage operand CSVs",
+      "record and reject unexpected retry/fallback/nonfinite/soft-continue/state-handoff events as a numerical-health mismatch rather than silently mixing paths"
+    ],
+    "run_seconds": 240,
+    "stage_CSV_expected_count": 0
+  },
+  "existing_data": {
+    "field_aliases": {
+      "coarse": "h=0.9375",
+      "fine": "h=0.46875"
+    },
+    "npz_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/published_fields_and_W.npz",
+    "npz_sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+    "prior_pair_analysis_protocol_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/protocol_final.json",
+    "prior_pair_analysis_protocol_sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad"
+  },
+  "frozen_at_jst": "2026-10-20T17:30:46+09:00",
+  "new_case_to_bind_before_analysis": {
+    "duration_seconds": 240,
+    "expected_comparison_role": "fine level h3; compare to unchanged archived h=0.46875 middle level",
+    "history_times_seconds": [
+      0,
+      15,
+      30,
+      45,
+      60,
+      75,
+      90,
+      105,
+      120,
+      135,
+      150,
+      165,
+      180,
+      195,
+      210,
+      225,
+      240
+    ],
+    "internal_trajectory_requirement": "Not required for the official screen. If the observer is off, use only public 17-point fields; do not infer internal FP64 trajectories.",
+    "required_run_receipt_fields": [
+      "run receipt and source/executable/input/namelist hashes",
+      "return code and WRF SUCCESS COMPLETE marker",
+      "actual canonical 17 NetCDF times",
+      "all 8 fields finite and physical admissibility",
+      "exact same initial state/input/source/executable/physics configuration as h=0.46875 except the declared timestep triple and observer-only capture mode"
+    ],
+    "timestep_seconds": 0.234375
+  },
+  "non_scope": [
+    "No rerun of h=.9375 or .46875; reuse the preserved 22/24 family unchanged.",
+    "Only the predeclared new h=15/64 varies; no production source, physics, initial condition, tolerance or budget change.",
+    "Observer capture mode changes only as declared; no new writer/framework or build.",
+    "Do not use amplitude/time shifts or projection diagnostics to correct official fields.",
+    "q/cosine are descriptive, not extra acceptance conditions or proof of order.",
+    "No efficiency, true-error, general-adjoint or project-wide acceptance claim."
+  ],
+  "official_screen": {
+    "criterion": "All 24 RMS rows must satisfy the unchanged epsilon/3 limits for the named h=0.234375 versus h=0.46875 reference pair. Only if all 24 pass may the existing archived h=15 s candidate be formally compared against h=0.234375 at the same four times using the full epsilon limits. If any h3 reference row fails, do not adjudicate the h=15 candidate as passing. This is named-case evidence, not truth, an error bound, an order claim, or project-wide acceptance.",
+    "epsilon_over_3": {
+      "MU": 0.004863633485853729,
+      "PH": 0.0034165835132482897,
+      "T": 1.2065237971809995e-05,
+      "U": 0.00025814723466881614,
+      "V": 3.374002414931749e-05,
+      "W": 2.5981466189324436e-06
+    },
+    "fields": [
+      "U",
+      "V",
+      "W",
+      "PH",
+      "T",
+      "MU"
+    ],
+    "method": "Use the repository-owned published NetCDF loader and exact V3 owner masks/transforms. Promote each FP32 published field to FP64 before differencing. Compare h=0.234375 minus h=0.46875 at the four exact timestamps.",
+    "owner_counts": {
+      "MU": 256,
+      "PH": 4096,
+      "T": 4096,
+      "U": 4096,
+      "V": 4352,
+      "W": 4096
+    },
+    "times_seconds": [
+      60,
+      120,
+      180,
+      240
+    ],
+    "transforms": {
+      "MU": "MU + MUB Pa",
+      "PH": "PH geopotential perturbation (m^2/s^2)",
+      "T": "T + 300 K",
+      "U": "U",
+      "V": "V",
+      "W": "W"
+    }
+  },
+  "schema": "three_level_w_reference_root_final_v1",
+  "scope": "Offline analysis plan for the existing h=0.9375 and h=0.46875 published data plus one separately authorized h=0.234375 240 s case. This file authorizes no model run.",
+  "spatial_precheck_decision": {
+    "action": "Proceed with the one authorized third-level run; do not change operators or tune coefficients.",
+    "basis": "Two compact-only analyses agree: horizontal interior contributes approximately68-72percent of difference squared norm; maxima partly occur in Y-wall-adjacent rows but discrepancy is not confined to those rows or the dynamic top. This distribution does not prove cause.",
+    "new_local_numerical_defect_confirmed": false
+  },
+  "status": "corrected v2 awaiting root final freeze; no h=0.234375 model output had been launched or bound at this revision",
+  "stop_policy": {
+    "actual_model_or_state_handoff_error": "Stop and record the first actual error; no automatic rerun.",
+    "all_24_pass": "End this named-case empirical reference-sensitivity screen and evaluate only the pinned archived h15 candidate with full original epsilon. No new order requirement.",
+    "any_24_fail": "Report first failed variable/checkpoint and descriptive three-level directions. No automatic smaller timestep, tolerance change, budget change or second model run.",
+    "healthy_case": "Finish the single 240s case even if an earlier official row fails.",
+    "no_more_models_under_this_protocol": true
+  },
+  "supersedes_pre_output_draft": {
+    "any_h3_model_output_observed": false,
+    "changes": [
+      "pin full candidate epsilon values from the original contract exactly, rather than floating-point multiply-by-three",
+      "bind lightweight observer-off capture and exact one-run execution/stop policy"
+    ],
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/pr311_three_level_reference_protocol_v2.json",
+    "sha256": "3b76874ba07b5bca137a19be96656307e79ffda285feb5b0c6425373dee8cd88"
+  },
+  "supersedes_protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/pr311_three_level_reference_protocol_v1.json",
+    "reason": "v1 incorrectly named h=0.9375 as the conditional archived candidate; the intended candidate is the existing h=15 s run.",
+    "sha256": "892003e25e07499c28ed9d8d6c100e3fd7e77216867c20521d68857d1c433b1a"
+  },
+  "three_level_differences": {
+    "D1": "h=0.46875 minus h=0.9375, from existing NPZ fields `fine - coarse` at each shared timestamp.",
+    "D2": "h=0.234375 minus h=0.46875, from the newly authorized case and existing h=0.46875 middle archive.",
+    "interpretation": "Descriptive three-level shape comparison only. No Richardson fit, convergence-order claim, or automatic pass criterion is applied to D2/D1 or cosine.",
+    "statistics": "At each of 4 times \u00d7 6 fields, compute owner-masked RMS(D1), RMS(D2), max-absolute(D1/D2), RMS ratio RMS(D2)/RMS(D1), and spatial cosine dot(D1,D2)/(||D1||2 ||D2||2). Each field retains its own units; cosine and RMS ratio are dimensionless. If either vector norm is zero, cosine is null and explicitly reasoned."
+  }
+}

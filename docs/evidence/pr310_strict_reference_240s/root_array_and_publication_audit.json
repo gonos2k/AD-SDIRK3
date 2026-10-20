@@ -1,0 +1,259 @@
+{
+  "green_analysis_sha256": "6985f6d2f78b3d4c8822a9593ebf35963b7f7d23b18864f0b9e7ca8d69ea46fb",
+  "E309_all_internal_W_prefixes": {
+    "coarse": {
+      "endpoint_count": 65,
+      "all_W_endpoint_bytes_exact": true
+    },
+    "fine": {
+      "endpoint_count": 129,
+      "all_W_endpoint_bytes_exact": true
+    }
+  },
+  "publication_checks": [
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:00:00",
+      "internal_endpoint_index": 0,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:00:15",
+      "internal_endpoint_index": 16,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:00:30",
+      "internal_endpoint_index": 32,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:00:45",
+      "internal_endpoint_index": 48,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:01:00",
+      "internal_endpoint_index": 64,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:01:15",
+      "internal_endpoint_index": 80,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:01:30",
+      "internal_endpoint_index": 96,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:01:45",
+      "internal_endpoint_index": 112,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:02:00",
+      "internal_endpoint_index": 128,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:02:15",
+      "internal_endpoint_index": 144,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:02:30",
+      "internal_endpoint_index": 160,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:02:45",
+      "internal_endpoint_index": 176,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:03:00",
+      "internal_endpoint_index": 192,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:03:15",
+      "internal_endpoint_index": 208,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:03:30",
+      "internal_endpoint_index": 224,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:03:45",
+      "internal_endpoint_index": 240,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "coarse",
+      "timestamp": "0001-01-01_00:04:00",
+      "internal_endpoint_index": 256,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:00:00",
+      "internal_endpoint_index": 0,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:00:15",
+      "internal_endpoint_index": 32,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:00:30",
+      "internal_endpoint_index": 64,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:00:45",
+      "internal_endpoint_index": 96,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:01:00",
+      "internal_endpoint_index": 128,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:01:15",
+      "internal_endpoint_index": 160,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:01:30",
+      "internal_endpoint_index": 192,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:01:45",
+      "internal_endpoint_index": 224,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:02:00",
+      "internal_endpoint_index": 256,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:02:15",
+      "internal_endpoint_index": 288,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:02:30",
+      "internal_endpoint_index": 320,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:02:45",
+      "internal_endpoint_index": 352,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:03:00",
+      "internal_endpoint_index": 384,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:03:15",
+      "internal_endpoint_index": 416,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:03:30",
+      "internal_endpoint_index": 448,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:03:45",
+      "internal_endpoint_index": 480,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    },
+    {
+      "role": "fine",
+      "timestamp": "0001-01-01_00:04:00",
+      "internal_endpoint_index": 512,
+      "physical_owners": 4096,
+      "FP32_bytes_exact": true
+    }
+  ],
+  "publication_exact_count": 34,
+  "owned_raw_W_equals_projected_W": {
+    "coarse": true,
+    "fine": true
+  },
+  "scope": "Exact array/precision path checks, not a true-error or global-adjoint claim."
+}

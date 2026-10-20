@@ -1,0 +1,636 @@
+{
+  "schema": "pr310_strict_reference_240s_preflight_v3",
+  "created_local_time": "2026-10-20T09:44:29+09:00",
+  "status": "preflight_v3_protocol_and_storage_bound; awaiting_root_final_capture_plan_launch_binding",
+  "target_worktree": "/private/tmp/pr310-strict-reference-240s-20261020",
+  "target_head": "9614e78dbd71250f571f0e495650eeca1e209a04",
+  "current_source_checks": [
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_globals.cpp",
+      "expected": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+      "actual": "153b80a8f23c2043f5b45e1cae38862524bb65ac31cccf019d80455772fd8613",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_operator_contract.cpp",
+      "expected": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+      "actual": "a2e7db08020d67642566e27d3eb9523aa2d5f0705a44b0e00012bc1e29cddbef",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_interface.cpp",
+      "expected": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+      "actual": "a97f16441763116b08b94561d5977aa42ff9dc462703379b2a9360970f6453ed",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "expected": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+      "actual": "ef0529ee9bec056be2fb21607737665c786f4851e8a9d4ce6d76e5e9e10e0fb0",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_zero_copy_interface.cpp",
+      "expected": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+      "actual": "13c7c3f96a2d13770f7d0d8e5fc3ea859b65705fbf1ce1e250e95a4c4577a99a",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.cpp",
+      "expected": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+      "actual": "e2def496c7f6b78f68813f0d9b422abf6962703b38eb9c429cf5468ddaab86b4",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "expected": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "actual": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+      "expected": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+      "actual": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_autograd.cpp",
+      "expected": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+      "actual": "3e595826973961c812c05b7d9f101c5b3a3018ae3ad019471c664502b8538601",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp",
+      "expected": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+      "actual": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp",
+      "expected": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+      "actual": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp",
+      "expected": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+      "actual": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_tile_boundary_optimizer.cpp",
+      "expected": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+      "actual": "71722365e4acfddbecf9468365936f203934a36bcc3e57210cb4e408c1be397a",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp",
+      "expected": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "actual": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_preconditioner.cpp",
+      "expected": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+      "actual": "f92032a9d6a1002784fbd6fca1b96c0b10580d625d9a3952bf157ec846e9e386",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_unified_rhs_extended.cpp",
+      "expected": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+      "actual": "b477662e01c68bf5f781abe10c9516a9ae4ad9f9e66dd6205fae5fa7b3420bf9",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_cache_utils.cpp",
+      "expected": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+      "actual": "b40561da95360d994ba2bbe16acbb06064091e5179b2c8acc9b10dc3b4f14cc7",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_boundary_ad.cpp",
+      "expected": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+      "actual": "7b2df47073b9e20e78850a3302c66e32e3d2668706b1747f872748927134b86c",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_rayleigh_damping_ad.cpp",
+      "expected": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+      "actual": "d8f1d010f8cf3909d3e7c337bc5059b80fceef04be90037e2e87688bcd01dff6",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_mpi_safety_impl.cpp",
+      "expected": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+      "actual": "dffb0b517d5494210d02547d7b3725a6046d0124e1de2d24b2e1293ca237975b",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_halo_exchange.cpp",
+      "expected": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+      "actual": "bda76d9c601b0b9c3e577fbef1172f3f18bfbedef69a23b8c8aacb1f0bb815bc",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_ad_halo_exchange.cpp",
+      "expected": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+      "actual": "c3a79dec4fb62db812f19f8d6c48cf89889f18c5fd87b7eacb65d8c454d6e216",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_rhs_run_close.cpp",
+      "expected": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+      "actual": "eb03d9c02132451d2df33d5d6c2d2ba65a1691efeffac4ec586791451add06e7",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_u_slow_diagnostics.cpp",
+      "expected": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+      "actual": "bd5774f7a2b1fcac08e7e9b394278009f98e3da15b05cd2480fa1c7cadcc52db",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "expected": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "actual": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "expected": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "actual": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/dyn_em/module_implicit_sdirk3.F",
+      "expected": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+      "actual": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+      "match": true
+    },
+    {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/dyn_em/solve_em.F",
+      "expected": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "actual": "888b81bcb21791fc89e08d739162f7cedfbff8679cba5453010257a3f31a9be8",
+      "match": true
+    }
+  ],
+  "source_matches_all": true,
+  "producer": {
+    "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/libwrf_sdirk3_libtorch.a",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "fortran_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/libwrflib.a",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "pr307_build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/pr307_v2_build_receipt.json",
+    "pr307_build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8",
+    "producer_source_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "build_receipt_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "compiler": "/usr/bin/g++ (Apple clang 21.0.0)",
+    "mpi": "Open MPI 5.0.9; -DDMPARALLEL in core build",
+    "linked_configure_sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289"
+  },
+  "input_reference": {
+    "original_e71_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "source_case": "PR309 same original input copied byte-for-byte into each 240s case",
+    "predecessor_receipts": [
+      {
+        "label": "coarse_60s",
+        "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/run_receipt.json",
+        "run_receipt_sha256": "ca4c91645e4165ae33f802d33a1114f858cf178362c250cf7240306ea49450b5",
+        "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+        "return_code": 0,
+        "duration_s": null,
+        "dt_s": 0.9375,
+        "newton_tol": 1e-09,
+        "step_count": null
+      },
+      {
+        "label": "fine_60s",
+        "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/run_receipt.json",
+        "run_receipt_sha256": "6123eb09ebe8507a95fed5db2cc5a133bf8e9435ff2946a9ad06ac79c0b3ce89",
+        "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+        "return_code": 0,
+        "duration_s": null,
+        "dt_s": 0.46875,
+        "newton_tol": 1e-09,
+        "step_count": null
+      }
+    ]
+  },
+  "pair": [
+    {
+      "role": "coarse",
+      "source_60s_label": "h0p9375_0_60s_newton_tol1e-9",
+      "label": "h0p9375_0_240s_newton_tol1e-9",
+      "status": "prepared_not_started",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p9375_0_240s_newton_tol1e-9",
+      "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p9375_0_240s_newton_tol1e-9/namelist.input",
+      "namelist_sha256": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+      "namelist_diff_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p9375_0_240s_newton_tol1e-9/namelist.diff",
+      "namelist_diff_sha256": "8b9f8b50eb2a4a61e2f685c57089a4e0b5fb224f6d8be656351c79d7294ba688",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p9375_0_240s_newton_tol1e-9/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "changed_namelist_fields": [
+        "run_seconds: 60 -> 240"
+      ],
+      "effective_fields": {
+        "run_seconds": "240",
+        "num": "15",
+        "den": "16",
+        "history_interval_s": "15",
+        "newton_tol": "1e-9",
+        "krylov_max": "100"
+      },
+      "expected": {
+        "duration_s": 240,
+        "dt_fraction_s": "15/16",
+        "dt_s": 0.9375,
+        "macrosteps": 256,
+        "implicit_stage_calls": 768,
+        "history_interval_s": 15,
+        "history_times_seconds": [
+          0,
+          15,
+          30,
+          45,
+          60,
+          75,
+          90,
+          105,
+          120,
+          135,
+          150,
+          165,
+          180,
+          195,
+          210,
+          225,
+          240
+        ],
+        "fp64_carry_host_inputs": 1,
+        "fp64_carry_internal_inputs": 255,
+        "fp64_carry_publications": 256,
+        "newton_tol": 1e-09,
+        "krylov_tol": 1e-07,
+        "ewt_effective": 1e-06
+      }
+    },
+    {
+      "role": "fine",
+      "source_60s_label": "h0p46875_0_60s_newton_tol1e-9",
+      "label": "h0p46875_0_240s_newton_tol1e-9",
+      "status": "prepared_not_started",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p46875_0_240s_newton_tol1e-9",
+      "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p46875_0_240s_newton_tol1e-9/namelist.input",
+      "namelist_sha256": "afc0043b726084aa84e4b319352f0bf3e72b1947667a17e7813aac56729f9e7b",
+      "namelist_diff_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p46875_0_240s_newton_tol1e-9/namelist.diff",
+      "namelist_diff_sha256": "b352335461f7e36bba544a66285e58e05e1a6f9ecf4564cb3b7153caa8b7039c",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p46875_0_240s_newton_tol1e-9/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "changed_namelist_fields": [
+        "run_seconds: 60 -> 240"
+      ],
+      "effective_fields": {
+        "run_seconds": "240",
+        "num": "15",
+        "den": "32",
+        "history_interval_s": "15",
+        "newton_tol": "1e-9",
+        "krylov_max": "100"
+      },
+      "expected": {
+        "duration_s": 240,
+        "dt_fraction_s": "15/32",
+        "dt_s": 0.46875,
+        "macrosteps": 512,
+        "implicit_stage_calls": 1536,
+        "history_interval_s": 15,
+        "history_times_seconds": [
+          0,
+          15,
+          30,
+          45,
+          60,
+          75,
+          90,
+          105,
+          120,
+          135,
+          150,
+          165,
+          180,
+          195,
+          210,
+          225,
+          240
+        ],
+        "fp64_carry_host_inputs": 1,
+        "fp64_carry_internal_inputs": 511,
+        "fp64_carry_publications": 512,
+        "newton_tol": 1e-09,
+        "krylov_tol": 1e-07,
+        "ewt_effective": 1e-06
+      }
+    }
+  ],
+  "previous_comparisons": [
+    {
+      "label": "coarse_60s",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p9375_0_60s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "ca4c91645e4165ae33f802d33a1114f858cf178362c250cf7240306ea49450b5",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "return_code": 0,
+      "duration_s": 60,
+      "dt_s": 0.9375,
+      "newton_tol": 1e-09,
+      "step_count": 64
+    },
+    {
+      "label": "fine_60s",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/h0p46875_0_60s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "6123eb09ebe8507a95fed5db2cc5a133bf8e9435ff2946a9ad06ac79c0b3ce89",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "return_code": 0,
+      "duration_s": 60,
+      "dt_s": 0.46875,
+      "newton_tol": 1e-09,
+      "step_count": 128
+    },
+    {
+      "label": "coarse_15s",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p9375_0_15s/run_receipt.json",
+      "run_receipt_sha256": "7669e1c022fa2edbcfc7ce49dd539d32d66f8efd6b8719829d80948370c4d25b",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "return_code": 0,
+      "duration_s": 15,
+      "dt_s": 0.9375,
+      "newton_tol": "1e-7",
+      "step_count": 16
+    },
+    {
+      "label": "fine_15s_tol1e-7",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p46875_0_15s/run_receipt.json",
+      "run_receipt_sha256": "f7bb6e7bcd32c116cdd0ef601cdd407bf267169160546d4636dc03d2218211d5",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "return_code": 0,
+      "duration_s": 15,
+      "dt_s": 0.46875,
+      "newton_tol": "1e-7",
+      "step_count": 32
+    },
+    {
+      "label": "fine_15s_tol1e-9",
+      "run_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_execution/h0p46875_0_15s_newton_tol1e-9/run_receipt.json",
+      "run_receipt_sha256": "30e458a7eea73a3f14e7763b52ec26879cb0e7e31c6461b6a8ef89d79bd479ff",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "return_code": 0,
+      "duration_s": 15,
+      "dt_s": 0.46875,
+      "newton_tol": 1e-09,
+      "step_count": 32
+    }
+  ],
+  "capture_plan_status": "No native run until root final capture-plan command binds observer environment, temporary raw handling, compactor product hashes, and retention/deletion point.",
+  "no_build_or_model_runs_performed": true,
+  "limits": {
+    "max_native_runs": 2,
+    "continuous_from_t0": true,
+    "horizon_seconds": 240,
+    "same_pair_dt_s": [
+      0.9375,
+      0.46875
+    ],
+    "newton_tol_both": 1e-09,
+    "no_restart_from_60s": true,
+    "no_extra_timestep_or_tolerance_runs": true,
+    "stop_at_240_all_outcomes": true
+  },
+  "original_preflight_v1": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_preflight_manifest_v1_initial.json",
+    "sha256": "5d3d078a21fde1b5ac4199c815168f7d275ce993c0d8f295af1b67a316a959bf",
+    "note": "Initial candidate preflight preserved before expanded build/source revision lineage and corrected predecessor run field mapping."
+  },
+  "source_revision_lineage": {
+    "pr307_build_receipt_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "pr307_frozen_observer_source_commit": "18abbe9a2cd4b32c68d1b3bbf0d64ea0040d48fc",
+    "pr307_docs_final_commit": "df1bc9c7c5d8b07667e182391dc170f9a2dcc49a",
+    "pr307_merge_commit": "e717aa30c55e8cd12dde0de35459c3aabec953c4",
+    "pr308_merge_commit": "9570dd638a1a82b926a5a31fe0a5c6fb2115aecc",
+    "pr309_merge_commit": "9614e78dbd71250f571f0e495650eeca1e209a04",
+    "current_target_head": "9614e78dbd71250f571f0e495650eeca1e209a04",
+    "current_target_diff_from_pr307_merge": [
+      "A\tdocs/(202610151003)_fine_pair_w_trajectory_and_solver_control.md",
+      "A\tdocs/(202610152339)_solver_controlled_w_60s_reference_screen.md",
+      "M\tdocs/PROBLEM_DEFINITION.md",
+      "A\tdocs/evidence/pr308_fine_pair_w/README.md",
+      "A\tdocs/evidence/pr308_fine_pair_w/analysis_protocol_frozen.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/analyzer_graph_binding_receipt.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/analyzer_red_review_ko.md",
+      "A\tdocs/evidence/pr308_fine_pair_w/baseline_csv_compression_manifest.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/coarse_run_receipt.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/common_initial_state_gate.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/compact_recomputation_receipt.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/conditional_csv_compression_manifest.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/conditional_newton_tolerance_contrast_v1.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/final_green_closing_review.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/final_red_scope_audit_ko.md",
+      "A\tdocs/evidence/pr308_fine_pair_w/fine_pair_pressure_work_time_series.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory.png",
+      "A\tdocs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory_analysis.csv",
+      "A\tdocs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory_analysis.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory_analysis.npz",
+      "A\tdocs/evidence/pr308_fine_pair_w/fine_pair_w_trajectory_analysis_steps.csv",
+      "A\tdocs/evidence/pr308_fine_pair_w/fine_run_receipt.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/fixed_w_projection.npz",
+      "A\tdocs/evidence/pr308_fine_pair_w/fixed_w_projection_basis.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/green_red_validation.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/manifest.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/newton_control_analysis.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/newton_control_independent_comparison.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/newton_control_review_ko.md",
+      "A\tdocs/evidence/pr308_fine_pair_w/newton_control_run_receipt.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/newton_control_trajectories.npz",
+      "A\tdocs/evidence/pr308_fine_pair_w/newton_tol_entry_format_audit.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/newton_tolerance_w_control.png",
+      "A\tdocs/evidence/pr308_fine_pair_w/portable_package_receipt.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/pr308_fine_pair_run_index.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/preedit_graph_binding_receipt.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/previous_ci_baseline.md",
+      "A\tdocs/evidence/pr308_fine_pair_w/red_precision_fine_pair_analysis.json",
+      "A\tdocs/evidence/pr308_fine_pair_w/red_precision_fine_pair_audit_ko.md",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/README.md",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/accepted_step_solver_summary.csv",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/all_192_raw_csv_compression_manifest.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/analysis_protocol_final_v3.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/coarse_15s_reuse_audit.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/coarse_prefix16_observed_parity.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/coarse_run_receipt.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/common_time_w_65.csv",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/compact_array_derivation_receipt.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/compact_recomputation_receipt.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/compact_w_trajectories_and_t60_fields.npz",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/external_package_receipt.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/figure_source_hashes.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/final_green_closing_review.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/final_green_review_ko.md",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/final_red_scope_audit_ko.md",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/fine_prefix32_observed_parity.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/fine_run_receipt.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/green_full_analysis.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/green_red_validation.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/manifest.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/numerical_summary.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/official_t60_screen.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/offline_analysis_graph_binding_receipt.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/preedit_graph_reuse_receipt.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/preflight_manifest.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/previous_ci_baseline.md",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/red_independent_analysis_ko.md",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/root_launch_binding.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/rsl_step_telemetry_audit.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/run_index.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/selected_five_details.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/stage_runtime_config_audit.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/stock_rk3_t60_secondary_comparison.json",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/stock_rk3_t60_secondary_comparison_ko.md",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/t60_published_fields.npz",
+      "A\tdocs/evidence/pr309_solver_controlled_w_60s/w_pair_60s.png",
+      "A\ttools/analyze_fine_pair_w_trajectory.py"
+    ],
+    "build_receipt_to_committed_observer_diff": [
+      "M\texternal/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "M\texternal/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "A\ttools/analyze_accepted_ark_w_stage.py"
+    ],
+    "source_hash_gate": "All 24 C++ build source objects plus pinned tile header/implementation and relevant Fortran sources are byte-identical to the reused producer receipts."
+  },
+  "predecessor_pr309_run_index": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/pr309_run_index.json",
+    "sha256": "d17cf4a5e6705fb065f1ad1c18244aff4041eb230a4f16a73a2f402ea5bc2ffd"
+  },
+  "original_preflight_v2": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_preflight_manifest_v2_pre_protocol.json",
+    "sha256": "d88d242c00ea6f3b6e268d0143e6c817dae3289ab2c124c18f4d8f3ff4decfd4",
+    "note": "Source/producer lineage-corrected preflight before Green protocol and storage audit bindings."
+  },
+  "protocol_reference": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/pr310_analysis_protocol_v1.json",
+    "sha256": "2d3ee2b52c71dc1c3771ab39203e3c5d5f47cc06a2e10ed1d78f78d8fa5ca9e5",
+    "status": "frozen_before_PR310_native_outputs",
+    "schema": "pr310_strict_ark_reference_240s_protocol_v1",
+    "paired_cases": {
+      "coarse": {
+        "dt_fraction_seconds": "15/16",
+        "dt_seconds": 0.9375,
+        "final_step_seq": 256,
+        "implicit_stage_calls": 768,
+        "macrosteps": 256
+      },
+      "common": {
+        "effective_ewt_rtol": 1e-06,
+        "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+        "expected_history_times_seconds": [
+          0,
+          15,
+          30,
+          45,
+          60,
+          75,
+          90,
+          105,
+          120,
+          135,
+          150,
+          165,
+          180,
+          195,
+          210,
+          225,
+          240
+        ],
+        "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+        "krylov_tolerance": 1e-07,
+        "newton_tolerance": 1e-09,
+        "only_namelist_difference": "time_step_fract_den",
+        "run_seconds": 240
+      },
+      "fine": {
+        "dt_fraction_seconds": "15/32",
+        "dt_seconds": 0.46875,
+        "final_step_seq": 512,
+        "implicit_stage_calls": 1536,
+        "macrosteps": 512
+      }
+    },
+    "official_screen": {
+      "comparison": "At each exact WRF NetCDF timestamp 60, 120, 180, and 240 s, compare fine-minus-coarse in published FP32 fields promoted to FP64 before differencing/RMS. Apply only the committed V3 field transforms and physical-owner masks; test all 24 (six fields x four timestamps) against the unchanged V3 epsilon/3 reference-check limits.",
+      "contract_id": "dry-em-b-wave-16cubed-240s-fixed-physical-budgets-v3",
+      "epsilon_over_3": {
+        "MU": 0.004863633485853729,
+        "PH": 0.0034165835132482897,
+        "T": 1.2065237971809995e-05,
+        "U": 0.00025814723466881614,
+        "V": 3.374002414931749e-05,
+        "W": 2.5981466189324436e-06
+      },
+      "fields": [
+        "U",
+        "V",
+        "W",
+        "PH",
+        "T",
+        "MU"
+      ],
+      "frozen_contract_sha256": "77bc4dcc7b8e0bde91d6089e9aaa11a67a49311f824d88c97919bbbb8e64fe3f",
+      "interpretation": "Named-case resolution screen only; not truth, an error bound, a convergence-order claim, or project-wide acceptance.",
+      "owner_counts": {
+        "MU": 256,
+        "PH": 4096,
+        "T": 4096,
+        "U": 4096,
+        "V": 4352,
+        "W": 4096
+      },
+      "owner_policy": {
+        "MU": "all mass points",
+        "PH": "drop fixed lower face; retain top",
+        "T": "all mass points",
+        "U": "drop periodic duplicate x face",
+        "V": "retain both physical y walls",
+        "W": "drop fixed lower face; retain dynamic top"
+      },
+      "row_rule": "pass iff FP32-NetCDF-promoted-to-FP64 fine-minus-coarse physical-owner RMS <= frozen field epsilon/3",
+      "source_json": "docs/evidence/pr306_common_filter_reference/native_ark_v3_fixed_budget_analysis.json",
+      "source_sha256": "f1d03774f6b231d49c4f090f3a105835eff6e98755af3c9715bf90a5c7ad2f9c",
+      "transforms": {
+        "MU": "MU + MUB Pa",
+        "PH": "PH geopotential perturbation (m^2/s^2)",
+        "T": "T + 300 K",
+        "U": "U",
+        "V": "V",
+        "W": "W"
+      }
+    },
+    "stage_data_retention": {
+      "all_macrosteps": "Retain compact per-step W internal endpoint and global Newton/stopping summary for all 256/512 macrosteps. Retain no full stage arrays except selected diagnostic details.",
+      "full_stage_details": "First accepted macrostep in each run plus the earliest checkpoint-ending macrostep interval associated with any failed V3 row; if all 24 rows pass, use fixed final interval: coarse step 256 and fine steps 511/512.",
+      "no_discard_before_validation": true,
+      "raw_capture_policy": "Temporary observer CSVs may be compacted after source/receipt/hash validation; preserve only selected full-step details and compact all-step summaries/endpoint W arrays.",
+      "selection": "If any of 24 V3 rows fails, select the earliest failing checkpoint and its one coarse/two fine macrostep interval. If all pass, select [239.0625,240] s."
+    },
+    "outputs": "One compact JSON/NPZ/CSV analysis bundle with all 24 official rows, 257 internal W trajectory rows, compact all-step Newton/stopping records, verified prefixes, selected detailed stage records, receipts and source hashes."
+  },
+  "observer_storage_audit": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_observer_storage_audit.json",
+    "sha256": "3bdbbfee23ddaa258b9f9544696386534d02310285b88ae9f6480c102e30576f",
+    "worktree_clean_at_audit": true,
+    "no_existing_lightweight_writer": true,
+    "estimated_raw_bytes": 23082853380,
+    "available_disk_at_initial_preflight": "72 GiB; recheck before native run",
+    "decision": "Use full accepted-stage observer output temporarily, run the frozen compact analyzer, preserve original SHA/size manifest, and defer cleanup until validation and reviews finish."
+  },
+  "created_local_time_revision": "2026-10-20T09:48:04+09:00"
+}

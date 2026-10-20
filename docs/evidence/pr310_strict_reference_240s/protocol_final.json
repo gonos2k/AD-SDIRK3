@@ -1,0 +1,218 @@
+{
+  "created_local_time": "2026-10-20T09:44:57+09:00",
+  "decision_policy": {
+    "all_outcomes": "No further model runs, horizon extension, timestep ladder, coefficient change, or precision change under this protocol.",
+    "if_all_24_pass": "Report the named-case screen result and stop at 240 s; root may separately assess the already archived h=15 s candidate using archived data, with provenance caveats.",
+    "if_any_of_24_fail": "Report the earliest failing checkpoint and field plus only its preselected adjacent stage details; do not run new timesteps or change coefficients."
+  },
+  "expected_output": "One compact JSON/NPZ/CSV analysis bundle with all 24 official rows, 257 internal W trajectory rows, compact all-step Newton/stopping records, verified prefixes, selected detailed stage records, receipts and source hashes.",
+  "forbidden_inferences": [
+    "true error or forecast truth",
+    "Richardson/order claim",
+    "global state-error bound from local solver defects",
+    "efficiency claim unless separately supported",
+    "project-wide acceptance beyond this named dry case"
+  ],
+  "internal_w_diagnostic": {
+    "coarse_endpoint_count": 257,
+    "common_time_count": 257,
+    "dynamic_top_included": true,
+    "fine_endpoint_count": 513,
+    "fixed_bottom_excluded": true,
+    "frozen_m0_e1_manifest": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/fixed_w_projection_basis.json",
+    "frozen_m0_e1_manifest_sha256": "afc377620a427102be81d8a460d79ae7d72a32dc5503a80d14f7bf0e7aa8debe",
+    "frozen_m0_e1_npz": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/preflight/fixed_w_projection.npz",
+    "frozen_m0_e1_sha256": "12b3432df84de34ca3f8108ae8aabf4953ac484dcb93b6600e2335b0411e85cd",
+    "no_frequency_phase_or_causality_inference": true,
+    "no_refitting_or_recomputing_direction": true,
+    "owners": 4096,
+    "purpose": "Compare accepted internal FP64 W endpoints separately from the official NetCDF screen.",
+    "reported_metrics": [
+      "unweighted W RMS/max at all 257 common times",
+      "M0-weighted W RMS",
+      "signed projection onto fixed e1",
+      "parallel/perpendicular M0 components"
+    ],
+    "shape_kji": [
+      16,
+      16,
+      16
+    ],
+    "time_join": "t_j = j*(15/16) s for j=0..256; coarse j matches fine 2j exactly as rational times."
+  },
+  "official_screen": {
+    "comparison": "At each exact WRF NetCDF timestamp 60, 120, 180, and 240 s, compare fine-minus-coarse in published FP32 fields promoted to FP64 before differencing/RMS. Apply only the committed V3 field transforms and physical-owner masks; test all 24 (six fields x four timestamps) against the unchanged V3 epsilon/3 reference-check limits.",
+    "contract_id": "dry-em-b-wave-16cubed-240s-fixed-physical-budgets-v3",
+    "epsilon_over_3": {
+      "MU": 0.004863633485853729,
+      "PH": 0.0034165835132482897,
+      "T": 1.2065237971809995e-05,
+      "U": 0.00025814723466881614,
+      "V": 3.374002414931749e-05,
+      "W": 2.5981466189324436e-06
+    },
+    "fields": [
+      "U",
+      "V",
+      "W",
+      "PH",
+      "T",
+      "MU"
+    ],
+    "frozen_contract_sha256": "77bc4dcc7b8e0bde91d6089e9aaa11a67a49311f824d88c97919bbbb8e64fe3f",
+    "interpretation": "Named-case resolution screen only; not truth, an error bound, a convergence-order claim, or project-wide acceptance.",
+    "owner_counts": {
+      "MU": 256,
+      "PH": 4096,
+      "T": 4096,
+      "U": 4096,
+      "V": 4352,
+      "W": 4096
+    },
+    "owner_policy": {
+      "MU": "all mass points",
+      "PH": "drop fixed lower face; retain top",
+      "T": "all mass points",
+      "U": "drop periodic duplicate x face",
+      "V": "retain both physical y walls",
+      "W": "drop fixed lower face; retain dynamic top"
+    },
+    "row_rule": "pass iff FP32-NetCDF-promoted-to-FP64 fine-minus-coarse physical-owner RMS <= frozen field epsilon/3",
+    "source_json": "docs/evidence/pr306_common_filter_reference/native_ark_v3_fixed_budget_analysis.json",
+    "source_sha256": "f1d03774f6b231d49c4f090f3a105835eff6e98755af3c9715bf90a5c7ad2f9c",
+    "transforms": {
+      "MU": "MU + MUB Pa",
+      "PH": "PH geopotential perturbation (m^2/s^2)",
+      "T": "T + 300 K",
+      "U": "U",
+      "V": "V",
+      "W": "W"
+    }
+  },
+  "paired_cases": {
+    "coarse": {
+      "dt_fraction_seconds": "15/16",
+      "dt_seconds": 0.9375,
+      "final_step_seq": 256,
+      "implicit_stage_calls": 768,
+      "macrosteps": 256
+    },
+    "common": {
+      "effective_ewt_rtol": 1e-06,
+      "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+      "expected_history_times_seconds": [
+        0,
+        15,
+        30,
+        45,
+        60,
+        75,
+        90,
+        105,
+        120,
+        135,
+        150,
+        165,
+        180,
+        195,
+        210,
+        225,
+        240
+      ],
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "krylov_tolerance": 1e-07,
+      "newton_tolerance": 1e-09,
+      "only_namelist_difference": "time_step_fract_den",
+      "run_seconds": 240,
+      "newton_relative_tolerance": 0.0
+    },
+    "fine": {
+      "dt_fraction_seconds": "15/32",
+      "dt_seconds": 0.46875,
+      "final_step_seq": 512,
+      "implicit_stage_calls": 1536,
+      "macrosteps": 512
+    }
+  },
+  "producer": {
+    "base_revision": "9614e78dbd71250f571f0e495650eeca1e209a04",
+    "base_tree": "24f37b93aa7f93eefe2b291de019fa6a6754474d",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "no_source_edit_or_rebuild": true,
+    "observer_impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "runtime": {
+      "buoyancy_uses_current_w": true,
+      "effective_ewt_rtol": 1e-06,
+      "effective_omega_ww_cp": true,
+      "history_interval_seconds": 15,
+      "imex_mode": 3,
+      "kdamp": 0.2,
+      "krylov_tolerance": 1e-07,
+      "mass_coordinate_mode": 1,
+      "mpi_ranks": 1,
+      "newton_tolerance": 1e-09,
+      "omega_w_blend": 1.0,
+      "omp_threads": 1,
+      "run_seconds": 240,
+      "scheme": 6,
+      "split_explicit": false,
+      "newton_relative_tolerance": 0.0
+    },
+    "worktree": "/private/tmp/pr310-strict-reference-240s-20261020"
+  },
+  "schema": "pr310_strict_ark_reference_240s_protocol_final_v2",
+  "scope": "Two continuous 240 s dry em_b_wave ARK3 mode-3 strict-tolerance references on identical source/executable/input/config, h=15/16 and 15/32 s. Offline analysis only after the two authorized runs.",
+  "stage_data_retention": {
+    "all_macrosteps": "Retain compact per-step W internal endpoint and global Newton/stopping summary for all 256/512 macrosteps. Retain no full stage arrays except selected diagnostic details.",
+    "full_stage_details": "First accepted macrostep in each run plus the earliest checkpoint-ending macrostep interval associated with any failed V3 row; if all 24 rows pass, use fixed final interval: coarse step 256 and fine steps 511/512.",
+    "no_discard_before_validation": true,
+    "raw_capture_policy": "Temporary observer CSVs may be compacted after source/receipt/hash validation; preserve only selected full-step details and compact all-step summaries/endpoint W arrays.",
+    "selection": "If any of 24 V3 rows fails, select the earliest failing checkpoint and its one coarse/two fine macrostep interval. If all pass, select [239.0625,240] s.",
+    "actual_capture": "Reuse unmodified stage_operand_diag existing native writer; all per-step CSVs are TEMPORARY scratch. Do not add a C++/Fortran option, formula, ABI or rebuild.",
+    "primary_compactor": "GreenMetric E-only analyzer reads original CSVs and emits W endpoints, full-six-state prefix/endpoint digests, all-step scalar solver/stopping records and all24 published-field rows.",
+    "independent_validator": "Red independent analysis reads the original temporary CSVs before deletion and independently computes all24 endpoint rows and compact W/solver metrics.",
+    "deletion_gate": "Root authorizes removal of nonselected raw CSVs only after completed process/acceptance/carry/hash gates, agreement of independent compact analyses, and retained-detail SHA verification. Keep per-file original SHA/size and a deletion manifest; discarded full stage arrays are NOT claimed to be losslessly preserved.",
+    "permanent_full_csv_count_if_no_model_anomaly": 5,
+    "full_csv_selection": "Keep coarse1, fine1 and one coarse/two fine interval ending at earliest failed OFFICIAL checkpoint; if all24 pass retain coarse256,fine511,fine512. Additional anomaly details only if an actual failure prevents completion; do not add runs."
+  },
+  "status": "frozen_before_PR310_native_outputs",
+  "status_note": "This is a paired refinement screen; the h=15 s candidate is a separate archived comparison handled outside this two-run reference protocol.",
+  "strict_60s_prefix_reuse": {
+    "prefix_result_is_not_a_new_accuracy_claim": true,
+    "reuse": "No additional 60 s run. Compare PR310 packed six-state input and projected endpoint at 60 s against the corresponding E309 strict-tolerance pair states, and verify those source receipts/source/executable/input hashes.",
+    "source_analysis": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_metric/pr309_60s_analysis.json",
+    "source_analysis_sha256": "f34dc64b71a038b05a4a39ed0b9984a3996caa33408763c50737d782fe7a8823",
+    "source_run_index": "/Users/yhlee/AD-SDIRK3-review-evidence/solver-controlled-w-60s-20261015/green_execution/pr309_run_index.json"
+  },
+  "finalized_local_time": "2026-10-20T09:49:20+09:00",
+  "supersedes_pre_run_v1": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/pr310_analysis_protocol_v1.json",
+    "sha256": "2d3ee2b52c71dc1c3771ab39203e3c5d5f47cc06a2e10ed1d78f78d8fa5ca9e5",
+    "changes": [
+      "correct frozen basis-manifest SHA from actual preserved source bytes",
+      "fix temporary-capture/validation/retention responsibilities",
+      "predeclare conditional archived-candidate reference and full epsilon limits"
+    ],
+    "old_basis_manifest_sha256_literal": "afc377620a427102be81d8a460d79ae7d72dc5503a80d14f7bf0e7aa8debe",
+    "correct_actual_basis_manifest_sha256": "afc377620a427102be81d8a460d79ae7d72a32dc5503a80d14f7bf0e7aa8debe",
+    "model_outputs_observed_before_revision": false
+  },
+  "conditional_archived_candidate": {
+    "enabled_only_if_all24_reference_rows_pass": true,
+    "candidate": "PR304 original-e71 h15/240s post-CF archive or PR306 bitwise-identical h15 bridge; no new candidate run",
+    "reference": "the newly computed fine h=15/32s strict-Newton trajectory, fixed in advance",
+    "criterion": "candidate-minus-qualified-fine RMS <= original full epsilon_X at each of four named timestamps (NOT epsilon_X/3, which is the reference sensitivity rule)",
+    "epsilon_full": {
+      "U": 0.0007744417040064484,
+      "V": 0.00010122007244795247,
+      "W": 7.79443985679733e-06,
+      "PH": 0.010249750539744869,
+      "T": 3.619571391542998e-05,
+      "MU": 0.014590900457561187
+    },
+    "original_candidate_solver_tolerance": 1e-07,
+    "include_actual_candidate_solver_error": true,
+    "no_truth_order_or_project_wide_acceptance_claim": true
+  }
+}

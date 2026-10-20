@@ -1,0 +1,72 @@
+{
+  "analyzer_sha256_at_launch": "02539d8181c07c1970e3535da1cdfc6893f676baad7c1faa2a948b2913ecba9d",
+  "coarse_cache_consumed": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/coarse_streamed_compact.json",
+  "coarse_receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+  "command": [
+    "python",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyze_pr310_240s_red.py",
+    "--plan",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/pr310_red_analysis_plan.json",
+    "--protocol",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_protocol_final_v2.json",
+    "--out-dir",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final",
+    "--coarse-cache",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/coarse_streamed_compact.json"
+  ],
+  "exception": "ValueError: solver-summary DictWriter fieldnames omitted newly added physical-W G/K\u2212FI columns after the original fine CSV pass and products were written.",
+  "fine_raw_csv_stream_passes": 1,
+  "fine_receipt_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+  "independently_observed_screen": {
+    "earliest_failed_checkpoint_seconds": 180,
+    "failures": [
+      {
+        "field": "W",
+        "limit": 2.5981466189324436e-06,
+        "ratio": 1.30903558362905,
+        "rms": 3.401066375668074e-06,
+        "time_seconds": 180
+      },
+      {
+        "field": "W",
+        "limit": 2.5981466189324436e-06,
+        "ratio": 1.2591732218690532,
+        "rms": 3.271516649049352e-06,
+        "time_seconds": 240
+      }
+    ],
+    "passes": 22,
+    "rows": 24
+  },
+  "note": "The full Red JSON and completed solver-summary CSV were not written; stage solver objects were only held in process memory. The official screen and W products are complete and match root official screen.",
+  "output_write_end_local_time": "2026-10-20T10:53:06.975872+09:00",
+  "plan_sha256": "9612db717471730f92b1c2951c43202df2c9da08cdd4389c9405eb45ada09a37",
+  "raw_csv_cleanup": "none",
+  "raw_csv_mutation": "none",
+  "schema": "pr310_red_final_analysis_attempt_v1",
+  "start_marker_local_time": "2026-10-20T10:42:15.610472+09:00",
+  "start_marker_source": "red analysis plan mtime immediately before final invocation",
+  "status": "partial_products_written_solver_summary_serialization_failed",
+  "written_outputs": {
+    "pr310_240s_red_24row_screen.csv": {
+      "bytes": 2997,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final/pr310_240s_red_24row_screen.csv",
+      "sha256": "66435dcdcf844915eedcd3c14d14d26a5542b3467ba08d0121f508abfa1f5f9f"
+    },
+    "pr310_240s_red_compact.npz": {
+      "bytes": 49253050,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final/pr310_240s_red_compact.npz",
+      "sha256": "ad23d954b4ca5ce34badbccb9b8454393a23f6651ad4beb859b9966b8f149d6c"
+    },
+    "pr310_257point_red_W.csv": {
+      "bytes": 39687,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final/pr310_257point_red_W.csv",
+      "sha256": "8c80e60ae7e6fd8edf2c9b04b382b3171eae69fb6853950de62a08cd9fd443c4"
+    },
+    "pr310_red_solver_summary.csv": {
+      "bytes": 217,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final/pr310_red_solver_summary.csv",
+      "sha256": "c03f0f770f3781ce1447c0ac066f374d43938350d9cddfa8a54323004b5b0381"
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "schema": "pr310_green_closing_review_final_v1",
+  "captured_local_time": "2026-10-20T11:13:21+09:00",
+  "worktree": "/private/tmp/pr310-strict-reference-240s-20261020",
+  "head": "9614e78dbd71250f571f0e495650eeca1e209a04",
+  "status": "PASS_FINAL_REPORT_AND_EVIDENCE",
+  "findings": [],
+  "scope": "read-only final review of the strict 240s report, Problem Definition PR310 section and curated recomputation artifacts; no model run, build, source edit or additional raw-stage parse",
+  "final_manifest": {
+    "sha256": "2ae23ec1757392f12bf6cf1f9cf98d223ab556dda41a7f6f7c9ddeab4620d00a",
+    "state": "final_after_independent_agreement_and_raw_cleanup",
+    "payload_count": 36,
+    "payload_bytes": 27636749,
+    "all_36_payload_hashes_rechecked": true,
+    "manifest_sha256": "2ae23ec1757392f12bf6cf1f9cf98d223ab556dda41a7f6f7c9ddeab4620d00a"
+  },
+  "official_screen": {
+    "sha256": "891a5bc7b356e45e1270f2ac0263a2848708e30451e51d0b3ccaa3cb45ea4656",
+    "pass_count": 22,
+    "row_count": 24,
+    "failed_rows": [
+      {
+        "time_s": 180,
+        "field": "W",
+        "rms": 3.401066375668074e-06,
+        "ratio": 1.30903558362905
+      },
+      {
+        "time_s": 240,
+        "field": "W",
+        "rms": 3.271516649049352e-06,
+        "ratio": 1.2591732218690532
+      }
+    ],
+    "report_matches_root_screen": true
+  },
+  "independent_crosschecks": {
+    "agreement_receipt_sha256": "168f94cdc635270db8c3ea4f7fe830b2893280dcd189fb9b598370bc5632e60e",
+    "official_rows_three_way_exact": 24,
+    "three_way_npz_arrays_bitwise_equal": 79,
+    "three_way_meaning": "Green compact, Red first partial compact, Red recovered compact; Root did not generate a third internal-W NPZ",
+    "coarse_implicit_stage_agreement": 768,
+    "fine_implicit_stage_agreement": 1536,
+    "all_newton_check_counts_two": true,
+    "root_netCDF_direct_screen_independent": true,
+    "FP32_publication_W_checks_exact": 34
+  },
+  "raw_data_retention": {
+    "receipt_sha256": "307a09b558f1a5ce7dfe29e92821be7ef921171efa4445243bab1f6adb0ef925",
+    "input_csv_count": 768,
+    "retained_files": 5,
+    "retained_bytes": 147043773,
+    "deleted_temporary_files": 763,
+    "deleted_temporary_bytes": 22884674379,
+    "retained_hashes_reverified": true,
+    "no_old_netCDF_logs_or_evidence_modified_claimed": true
+  },
+  "source_and_document_hashes": {
+    "report": "ab022a23b17bf286099e88c1a427ec3f8c2410fb26e350f4dbc11e4660002402",
+    "problem_definition": "f109beb4091ceb90e21de1b7e4854c8a9bec6eb84d3e093a94bc2aa8ba9ca410",
+    "recompute_readme": "332b7ed23142a0604d7c291dc3faac63b80b340dc494ae51ba4fbe8be5310a2c",
+    "published_fields_and_W_npz": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+    "production_impl": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076"
+  },
+  "interpretation_review": {
+    "official_result": "22/24; W180 and W240 fail",
+    "reference_qualified": false,
+    "h15_candidate_officially_adjudicated": false,
+    "direct_residual_sum_propagated_bound": false,
+    "stock_RK3_role": "secondary comparison under different filter policy",
+    "120_180_240_limits_and_no_24_of_24_closure_explicit": true,
+    "no_global_tolerance_frequency_phase_cause_or_speed_claim": true
+  },
+  "conclusion": "PASS. The final report and Problem Definition accurately state the 22/24 fixed named-case screen, preserve the unqualified-reference and open-accuracy limits, distinguish direct residual accounting from propagated error, and accurately describe the independent-analysis scope and raw-data retention."
+}

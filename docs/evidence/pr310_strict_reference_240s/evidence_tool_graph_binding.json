@@ -1,0 +1,188 @@
+{
+  "bounded_ast_graph": {
+    "copied_sources": 7,
+    "corpus_root": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source",
+    "detected_words": 6000,
+    "edge_count": 243,
+    "extractor": "graphify update --no-cluster (AST only; no LLM semantic pass or clustering)",
+    "graphify_input_tokens": 0,
+    "graphify_output_tokens": 0,
+    "llm_token_cost": "0 for this local AST extraction/query; Graphify JSON reports input_tokens=0, output_tokens=0.",
+    "node_count": 74,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/graphify-out/graph.json",
+    "query_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_ast_import_query.txt",
+    "query_receipt_sha256": "90610c603687f4055b5aecb835b13d4933b09292dfac06e861de9d087bd7bce7",
+    "sha256": "b94e065cad94af7e2b2a0a73ecf3bc4d00f3c59ea6ee377e30390067ac2d1c0f"
+  },
+  "evidence_tool_sources": [
+    {
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/green_metric/analyze_pr310_240s.py",
+      "corpus_copy_matches": true,
+      "name": "green_analyzer",
+      "sha256": "e5298e85cf8e8cefddfd12367a08022e4aa84f491c38bfaaa27555fa1f36aa29",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/analyze_pr310_240s.py"
+    },
+    {
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/red_validator/analyze_pr310_240s_red.py",
+      "corpus_copy_matches": true,
+      "name": "red_analyzer",
+      "sha256": "16daf7b72a93986631877d8257a6fa263a12d8b570f62a759a32061e71c87b5b",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyze_pr310_240s_red.py"
+    },
+    {
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/root_official_screen.py",
+      "corpus_copy_matches": true,
+      "name": "official_24_row_screen",
+      "sha256": "4765e9b98badc4e9cdfb58e7e32febf871281531f052e65621c1736e37605931",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_official_screen.py"
+    },
+    {
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/repo/docs/evidence/pr310_strict_reference_240s/recompute.py",
+      "corpus_copy_matches": true,
+      "name": "public_compact_recompute",
+      "sha256": "06cf78ce4461a88a73ea8016148a95c6b5cb7707c167c2d74be9209830ed8f0f",
+      "source_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/recompute.py"
+    },
+    {
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/preflight/run_pr310_case.py",
+      "corpus_copy_matches": true,
+      "name": "current_run_preflight",
+      "sha256": "4cd06a6e3c0a5840c3c37d8367001714449d59ffd8f07b685a6be43e418d6f6a",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/run_pr310_case.py"
+    },
+    {
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/preflight/legacy_timestamp_generator/run_pr310_case_pre_datetime_fix.py",
+      "corpus_copy_matches": true,
+      "name": "preserved_legacy_run_preflight",
+      "sha256": "ae9e22d80c2c352c8f7cc3044b2a89fa6075bb75273e3d0bf7a1ef44b509913d",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/legacy_timestamp_generator/run_pr310_case_pre_datetime_fix.py"
+    },
+    {
+      "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/green_pressure/compare_fine_to_archived_stock_rk3.py",
+      "corpus_copy_matches": true,
+      "name": "stock_rk3_comparator",
+      "sha256": "924a5cb1e4695e6a7d8a06eb250e4a30202198b8ffe21164d8d586d06bab6968",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_pressure/compare_fine_to_archived_stock_rk3.py"
+    }
+  ],
+  "head": "9614e78dbd71250f571f0e495650eeca1e209a04",
+  "limitations": [
+    "Graph edges are AST navigation aids, not scientific/numerical proof. The Green/Red analysis source and adjacent existing parser/helper source are manually linked via exact-hash receipts; dependency edges beyond this 7-file corpus are not newly extracted.",
+    "The public recompute tool is source-bound only; no recomputation was run for this graph task.",
+    "No model/build/test run, production edit, production AST refresh, or full repository graph build was performed. Numerical conclusions require the separate frozen analysis and run receipts."
+  ],
+  "manual_source_navigation": [
+    {
+      "edge": "Green and Red analyzer -> benchmark_wrf_accuracy_cost, analyze_accepted_ark_w_stage, test_native_wave_refinement.read_payload",
+      "locations": "Green analyzer imports at lines 20-22 and payload parsing at line 198; Red analyzer imports at lines 19-21 and payload parsing at line 182. Shared source pins are in the preserved PR309/PR305 receipts."
+    },
+    {
+      "edge": "current/legacy runner -> WRF process and run evidence; comparator -> NetCDF checkpoint input; official screen -> NetCDF fields; public recompute -> compact NPZ arrays",
+      "locations": "The seven frozen files bind exact hashes; runner main entrypoints are at line 95; comparator main at line 160; official screen main at line 54; recompute consumes a compact npz with allow_pickle=False near line 27."
+    }
+  ],
+  "output": "PR310 evidence tool source bindings and bounded AST graph only; no additions to the W310 production corpus.",
+  "prior_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_observer_storage_audit.json",
+  "prior_receipt_sha256": "3bdbbfee23ddaa258b9f9544696386534d02310285b88ae9f6480c102e30576f",
+  "production_sources_unchanged": true,
+  "reused_production_and_helper_graphs": [
+    {
+      "name": "pr307_v2_cpp",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+      "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+    },
+    {
+      "name": "pr307_accepted_parser",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+      "sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5"
+    },
+    {
+      "name": "pr305_read_payload",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_graph/graphify-out/graph.json",
+      "sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257"
+    },
+    {
+      "name": "pr299_benchmark_helpers",
+      "path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+      "sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230"
+    },
+    {
+      "name": "pr308_fine_pair_analyzer",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_fine_pair_analyzer_graph/graphify-out/graph.json",
+      "sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9"
+    }
+  ],
+  "reused_source_pins": [
+    {
+      "actual_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "expected_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h"
+    },
+    {
+      "actual_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "expected_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+      "matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp"
+    },
+    {
+      "actual_sha256": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b",
+      "expected_sha256": "907120641fbe3306b1afed6a5233300c6da7e165a290dd61e157341f6dd4b86b",
+      "matches": true,
+      "path": "tools/analyze_accepted_ark_w_stage.py"
+    },
+    {
+      "actual_sha256": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+      "expected_sha256": "81021668be749283802d64241b197c45bafbcd7440b6132100f4b7e43e325e9b",
+      "matches": true,
+      "path": "tools/test_native_wave_refinement.py"
+    },
+    {
+      "actual_sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8",
+      "expected_sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8",
+      "matches": true,
+      "path": "tools/benchmark_wrf_accuracy_cost.py"
+    },
+    {
+      "actual_sha256": "b3dfa74b43eae9ced7d98670aa127714dcb95796b7e771e488834d3842e490f7",
+      "expected_sha256": "b3dfa74b43eae9ced7d98670aa127714dcb95796b7e771e488834d3842e490f7",
+      "matches": true,
+      "path": "tools/analyze_fine_pair_w_trajectory.py"
+    },
+    {
+      "actual_sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "expected_sha256": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8",
+      "matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h"
+    },
+    {
+      "actual_sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "expected_sha256": "9fc32895278bb6e7ce339e804ecd687bc046d849e6a5a70dd47e43e84f446fc5",
+      "matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp"
+    },
+    {
+      "actual_sha256": "66000e5c623c6b54de7595914afbbdda41fb7b62a326225b47f619d7d6899bfd",
+      "expected_sha256": "66000e5c623c6b54de7595914afbbdda41fb7b62a326225b47f619d7d6899bfd",
+      "matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_stage_history_diag.h"
+    },
+    {
+      "actual_sha256": "71baa4f9b4255e2a472dbf8e5a8aefae11985b075a5d1b595f31f1ee0f598d78",
+      "expected_sha256": "71baa4f9b4255e2a472dbf8e5a8aefae11985b075a5d1b595f31f1ee0f598d78",
+      "matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_diag_io.h"
+    },
+    {
+      "actual_sha256": "e4c9e7e204b91d1f97865c930f6e79abae0d36c6b3557e7c1b776c605f7ab61f",
+      "expected_sha256": "e4c9e7e204b91d1f97865c930f6e79abae0d36c6b3557e7c1b776c605f7ab61f",
+      "matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_stage_operand_capture.h"
+    }
+  ],
+  "schema": "pr310_final_evidence_tool_graph_binding_v1",
+  "source_binding_scope": "Seven frozen Python evidence/runner sources only; the two analyzers and five adjacent, active/reproducibility tools named by the task. Existing production/source corpus receipts are reused and pinned below; no additional production AST extraction.",
+  "tracked_status_at_binding": "clean",
+  "tree": "24f37b93aa7f93eefe2b291de019fa6a6754474d",
+  "worktree": "/private/tmp/pr310-strict-reference-240s-20261020"
+}

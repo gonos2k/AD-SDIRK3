@@ -1,0 +1,18 @@
+{
+  "immutable_agreement_file": "green_red_agreement.json",
+  "immutable_agreement_sha256": "168f94cdc635270db8c3ea4f7fe830b2893280dcd189fb9b598370bc5632e60e",
+  "meaning_of_79_array_three_way_comparison": [
+    "Green original compact NPZ",
+    "Red first completed array/24-row output before scalar serialization error",
+    "Red recovered compact NPZ"
+  ],
+  "independent_raw_CSV_numeric_analyzers": 2,
+  "Root_checks": [
+    "independent direct NetCDF 24-row screen",
+    "34 internal-W-to-FP32 publication checks",
+    "all E309 W prefixes",
+    "array-byte and scalar comparisons between the two analyzers"
+  ],
+  "Root_generated_a_third_independent_internal_W_NPZ": false,
+  "scientific_reference_result": "22/24; W180 and W240 fail; no h15 official adjudication"
+}

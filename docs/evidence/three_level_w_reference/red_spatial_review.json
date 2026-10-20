@@ -1,0 +1,317 @@
+{
+  "amplitude_time_fit_review_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/pr310_red_amplitude_time_fit_review.json",
+  "amplitude_time_fit_review_sha256": "c290bda07092b424860e5c051e81dcaabb7a2da0fda564243643b127f87448b3",
+  "diagnostics": {
+    "all_spatial_closure_checks_within_float64_roundoff": true,
+    "disjoint_horizontal_region_counts": {
+      "horizontal_interior": 3136,
+      "x_periodic_seam_adjacent_after_wall_rows": 448,
+      "y_wall_adjacent_rows_in_W_mass_grid": 512
+    },
+    "grid_kji": [
+      16,
+      16,
+      16
+    ],
+    "interpretation": "Descriptive stored-trajectory structure only; no causal, truth, propagated error bound, or acceptance claim.",
+    "owner_count": 4096
+  },
+  "green_cross_check": {
+    "all_selected_spatial_values_exactly_equal": true,
+    "amplitude_time_fit_exact_values_match": [
+      {
+        "alpha_exact": true,
+        "beta_exact": true,
+        "condition_exact": true,
+        "rank_exact": true,
+        "residual_fraction_exact": true,
+        "time_seconds": 81.5625
+      },
+      {
+        "alpha_exact": true,
+        "beta_exact": true,
+        "condition_exact": true,
+        "rank_exact": true,
+        "residual_fraction_exact": true,
+        "time_seconds": 170.625
+      },
+      {
+        "alpha_exact": true,
+        "beta_exact": true,
+        "condition_exact": true,
+        "rank_exact": true,
+        "residual_fraction_exact": true,
+        "time_seconds": 180.0
+      },
+      {
+        "terminal_unavailable_matches": true,
+        "time_seconds": 240.0
+      }
+    ],
+    "green_result_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/results/pr310_w_spatial_structure_results.json",
+    "green_result_sha256": "0d25288e10a8e3280074db4c28c12314044cad176b23e9a7aed1be400abdab6b",
+    "per_time": [
+      {
+        "time_seconds": 81.5625,
+        "whole_layer_top_max_and_fixed_metric_exact_equal_to_green": true
+      },
+      {
+        "time_seconds": 170.625,
+        "whole_layer_top_max_and_fixed_metric_exact_equal_to_green": true
+      },
+      {
+        "time_seconds": 180.0,
+        "whole_layer_top_max_and_fixed_metric_exact_equal_to_green": true
+      },
+      {
+        "time_seconds": 240.0,
+        "whole_layer_top_max_and_fixed_metric_exact_equal_to_green": true
+      }
+    ]
+  },
+  "input": {
+    "arrays": {
+      "coarse_W_internal_projected_kji": {
+        "c_order_array_sha256": "bb692b00f56a0ab03b2ca1f004737400107826cf86e6fb8104e4b1f3ef4f2149",
+        "dtype": "float64",
+        "shape": [
+          257,
+          16,
+          16,
+          16
+        ],
+        "uncompressed_nbytes": 8421376
+      },
+      "fine_W_internal_projected_kji": {
+        "c_order_array_sha256": "b00ae4fd7c3cf07e2904543afe62c8ab1aa13583c50620166e8b9a9b1e8ceda7",
+        "dtype": "float64",
+        "shape": [
+          513,
+          16,
+          16,
+          16
+        ],
+        "uncompressed_nbytes": 16809984
+      },
+      "fixed_M0_kg": {
+        "c_order_array_sha256": "e2d1f2b513f47339482e6afdae32179eb1a3a9505463b4888eec7147ab3adab8",
+        "dtype": "float64",
+        "shape": [
+          16,
+          16,
+          16
+        ],
+        "uncompressed_nbytes": 32768
+      },
+      "fixed_e1_dimensionless": {
+        "c_order_array_sha256": "027d76bd7516bcbba3846cfd7526ca9a20d57cc9e67ea12a2880b1af58dc6a00",
+        "dtype": "float64",
+        "shape": [
+          16,
+          16,
+          16
+        ],
+        "uncompressed_nbytes": 32768
+      },
+      "owner_mask_W": {
+        "c_order_array_sha256": "3431383721510cf1c211de027cf958c183e16db5fabb6b230eb284c85e196aa9",
+        "dtype": "bool",
+        "shape": [
+          16,
+          16,
+          16
+        ],
+        "uncompressed_nbytes": 4096
+      }
+    },
+    "bytes": 24901006,
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/published_fields_and_W.npz",
+    "sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+    "source_protocol_sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+    "spatial_protocol_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_metric/pr310_w_spatial_structure_protocol_v1.json",
+    "spatial_protocol_sha256": "2c7ac76fef65e917bf02dc08a2dba15ee5531ac49b2756aa4e628c3dd48df94e"
+  },
+  "max_location_interpretation": "At 170.625 s and 180 s the max lies at j=15, in the fixed Y-wall-adjacent mask. At 240 s it lies at j=14, one row inside that mask, so it is near the wall but is not wall-adjacent under the frozen j=0/15 definition.",
+  "new_model_runs": 0,
+  "no_raw_stage_csvs_read": true,
+  "production_source_edits": 0,
+  "schema": "pr310_red_independent_spatial_review_receipt_v1",
+  "spatial_analyzer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/analyze_pr310_w_spatial_independent.py",
+  "spatial_analyzer_sha256": "0d819f9b8e9152c11514fbf4fd390abc209ccf8a0f960eabf0b6cb23eea80381",
+  "spatial_result_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/pr310_red_W_spatial_audit.json",
+  "spatial_result_sha256": "0bee9a6a8816150ada4a367f0b4ffe1f20c8896564cdc70d7eaa5796ed39dd8f",
+  "status": "complete_compact_only_independent_recomputation",
+  "target_time_summary": [
+    {
+      "M0_weighted_rms_m_s": 3.280073141292583e-06,
+      "closure_checks": {
+        "disjoint_horizontal_share_sum_minus_one": 2.220446049250313e-16,
+        "disjoint_horizontal_sse_minus_whole_sse": 1.3234889800848443e-23,
+        "layer_share_sum_minus_one": 0.0,
+        "layer_sse_minus_whole_sse": 0.0,
+        "rms_times_sqrt_count_minus_l2_norm": 0.0
+      },
+      "coarse_index": 182,
+      "disjoint_horizontal_shares": {
+        "horizontal_interior": 0.7154818762119299,
+        "x_periodic_seam_adjacent_after_wall_rows": 0.09997442835941289,
+        "y_wall_adjacent_rows_in_W_mass_grid": 0.18454369542865742
+      },
+      "dynamic_top_share_k15": 0.20751370659154322,
+      "e1_projection_m_s": 1.0575996833972297e-06,
+      "fine_index": 364,
+      "layer_sse_shares_k0_to_k15": [
+        0.005546877866932106,
+        0.01950279329383528,
+        0.008775214685452221,
+        0.006682889474382759,
+        0.014423139756056412,
+        0.008420267582667184,
+        0.013674547815027619,
+        0.025754467035560558,
+        0.021123976912006334,
+        0.011125824310659843,
+        0.0602734121050623,
+        0.14605565059020822,
+        0.14584182446386273,
+        0.13940647283793248,
+        0.16587893467881085,
+        0.20751370659154322
+      ],
+      "max_abs_kji": {
+        "i": 6,
+        "j": 15,
+        "k": 15,
+        "signed_delta_m_s": 1.918643789365363e-05
+      },
+      "max_abs_m_s": 1.918643789365363e-05,
+      "max_location_classification": {
+        "is_dynamic_top_k15": true,
+        "note": "W mass-grid owner index; not a V boundary-face location",
+        "y_row_class": "Y-wall-adjacent W mass-grid row (j=0 or 15)"
+      },
+      "mean_m_s": 2.2752220822013256e-07,
+      "overlapping_marginal_shares": {
+        "periodic_x_seam_columns": 0.11875306562343853,
+        "y_wall_rows": 0.18454369542865742
+      },
+      "rms_m_s": 4.557126458467745e-06,
+      "squared_norm": 8.506327678347991e-08,
+      "time_seconds": 170.625
+    },
+    {
+      "M0_weighted_rms_m_s": 2.736834548034241e-06,
+      "closure_checks": {
+        "disjoint_horizontal_share_sum_minus_one": -1.1102230246251565e-16,
+        "disjoint_horizontal_sse_minus_whole_sse": 0.0,
+        "layer_share_sum_minus_one": -1.1102230246251565e-16,
+        "layer_sse_minus_whole_sse": 0.0,
+        "rms_times_sqrt_count_minus_l2_norm": 0.0
+      },
+      "coarse_index": 192,
+      "disjoint_horizontal_shares": {
+        "horizontal_interior": 0.692573291700688,
+        "x_periodic_seam_adjacent_after_wall_rows": 0.10553114508702954,
+        "y_wall_adjacent_rows_in_W_mass_grid": 0.2018955632122823
+      },
+      "dynamic_top_share_k15": 0.0760660382912619,
+      "e1_projection_m_s": 7.725906025077717e-07,
+      "fine_index": 384,
+      "layer_sse_shares_k0_to_k15": [
+        0.007805605539628949,
+        0.00876113503036897,
+        0.006483104440424816,
+        0.013921672486072558,
+        0.04872928516381763,
+        0.06749499296866253,
+        0.028401627636873466,
+        0.021825744806189176,
+        0.023758353360880856,
+        0.018349239724540955,
+        0.09092673233615799,
+        0.20398872637246918,
+        0.17441284173188668,
+        0.12026520303942316,
+        0.08880969707134113,
+        0.0760660382912619
+      ],
+      "max_abs_kji": {
+        "i": 6,
+        "j": 15,
+        "k": 13,
+        "signed_delta_m_s": 1.2801570249181807e-05
+      },
+      "max_abs_m_s": 1.2801570249181807e-05,
+      "max_location_classification": {
+        "is_dynamic_top_k15": false,
+        "note": "W mass-grid owner index; not a V boundary-face location",
+        "y_row_class": "Y-wall-adjacent W mass-grid row (j=0 or 15)"
+      },
+      "mean_m_s": 7.221086911247512e-08,
+      "overlapping_marginal_shares": {
+        "periodic_x_seam_columns": 0.12988123931066076,
+        "y_wall_rows": 0.20189556321228236
+      },
+      "rms_m_s": 3.4010662290192943e-06,
+      "squared_norm": 4.737946212014294e-08,
+      "time_seconds": 180.0
+    },
+    {
+      "M0_weighted_rms_m_s": 3.142500530496783e-06,
+      "closure_checks": {
+        "disjoint_horizontal_share_sum_minus_one": 0.0,
+        "disjoint_horizontal_sse_minus_whole_sse": 0.0,
+        "layer_share_sum_minus_one": 0.0,
+        "layer_sse_minus_whole_sse": 0.0,
+        "rms_times_sqrt_count_minus_l2_norm": 0.0
+      },
+      "coarse_index": 256,
+      "disjoint_horizontal_shares": {
+        "horizontal_interior": 0.683496409210297,
+        "x_periodic_seam_adjacent_after_wall_rows": 0.09974420790174982,
+        "y_wall_adjacent_rows_in_W_mass_grid": 0.21675938288795318
+      },
+      "dynamic_top_share_k15": 0.11810233663688167,
+      "e1_projection_m_s": -1.1736986930572098e-06,
+      "fine_index": 512,
+      "layer_sse_shares_k0_to_k15": [
+        0.018067832174759633,
+        0.03066327258067622,
+        0.06031430625825772,
+        0.10216092897805605,
+        0.10140326848212373,
+        0.027722595525768442,
+        0.03893850365955584,
+        0.14918191968236244,
+        0.07715935030341903,
+        0.02211898011795206,
+        0.06065978796559196,
+        0.029515929122082302,
+        0.02138394767365715,
+        0.060038607193190784,
+        0.08256843364566495,
+        0.11810233663688167
+      ],
+      "max_abs_kji": {
+        "i": 1,
+        "j": 14,
+        "k": 15,
+        "signed_delta_m_s": -1.2028799261408225e-05
+      },
+      "max_abs_m_s": 1.2028799261408225e-05,
+      "max_location_classification": {
+        "is_dynamic_top_k15": true,
+        "note": "W mass-grid owner index; not a V boundary-face location",
+        "y_row_class": "one row inside Y-wall-adjacent boundary (not in wall-adjacent mask)"
+      },
+      "mean_m_s": -9.345117905303953e-08,
+      "overlapping_marginal_shares": {
+        "periodic_x_seam_columns": 0.12315529351863906,
+        "y_wall_rows": 0.21675938288795318
+      },
+      "rms_m_s": 3.271515761208335e-06,
+      "squared_norm": 4.3838731779418334e-08,
+      "time_seconds": 240.0
+    }
+  ]
+}

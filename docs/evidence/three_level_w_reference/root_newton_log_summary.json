@@ -1,0 +1,14 @@
+{
+  "source_sha256": "f33b69b1ff54445adf148eff75ef29d8e54e3560e79dba538bf1b7fda2de9821",
+  "records": 3072,
+  "stage_counts": {
+    "2": 1024,
+    "3": 1024,
+    "4": 1024
+  },
+  "iteration_counts": {
+    "2": 3072
+  },
+  "printed_scaled_residual_max": 1.1e-15,
+  "interpretation": "Printed limited-precision normalized residual; not physical W G or global error bound."
+}

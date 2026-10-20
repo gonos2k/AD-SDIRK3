@@ -1,0 +1,10 @@
+{
+  "authorization_text": "The one-pass rule was a performance plan, not a scientific constraint. One additional offline read of fine CSVs is authorized to recover the missing independent solver summary. Preserve first partial NPZ/W/24-row products and failure receipt, then run once with corrected field list. No model run, new timestep, tolerance, formula, screen, or budget changes. Reuse coarse cache.",
+  "authorized_by": "/root",
+  "first_partial_attempt_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/final_analysis_attempt_receipt.json",
+  "first_partial_attempt_receipt_sha256": "36d97baf08680b1b848f28100b4d5644b7557618ec07c4732fedc5758a7a19ad",
+  "recovery_analyzer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyze_pr310_240s_red.py",
+  "recovery_analyzer_sha256": "0a2f6ce72f5331b8a5aedaaaf05c1c3bae69fb3911456cb235cb107d05311917",
+  "recovery_out_dir": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/recovery",
+  "schema": "pr310_red_offline_recovery_authorization_v1"
+}

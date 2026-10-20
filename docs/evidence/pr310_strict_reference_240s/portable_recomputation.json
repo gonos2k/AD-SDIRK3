@@ -1,0 +1,213 @@
+{
+  "completed_local_time": "2026-10-20T11:12:03.359814+09:00",
+  "exact_final_manifest_sha256": "2ae23ec1757392f12bf6cf1f9cf98d223ab556dda41a7f6f7c9ddeab4620d00a",
+  "only_four_inputs_copied": true,
+  "original_NetCDF_or_helpers_used": false,
+  "temporary_copy_removed_after_check": true,
+  "input_hashes": {
+    "recompute.py": "06cf78ce4461a88a73ea8016148a95c6b5cb7707c167c2d74be9209830ed8f0f",
+    "protocol_final.json": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+    "published_fields_and_W.npz": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+    "manifest.json": "2ae23ec1757392f12bf6cf1f9cf98d223ab556dda41a7f6f7c9ddeab4620d00a"
+  },
+  "result": {
+    "official_pass_count": 22,
+    "official_rows": [
+      {
+        "time_seconds": 60,
+        "field": "U",
+        "rms": 2.3350212277406657e-08,
+        "limit": 0.00025814723466881614,
+        "ratio": 9.04530792567399e-05,
+        "pass": true
+      },
+      {
+        "time_seconds": 60,
+        "field": "V",
+        "rms": 5.27999998338641e-09,
+        "limit": 3.374002414931749e-05,
+        "ratio": 0.00015649069959225906,
+        "pass": true
+      },
+      {
+        "time_seconds": 60,
+        "field": "W",
+        "rms": 1.7984436497264701e-06,
+        "limit": 2.5981466189324436e-06,
+        "ratio": 0.6922025249157938,
+        "pass": true
+      },
+      {
+        "time_seconds": 60,
+        "field": "PH",
+        "rms": 0.0001028908077946562,
+        "limit": 0.0034165835132482897,
+        "ratio": 0.030115115698381854,
+        "pass": true
+      },
+      {
+        "time_seconds": 60,
+        "field": "T",
+        "rms": 0.0,
+        "limit": 1.2065237971809995e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time_seconds": 60,
+        "field": "MU",
+        "rms": 0.0,
+        "limit": 0.004863633485853729,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time_seconds": 120,
+        "field": "U",
+        "rms": 2.5442795096424906e-08,
+        "limit": 0.00025814723466881614,
+        "ratio": 9.855923937773781e-05,
+        "pass": true
+      },
+      {
+        "time_seconds": 120,
+        "field": "V",
+        "rms": 8.986983387104293e-09,
+        "limit": 3.374002414931749e-05,
+        "ratio": 0.0002663597200562788,
+        "pass": true
+      },
+      {
+        "time_seconds": 120,
+        "field": "W",
+        "rms": 2.4372711068088664e-06,
+        "limit": 2.5981466189324436e-06,
+        "ratio": 0.9380806645201265,
+        "pass": true
+      },
+      {
+        "time_seconds": 120,
+        "field": "PH",
+        "rms": 0.00013701416036050805,
+        "limit": 0.0034165835132482897,
+        "ratio": 0.04010268147382205,
+        "pass": true
+      },
+      {
+        "time_seconds": 120,
+        "field": "T",
+        "rms": 0.0,
+        "limit": 1.2065237971809995e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time_seconds": 120,
+        "field": "MU",
+        "rms": 0.0,
+        "limit": 0.004863633485853729,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time_seconds": 180,
+        "field": "U",
+        "rms": 3.306267494986009e-08,
+        "limit": 0.00025814723466881614,
+        "ratio": 0.0001280768124139585,
+        "pass": true
+      },
+      {
+        "time_seconds": 180,
+        "field": "V",
+        "rms": 1.2312481900112498e-08,
+        "limit": 3.374002414931749e-05,
+        "ratio": 0.00036492214248642023,
+        "pass": true
+      },
+      {
+        "time_seconds": 180,
+        "field": "W",
+        "rms": 3.401066375668074e-06,
+        "limit": 2.5981466189324436e-06,
+        "ratio": 1.30903558362905,
+        "pass": false
+      },
+      {
+        "time_seconds": 180,
+        "field": "PH",
+        "rms": 0.00013919398561672373,
+        "limit": 0.0034165835132482897,
+        "ratio": 0.04074069463748777,
+        "pass": true
+      },
+      {
+        "time_seconds": 180,
+        "field": "T",
+        "rms": 0.0,
+        "limit": 1.2065237971809995e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time_seconds": 180,
+        "field": "MU",
+        "rms": 5.960464477539063e-08,
+        "limit": 0.004863633485853729,
+        "ratio": 1.2255167859328947e-05,
+        "pass": true
+      },
+      {
+        "time_seconds": 240,
+        "field": "U",
+        "rms": 2.6489679277705864e-08,
+        "limit": 0.00025814723466881614,
+        "ratio": 0.00010261461569282417,
+        "pass": true
+      },
+      {
+        "time_seconds": 240,
+        "field": "V",
+        "rms": 1.1236593634466586e-08,
+        "limit": 3.374002414931749e-05,
+        "ratio": 0.000333034546292519,
+        "pass": true
+      },
+      {
+        "time_seconds": 240,
+        "field": "W",
+        "rms": 3.271516649049352e-06,
+        "limit": 2.5981466189324436e-06,
+        "ratio": 1.2591732218690532,
+        "pass": false
+      },
+      {
+        "time_seconds": 240,
+        "field": "PH",
+        "rms": 0.00013871618292546058,
+        "limit": 0.0034165835132482897,
+        "ratio": 0.04060084654379698,
+        "pass": true
+      },
+      {
+        "time_seconds": 240,
+        "field": "T",
+        "rms": 0.0,
+        "limit": 1.2065237971809995e-05,
+        "ratio": 0.0,
+        "pass": true
+      },
+      {
+        "time_seconds": 240,
+        "field": "MU",
+        "rms": 6.664001874625056e-08,
+        "limit": 0.004863633485853729,
+        "ratio": 1.3701694204565053e-05,
+        "pass": true
+      }
+    ],
+    "internal_W_max_RMS_m_s": 4.557126458467745e-06,
+    "internal_W_max_time_seconds": 170.625,
+    "scope": "Named-case sensitivity screen; no true-error bound."
+  }
+}

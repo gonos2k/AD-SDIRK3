@@ -1,0 +1,54 @@
+{
+  "role": "coarse",
+  "green_json_sha256": "2e86ce669f07fa7905bb22a4388a0259d7aeea1b544e034089c9cec0c8635365",
+  "red_json_sha256": "8172f1af2eeaf4bc5858d68af9eea5bd66ca2dfbab92f4b56b0130b7cdbc7cc7",
+  "arrays": {
+    "W_internal_projected_kji": {
+      "bitwise_equal": true,
+      "shape": [
+        257,
+        16,
+        16,
+        16
+      ]
+    },
+    "W_internal_raw_final_kji": {
+      "bitwise_equal": true,
+      "shape": [
+        256,
+        16,
+        16,
+        16
+      ]
+    },
+    "initial_packed_state": {
+      "bitwise_equal": true,
+      "shape": [
+        24531
+      ]
+    },
+    "final_packed_state": {
+      "bitwise_equal": true,
+      "shape": [
+        24531
+      ]
+    },
+    "packed_state_at_60s": {
+      "bitwise_equal": true,
+      "shape": [
+        24531
+      ]
+    }
+  },
+  "implicit_stage_count": 768,
+  "all_Newton_counts_are_2": true,
+  "max_difference_G_W_RMS_m_s": 3.1554436208840472e-30,
+  "max_difference_K_minus_FI_W_RMS_m_s2": 6.310887241768095e-30,
+  "max_difference_perstep_direct_sum_m_s": 1.262177448353619e-29,
+  "max_difference_scaled_residual": 0.0,
+  "E309_prefix": {
+    "t60_all_six_packed_bitwise_equal": true,
+    "all_65_W_endpoints_bitwise_equal": true
+  },
+  "scope": "Independent compaction agreement; no V3 pair result or propagated-error bound."
+}

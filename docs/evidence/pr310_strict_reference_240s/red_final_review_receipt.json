@@ -1,0 +1,144 @@
+{
+  "analyzer_sha256": "0a2f6ce72f5331b8a5aedaaaf05c1c3bae69fb3911456cb235cb107d05311917",
+  "analyzer_version_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyzer_version_binding.json",
+  "coarse_corrected_receipt": {
+    "duration_s": 240,
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/wrfinput_d01",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "macrosteps": 256,
+    "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/namelist.input",
+    "namelist_sha256": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/corrected_full_run_receipt.json",
+    "producer_source_hashes": null,
+    "sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257"
+  },
+  "coarse_stream_execution_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/coarse_stream_execution_receipt.json",
+  "failed_first_attempt_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/final_analysis_attempt_receipt.json",
+  "fine_corrected_receipt": {
+    "duration_s": 240,
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/wrfinput_d01",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "macrosteps": 512,
+    "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/namelist.input",
+    "namelist_sha256": "afc0043b726084aa84e4b319352f0bf3e72b1947667a17e7813aac56729f9e7b",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/run_receipt.json",
+    "producer_source_hashes": null,
+    "sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8"
+  },
+  "internal_w": {
+    "coarse_endpoints": 257,
+    "coarse_t60_full_packed_matches_E309": true,
+    "common_exact_rational_times": 257,
+    "fine_endpoints": 513,
+    "fine_t60_full_packed_matches_E309": true,
+    "owner_count": 4096
+  },
+  "official_v3_screen": {
+    "earliest_failed_checkpoint_seconds": 180,
+    "failed_row_count": 2,
+    "failed_rows": [
+      {
+        "epsilon_over_3": 2.5981466189324436e-06,
+        "field": "W",
+        "ratio": 1.30903558362905,
+        "rms": 3.401066375668074e-06,
+        "time_seconds": 180
+      },
+      {
+        "epsilon_over_3": 2.5981466189324436e-06,
+        "field": "W",
+        "ratio": 1.2591732218690532,
+        "rms": 3.271516649049352e-06,
+        "time_seconds": 240
+      }
+    ],
+    "pass_count": 22,
+    "reference_qualified": false,
+    "rows": 24
+  },
+  "outputs": {
+    "W_trajectory_csv": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/recovery/pr310_257point_red_W.csv",
+    "W_trajectory_csv_sha256": "8c80e60ae7e6fd8edf2c9b04b382b3171eae69fb6853950de62a08cd9fd443c4",
+    "npz": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/recovery/pr310_240s_red_compact.npz",
+    "npz_sha256": "ad23d954b4ca5ce34badbccb9b8454393a23f6651ad4beb859b9966b8f149d6c",
+    "official_screen_csv": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/recovery/pr310_240s_red_24row_screen.csv",
+    "official_screen_csv_sha256": "66435dcdcf844915eedcd3c14d14d26a5542b3467ba08d0121f508abfa1f5f9f",
+    "solver_summary_csv": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/recovery/pr310_red_solver_summary.csv",
+    "solver_summary_csv_sha256": "df87d5409681ad8c2d0bff0ac390a0dbd503b6421e839259832ed4411a7a257e"
+  },
+  "protocol_sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+  "raw_files": "Retained pending root verification of selected five files; no raw file modified or deleted by Red.",
+  "recovery_execution_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/red_recovery_execution_receipt.json",
+  "root_full_pair_agreement_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_full_pair_agreement.json",
+  "root_full_pair_agreement_sha256": "168f94cdc635270db8c3ea4f7fe830b2893280dcd189fb9b598370bc5632e60e",
+  "schema": "pr310_red_validator_review_receipt_v1",
+  "scope": "Two frozen native strict-ARK runs, original e71 input, 0\u2013240 s only; no new model/build/source change.",
+  "selected_full_stage_details": {
+    "coarse": [
+      {
+        "csv_bytes": 28607385,
+        "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/accepted_ark_w_step_1.csv",
+        "csv_sha256": "8e61145c438cf0e2d15fa75a0fedfb0eecd2d5395f8766c26a797de14e3bfbdb",
+        "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+        "role": "coarse",
+        "step_seq": 1
+      },
+      {
+        "csv_bytes": 29943616,
+        "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/accepted_ark_w_step_192.csv",
+        "csv_sha256": "861801d26d1c175b4f22034b6f8d5cf4d1b42513765c2fff4b7b0db92525c903",
+        "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+        "role": "coarse",
+        "step_seq": 192
+      }
+    ],
+    "fine": [
+      {
+        "csv_bytes": 28610391,
+        "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/accepted_ark_w_step_1.csv",
+        "csv_sha256": "b7211499534a056d01e22e55576189df34934c890e3d3cc5abbe265d79d6296d",
+        "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+        "role": "fine",
+        "step_seq": 1
+      },
+      {
+        "csv_bytes": 29940573,
+        "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/accepted_ark_w_step_383.csv",
+        "csv_sha256": "09bb7a0dab77da7adf94f30ff3f42e7f37640e9a03497e522892a43567489fb8",
+        "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+        "role": "fine",
+        "step_seq": 383
+      },
+      {
+        "csv_bytes": 29941808,
+        "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/accepted_ark_w_step_384.csv",
+        "csv_sha256": "3f476e04e092ec7e45293da76bc532ca7212155c7397b92aedd54fadc553892d",
+        "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+        "role": "fine",
+        "step_seq": 384
+      }
+    ]
+  },
+  "solver_summary": {
+    "all_implicit_newton_iteration_count_2": true,
+    "implicit_stages": {
+      "coarse": 768,
+      "fine": 1536,
+      "total": 2304
+    },
+    "interpretation": "Newton count 2 means initial residual check plus one correction.",
+    "local_direct_W_sums_are_propagated_error_bounds": false,
+    "stage1": "Explicit; Newton and G are N/A; local direct W increment contribution is exactly 0."
+  },
+  "status": "complete_red_independent_compaction_and_validation",
+  "three_way_agreement": {
+    "both_t60_full_packed_prefixes_exact": true,
+    "compact_npz_arrays_bitwise_equal": 79,
+    "official_rows_exact": 24,
+    "original_csv_manifest_sha_and_bytes_match_receipts": true,
+    "runtime_configuration_exact": true,
+    "solver_stage_metric_scope": "all 2304 implicit stages; Green/Red maxima G 7.89e-31 m/s, K\u2212FI 6.31e-30 m/s\u00b2; local increment sums agree within 1.27e-29 m/s"
+  }
+}

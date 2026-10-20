@@ -1,0 +1,360 @@
+{
+  "schema": "pr310_strict_reference_240s_run_index_v1",
+  "created_local_time": "2026-10-20T10:41:23+09:00",
+  "root_launch_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_root_launch_binding.json",
+  "root_launch_binding_sha256": "8d224408c418f36ef1a4588b5f5e4d2857722d50f29d3e816c708d82c5ab90f5",
+  "protocol_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_protocol_final_v2.json",
+  "protocol_sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+  "source_preflight_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_preflight_manifest.json",
+  "source_preflight_sha256": "9f685f588991566ebdd712cacc64cff25f840ceeddfa33ab88cf27f9e7c3347a",
+  "producer": {
+    "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/libwrf_sdirk3_libtorch.a",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "fortran_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/libwrflib.a",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "pr307_build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/pr307_v2_build_receipt.json",
+    "pr307_build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8",
+    "producer_source_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "build_receipt_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "compiler": "/usr/bin/g++ (Apple clang 21.0.0)",
+    "mpi": "Open MPI 5.0.9; -DDMPARALLEL in core build",
+    "linked_configure_sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289"
+  },
+  "runs": [
+    {
+      "label": "h0p9375_0_240s_newton_tol1e-9",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9",
+      "corrected_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/corrected_full_run_receipt.json",
+      "corrected_receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+      "legacy_original_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/run_receipt.json",
+      "legacy_original_receipt_sha256": "2d4ab1c46d09907b5a0386d76cf2fa2e84bd6ac91760a3b3c03337eab153be41",
+      "accepted_csv_manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/accepted_csv_manifest.json",
+      "accepted_csv_manifest_sha256": "827730f5f70380e83e755b87916ce0af2ff7decc1139fe5548310fb000acbc03",
+      "return_code": 0,
+      "application_success_marker": true,
+      "dt_s": 0.9375,
+      "duration_s": 240,
+      "steps": 256,
+      "expected_steps": 256,
+      "solver_summaries": [
+        {
+          "steps": 300,
+          "failed": 0,
+          "dt": 0.9375
+        },
+        {
+          "steps": 600,
+          "failed": 0,
+          "dt": 0.9375
+        },
+        {
+          "steps": 768,
+          "failed": 0,
+          "dt": 0.9375
+        }
+      ],
+      "history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:00:15",
+        "0001-01-01_00:00:30",
+        "0001-01-01_00:00:45",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:01:15",
+        "0001-01-01_00:01:30",
+        "0001-01-01_00:01:45",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:02:15",
+        "0001-01-01_00:02:30",
+        "0001-01-01_00:02:45",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:03:15",
+        "0001-01-01_00:03:30",
+        "0001-01-01_00:03:45",
+        "0001-01-01_00:04:00"
+      ],
+      "history_times_exact": true,
+      "all_eight_fields_finite": true,
+      "csv_bytes": 7676968389,
+      "runtime_config_unique": {
+        "newton_tol_config": [
+          "9.9999997171806854e-10"
+        ],
+        "krylov_tol_config": [
+          "1.0000000116860974e-07"
+        ],
+        "effective_ewt_rtol_config": [
+          "9.9999999747524271e-07"
+        ]
+      },
+      "netcdf_files": [
+        {
+          "path": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1040888,
+          "sha256": "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:00:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:00:30",
+          "bytes": 1079765,
+          "sha256": "d8f80633e95a3636e11fe4610e9699f9fa8892fe6a37636b43e84dfeb76d5600",
+          "times": [
+            "0001-01-01_00:00:30",
+            "0001-01-01_00:00:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:01:00",
+          "bytes": 1082408,
+          "sha256": "76646b5e51d523eed8770703d79209dd95676a4de35938a6f9bb9c93d6f46130",
+          "times": [
+            "0001-01-01_00:01:00",
+            "0001-01-01_00:01:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:01:30",
+          "bytes": 1084261,
+          "sha256": "34bbbd2bf8e16527f43984ff9c7ef4e5cae7897e69c6797fc41633aa11227f43",
+          "times": [
+            "0001-01-01_00:01:30",
+            "0001-01-01_00:01:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1085708,
+          "sha256": "c3358e9e73e2cb1b8d7baebcce3f0ec757018882606e46329db1cdb13db0e0b7",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:02:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:02:30",
+          "bytes": 1086332,
+          "sha256": "c9806eeec0109711e02bd6e4b15423770897cc8dc4e90a838ea4782dd4556182",
+          "times": [
+            "0001-01-01_00:02:30",
+            "0001-01-01_00:02:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:03:00",
+          "bytes": 1086878,
+          "sha256": "027af943a2074597394a12c26481fe6e916f7e3b8354933534b804b6d9ed6d1f",
+          "times": [
+            "0001-01-01_00:03:00",
+            "0001-01-01_00:03:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:03:30",
+          "bytes": 1087384,
+          "sha256": "e61ab5b6e04ab46e5601a661e32e2413800f6793455bbb452df1730e0a35c04a",
+          "times": [
+            "0001-01-01_00:03:30",
+            "0001-01-01_00:03:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 987299,
+          "sha256": "88121016bd914ffe42c8b01fbee2a871ecc3e350b1e40185454da54b7bd54fee",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "log_hashes": {
+        "run.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+        "time.log": "8624e922e943a8b66e080e9dae751ac92540d307d5b1af23f29e76efce0bed03",
+        "rsl.error.0000": "bf07d29ef4f1d3cf9b82c6b4a055c8aa36a2fc0a001b296865a1385cf2b5064c",
+        "rsl.out.0000": "fc2ee93ad9753fcca767edb2969fa369246e86eb0c223b47f78fe976354d8cd7",
+        "namelist.output": "14caa5634ffb29b5cc84960839fc7f81521738251570d10191d692ba2abe12eb"
+      },
+      "wall_seconds": 872.94
+    },
+    {
+      "label": "h0p46875_0_240s_newton_tol1e-9",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9",
+      "corrected_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/run_receipt.json",
+      "corrected_receipt_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+      "legacy_original_receipt_path": null,
+      "legacy_original_receipt_sha256": null,
+      "accepted_csv_manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/accepted_csv_manifest.json",
+      "accepted_csv_manifest_sha256": "704ed8b658973aa0ea9a1ec110adba8e2ee3eafebf1a910be29a11743dbb844e",
+      "return_code": 0,
+      "application_success_marker": true,
+      "dt_s": 0.46875,
+      "duration_s": 240,
+      "steps": 512,
+      "expected_steps": 512,
+      "solver_summaries": [
+        {
+          "steps": 300,
+          "failed": 0,
+          "dt": 0.4688
+        },
+        {
+          "steps": 600,
+          "failed": 0,
+          "dt": 0.4688
+        },
+        {
+          "steps": 900,
+          "failed": 0,
+          "dt": 0.4688
+        },
+        {
+          "steps": 1200,
+          "failed": 0,
+          "dt": 0.4688
+        },
+        {
+          "steps": 1500,
+          "failed": 0,
+          "dt": 0.4688
+        },
+        {
+          "steps": 1536,
+          "failed": 0,
+          "dt": 0.4688
+        }
+      ],
+      "history_times": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:00:15",
+        "0001-01-01_00:00:30",
+        "0001-01-01_00:00:45",
+        "0001-01-01_00:01:00",
+        "0001-01-01_00:01:15",
+        "0001-01-01_00:01:30",
+        "0001-01-01_00:01:45",
+        "0001-01-01_00:02:00",
+        "0001-01-01_00:02:15",
+        "0001-01-01_00:02:30",
+        "0001-01-01_00:02:45",
+        "0001-01-01_00:03:00",
+        "0001-01-01_00:03:15",
+        "0001-01-01_00:03:30",
+        "0001-01-01_00:03:45",
+        "0001-01-01_00:04:00"
+      ],
+      "history_times_exact": true,
+      "all_eight_fields_finite": true,
+      "csv_bytes": 15354749763,
+      "runtime_config_unique": {
+        "newton_tol_config": [
+          "9.9999997171806854e-10"
+        ],
+        "krylov_tol_config": [
+          "1.0000000116860974e-07"
+        ],
+        "effective_ewt_rtol_config": [
+          "9.9999999747524271e-07"
+        ]
+      },
+      "netcdf_files": [
+        {
+          "path": "wrfout_d01_0001-01-01_00:00:00",
+          "bytes": 1040885,
+          "sha256": "5072b2699a2413d2c30e5f94b357454a27cb9e33201733dbaa99989a2f8e5ab9",
+          "times": [
+            "0001-01-01_00:00:00",
+            "0001-01-01_00:00:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:00:30",
+          "bytes": 1079895,
+          "sha256": "a63fd4c079cb6f34136ee12cd2112c3a6c3a0fa33929e6cca7ae2b9db016eeb8",
+          "times": [
+            "0001-01-01_00:00:30",
+            "0001-01-01_00:00:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:01:00",
+          "bytes": 1082463,
+          "sha256": "59804f3f67c0636cf7475036a0caf0b0592f1cf17aa78f15d345ad8287bd804d",
+          "times": [
+            "0001-01-01_00:01:00",
+            "0001-01-01_00:01:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:01:30",
+          "bytes": 1084336,
+          "sha256": "36a0469afc8fbc60c63449295b7122cc3b2c0037afd4738e1e96ec9430ae8269",
+          "times": [
+            "0001-01-01_00:01:30",
+            "0001-01-01_00:01:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:02:00",
+          "bytes": 1085632,
+          "sha256": "e6ef73ee6c56ec5a744ca9413da6d926bbc631f6bf68339b26cd26f8d3c800bc",
+          "times": [
+            "0001-01-01_00:02:00",
+            "0001-01-01_00:02:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:02:30",
+          "bytes": 1086342,
+          "sha256": "3002045e32d0e61fa952420036e8c9dbe224bbb8d5663ee6dcd3e019a1d33a05",
+          "times": [
+            "0001-01-01_00:02:30",
+            "0001-01-01_00:02:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:03:00",
+          "bytes": 1086836,
+          "sha256": "a94afc81af943592c3b62a185375a1098d98784d0a02ac27603b552abddab469",
+          "times": [
+            "0001-01-01_00:03:00",
+            "0001-01-01_00:03:15"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:03:30",
+          "bytes": 1087393,
+          "sha256": "a01981ecf2974bb2140f344c56aecaf05a3d0bb5582b43ff4338a32f69eff4d4",
+          "times": [
+            "0001-01-01_00:03:30",
+            "0001-01-01_00:03:45"
+          ]
+        },
+        {
+          "path": "wrfout_d01_0001-01-01_00:04:00",
+          "bytes": 987317,
+          "sha256": "a7ff3616362d01fcf98d63826feeda5c71cf39bb9af71743a679ba27a853ca81",
+          "times": [
+            "0001-01-01_00:04:00"
+          ]
+        }
+      ],
+      "log_hashes": {
+        "run.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+        "time.log": "ea0536c0f7f0765ea47c3caaedf1a1cdd635c82f90fc0d941bb46f63de7cb910",
+        "rsl.error.0000": "6c61f46cf0cc6bb8f49ec890a9bb7deda9f2bdda1e7cf2e518de7dd71487dba3",
+        "rsl.out.0000": "8fc3fec8ca7e7caa3f2ef36f8c457bb016acb4bd260a1b5d360b1c4c3dd9134d",
+        "namelist.output": "a254fd96b9248cb6116b4c2b72d4666131f728091c0aae07a762cad601c58bb8"
+      },
+      "wall_seconds": 1673.05
+    }
+  ],
+  "total_native_runs": 2,
+  "additional_native_runs": 0,
+  "builds": 0,
+  "raw_csv_loose_files_retained": true,
+  "raw_csv_total_bytes": 23031718152,
+  "free_disk_bytes_after_runs": 13643382784
+}

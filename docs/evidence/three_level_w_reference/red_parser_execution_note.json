@@ -1,0 +1,24 @@
+{
+  "additional_order_or_q_cos_acceptance_gates": false,
+  "candidate_full_epsilon_evaluation": "Executed only after 24/24 h3 reference screen passed; 20/24 pass, four W failures.",
+  "final_analysis_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/results/h3/pr311_h3_red_analysis.json",
+  "final_analysis_sha256": "d0bec36a0b23be6351ed720dcbe50b443136797778e7df4046a779136f622712",
+  "final_analyzer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/analyze_pr311_h3_independent.py",
+  "final_analyzer_sha256": "ff57362ed57bed947bd8bd4dd05ce5919186b4ec76e333fd9d1c7c8013c06fd6",
+  "final_validation_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/red_validator/pr311_red_final_validation_receipt.json",
+  "final_validation_receipt_sha256": "54f96e9f729db77f8cfce5ab4fdabd790e21c360b13e564b4674484512df6e59",
+  "h3_run_receipt_sha256": "ef6fb87deba873141306d78fe23a834b3533519750e46a3babf5c9d378194e95",
+  "model_runs_by_Red": 0,
+  "native_run_status": "completed rc=0 SUCCESS; zero solver failures; no native failure occurred.",
+  "old_stage_csv_reads_by_Red": 0,
+  "parser_only_adaptations": [
+    "Accepted the completed h3 receipt\u2019s actual command.cwd/input/protocol field layout and its exact preflight/capture bindings.",
+    "Interpreted receipt solver_summaries.steps as 3,072 implicit stages (not 1,024 host timesteps), consistent with the frozen plan.",
+    "With the required observer off, stage-history side rows are absent; health validation uses the 3,072 printed Newton convergence records, 1,024 step telemetry rows, FP64 carry tokens, RHS count records, and RSL timings.",
+    "Accepted the pinned archived h15 run receipt\u2019s PR303 schema and compared its receipt/netCDF hashes against the frozen protocol."
+  ],
+  "schema": "pr311_red_validator_execution_note_v1",
+  "scientific_criteria_changed": false,
+  "source_or_build_edits_by_Red": 0,
+  "status": "analysis_complete_parser_adaptations_only"
+}

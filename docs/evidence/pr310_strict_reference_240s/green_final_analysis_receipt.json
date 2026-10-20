@@ -1,0 +1,382 @@
+{
+  "analysis_command": [
+    "/opt/homebrew/bin/python3.10",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/analyze_pr310_240s.py",
+    "--plan",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/pr310_analysis_plan_final.json",
+    "--protocol",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_protocol_final_v2.json",
+    "--out-dir",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final"
+  ],
+  "analysis_plan_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/pr310_analysis_plan_final.json",
+  "analysis_plan_sha256": "6bee3d92259ef4586e2b68bf953d4edfbff29a85f53167e908ad81fcb5458c28",
+  "analysis_source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/analyze_pr310_240s.py",
+  "analysis_source_sha256": "0ed0a5791c10f50a268fa2802a1a8d6dcb219d7dcc87b41215fa62b8db37c9c4",
+  "case_compactions": {
+    "coarse": {
+      "json_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/compact_cases/pr310_coarse_compact.json",
+      "json_sha256": "2e86ce669f07fa7905bb22a4388a0259d7aeea1b544e034089c9cec0c8635365",
+      "npz_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/compact_cases/pr310_coarse_compact.npz",
+      "npz_sha256": "3744e337310108cd911e30f1c0663dfdbb1f6dbde511393c874a3752164567bd",
+      "run_receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+      "source_csv_count": 256,
+      "source_csv_manifest_sha256": "a14d8f43eadb2da842217f841efd57674db2a0d550e2ef7eed741f34457a9ed7"
+    },
+    "fine": {
+      "json_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/compact_cases/pr310_fine_compact.json",
+      "json_sha256": "9156a95b5faec02a11e587014b53e3d28054a9fdf1e52bc81455907baf65d48f",
+      "npz_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/compact_cases/pr310_fine_compact.npz",
+      "npz_sha256": "82c0d637edd2962a2c7706fd34a0202d980cf91ee7b2bae52562f453af994976",
+      "run_receipt_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+      "source_csv_count": 512,
+      "source_csv_manifest_sha256": "fcdd6e79dd35384629c1e2de44b7e769eb0fe65f7e5036141aa0f2746f53b8f9"
+    }
+  },
+  "final_analysis_json_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_240s_analysis.json",
+  "final_analysis_json_sha256": "6985f6d2f78b3d4c8822a9593ebf35963b7f7d23b18864f0b9e7ca8d69ea46fb",
+  "final_npz_sha256": "ad23d954b4ca5ce34badbccb9b8454393a23f6651ad4beb859b9966b8f149d6c",
+  "final_screen_csv_sha256": "66435dcdcf844915eedcd3c14d14d26a5542b3467ba08d0121f508abfa1f5f9f",
+  "final_solver_csv_sha256": "42c36a1ffb83ef6d6554bc12afeae434a38535711c027deee0d5fd67f663e9b7",
+  "final_w_csv_sha256": "8c80e60ae7e6fd8edf2c9b04b382b3171eae69fb6853950de62a08cd9fd443c4",
+  "protocol_sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+  "result": {
+    "earliest_failure_seconds": 180,
+    "failed_fields_by_checkpoint": {
+      "120": [],
+      "180": [
+        "W"
+      ],
+      "240": [
+        "W"
+      ],
+      "60": []
+    },
+    "internal_W_endpoint_count": 257,
+    "internal_W_owner_count": 4096,
+    "official_rows": 24,
+    "passes": 22,
+    "prefix_0_60_fullpacked_exact": {
+      "coarse": true,
+      "fine": true
+    },
+    "published_FP32_W_roundtrip_all_exact": true,
+    "selected_details": {
+      "coarse": [
+        {
+          "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/accepted_ark_w_step_1.csv",
+          "csv_sha256": "8e61145c438cf0e2d15fa75a0fedfb0eecd2d5395f8766c26a797de14e3bfbdb",
+          "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+          "role": "coarse",
+          "step_seq": 1
+        },
+        {
+          "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/accepted_ark_w_step_192.csv",
+          "csv_sha256": "861801d26d1c175b4f22034b6f8d5cf4d1b42513765c2fff4b7b0db92525c903",
+          "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+          "role": "coarse",
+          "step_seq": 192
+        }
+      ],
+      "fine": [
+        {
+          "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/accepted_ark_w_step_1.csv",
+          "csv_sha256": "b7211499534a056d01e22e55576189df34934c890e3d3cc5abbe265d79d6296d",
+          "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+          "role": "fine",
+          "step_seq": 1
+        },
+        {
+          "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/accepted_ark_w_step_383.csv",
+          "csv_sha256": "09bb7a0dab77da7adf94f30ff3f42e7f37640e9a03497e522892a43567489fb8",
+          "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+          "role": "fine",
+          "step_seq": 383
+        },
+        {
+          "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/accepted_ark_w_step_384.csv",
+          "csv_sha256": "3f476e04e092ec7e45293da76bc532ca7212155c7397b92aedd54fadc553892d",
+          "detail_selection_reason": "earliest failing V3 checkpoint; adjacent macrostep interval",
+          "role": "fine",
+          "step_seq": 384
+        }
+      ]
+    }
+  },
+  "root_independent_official_screen": {
+    "all_rows_matching_root": true,
+    "green_reported_v3_pass_count": 22,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_official_screen.json",
+    "root_reported_v3_pass_count": 22,
+    "row_count": 24,
+    "rows": [
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "U",
+        "green_ratio": 9.04530792567399e-05,
+        "green_rms": 2.3350212277406657e-08,
+        "pass_match": true,
+        "root_ratio": 9.04530792567399e-05,
+        "root_rms": 2.3350212277406657e-08,
+        "time_seconds": 60
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "V",
+        "green_ratio": 0.00015649069959225906,
+        "green_rms": 5.27999998338641e-09,
+        "pass_match": true,
+        "root_ratio": 0.00015649069959225906,
+        "root_rms": 5.27999998338641e-09,
+        "time_seconds": 60
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "W",
+        "green_ratio": 0.6922025249157938,
+        "green_rms": 1.7984436497264701e-06,
+        "pass_match": true,
+        "root_ratio": 0.6922025249157938,
+        "root_rms": 1.7984436497264701e-06,
+        "time_seconds": 60
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "PH",
+        "green_ratio": 0.030115115698381854,
+        "green_rms": 0.0001028908077946562,
+        "pass_match": true,
+        "root_ratio": 0.030115115698381854,
+        "root_rms": 0.0001028908077946562,
+        "time_seconds": 60
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "T",
+        "green_ratio": 0.0,
+        "green_rms": 0.0,
+        "pass_match": true,
+        "root_ratio": 0.0,
+        "root_rms": 0.0,
+        "time_seconds": 60
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "MU",
+        "green_ratio": 0.0,
+        "green_rms": 0.0,
+        "pass_match": true,
+        "root_ratio": 0.0,
+        "root_rms": 0.0,
+        "time_seconds": 60
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "U",
+        "green_ratio": 9.855923937773781e-05,
+        "green_rms": 2.5442795096424906e-08,
+        "pass_match": true,
+        "root_ratio": 9.855923937773781e-05,
+        "root_rms": 2.5442795096424906e-08,
+        "time_seconds": 120
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "V",
+        "green_ratio": 0.0002663597200562788,
+        "green_rms": 8.986983387104293e-09,
+        "pass_match": true,
+        "root_ratio": 0.0002663597200562788,
+        "root_rms": 8.986983387104293e-09,
+        "time_seconds": 120
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "W",
+        "green_ratio": 0.9380806645201265,
+        "green_rms": 2.4372711068088664e-06,
+        "pass_match": true,
+        "root_ratio": 0.9380806645201265,
+        "root_rms": 2.4372711068088664e-06,
+        "time_seconds": 120
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "PH",
+        "green_ratio": 0.04010268147382205,
+        "green_rms": 0.00013701416036050805,
+        "pass_match": true,
+        "root_ratio": 0.04010268147382205,
+        "root_rms": 0.00013701416036050805,
+        "time_seconds": 120
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "T",
+        "green_ratio": 0.0,
+        "green_rms": 0.0,
+        "pass_match": true,
+        "root_ratio": 0.0,
+        "root_rms": 0.0,
+        "time_seconds": 120
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "MU",
+        "green_ratio": 0.0,
+        "green_rms": 0.0,
+        "pass_match": true,
+        "root_ratio": 0.0,
+        "root_rms": 0.0,
+        "time_seconds": 120
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "U",
+        "green_ratio": 0.0001280768124139585,
+        "green_rms": 3.306267494986009e-08,
+        "pass_match": true,
+        "root_ratio": 0.0001280768124139585,
+        "root_rms": 3.306267494986009e-08,
+        "time_seconds": 180
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "V",
+        "green_ratio": 0.00036492214248642023,
+        "green_rms": 1.2312481900112498e-08,
+        "pass_match": true,
+        "root_ratio": 0.00036492214248642023,
+        "root_rms": 1.2312481900112498e-08,
+        "time_seconds": 180
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "W",
+        "green_ratio": 1.30903558362905,
+        "green_rms": 3.401066375668074e-06,
+        "pass_match": true,
+        "root_ratio": 1.30903558362905,
+        "root_rms": 3.401066375668074e-06,
+        "time_seconds": 180
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "PH",
+        "green_ratio": 0.04074069463748777,
+        "green_rms": 0.00013919398561672373,
+        "pass_match": true,
+        "root_ratio": 0.04074069463748777,
+        "root_rms": 0.00013919398561672373,
+        "time_seconds": 180
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "T",
+        "green_ratio": 0.0,
+        "green_rms": 0.0,
+        "pass_match": true,
+        "root_ratio": 0.0,
+        "root_rms": 0.0,
+        "time_seconds": 180
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "MU",
+        "green_ratio": 1.2255167859328947e-05,
+        "green_rms": 5.960464477539063e-08,
+        "pass_match": true,
+        "root_ratio": 1.2255167859328947e-05,
+        "root_rms": 5.960464477539063e-08,
+        "time_seconds": 180
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "U",
+        "green_ratio": 0.00010261461569282417,
+        "green_rms": 2.6489679277705864e-08,
+        "pass_match": true,
+        "root_ratio": 0.00010261461569282417,
+        "root_rms": 2.6489679277705864e-08,
+        "time_seconds": 240
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "V",
+        "green_ratio": 0.000333034546292519,
+        "green_rms": 1.1236593634466586e-08,
+        "pass_match": true,
+        "root_ratio": 0.000333034546292519,
+        "root_rms": 1.1236593634466586e-08,
+        "time_seconds": 240
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "W",
+        "green_ratio": 1.2591732218690532,
+        "green_rms": 3.271516649049352e-06,
+        "pass_match": true,
+        "root_ratio": 1.2591732218690532,
+        "root_rms": 3.271516649049352e-06,
+        "time_seconds": 240
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "PH",
+        "green_ratio": 0.04060084654379698,
+        "green_rms": 0.00013871618292546058,
+        "pass_match": true,
+        "root_ratio": 0.04060084654379698,
+        "root_rms": 0.00013871618292546058,
+        "time_seconds": 240
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "T",
+        "green_ratio": 0.0,
+        "green_rms": 0.0,
+        "pass_match": true,
+        "root_ratio": 0.0,
+        "root_rms": 0.0,
+        "time_seconds": 240
+      },
+      {
+        "exact_ratio_match": true,
+        "exact_rms_match": true,
+        "field": "MU",
+        "green_ratio": 1.3701694204565053e-05,
+        "green_rms": 6.664001874625056e-08,
+        "pass_match": true,
+        "root_ratio": 1.3701694204565053e-05,
+        "root_rms": 6.664001874625056e-08,
+        "time_seconds": 240
+      }
+    ],
+    "rows_matching_root_count": 24,
+    "sha256": "891a5bc7b356e45e1270f2ac0263a2848708e30451e51d0b3ccaa3cb45ea4656"
+  },
+  "schema": "pr310_green_analysis_validation_receipt_v1"
+}

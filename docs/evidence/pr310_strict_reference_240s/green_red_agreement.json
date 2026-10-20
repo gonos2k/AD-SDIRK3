@@ -1,0 +1,37 @@
+{
+  "schema": "pr310_root_independent_full_pair_agreement_v1",
+  "Green_analysis_sha256": "6985f6d2f78b3d4c8822a9593ebf35963b7f7d23b18864f0b9e7ca8d69ea46fb",
+  "Red_recovery_analysis_sha256": "7d8a05079606ced42dc902e64cfddedae24712f98d2be92a476e303c8ff789f3",
+  "Root_official_analysis_sha256": "891a5bc7b356e45e1270f2ac0263a2848708e30451e51d0b3ccaa3cb45ea4656",
+  "official_rows_three_way_exact": 24,
+  "official_pass_count": 22,
+  "all_NPZ_arrays_three_way_bitwise_equal": 79,
+  "original_Red_partial_and_recovered_arrays_bitwise_equal": true,
+  "solver_metric_agreement": {
+    "coarse": {
+      "compared_implicit_stages": 768,
+      "all_Newton_check_counts_2": true,
+      "max_G_stat_abs_difference_m_s": 3.1554436208840472e-30,
+      "max_K_minus_FI_stat_abs_difference_m_s2": 6.310887241768095e-30,
+      "max_local_increment_sum_difference_m_s": 1.262177448353619e-29,
+      "scaled_residual_exact": true,
+      "Green_direct_sum_m_s": 1.232909502653263e-11,
+      "Red_direct_sum_m_s": 1.232909502653263e-11
+    },
+    "fine": {
+      "compared_implicit_stages": 1536,
+      "all_Newton_check_counts_2": true,
+      "max_G_stat_abs_difference_m_s": 7.888609052210118e-31,
+      "max_K_minus_FI_stat_abs_difference_m_s2": 6.310887241768095e-30,
+      "max_local_increment_sum_difference_m_s": 6.310887241768095e-30,
+      "scaled_residual_exact": true,
+      "Green_direct_sum_m_s": 1.1696403128791608e-11,
+      "Red_direct_sum_m_s": 1.1696403128791606e-11
+    }
+  },
+  "runtime_config_exact": true,
+  "both_t60_full_packed_prefixes_exact": true,
+  "all_768_original_CSV_manifests_match_producer_receipts": true,
+  "scalar_comparison_guard_absolute": 1e-26,
+  "scope": "Observed independent compact agreement. Local residual sums do not bound propagated state error. No 24/24 reference qualification."
+}

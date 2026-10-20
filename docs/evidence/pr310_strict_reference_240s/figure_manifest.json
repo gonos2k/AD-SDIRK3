@@ -1,0 +1,141 @@
+{
+  "displayed_metrics": {
+    "epsilon_W_over_3_m_s": 2.598146618932444e-06,
+    "internal_W_metric": "unweighted RMS of fine-minus-coarse internal FP64 W at common times",
+    "internal_W_owners": 4096,
+    "internal_W_points": 257,
+    "official_failed_rows": [
+      {
+        "field": "W",
+        "ratio": 1.30903558362905,
+        "time_seconds": 180
+      },
+      {
+        "field": "W",
+        "ratio": 1.2591732218690532,
+        "time_seconds": 240
+      }
+    ],
+    "official_pass_rows": 22,
+    "official_screen_rows": 24
+  },
+  "figure": {
+    "png": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/figures/pr310_240s_korean_summary.png",
+      "sha256": "26c62d3051332a63759f95cc4cf8f424214398885aaabbf4e09d4fb0f151c862"
+    },
+    "svg": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/figures/pr310_240s_korean_summary.svg",
+      "sha256": "6dac8896cda1ec473397aa736262c2701843e165d3210751f378d39470a4710b"
+    }
+  },
+  "generator": {
+    "font": "AppleGothic",
+    "matplotlib_version": "3.10.8",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/make_pr310_240s_korean_summary_figure.py",
+    "sha256": "1b7564e4dd097e23408e1e5008f106e07baa53e18b01486f7f2c3d3945d40852"
+  },
+  "inputs": {
+    "analysis_json": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_240s_analysis.json",
+      "sha256": "6985f6d2f78b3d4c8822a9593ebf35963b7f7d23b18864f0b9e7ca8d69ea46fb"
+    },
+    "green_analyzer_lineage": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/pr310_green_analyzer_lineage.json",
+      "sha256": "423df2d3a4d7b2569abc7236a8cc9ca206baf1fa7eabf29f3d0854be27fc9846"
+    },
+    "green_analyzer_source": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/analyze_pr310_240s.py",
+      "sha256": "0ed0a5791c10f50a268fa2802a1a8d6dcb219d7dcc87b41215fa62b8db37c9c4"
+    },
+    "internal_w_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_257point_W.csv",
+      "sha256": "8c80e60ae7e6fd8edf2c9b04b382b3171eae69fb6853950de62a08cd9fd443c4"
+    },
+    "official_screen_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_240s_24row_screen.csv",
+      "sha256": "66435dcdcf844915eedcd3c14d14d26a5542b3467ba08d0121f508abfa1f5f9f"
+    },
+    "official_screen_source": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_official_screen.py",
+      "sha256": "4765e9b98badc4e9cdfb58e7e32febf871281531f052e65621c1736e37605931"
+    },
+    "protocol": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_protocol_final_v2.json",
+      "sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad"
+    },
+    "red_analyzer_source_current": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyze_pr310_240s_red.py",
+      "sha256": "0a2f6ce72f5331b8a5aedaaaf05c1c3bae69fb3911456cb235cb107d05311917"
+    },
+    "red_analyzer_version_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyzer_version_binding.json",
+      "sha256": "e52ddab11e5d56c667948032de55e2fcb868ae0e2627d993973be60b837590cd"
+    },
+    "red_internal_w_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final/pr310_257point_red_W.csv",
+      "sha256": "8c80e60ae7e6fd8edf2c9b04b382b3171eae69fb6853950de62a08cd9fd443c4"
+    },
+    "red_official_screen_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final/pr310_240s_red_24row_screen.csv",
+      "sha256": "66435dcdcf844915eedcd3c14d14d26a5542b3467ba08d0121f508abfa1f5f9f"
+    },
+    "red_partial_attempt_receipt": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/final_analysis_attempt_receipt.json",
+      "sha256": "36d97baf08680b1b848f28100b4d5644b7557618ec07c4732fedc5758a7a19ad"
+    },
+    "root_official_screen_json": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_official_screen.json",
+      "sha256": "891a5bc7b356e45e1270f2ac0263a2848708e30451e51d0b3ccaa3cb45ea4656"
+    },
+    "root_portable_recomputation": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_portable_recomputation.json",
+      "sha256": "eb93bd679438d0ed6aa6371e6b7023da62a570d7d3ee783fc5ee1ca274d86d05"
+    }
+  },
+  "interpretation_limit": "The internal FP64 W curve and published-NetCDF V3 screen are distinct diagnostics; the left panel's threshold crossing is not the official screen result.",
+  "producer": {
+    "base_revision": "9614e78dbd71250f571f0e495650eeca1e209a04",
+    "base_tree": "24f37b93aa7f93eefe2b291de019fa6a6754474d",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "no_source_edit_or_rebuild": true,
+    "observer_impl_sha256": "a4d65886b5281c28a1b81a3b62b74ab0a763706c311cb7887d1eecaaaf88b076",
+    "runtime": {
+      "buoyancy_uses_current_w": true,
+      "effective_ewt_rtol": 1e-06,
+      "effective_omega_ww_cp": true,
+      "history_interval_seconds": 15,
+      "imex_mode": 3,
+      "kdamp": 0.2,
+      "krylov_tolerance": 1e-07,
+      "mass_coordinate_mode": 1,
+      "mpi_ranks": 1,
+      "newton_relative_tolerance": 0.0,
+      "newton_tolerance": 1e-09,
+      "omega_w_blend": 1.0,
+      "omp_threads": 1,
+      "run_seconds": 240,
+      "scheme": 6,
+      "split_explicit": false
+    },
+    "worktree": "/private/tmp/pr310-strict-reference-240s-20261020"
+  },
+  "red_output_provenance": {
+    "current_recovery_output_not_claimed": true,
+    "current_recovery_source_sha256": "0a2f6ce72f5331b8a5aedaaaf05c1c3bae69fb3911456cb235cb107d05311917",
+    "partial_attempt_status": "partial_products_written_solver_summary_serialization_failed",
+    "partial_outputs_generated_by_source_sha256": "02539d8181c07c1970e3535da1cdfc6893f676baad7c1faa2a948b2913ecba9d"
+  },
+  "schema": "pr310_summary_figure_manifest_v1",
+  "validation": {
+    "Green_Red_W_and_screen_csv_equal": true,
+    "Green_Root_24row_screen_JSON_equal": true,
+    "Green_Root_portable_recomputation_equal": true,
+    "JSON_CSV_values_match": true,
+    "green_source_matches_lineage": true,
+    "no_model_execution": true,
+    "protocol_hash_matches_analysis": true,
+    "red_partial_outputs_match_attempt_receipt": true
+  }
+}

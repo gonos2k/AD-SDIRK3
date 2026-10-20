@@ -1,0 +1,157 @@
+{
+  "bounded_current_graphs": {
+    "figure_generator": {
+      "edges": 20,
+      "input_tokens": 0,
+      "nodes": 6,
+      "output_tokens": 0,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_figure_generator_final_v3_ast_corpus/source/graphify-out/graph.json",
+      "sha256": "11d77e91534a63dc5744c7351c92bd8c047bb612fbf35bf36549f15d7157ab20"
+    },
+    "green_analyzer": {
+      "edges": 69,
+      "input_tokens": 0,
+      "nodes": 24,
+      "output_tokens": 0,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_green_final_analyzer_ast_corpus/source/graphify-out/graph.json",
+      "sha256": "4ce12dfee77911674f2b54ca080666f0b9ae0b16c4c5faff241d6ddffcf03356"
+    },
+    "red_analyzer": {
+      "edges": 72,
+      "input_tokens": 0,
+      "nodes": 24,
+      "output_tokens": 0,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_red_recovery_analyzer_ast_corpus/source/graphify-out/graph.json",
+      "sha256": "3b5ef038683dcb34eb6e92f7e9895f455d1b54e018d0c54b91962eb304039dc9"
+    }
+  },
+  "current_source_bindings": {
+    "figure_generator": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/make_pr310_240s_korean_summary_figure.py",
+      "sha256": "1b7564e4dd097e23408e1e5008f106e07baa53e18b01486f7f2c3d3945d40852"
+    },
+    "green_analyzer": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/analyze_pr310_240s.py",
+      "sha256": "0ed0a5791c10f50a268fa2802a1a8d6dcb219d7dcc87b41215fa62b8db37c9c4"
+    },
+    "red_analyzer": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyze_pr310_240s_red.py",
+      "sha256": "0a2f6ce72f5331b8a5aedaaaf05c1c3bae69fb3911456cb235cb107d05311917"
+    }
+  },
+  "data_binding": {
+    "equality": "Green/Red W and 24-row CSV values match exactly; Green rows match the root official 24-row JSON and portable recomputation. The plot itself uses the Green final JSON/CSV as canonical data.",
+    "green_analysis_json": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_240s_analysis.json",
+      "sha256": "6985f6d2f78b3d4c8822a9593ebf35963b7f7d23b18864f0b9e7ca8d69ea46fb"
+    },
+    "green_internal_W_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_257point_W.csv",
+      "sha256": "8c80e60ae7e6fd8edf2c9b04b382b3171eae69fb6853950de62a08cd9fd443c4"
+    },
+    "green_official_24row_csv": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_240s_24row_screen.csv",
+      "sha256": "66435dcdcf844915eedcd3c14d14d26a5542b3467ba08d0121f508abfa1f5f9f"
+    },
+    "red_24row_csv_partial_crosscheck": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final/pr310_240s_red_24row_screen.csv",
+      "sha256": "66435dcdcf844915eedcd3c14d14d26a5542b3467ba08d0121f508abfa1f5f9f"
+    },
+    "red_W_csv_partial_crosscheck": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/final/pr310_257point_red_W.csv",
+      "sha256": "8c80e60ae7e6fd8edf2c9b04b382b3171eae69fb6853950de62a08cd9fd443c4"
+    },
+    "root_official_screen": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_official_screen.json",
+      "sha256": "891a5bc7b356e45e1270f2ac0263a2848708e30451e51d0b3ccaa3cb45ea4656"
+    },
+    "root_portable_recomputation": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_portable_recomputation.json",
+      "sha256": "eb93bd679438d0ed6aa6371e6b7023da62a570d7d3ee783fc5ee1ca274d86d05"
+    }
+  },
+  "figure": {
+    "generator_sha256": "1b7564e4dd097e23408e1e5008f106e07baa53e18b01486f7f2c3d3945d40852",
+    "manifest_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/figures/pr310_240s_korean_summary_manifest.json",
+    "manifest_sha256": "2711809fd5e33174010ce0f68221f92ffc17aeab7b85f76cd755c393c15aec83",
+    "png": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/figures/pr310_240s_korean_summary.png",
+      "sha256": "26c62d3051332a63759f95cc4cf8f424214398885aaabbf4e09d4fb0f151c862"
+    },
+    "svg": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/figures/pr310_240s_korean_summary.svg",
+      "sha256": "6dac8896cda1ec473397aa736262c2701843e165d3210751f378d39470a4710b"
+    },
+    "visual_qa": "Full-resolution PNG inspected: no heatmap grid crossing values, Korean labels render, both panels and colorbar fit, W180/W240 fail cells clearly marked."
+  },
+  "graphify_scope": "Three isolated one-file AST graphs only (Green analyzer, Red recovery analyzer, and figure generator); no full corpus or production graph rebuild. Local AST runs report zero Graphify input/output LLM tokens.",
+  "limitations": [
+    "Graph edges are navigation only, not numerical proof.",
+    "Figure status is 22/24 official rows passing; W at 180 and 240 seconds fails \u03b5/3. The internal FP64 W curve is a separate diagnostic and its \u03b5W/3 line is a reference only.",
+    "No new model run, build, or numerical recomputation was done for this source/figure refresh.",
+    "W310 commit/tree are unchanged; current tracked worktree has an unrelated documentation-only modification at docs/PROBLEM_DEFINITION.md."
+  ],
+  "schema": "pr310_final_graph_figure_lineage_receipt_v1",
+  "source_change_scope": {
+    "figure_generator": {
+      "changes": "Removed heatmap grid, corrected Korean labels to \uacf5\uc2dd V3 \uac80\uc0ac / \ud3c9\uac00 \ubcc0\uc218, and revised title; no data or formulas altered.",
+      "sha256": "1b7564e4dd097e23408e1e5008f106e07baa53e18b01486f7f2c3d3945d40852"
+    },
+    "green_analyzer": {
+      "changed_AST_functions_from_prior_verified_snapshot": [
+        "analyze"
+      ],
+      "lineage": "Only the `solver_summary.csv` serializer in analyze() was extended to flatten already-computed per-stage G_W, K\u2212FI_RK, same-Y Full\u2212FI\u2212FE, availability, and direct local W increment fields. No data-loading, validation, budget, array, or numerical calculation code changed.",
+      "science_formulas_changed": false
+    },
+    "red_analyzer": {
+      "_read_steps_unchanged_from_original": true,
+      "changed_AST_functions_from_previous_receipt-alias_snapshot": [
+        "analyze"
+      ],
+      "science_formulas_changed": false,
+      "version_binding_scope": "Receipt-schema aliases only: accept exact `history_times`/`history_times_exact`, `accepted_stage_csvs`/accepted count, and normalized contiguous/accepted/dt keys in the corrected fine runner receipt; all gates remain strict. Added no changes to _read_steps, state unpacking, G/K\u2212FI equations, W owner, time grid, V3 mask/budgets, comparison formulas, or selected-stage logic. Added a solver-summary CSV schema preflight that rejects missing/extra field handling before output writing; no numerical analysis changes."
+    },
+    "red_output_provenance": {
+      "current_recovery_analyzer_sha256": "0a2f6ce72f5331b8a5aedaaaf05c1c3bae69fb3911456cb235cb107d05311917",
+      "current_source_output_claimed": false,
+      "existing_W_and_24row_CSV_producer_sha256": "02539d8181c07c1970e3535da1cdfc6893f676baad7c1faa2a948b2913ecba9d",
+      "existing_attempt_status": "partial_products_written_solver_summary_serialization_failed",
+      "note": "Existing Red W/official-screen partial outputs are complete and hash-identical to Green, but the first Red attempt did not write its JSON/complete solver-summary file. A subsequent authorized offline recovery using the current source is still separate from these existing outputs."
+    }
+  },
+  "source_lineage_receipts": {
+    "green_analyzer_lineage": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/pr310_green_analyzer_lineage.json",
+      "sha256": "423df2d3a4d7b2569abc7236a8cc9ca206baf1fa7eabf29f3d0854be27fc9846"
+    },
+    "green_final_receipt": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/pr310_green_final_analysis_receipt.json",
+      "sha256": "4ed1d2a1516a185963440d9e4ea0dcfed2fec5ddbb89ca1511dbd21e9b09fee6"
+    },
+    "portable_recomputation": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_portable_recomputation.json",
+      "sha256": "eb93bd679438d0ed6aa6371e6b7023da62a570d7d3ee783fc5ee1ca274d86d05"
+    },
+    "protocol": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_protocol_final_v2.json",
+      "sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad"
+    },
+    "red_analyzer_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyzer_version_binding.json",
+      "sha256": "e52ddab11e5d56c667948032de55e2fcb868ae0e2627d993973be60b837590cd"
+    },
+    "red_first_attempt": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/final_analysis_attempt_receipt.json",
+      "sha256": "36d97baf08680b1b848f28100b4d5644b7557618ec07c4732fedc5758a7a19ad"
+    },
+    "root_official_screen": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_official_screen.json",
+      "sha256": "891a5bc7b356e45e1270f2ac0263a2848708e30451e51d0b3ccaa3cb45ea4656"
+    }
+  },
+  "target_head": "9614e78dbd71250f571f0e495650eeca1e209a04",
+  "target_tree": "24f37b93aa7f93eefe2b291de019fa6a6754474d",
+  "target_worktree": "/private/tmp/pr310-strict-reference-240s-20261020",
+  "tracked_status_at_binding": "M docs/PROBLEM_DEFINITION.md"
+}
