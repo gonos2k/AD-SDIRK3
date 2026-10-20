@@ -1,0 +1,100 @@
+{
+  "build_receipts": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archive_copy_receipt.json": "9cdf5ce26245049f80f0fbf8a30064f28aa4a1c8905bdaceee89ee580da57c72",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archive_update_receipt.json": "87e7e1fcad7032e419894b06918654369aba0cba3bcdf919e0e68a456f5b5636",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/build_receipt.json": "d166bd91298840df5cb626eb40da4e8b88cc94c6ad396ec074c6c00b3399d1bb",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/compile_commands.json": "814a9f5cc1d2cefb6ecd448e09d41184e3194cf5ed0272e47654c053f600e51b",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/link_receipt.json": "9677a9dca25b5aee687b694f14d955d5c42255614e36da845f1a6e83a2003d19",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/symbol_receipt.json": "06203664fc9605f736fef35d7f02136424d2cff03f7afa56e398685ef3a11af8"
+  },
+  "completed_baseline": {
+    "actual_incoming_lambda224_f32": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.lambda_out_f32.bin",
+      "sha256": "0550f495b079930b3e04313b9ecfb5e574811cc263a466300c0addcbcc19753f"
+    },
+    "forward_gate": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v5_baseline_forward_only.json",
+      "sha256": "6c29682d99fc62e52000247ec15a611b68a291c20d89316ff11640e7fdc5d855"
+    },
+    "receipt": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/run_receipt.json",
+      "sha256": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689"
+    },
+    "reference_checkpoints": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+      "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+    },
+    "source_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/launch_binding_v5.json",
+      "sha256": "1279e2d15fc068cc8fd71fef8c81508c6ce35a0f56fba46b3d130c040cf9061b"
+    }
+  },
+  "created_at": "2026-10-21T00:24:32.217787+09:00",
+  "executable": {
+    "bytes": 52799256,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+    "sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249"
+  },
+  "execution": "Root sole executor; at most two isolated rank1 OMP1 cases; seven sequential prefix VJPs and independent replay/FD lane. Stop at first failure. Existing 3N stage-count gate independently enforced by analyzer before scientific acceptance.",
+  "head": "a9c256e487574e01c3bf0231a94fec0630c69d7f",
+  "protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/protocol_v6.json",
+    "sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650"
+  },
+  "red_source_review": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/red_fortran_chain/final_source_v6_review.json",
+    "sha256": "574cf5fcdc5fb541518e6a0c9c892451b8e99aa5117713f48b13b2c73a56af1f"
+  },
+  "runner": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/run_case_v6.py",
+    "sha256": "69f84d75f2c368e9f82502e2025eb2733180965e763ee69f8a9b2ac532a3de94"
+  },
+  "schema": "native_terminal_launch_binding_v6",
+  "scope": "Actual Fortran FP32 global cotangent chain; one fresh native forward state replay; four frozen FD cases. Per-block F64 capture is local pre-cast only, not global F64 gradient; no second global VJP replay claim.",
+  "source_files": [
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ],
+  "source_graph": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/w6_v6_source_binding.json",
+    "sha256": "d7133908f148201a1616423c32c38054d8e5fef4322369711dfb2277200dd712"
+  }
+}

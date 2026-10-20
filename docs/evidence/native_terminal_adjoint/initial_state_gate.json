@@ -1,0 +1,18 @@
+{
+  "analyzer_sha256": "e1ab7c2c115d99465f5dcfb9abc2d10860512025a09b4241ff020465528107cc",
+  "case_gate": {
+    "accepted_prefix_endpoints": 33,
+    "all_endpoints_byte_equal_to_V5_baseline": true,
+    "case": "baseline_prefix_032",
+    "case_role": "Fortran_FP32_prefix_pullback",
+    "data_receipt_sha256": "a7776b973d526c82d4ad6ec2b0cb820b54762bb23c5f97ca4ac26d4fd5e0650e",
+    "global_exact_F64_chain_claim": false,
+    "gradient_f64_semantics": "local_precast_fp64",
+    "gradient_scope": "local_32_step_window",
+    "reference_prefix_fnv1a64": "c04af527e522c402",
+    "technical_gate_pass": true
+  },
+  "overall_v6_full_acceptance": false,
+  "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+  "schema": "native_terminal_v6_case_gate_v1"
+}

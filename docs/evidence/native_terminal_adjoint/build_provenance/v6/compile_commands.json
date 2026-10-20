@@ -1,0 +1,72 @@
+{
+  "schema": "native_terminal_adjoint_v6_fortran_chain_compile_commands_v1",
+  "commands": [
+    {
+      "name": "P6 native_terminal_adjoint_test.cpp",
+      "cwd": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3",
+      "argv": [
+        "g++",
+        "-std=c++17",
+        "-O3",
+        "-c",
+        "-DMACOS",
+        "-DDMPARALLEL",
+        "-DUSE_SDIRK3",
+        "-DWRF_SDIRK3_NATIVE_TERMINAL_TEST",
+        "-I/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+        "-I/opt/homebrew/include",
+        "-D_GLIBCXX_USE_CXX11_ABI=0",
+        "-MMD",
+        "-MP",
+        "-c",
+        "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+        "-o",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/objects/native_terminal_adjoint_test.o"
+      ],
+      "source_sha256": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d",
+      "output_sha256": "4c0d0dd0131927b2af0a6c1f052bdee22f7166bd9b946014f206f80dbddac163",
+      "return_code": 0,
+      "log": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/logs/cpp_test_compile.log"
+    },
+    {
+      "name": "P6 native_terminal_adjoint_test.F with E5 modules and isolated .mod output",
+      "cwd": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain",
+      "argv": [
+        "mpif90",
+        "-o",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/objects/module_native_terminal_adjoint_test.o",
+        "-c",
+        "-O2",
+        "-ftree-vectorize",
+        "-funroll-loops",
+        "-w",
+        "-ffree-form",
+        "-ffree-line-length-none",
+        "-fconvert=big-endian",
+        "-frecord-marker=4",
+        "-fallow-argument-mismatch",
+        "-fallow-invalid-boz",
+        "-DUSE_SDIRK3",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/main",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/external/io_netcdf",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/external/io_int",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/frame",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/share",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/phys",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/wrftladj",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/chem",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/inc",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/dyn_em",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/mod",
+        "-J/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/mod",
+        "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F"
+      ],
+      "source_sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+      "output_sha256": "78ba41d21fa9dda41419f2ca1f6b97e8bd172103975e7addf18659b529693384",
+      "return_code": 0,
+      "log": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/logs/fortran_module_compile.log"
+    }
+  ]
+}

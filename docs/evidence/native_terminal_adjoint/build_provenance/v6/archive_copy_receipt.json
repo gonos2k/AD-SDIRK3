@@ -1,0 +1,39 @@
+{
+  "schema": "native_terminal_adjoint_v6_e5_archive_copy_receipt_v1",
+  "created_unix_time": 1792508838.947134,
+  "status": "copied_to_e6_seed_and_candidate; E5 untouched",
+  "e5_live_tree": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree",
+  "e6_seed_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/seed",
+  "e6_candidate_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/candidate",
+  "archives": {
+    "libwrf_sdirk3_libtorch.a": {
+      "source": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+      "sha256": "da6e9cdc3dc820d697e234e949c1d5ad6b9ef9a42085bfeebad6ca5ee5bd60aa",
+      "bytes": 11740608,
+      "seed_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/seed/libwrf_sdirk3_libtorch.a",
+      "candidate_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/candidate/libwrf_sdirk3_libtorch.a",
+      "seed_copy_sha256": "da6e9cdc3dc820d697e234e949c1d5ad6b9ef9a42085bfeebad6ca5ee5bd60aa",
+      "candidate_copy_sha256": "da6e9cdc3dc820d697e234e949c1d5ad6b9ef9a42085bfeebad6ca5ee5bd60aa"
+    },
+    "libwrflib.a": {
+      "source": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/wrf_link_tree/main/libwrflib.a",
+      "sha256": "752da799eac66b8756f2768b316a47615f84669377ed90972553d0ba268cd588",
+      "bytes": 54890272,
+      "seed_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/seed/libwrflib.a",
+      "candidate_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/candidate/libwrflib.a",
+      "seed_copy_sha256": "752da799eac66b8756f2768b316a47615f84669377ed90972553d0ba268cd588",
+      "candidate_copy_sha256": "752da799eac66b8756f2768b316a47615f84669377ed90972553d0ba268cd588"
+    }
+  },
+  "source_worktree": "/private/tmp/pr312-native-fortran-chain-20261020",
+  "source_commit": "559b7a861105e5db5838f1a933a6661111aec1cb",
+  "frozen_source_hashes": {
+    "cpp": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d",
+    "fortran": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+    "header": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53",
+    "class_header": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+    "interface_cpp": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab",
+    "tile_impl_cpp": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+    "solve_em_F": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+  }
+}

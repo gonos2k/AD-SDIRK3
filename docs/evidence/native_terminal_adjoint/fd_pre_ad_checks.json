@@ -1,0 +1,451 @@
+{
+  "finite_difference_raw": {
+    "both_signal_differences_above_frozen_floor": true,
+    "central_width_plateau_relative": 1.8528429252487766e-08,
+    "central_widths_within_frozen_1_percent": true,
+    "directional_adjoint_comparison": "pending full 256-step actual Fortran FP32 cotangent chain; no partial gradient/dot used",
+    "full_fd_adjoint_acceptance": false,
+    "widths": {
+      "0p01": {
+        "J0": -11.718318303682183,
+        "J_minus": 98.80549138025432,
+        "J_plus": -122.24746142001815,
+        "central_fd": -11052.647887059555,
+        "eta_minus_actual": -0.009999999776482582,
+        "eta_plus_actual": 0.009999999776482582,
+        "one_sided_minus": -11052.381215433621,
+        "one_sided_plus": -11052.91455868549,
+        "one_sided_relative_gap": 4.825363021105133e-05,
+        "signal_above_frozen_floor": true,
+        "signal_abs_Jplus_minus_Jminus": 221.05295280027246,
+        "signal_floor": 5.917330365791284e-06
+      },
+      "0p03": {
+        "J0": -11.718318303682183,
+        "J_minus": 319.83709848266585,
+        "J_plus": -343.32174763085953,
+        "central_fd": -11052.64768227135,
+        "eta_minus_actual": -0.029999999329447746,
+        "eta_plus_actual": 0.029999999329447746,
+        "one_sided_minus": -11051.847473239643,
+        "one_sided_plus": -11053.447891303058,
+        "one_sided_relative_gap": 0.000144789035887584,
+        "signal_above_frozen_floor": true,
+        "signal_abs_Jplus_minus_Jminus": 663.1588461135254,
+        "signal_floor": 5.917330365791284e-06
+      }
+    }
+  },
+  "hard_omega_sign_audit": {
+    "comparisons_vs_baseline": {
+      "baseline": {
+        "aligned_sign_values": 5977088,
+        "interpretation": "descriptive differences at matching recorded step/ordinal/layout only; physical evaluation identity across perturbations is not established",
+        "negative_to_positive": 0,
+        "positive_to_negative": 0,
+        "reference": "baseline",
+        "shape_or_k_range_mismatch_rows": 0,
+        "shared_host_step_ordinal_rows": 1796,
+        "sign_disagreements": 0,
+        "unmatched_rows": 0,
+        "zero_membership_changes": 0
+      },
+      "minus_0p01": {
+        "aligned_sign_values": 5977088,
+        "interpretation": "descriptive differences at matching recorded step/ordinal/layout only; physical evaluation identity across perturbations is not established",
+        "negative_to_positive": 29985,
+        "positive_to_negative": 15987,
+        "reference": "baseline",
+        "shape_or_k_range_mismatch_rows": 0,
+        "shared_host_step_ordinal_rows": 1796,
+        "sign_disagreements": 55956,
+        "unmatched_rows": 0,
+        "zero_membership_changes": 9984
+      },
+      "minus_0p03": {
+        "aligned_sign_values": 5977088,
+        "interpretation": "descriptive differences at matching recorded step/ordinal/layout only; physical evaluation identity across perturbations is not established",
+        "negative_to_positive": 102244,
+        "positive_to_negative": 51479,
+        "reference": "baseline",
+        "shape_or_k_range_mismatch_rows": 0,
+        "shared_host_step_ordinal_rows": 1796,
+        "sign_disagreements": 163707,
+        "unmatched_rows": 0,
+        "zero_membership_changes": 9984
+      },
+      "plus_0p01": {
+        "aligned_sign_values": 5977088,
+        "interpretation": "descriptive differences at matching recorded step/ordinal/layout only; physical evaluation identity across perturbations is not established",
+        "negative_to_positive": 23729,
+        "positive_to_negative": 30246,
+        "reference": "baseline",
+        "shape_or_k_range_mismatch_rows": 0,
+        "shared_host_step_ordinal_rows": 1796,
+        "sign_disagreements": 63959,
+        "unmatched_rows": 0,
+        "zero_membership_changes": 9984
+      },
+      "plus_0p03": {
+        "aligned_sign_values": 5977088,
+        "interpretation": "descriptive differences at matching recorded step/ordinal/layout only; physical evaluation identity across perturbations is not established",
+        "negative_to_positive": 79274,
+        "positive_to_negative": 77044,
+        "reference": "baseline",
+        "shape_or_k_range_mismatch_rows": 0,
+        "shared_host_step_ordinal_rows": 1796,
+        "sign_disagreements": 166302,
+        "unmatched_rows": 0,
+        "zero_membership_changes": 9984
+      },
+      "replay": {
+        "aligned_sign_values": 5977088,
+        "interpretation": "descriptive differences at matching recorded step/ordinal/layout only; physical evaluation identity across perturbations is not established",
+        "negative_to_positive": 0,
+        "positive_to_negative": 0,
+        "reference": "baseline",
+        "shape_or_k_range_mismatch_rows": 0,
+        "shared_host_step_ordinal_rows": 1796,
+        "sign_disagreements": 0,
+        "unmatched_rows": 0,
+        "zero_membership_changes": 0
+      }
+    },
+    "interpretation": "branch diagnostics only; matching recorded ordinals do not establish identical physical evaluations or differentiability",
+    "per_case_integrity": {
+      "baseline": {
+        "all_256_host_steps_present": true,
+        "binary_csv_counts_match": true,
+        "binary_sha256": "dc366d7db5f197844f42647a8d0512a03477fb3f44ace0d9a4f4f20a5ff2d00a",
+        "binary_values": 5977088,
+        "csv_sha256": "e3350199375bdbc3638b2b64e2f782fed0ee98153a66e0d5cc8485e05a3c715a",
+        "missing_or_extra_keys": 0,
+        "ordinal_counts": {
+          "0": 256,
+          "1": 256,
+          "2": 256,
+          "3": 256,
+          "4": 256,
+          "5": 256,
+          "6": 256,
+          "7": 2,
+          "8": 2
+        },
+        "row_count": 1796,
+        "step_1_2_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "step_3_256_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "minus_0p01": {
+        "all_256_host_steps_present": true,
+        "binary_csv_counts_match": true,
+        "binary_sha256": "891239de31503de72805d4b9afd21c62cfd9fef0c2fbd4c70f1547c719f3f529",
+        "binary_values": 5977088,
+        "csv_sha256": "27023e567d3e1365302f9299d92f123a1c4861590e2a74630cac804bc5e49c21",
+        "missing_or_extra_keys": 0,
+        "ordinal_counts": {
+          "0": 256,
+          "1": 256,
+          "2": 256,
+          "3": 256,
+          "4": 256,
+          "5": 256,
+          "6": 256,
+          "7": 2,
+          "8": 2
+        },
+        "row_count": 1796,
+        "step_1_2_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "step_3_256_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "minus_0p03": {
+        "all_256_host_steps_present": true,
+        "binary_csv_counts_match": true,
+        "binary_sha256": "7d8a77b662506b0194ea4d37f678d0797aa35521ea9a5c62c3b95e055dd7f173",
+        "binary_values": 5977088,
+        "csv_sha256": "41790ac6b6092c9589954193944e3b4975a0818acbce9703381caf857a00fc65",
+        "missing_or_extra_keys": 0,
+        "ordinal_counts": {
+          "0": 256,
+          "1": 256,
+          "2": 256,
+          "3": 256,
+          "4": 256,
+          "5": 256,
+          "6": 256,
+          "7": 2,
+          "8": 2
+        },
+        "row_count": 1796,
+        "step_1_2_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "step_3_256_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "plus_0p01": {
+        "all_256_host_steps_present": true,
+        "binary_csv_counts_match": true,
+        "binary_sha256": "f1536b5afaed9ccb31a000b57557305cfd0ab8ef6cb818047d9ae36154f0aa46",
+        "binary_values": 5977088,
+        "csv_sha256": "b76792e69eb621b60a016d89eff25e57ff47d81e69f3a68930ec40d36330b88d",
+        "missing_or_extra_keys": 0,
+        "ordinal_counts": {
+          "0": 256,
+          "1": 256,
+          "2": 256,
+          "3": 256,
+          "4": 256,
+          "5": 256,
+          "6": 256,
+          "7": 2,
+          "8": 2
+        },
+        "row_count": 1796,
+        "step_1_2_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "step_3_256_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "plus_0p03": {
+        "all_256_host_steps_present": true,
+        "binary_csv_counts_match": true,
+        "binary_sha256": "564cf1dd91e4d9f38b92493d758efb9b8f9d145258c90bb1849520234f539651",
+        "binary_values": 5977088,
+        "csv_sha256": "b021cb75f4f0e13244f948fb08ca72248aa390f9cb03397562e00e64241cd643",
+        "missing_or_extra_keys": 0,
+        "ordinal_counts": {
+          "0": 256,
+          "1": 256,
+          "2": 256,
+          "3": 256,
+          "4": 256,
+          "5": 256,
+          "6": 256,
+          "7": 2,
+          "8": 2
+        },
+        "row_count": 1796,
+        "step_1_2_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "step_3_256_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "replay": {
+        "all_256_host_steps_present": true,
+        "binary_csv_counts_match": true,
+        "binary_sha256": "dc366d7db5f197844f42647a8d0512a03477fb3f44ace0d9a4f4f20a5ff2d00a",
+        "binary_values": 5977088,
+        "csv_sha256": "e3350199375bdbc3638b2b64e2f782fed0ee98153a66e0d5cc8485e05a3c715a",
+        "missing_or_extra_keys": 0,
+        "ordinal_counts": {
+          "0": 256,
+          "1": 256,
+          "2": 256,
+          "3": 256,
+          "4": 256,
+          "5": 256,
+          "6": 256,
+          "7": 2,
+          "8": 2
+        },
+        "row_count": 1796,
+        "step_1_2_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "step_3_256_ordinals": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      }
+    },
+    "trace_report_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v6_omega_sign_trace_pre_ad.json",
+    "trace_report_sha256": "92696f485e1b9d04f9b7a43dec415b4a915466fc93d5a01fdb3e9138a3d22090"
+  },
+  "inputs": {
+    "baseline": {
+      "J_internal_f64": -11.718318303682183,
+      "endpoint_sha256": "d2d4ff9f12b7089a52c40286cfbe5e4fd300093635559720956b619e339cde96",
+      "eta_actual_fp32_promoted": 0.0,
+      "eta_nominal": 0.0,
+      "lambda_f32_sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "newton_convergence_records": 768,
+      "protocol_sha256": "b96cbe382b1e992c64e21b2ef3f413cf3aa7ba6b7bfaa31e0a43b91390c9ce45",
+      "receipt_sha256": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689",
+      "step_telemetry_count": 256,
+      "success_marker": true,
+      "terminal_state_f64_sha256": "75b5c79ba0a6ab8c5fe9754b9a8eb8bd4295c95e5bb0ed7f001038f89e3e2b15"
+    },
+    "minus_0p01": {
+      "J_internal_f64": 98.80549138025432,
+      "endpoint_sha256": "d37780a1ebb8218ae81bc467f8e578a23829205f5be3e9f3d507801bee5e6eb1",
+      "eta_actual_fp32_promoted": -0.009999999776482582,
+      "eta_nominal": -0.01,
+      "lambda_f32_sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "newton_convergence_records": 768,
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "receipt_sha256": "2590bf2f1d4a3c13e9a7dbe5e0364f8aac648264db157481fdf9d5ddb517cc39",
+      "step_telemetry_count": 256,
+      "success_marker": true,
+      "terminal_state_f64_sha256": "11860184e928096c37c60e5cf617d54d7dc936f06b1188d9180f0ad656e6c486"
+    },
+    "minus_0p03": {
+      "J_internal_f64": 319.83709848266585,
+      "endpoint_sha256": "2705a0f2fcc97396c23707506e6b7f8f3605132a909848db8e99eaf38bfb5085",
+      "eta_actual_fp32_promoted": -0.029999999329447746,
+      "eta_nominal": -0.03,
+      "lambda_f32_sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "newton_convergence_records": 768,
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "receipt_sha256": "8e6bc906eb55bb40dab6d156a60f3bad02952725727e99c0403c35e23f7f6db0",
+      "step_telemetry_count": 256,
+      "success_marker": true,
+      "terminal_state_f64_sha256": "1ecc6e3fb26451976da8928beed441e33b45262686c1d7aa689d3cebf4e7a61d"
+    },
+    "plus_0p01": {
+      "J_internal_f64": -122.24746142001815,
+      "endpoint_sha256": "4d5928a3c42a7ca61418c9fa636e6ff7ca31ad2fe96a4d5cf98f005a1e96fef7",
+      "eta_actual_fp32_promoted": 0.009999999776482582,
+      "eta_nominal": 0.01,
+      "lambda_f32_sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "newton_convergence_records": 768,
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "receipt_sha256": "8a10d696fddeecf6a326eb014f9dd3be8a608dacef61028acaf1e6ce6ab9d4c1",
+      "step_telemetry_count": 256,
+      "success_marker": true,
+      "terminal_state_f64_sha256": "5414f1ade5fbcb0c9f00d60e376358c2625a89272824ef2484adedd26fef7d54"
+    },
+    "plus_0p03": {
+      "J_internal_f64": -343.32174763085953,
+      "endpoint_sha256": "cf4862d3e4a06f0d1c0ddaf199c5ebeddc24e8537bf8bfebfc876e06a4b44625",
+      "eta_actual_fp32_promoted": 0.029999999329447746,
+      "eta_nominal": 0.03,
+      "lambda_f32_sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "newton_convergence_records": 768,
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "receipt_sha256": "cbf0f969249e487ebb17818a2479df6edf17322fc3430c975d66f087632c423f",
+      "step_telemetry_count": 256,
+      "success_marker": true,
+      "terminal_state_f64_sha256": "8339c3d34e115d88097e7b8e108335660ad1ad11e4f5e7d430b136e7dbe1a5af"
+    },
+    "replay": {
+      "J_internal_f64": -11.718318303682183,
+      "endpoint_sha256": "f3a6139b1e949c460c8f4646aa3d8e0831049e8e87e4f2690628f0a16b290997",
+      "eta_actual_fp32_promoted": 0.0,
+      "eta_nominal": 0.0,
+      "lambda_f32_sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "newton_convergence_records": 768,
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "receipt_sha256": "9fd6db916906d15c7df29fb0d094835e71982391bd2bfa3439da6b238f76bd7b",
+      "step_telemetry_count": 256,
+      "success_marker": true,
+      "terminal_state_f64_sha256": "75b5c79ba0a6ab8c5fe9754b9a8eb8bd4295c95e5bb0ed7f001038f89e3e2b15"
+    }
+  },
+  "nonclaims": [
+    "no full initial gradient is available yet",
+    "no partial g160 directional dot is used",
+    "no FD-vs-adjoint acceptance result",
+    "no gradient replay claim",
+    "hard-sign flips are descriptive diagnostics only"
+  ],
+  "protocol_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/protocol_v6.json",
+  "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+  "schema": "native_terminal_v6_fd_pre_ad_analysis_v1",
+  "status": "pre_adjoint_diagnostic_only"
+}

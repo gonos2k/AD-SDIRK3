@@ -1,0 +1,31 @@
+{
+  "schema": "native_terminal_adjoint_v5_skip_context_target_test_success_v1",
+  "status": "passed",
+  "created_unix_time": 1792507088.550573,
+  "test_source": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+  "test_source_sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2",
+  "test_object": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v5_skip_context/test_fixed_trajectory_lifecycle.o",
+  "test_object_sha256": "b557270833123c3f81bbc66c6657acdc3c8e458ee50164805c9c88f8d6a8294b",
+  "test_executable": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v5_skip_context/test_fixed_trajectory_lifecycle",
+  "test_executable_sha256": "2fad0a06a95edfec85b91ea9d0f9a5661b243e1e59e54dc253ad60e66b32817d",
+  "checked_candidate_archive_sha256": "da6e9cdc3dc820d697e234e949c1d5ad6b9ef9a42085bfeebad6ca5ee5bd60aa",
+  "checked_candidate_wrf_executable_sha256": "1a05828d1c5c941ed43cd9011bc52973ed950f469f537d1c6e48cd64d3b45853",
+  "run_command": [
+    "/usr/bin/time",
+    "-p",
+    "env",
+    "OMP_NUM_THREADS=1",
+    "OPENBLAS_NUM_THREADS=1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v5_skip_context/test_fixed_trajectory_lifecycle"
+  ],
+  "run_log": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v5_skip_context/target_test_run_attempt_002.log",
+  "run_return_code": 0,
+  "elapsed_seconds": 39.12,
+  "pass_marker": "FIXED_TRAJECTORY_SKIPPED_ZERO_COPY_RK2_RK3 passed",
+  "verification_scope": "Focused C++ lifecycle regression against the checked candidate archive; validates a fixed-trajectory step remains intact across skipped RK2/RK3 zero-copy calls and bad geometry. No WRF model run.",
+  "previous_attempt": {
+    "source_sha256": "956cddbd64c841b0cd768dc1adae504c8a5d8cc903f780538a5208ac3472e62c",
+    "return_code": 1,
+    "failure": "The test expected an FP64 checkpoint from a Float32 fixture; it stopped before the skip-path assertions. See target_attempt_001/preservation_receipt.json."
+  }
+}

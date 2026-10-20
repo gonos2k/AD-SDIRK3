@@ -1,0 +1,672 @@
+{
+  "cases": {
+    "baseline": {
+      "all_seed_values_finite": true,
+      "boundary_max_abs": {
+        "PH_bottom_perturbation_seed": 0.0,
+        "V_north_wall_seed": 0.0,
+        "V_south_wall_seed": 0.0,
+        "W_bottom_seed": 0.0,
+        "direction_PH_bottom": 0.0,
+        "direction_V_antisymmetric_ghost_residual": 0.0,
+        "direction_V_periodic_X_alias_residual": 0.0,
+        "direction_V_walls": 0.0,
+        "direction_W_bottom": 0.0
+      },
+      "direction_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.direction_f32.bin",
+      "direction_sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "newton_convergence_record_count": 768,
+      "packed_size": 24531,
+      "physical_owner_extents": {
+        "MU": [
+          16,
+          16
+        ],
+        "PH": [
+          16,
+          17,
+          16
+        ],
+        "T": [
+          16,
+          16,
+          16
+        ],
+        "U": [
+          16,
+          16,
+          17
+        ],
+        "V": [
+          17,
+          16,
+          16
+        ],
+        "W": [
+          16,
+          17,
+          16
+        ]
+      },
+      "protocol_sha256": "b96cbe382b1e992c64e21b2ef3f413cf3aa7ba6b7bfaa31e0a43b91390c9ce45",
+      "published_fp32_is_exact_cast_of_seed": true,
+      "published_seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.x0_published_f32.bin",
+      "published_seed_sha256": "9e21079b1332cfafad3775b80d463eb0462ae96a02643ee59a006e71a91e555f",
+      "receipt_sha256": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689",
+      "seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.x0_internal_f64.bin",
+      "seed_sha256": "d2684934e033e879fab865ab4bd37b0aa1507b41408f7601bf30e75022cd5994",
+      "step_count": 256,
+      "total_column_dry_mass_Pa": {
+        "all_finite": true,
+        "count": 256,
+        "max": 89092.1171875,
+        "min": 89091.7890625
+      },
+      "total_geopotential_m2_s2": {
+        "all_finite": true,
+        "count": 4352,
+        "max": 161821.03173828125,
+        "min": 0.0
+      },
+      "total_theta_K": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 437.70611572265625,
+        "min": 302.2530517578125
+      },
+      "vertical_geopotential_increment_m2_s2": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 11013.165100097656,
+        "min": 9247.4697265625
+      }
+    },
+    "minus_0p01": {
+      "all_seed_values_finite": true,
+      "boundary_max_abs": {
+        "PH_bottom_perturbation_seed": 0.0,
+        "V_north_wall_seed": 0.0,
+        "V_south_wall_seed": 0.0,
+        "W_bottom_seed": 0.0,
+        "direction_PH_bottom": 0.0,
+        "direction_V_antisymmetric_ghost_residual": 0.0,
+        "direction_V_periodic_X_alias_residual": 0.0,
+        "direction_V_walls": 0.0,
+        "direction_W_bottom": 0.0
+      },
+      "direction_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p01/terminal.direction_f32.bin",
+      "direction_sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p01/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "newton_convergence_record_count": 768,
+      "packed_size": 24531,
+      "physical_owner_extents": {
+        "MU": [
+          16,
+          16
+        ],
+        "PH": [
+          16,
+          17,
+          16
+        ],
+        "T": [
+          16,
+          16,
+          16
+        ],
+        "U": [
+          16,
+          16,
+          17
+        ],
+        "V": [
+          17,
+          16,
+          16
+        ],
+        "W": [
+          16,
+          17,
+          16
+        ]
+      },
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "published_fp32_is_exact_cast_of_seed": true,
+      "published_seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p01/terminal.x0_published_f32.bin",
+      "published_seed_sha256": "033b997f06f814c4fcdc364ac507124015022ce74b2a324ef5e7a74800184096",
+      "receipt_sha256": "2590bf2f1d4a3c13e9a7dbe5e0364f8aac648264db157481fdf9d5ddb517cc39",
+      "seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p01/terminal.x0_internal_f64.bin",
+      "seed_sha256": "fa0ff6dd281c8e37147898bed4d851e63d63f0f2205703a2a73bef195f27e4a5",
+      "step_count": 256,
+      "total_column_dry_mass_Pa": {
+        "all_finite": true,
+        "count": 256,
+        "max": 89092.1186751495,
+        "min": 89091.78811136546
+      },
+      "total_geopotential_m2_s2": {
+        "all_finite": true,
+        "count": 4352,
+        "max": 161821.42556536748,
+        "min": 0.0
+      },
+      "total_theta_K": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 437.71266079351574,
+        "min": 302.25240157292745
+      },
+      "vertical_geopotential_increment_m2_s2": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 11013.215049103574,
+        "min": 9247.4307431802
+      }
+    },
+    "minus_0p03": {
+      "all_seed_values_finite": true,
+      "boundary_max_abs": {
+        "PH_bottom_perturbation_seed": 0.0,
+        "V_north_wall_seed": 0.0,
+        "V_south_wall_seed": 0.0,
+        "W_bottom_seed": 0.0,
+        "direction_PH_bottom": 0.0,
+        "direction_V_antisymmetric_ghost_residual": 0.0,
+        "direction_V_periodic_X_alias_residual": 0.0,
+        "direction_V_walls": 0.0,
+        "direction_W_bottom": 0.0
+      },
+      "direction_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p03/terminal.direction_f32.bin",
+      "direction_sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p03/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "newton_convergence_record_count": 768,
+      "packed_size": 24531,
+      "physical_owner_extents": {
+        "MU": [
+          16,
+          16
+        ],
+        "PH": [
+          16,
+          17,
+          16
+        ],
+        "T": [
+          16,
+          16,
+          16
+        ],
+        "U": [
+          16,
+          16,
+          17
+        ],
+        "V": [
+          17,
+          16,
+          16
+        ],
+        "W": [
+          16,
+          17,
+          16
+        ]
+      },
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "published_fp32_is_exact_cast_of_seed": true,
+      "published_seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p03/terminal.x0_published_f32.bin",
+      "published_seed_sha256": "e482c0f1543a13753f59f03d66128ec7fa1413ae95ca9a7aa90e69b5db1749a0",
+      "receipt_sha256": "8e6bc906eb55bb40dab6d156a60f3bad02952725727e99c0403c35e23f7f6db0",
+      "seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p03/terminal.x0_internal_f64.bin",
+      "seed_sha256": "38bec80eb5ffcda8466d2a118879b0376840e874c14d1afb89e3dd16d70b65b5",
+      "step_count": 256,
+      "total_column_dry_mass_Pa": {
+        "all_finite": true,
+        "count": 256,
+        "max": 89092.12165044849,
+        "min": 89091.78620909638
+      },
+      "total_geopotential_m2_s2": {
+        "all_finite": true,
+        "count": 4352,
+        "max": 161822.21321953993,
+        "min": 0.0
+      },
+      "total_theta_K": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 437.7257509352348,
+        "min": 302.2511012031574
+      },
+      "vertical_geopotential_increment_m2_s2": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 11013.31494711541,
+        "min": 9247.352776415573
+      }
+    },
+    "plus_0p01": {
+      "all_seed_values_finite": true,
+      "boundary_max_abs": {
+        "PH_bottom_perturbation_seed": 0.0,
+        "V_north_wall_seed": 0.0,
+        "V_south_wall_seed": 0.0,
+        "W_bottom_seed": 0.0,
+        "direction_PH_bottom": 0.0,
+        "direction_V_antisymmetric_ghost_residual": 0.0,
+        "direction_V_periodic_X_alias_residual": 0.0,
+        "direction_V_walls": 0.0,
+        "direction_W_bottom": 0.0
+      },
+      "direction_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p01/terminal.direction_f32.bin",
+      "direction_sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p01/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "newton_convergence_record_count": 768,
+      "packed_size": 24531,
+      "physical_owner_extents": {
+        "MU": [
+          16,
+          16
+        ],
+        "PH": [
+          16,
+          17,
+          16
+        ],
+        "T": [
+          16,
+          16,
+          16
+        ],
+        "U": [
+          16,
+          16,
+          17
+        ],
+        "V": [
+          17,
+          16,
+          16
+        ],
+        "W": [
+          16,
+          17,
+          16
+        ]
+      },
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "published_fp32_is_exact_cast_of_seed": true,
+      "published_seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p01/terminal.x0_published_f32.bin",
+      "published_seed_sha256": "b845318e7e10ca77d41d6baab69ae2d5d7cff94321cd2ec9935e7a60bd4748a6",
+      "receipt_sha256": "8a10d696fddeecf6a326eb014f9dd3be8a608dacef61028acaf1e6ce6ab9d4c1",
+      "seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p01/terminal.x0_internal_f64.bin",
+      "seed_sha256": "b966774c0a98542b65bc01cc12a628aeb3c3c302f23faffe91df7acb2c3b31a7",
+      "step_count": 256,
+      "total_column_dry_mass_Pa": {
+        "all_finite": true,
+        "count": 256,
+        "max": 89092.11882041347,
+        "min": 89091.78667928418
+      },
+      "total_geopotential_m2_s2": {
+        "all_finite": true,
+        "count": 4352,
+        "max": 161820.63791119502,
+        "min": 0.0
+      },
+      "total_theta_K": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 437.70325205511296,
+        "min": 302.2468052108492
+      },
+      "vertical_geopotential_increment_m2_s2": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 11013.55476626479,
+        "min": 9247.5087099448
+      }
+    },
+    "plus_0p03": {
+      "all_seed_values_finite": true,
+      "boundary_max_abs": {
+        "PH_bottom_perturbation_seed": 0.0,
+        "V_north_wall_seed": 0.0,
+        "V_south_wall_seed": 0.0,
+        "W_bottom_seed": 0.0,
+        "direction_PH_bottom": 0.0,
+        "direction_V_antisymmetric_ghost_residual": 0.0,
+        "direction_V_periodic_X_alias_residual": 0.0,
+        "direction_V_walls": 0.0,
+        "direction_W_bottom": 0.0
+      },
+      "direction_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p03/terminal.direction_f32.bin",
+      "direction_sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p03/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "newton_convergence_record_count": 768,
+      "packed_size": 24531,
+      "physical_owner_extents": {
+        "MU": [
+          16,
+          16
+        ],
+        "PH": [
+          16,
+          17,
+          16
+        ],
+        "T": [
+          16,
+          16,
+          16
+        ],
+        "U": [
+          16,
+          16,
+          17
+        ],
+        "V": [
+          17,
+          16,
+          16
+        ],
+        "W": [
+          16,
+          17,
+          16
+        ]
+      },
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "published_fp32_is_exact_cast_of_seed": true,
+      "published_seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p03/terminal.x0_published_f32.bin",
+      "published_seed_sha256": "81e2d686c51cca01113595eecd557aed7182a211fd9a737715490006719ef4b0",
+      "receipt_sha256": "cbf0f969249e487ebb17818a2479df6edf17322fc3430c975d66f087632c423f",
+      "seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p03/terminal.x0_internal_f64.bin",
+      "seed_sha256": "09510eab852fe4906c98d735f22118bdb0fc2daa060684c74351959d49e040bb",
+      "step_count": 256,
+      "total_column_dry_mass_Pa": {
+        "all_finite": true,
+        "count": 256,
+        "max": 89092.12208624039,
+        "min": 89091.78191285253
+      },
+      "total_geopotential_m2_s2": {
+        "all_finite": true,
+        "count": 4352,
+        "max": 161819.85025702257,
+        "min": 0.0
+      },
+      "total_theta_K": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 437.69752472002637,
+        "min": 302.2343121169226
+      },
+      "vertical_geopotential_increment_m2_s2": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 11014.334098599054,
+        "min": 9247.586676709427
+      }
+    },
+    "replay": {
+      "all_seed_values_finite": true,
+      "boundary_max_abs": {
+        "PH_bottom_perturbation_seed": 0.0,
+        "V_north_wall_seed": 0.0,
+        "V_south_wall_seed": 0.0,
+        "W_bottom_seed": 0.0,
+        "direction_PH_bottom": 0.0,
+        "direction_V_antisymmetric_ghost_residual": 0.0,
+        "direction_V_periodic_X_alias_residual": 0.0,
+        "direction_V_walls": 0.0,
+        "direction_W_bottom": 0.0
+      },
+      "direction_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/replay/terminal.direction_f32.bin",
+      "direction_sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/replay/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "newton_convergence_record_count": 768,
+      "packed_size": 24531,
+      "physical_owner_extents": {
+        "MU": [
+          16,
+          16
+        ],
+        "PH": [
+          16,
+          17,
+          16
+        ],
+        "T": [
+          16,
+          16,
+          16
+        ],
+        "U": [
+          16,
+          16,
+          17
+        ],
+        "V": [
+          17,
+          16,
+          16
+        ],
+        "W": [
+          16,
+          17,
+          16
+        ]
+      },
+      "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+      "published_fp32_is_exact_cast_of_seed": true,
+      "published_seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/replay/terminal.x0_published_f32.bin",
+      "published_seed_sha256": "9e21079b1332cfafad3775b80d463eb0462ae96a02643ee59a006e71a91e555f",
+      "receipt_sha256": "9fd6db916906d15c7df29fb0d094835e71982391bd2bfa3439da6b238f76bd7b",
+      "seed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/replay/terminal.x0_internal_f64.bin",
+      "seed_sha256": "d2684934e033e879fab865ab4bd37b0aa1507b41408f7601bf30e75022cd5994",
+      "step_count": 256,
+      "total_column_dry_mass_Pa": {
+        "all_finite": true,
+        "count": 256,
+        "max": 89092.1171875,
+        "min": 89091.7890625
+      },
+      "total_geopotential_m2_s2": {
+        "all_finite": true,
+        "count": 4352,
+        "max": 161821.03173828125,
+        "min": 0.0
+      },
+      "total_theta_K": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 437.70611572265625,
+        "min": 302.2530517578125
+      },
+      "vertical_geopotential_increment_m2_s2": {
+        "all_finite": true,
+        "count": 4096,
+        "max": 11013.165100097656,
+        "min": 9247.4697265625
+      }
+    }
+  },
+  "nonclaims": [
+    "does not establish admissibility after any model timestep",
+    "does not establish full trajectory stability or adjoint correctness",
+    "no layer-pressure formula was applied"
+  ],
+  "overall_initial_seed_admissibility": {
+    "V_walls_zero_for_all_seeds": true,
+    "W_and_PH_perturbation_bottom_zero_for_all_seeds": true,
+    "all_seed_arrays_finite": true,
+    "all_six_pass": true,
+    "direction_V_walls_ghost_and_periodic_X_alias_plus_W_PH_bottom_exact_for_all_cases": true,
+    "minimum_total_column_dry_mass_Pa": 89091.78191285253,
+    "minimum_total_theta_K": 302.2343121169226,
+    "minimum_vertical_geopotential_increment_m2_s2": 9247.352776415573
+  },
+  "packing_contract": {
+    "block_sizes": [
+      4896,
+      4896,
+      4913,
+      4913,
+      4624,
+      289
+    ],
+    "fortran_pack_order": "U,V,W,PH,T,MU; loops j outer, k next, i inner; i contiguous.",
+    "mapping_note": "Physical owners are the first 16 mass j/i rows/columns; U has 16x17 physical owners, V 17x16, W/PH 16x16x17, T 16x16x16, MU 16x16. Packed ghost/alias extents are excluded from physical metrics.",
+    "netcdf_static_field_schema": {
+      "MU": {
+        "description": "perturbation dry air mass in column",
+        "dimensions": [
+          "Time",
+          "south_north",
+          "west_east"
+        ],
+        "shape": [
+          1,
+          16,
+          16
+        ],
+        "units": "Pa"
+      },
+      "MUB": {
+        "description": "base state dry air mass in column",
+        "dimensions": [
+          "Time",
+          "south_north",
+          "west_east"
+        ],
+        "shape": [
+          1,
+          16,
+          16
+        ],
+        "units": "Pa"
+      },
+      "PH": {
+        "description": "perturbation geopotential",
+        "dimensions": [
+          "Time",
+          "bottom_top_stag",
+          "south_north",
+          "west_east"
+        ],
+        "shape": [
+          1,
+          17,
+          16,
+          16
+        ],
+        "units": "m2 s-2"
+      },
+      "PHB": {
+        "description": "base-state geopotential",
+        "dimensions": [
+          "Time",
+          "bottom_top_stag",
+          "south_north",
+          "west_east"
+        ],
+        "shape": [
+          1,
+          17,
+          16,
+          16
+        ],
+        "units": "m2 s-2"
+      },
+      "T": {
+        "description": "perturbation potential temperature theta-t0",
+        "dimensions": [
+          "Time",
+          "bottom_top",
+          "south_north",
+          "west_east"
+        ],
+        "shape": [
+          1,
+          16,
+          16,
+          16
+        ],
+        "units": "K"
+      }
+    },
+    "packed_extents": {
+      "MU": [
+        17,
+        17
+      ],
+      "PH": [
+        17,
+        17,
+        17
+      ],
+      "T": [
+        17,
+        16,
+        17
+      ],
+      "U": [
+        17,
+        16,
+        18
+      ],
+      "V": [
+        18,
+        16,
+        17
+      ],
+      "W": [
+        17,
+        17,
+        17
+      ]
+    },
+    "packed_total": 24531,
+    "source_pins": {
+      "shared_state_layout": [
+        "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+        "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+      ],
+      "v5_pack_fortran": [
+        "/private/tmp/pr310-strict-reference-240s-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+        "dffdbb6014920f927418447fc2ad2ed6669a29fea001fa54775f546251e2c1c8"
+      ],
+      "v6_pack_cpp": [
+        "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+        "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d"
+      ],
+      "v6_pack_fortran": [
+        "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+        "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+      ]
+    }
+  },
+  "protocol_bindings": {
+    "v5_binding_sha256": "1279e2d15fc068cc8fd71fef8c81508c6ce35a0f56fba46b3d130c040cf9061b",
+    "v5_protocol_sha256": "b96cbe382b1e992c64e21b2ef3f413cf3aa7ba6b7bfaa31e0a43b91390c9ce45",
+    "v6_binding_sha256": "714b5e500da2e0bd40e49e77498b99e503ed61be39700d0103f02562dbfb7439",
+    "v6_protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650"
+  },
+  "schema": "native_terminal_v6_initial_seed_admissibility_v1",
+  "scope": "Six exact initial packed solver-entry seeds; verifies finite prognostic states and positive physical thermodynamic/mass/geopotential metrics using static base fields from the SHA-pinned actual WRF input. No trajectory-wide admissibility claim.",
+  "static_input": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/wrfinput_d01",
+    "same_input_sha256_for_all_six_cases": true,
+    "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "transformations": "theta_dry = packed T perturbation + 300 K; column dry mass = packed MU perturbation + input MUB; total geopotential = packed PH perturbation + input PHB."
+  },
+  "status": "initial_seeds_only"
+}

@@ -1,0 +1,116 @@
+{
+  "schema": "native_terminal_adjoint_w6_final_evidence_binding_v1",
+  "captured_at_local": "2026-10-21T02:23:27.148109+09:00",
+  "worktree": "/private/tmp/pr312-native-fortran-chain-20261020",
+  "branch": "codex/native-fortran-chain-20261020",
+  "head": "a9c256e487574e01c3bf0231a94fec0630c69d7f",
+  "source_scope": {
+    "v6_source_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/w6_v6_source_binding.json",
+    "v6_source_binding_sha256": "d7133908f148201a1616423c32c38054d8e5fef4322369711dfb2277200dd712",
+    "ten_source_pins_reverified": true,
+    "tracked_source_revision_clean": true,
+    "working_tree_note": "Only the test usage Markdown is untracked; docs/evidence/native_terminal_adjoint artifacts are ignored by .gitignore."
+  },
+  "current_artifacts": {
+    "final_readme": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/README.md",
+      "sha256": "a7e48e654fc9266d8d5214e88ed5a70a32cf9d5e0d2267c4bbc31361405fdb56"
+    },
+    "recompute_helper": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/recompute.py",
+      "sha256": "73b6a2d220c9162641ed248e8fea9e4a24ac14ea668a19129487aaef9ae7bd3a"
+    },
+    "test_usage_readme": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.md",
+      "sha256": "a029488571fd23284a7d0fa84f67f2b8b4d9bd227aaa565e0f7a778ae818403b"
+    },
+    "npz": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/native_terminal_adjoint.npz",
+      "sha256": "c642672fb329fa60be5b29bd105d0476bbbc16cb00eb872fb15b874d0d816c36"
+    },
+    "manifest": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/manifest.json",
+      "sha256": "4f47146ae7fd3dcfaa282d92d209eceb7572bf67729cfa2001ddff7689a5cff4"
+    },
+    "green_review": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/green_review.json",
+      "sha256": "cf99659bfbe29914008c4d5454e3d547ca5577f900a1bc20a4c929a48cd65413"
+    },
+    "red_closure_review": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/red_closure_review.json",
+      "sha256": "327e062de81c2d02134cae6f30fc4417be98063782a6a8cb7aa71aa88d117b58"
+    },
+    "recomputed": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/recomputed.json",
+      "sha256": "3cd72e6fe99e26e2c0531907dd339774b4a4bbcd68b0944ca648f7127df82850"
+    },
+    "state_replay_proof": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/state_replay_proof.json",
+      "sha256": "23fd9e479c12d30384f69a8ded0eea36bb29e2c61e050bb1fca265d1d2d3990b"
+    },
+    "launch_binding_v6": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/launch_binding_v6.json",
+      "sha256": "714b5e500da2e0bd40e49e77498b99e503ed61be39700d0103f02562dbfb7439"
+    },
+    "protocol_v6": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/native_terminal_adjoint/protocol_v6.json",
+      "sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650"
+    },
+    "connection_report": {
+      "path": "/private/tmp/pr312-native-fortran-chain-20261020/docs/(202610210222)_native_terminal_adjoint_connection.md",
+      "sha256": "af0e23384912c15dfb3ed8a958715f79ec353ccc437d15b650d1fbe940013cff"
+    },
+    "recompute_source_graph_v6_ast": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/w6_recompute_ast/graphify-out/graph.json",
+      "sha256": "256aaa8a6c1385f873f6da6916558c484df7db6174ab571980cfa6e36ae21adf"
+    }
+  },
+  "manifest_scope": {
+    "npz_sha256": "c642672fb329fa60be5b29bd105d0476bbbc16cb00eb872fb15b874d0d816c36",
+    "npz_bytes": 4232280,
+    "receipts": 13,
+    "case_order": [
+      "baseline",
+      "replay",
+      "plus_0p01",
+      "minus_0p01",
+      "plus_0p03",
+      "minus_0p03"
+    ],
+    "prefix_receipt_labels": [
+      "baseline_prefix_224",
+      "baseline_prefix_192",
+      "baseline_prefix_160",
+      "baseline_prefix_128",
+      "baseline_prefix_096",
+      "baseline_prefix_064",
+      "baseline_prefix_032"
+    ]
+  },
+  "reviews": {
+    "green_status": "GREEN_REVIEW_COMPLETE",
+    "green_overall": "The frozen one-direction V6 forward replay, eight-window actual Fortran FP32 chain, and two-width FD evidence satisfy the registered checks. Numerical claims remain limited to this setup and direction; exact global FP64 gradient and independent gradient replay are not certified.",
+    "red_decision": "PASS_CLOSURE_UNBLOCK",
+    "red_final_gate": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v6_case_gates_final/baseline_prefix_032_gate.json",
+      "sha256": "cd00cde4699ddc0f12a550f088e8ca505d73fec6b7ad90783e85027dde31f28b",
+      "technical_gate_pass": true,
+      "accepted_prefix_endpoints": 33,
+      "all_endpoints_byte_equal_to_v5_baseline": true,
+      "global_exact_f64_chain_claim": false,
+      "gradient_f64_semantics": "local_precast_fp64",
+      "warm_zero_audit": "PASS: use actual initial/checkpoint 0 as the derived audit seed when warm_steps=0; no raw suffix-seed file was created"
+    }
+  },
+  "graph_reuse": {
+    "recompute_python_ast_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/w6_recompute_ast/graphify-out/graph.json",
+    "recompute_python_ast_sha256": "256aaa8a6c1385f873f6da6916558c484df7db6174ab571980cfa6e36ae21adf",
+    "nodes": 16,
+    "edges": 56,
+    "method": "code-only AST; no semantic extraction",
+    "production_graph_reused_from_v6_source_binding": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/w6_v6_source_binding.json",
+    "no_numerical_graph_rebuild": true
+  },
+  "scope_limits": "Claims remain those in the frozen V6 protocol and Green/Red reviews; the exact global FP64 chain and independent gradient replay are not certified.",
+  "no_source_build_model_actions_by_graph_agent": true
+}

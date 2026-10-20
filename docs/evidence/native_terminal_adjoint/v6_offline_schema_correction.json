@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-21T00:37:47.381437+09:00",
+  "preserved_stop": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/v6_stop_offline_schema_20261021003305.json",
+  "reason": "Offline reader expected endpoint-only counters in window JSON; wrong nested binding field; eta=0 signed-zero recomputation. Correct schema checks retain counters at endpoint/result and exact zero seed bytes. Native model outputs unchanged, no native rerun.",
+  "green_replay_gate": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_analysis/v6_case_gates/replay_gate.json",
+  "green_replay_gate_sha256": "c57f810b3b6581c141de18ec24f33aa3dc1e60372b8bd1aabbdb6aa2ae49a023",
+  "main_analyzer_sha256": "2e76978137fa6145c7cebd01139ce019d12074f89891d86eb802847a82f17bc0",
+  "reader_sha256": "a198d34a7adb761891969f8b11346e4519cf13b3a725c92d25861c542feebadf"
+}

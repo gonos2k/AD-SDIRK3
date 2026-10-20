@@ -267,6 +267,9 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+#include "tests/native_terminal_adjoint_test.h"
+#endif
 #include "wrf_sdirk3_phi_horizontal.h"
 #include "wrf_sdirk3_nonhydrostatic_pressure.h"
 #include "wrf_sdirk3_boundary_ad.h"
@@ -817,6 +820,10 @@ static torch::Tensor wrf_vert_adv3(const torch::Tensor& q, const torch::Tensor& 
     const auto boundary = torch::zeros_like(q.slice(1, 0, 1));
     const auto flux = torch::cat({boundary, interior, boundary}, 1);
     if (flux_out) *flux_out = flux;
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+    if (sign_delta == 0.0f)
+        wrf::sdirk3::native_terminal_test::capture_theta_omega(omega);
+#endif
     return (flux.slice(1, 1, nz + 1) - flux.slice(1, 0, nz))
            * rdnw_pos.slice(0, 0, nz).view({1, nz, 1});
 }
@@ -6186,6 +6193,9 @@ vertical_coefficients:
         U_n = next_fp64_state_for_test_;
         next_fp64_state_for_test_ = torch::Tensor();
     }
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+    U_n = wrf::sdirk3::native_terminal_test::control_input64(U_n);
+#endif
     if (fixed_trajectory_open_) {
         checkFixedTrajectoryFingerprint();
         TORCH_CHECK(U_n.device().is_cpu(),
@@ -13083,6 +13093,13 @@ vertical_coefficients:
         last_step_output_graph_ = adjoint_output_graph;
         recordFixedTrajectoryStep(step_input_graph, adjoint_output_graph, F_phys, dt);
     }
+
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+    if (carry_fp64 && getLastStepOutcomeCode() ==
+            static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED)) {
+        wrf::sdirk3::native_terminal_test::capture_accepted_state(U_new);
+    }
+#endif
 
     // PR307: persist the already-captured, accepted mode-3 stage witness only
     // after the outcome and projected endpoint are known. All tensor values
@@ -32914,6 +32931,20 @@ void TileSDIRK3UnifiedSolver::advanceZeroCopy(const wrf::sdirk3::ZeroCopyConfig&
                                                int rk_step, float dt) {
     // Zero-copy interface for SDIRK3 solver
 
+    // Validate every call, including compatibility stages, before publishing any
+    // caller-owned views. unifiedStep already completes the step at rk_step=1;
+    // later calls must preserve the RHS context retained for its pullback.
+    // Before any graph exists, legacy setup-only calls may publish the views.
+    validateCallGeometry(config.nx, config.ny, config.nz,
+                         config.nx_u, config.ny_v, config.nz_w);
+    if (rk_step != 1 &&
+        (fixed_trajectory_open_ || last_step_output_graph_.defined())) {
+        setLastStepOutcome(
+            static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_SKIPPED),
+            false, 0.0f, false);
+        return;
+    }
+
     // Store the SDIRK stage timestep for use in RHS computation (especially vertical diffusion)
     dt_stage_ = dt;
 
@@ -33750,16 +33781,6 @@ boundary_tensors_done:
         ; // OPT 2025-01-25: Label for spec_bdy_width==0 skip optimization
     }
 
-    // PER-CALL GEOMETRY VALIDATION (review rounds 3g/3h/3j — ONE contract).
-    // validateCallGeometry() is the single implementation: int64 arithmetic
-    // (no overflow UB), all six call dims positive/sane, stagger shape, init
-    // geometry itself valid (subsumes the old staggered-member corruption
-    // check; NO "uninitialized => allow" escape — a zero/negative base member
-    // previously disabled the equality check), and strict equality with init.
-    // The v2 ABI entry calls the same method BEFORE setWRFIndices; this call
-    // is defense in depth for any other entry path.
-    validateCallGeometry(config.nx, config.ny, config.nz,
-                         config.nx_u, config.ny_v, config.nz_w);
     auto safe_config = config;  // validated caller values, verbatim
 
 
