@@ -406,8 +406,8 @@ extern "C" int sdirk3_native_terminal_prepare(
         if (mode == 3) {
             const auto f64_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA64_IN");
             const auto f32_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA32_IN");
-            const auto f64_bytes = read_bytes(f64_path, static_cast<std::size_t>(n) * sizeof(double));
-            const auto f32_bytes = read_bytes(f32_path, static_cast<std::size_t>(n) * sizeof(float));
+            auto f64_bytes = read_bytes(f64_path, static_cast<std::size_t>(n) * sizeof(double));
+            auto f32_bytes = read_bytes(f32_path, static_cast<std::size_t>(n) * sizeof(float));
             lambda64_chain = torch::from_blob(f64_bytes.data(), {n},
                 torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
             lambda_wrapper = torch::from_blob(f32_bytes.data(), {n},
@@ -415,7 +415,7 @@ extern "C" int sdirk3_native_terminal_prepare(
         }
         if (mode == 1 || mode == 3) {
             reference_path = required_env("WRF_SDIRK3_NATIVE_TERMINAL_REFERENCE");
-            const auto reference_bytes = read_bytes(reference_path,
+            auto reference_bytes = read_bytes(reference_path,
                 static_cast<std::size_t>(kSteps + 1) * n * sizeof(double));
             reference = torch::from_blob(reference_bytes.data(),
                 {kSteps + 1, n}, torch::TensorOptions().dtype(torch::kFloat64)
@@ -825,10 +825,12 @@ extern "C" int sdirk3_native_terminal_finish(
                  << "  \"endpoint_reference_exact\": "
                  << ((run.mode == 1 || run.mode == 3) ? "true" : "null") << ",\n"
                  << "  \"directional_vjp_f64\": ";
-            if (vjp_expected && run.expected_steps == kWindowSteps) meta << directional64;
+            if (vjp_expected && run.mode == 3 && run.expected_steps == kWindowSteps)
+                meta << directional64;
             else meta << "null";
             meta << ",\n  \"directional_vjp_f32_abi\": ";
-            if (vjp_expected && run.expected_steps == kWindowSteps) meta << directional32;
+            if (vjp_expected && run.mode == 3 && run.expected_steps == kWindowSteps)
+                meta << directional32;
             else meta << "null";
             meta << ",\n"
                  << "  \"peak_rss_bytes\": " << peak_rss_bytes() << "\n}\n";
