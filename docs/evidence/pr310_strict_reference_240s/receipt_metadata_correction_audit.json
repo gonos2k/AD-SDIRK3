@@ -1,0 +1,16 @@
+{
+  "legacy_receipt_sha256": "2d4ab1c46d09907b5a0386d76cf2fa2e84bd6ac91760a3b3c03337eab153be41",
+  "corrected_receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+  "changed_top_keys": [
+    "actual",
+    "case",
+    "receipt_erratum"
+  ],
+  "producer_unchanged": true,
+  "inputs_unchanged": true,
+  "command_unchanged": true,
+  "raw_csv_hash_manifest_unchanged": true,
+  "netcdf_hash_manifest_unchanged": true,
+  "actual_times_unchanged": true,
+  "scope": "Receipt metadata correction only; original receipt and artifacts preserved."
+}

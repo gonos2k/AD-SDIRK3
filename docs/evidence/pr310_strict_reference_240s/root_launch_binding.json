@@ -1,0 +1,171 @@
+{
+  "schema": "pr310_root_launch_binding_v1",
+  "created_local_time": "2026-10-20T09:54:55+09:00",
+  "status": "authorized_exactly_two_original_initial_state_continuous_0_240s_runs",
+  "basis": "User PR309 review requests full240s strict pair; final Red science PASS on final protocol af8e50. No further permission gate.",
+  "protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_protocol_final_v2.json",
+    "sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad"
+  },
+  "source_case_preflight": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/pr310_preflight_manifest.json",
+    "sha256": "9f685f588991566ebdd712cacc64cff25f840ceeddfa33ab88cf27f9e7c3347a",
+    "note": "Earlier protocol draft pointer remains historical; this launch binding identifies final af8e50 without rewriting preflight."
+  },
+  "producer": {
+    "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "cpp_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/v2_sdirk3/libwrf_sdirk3_libtorch.a",
+    "cpp_archive_sha256": "dd87b49aa448a88e13ba2047fd75b433d785f112ab485483ae439ba5035f32c5",
+    "fortran_archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/libwrflib.a",
+    "fortran_archive_sha256": "11e6b42861a85d1ecfd4774c4272da71cb46e41a38c57c24d28b525cee09ad15",
+    "pr307_build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/pr307_v2_build_receipt.json",
+    "pr307_build_receipt_sha256": "78ff1f62777a854e39aeb5147b07de5883dc9e4aa10aac66c279ea74c71619a8",
+    "producer_source_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "build_receipt_head": "192c9149fc1b5968755654a328f350d43604687f",
+    "compiler": "/usr/bin/g++ (Apple clang 21.0.0)",
+    "mpi": "Open MPI 5.0.9; -DDMPARALLEL in core build",
+    "linked_configure_sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289"
+  },
+  "cases": [
+    {
+      "role": "coarse",
+      "source_60s_label": "h0p9375_0_60s_newton_tol1e-9",
+      "label": "h0p9375_0_240s_newton_tol1e-9",
+      "status": "prepared_not_started",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p9375_0_240s_newton_tol1e-9",
+      "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p9375_0_240s_newton_tol1e-9/namelist.input",
+      "namelist_sha256": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+      "namelist_diff_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p9375_0_240s_newton_tol1e-9/namelist.diff",
+      "namelist_diff_sha256": "8b9f8b50eb2a4a61e2f685c57089a4e0b5fb224f6d8be656351c79d7294ba688",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p9375_0_240s_newton_tol1e-9/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "changed_namelist_fields": [
+        "run_seconds: 60 -> 240"
+      ],
+      "effective_fields": {
+        "run_seconds": "240",
+        "num": "15",
+        "den": "16",
+        "history_interval_s": "15",
+        "newton_tol": "1e-9",
+        "krylov_max": "100"
+      },
+      "expected": {
+        "duration_s": 240,
+        "dt_fraction_s": "15/16",
+        "dt_s": 0.9375,
+        "macrosteps": 256,
+        "implicit_stage_calls": 768,
+        "history_interval_s": 15,
+        "history_times_seconds": [
+          0,
+          15,
+          30,
+          45,
+          60,
+          75,
+          90,
+          105,
+          120,
+          135,
+          150,
+          165,
+          180,
+          195,
+          210,
+          225,
+          240
+        ],
+        "fp64_carry_host_inputs": 1,
+        "fp64_carry_internal_inputs": 255,
+        "fp64_carry_publications": 256,
+        "newton_tol": 1e-09,
+        "krylov_tol": 1e-07,
+        "ewt_effective": 1e-06
+      }
+    },
+    {
+      "role": "fine",
+      "source_60s_label": "h0p46875_0_60s_newton_tol1e-9",
+      "label": "h0p46875_0_240s_newton_tol1e-9",
+      "status": "prepared_not_started",
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p46875_0_240s_newton_tol1e-9",
+      "namelist_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p46875_0_240s_newton_tol1e-9/namelist.input",
+      "namelist_sha256": "afc0043b726084aa84e4b319352f0bf3e72b1947667a17e7813aac56729f9e7b",
+      "namelist_diff_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p46875_0_240s_newton_tol1e-9/namelist.diff",
+      "namelist_diff_sha256": "b352335461f7e36bba544a66285e58e05e1a6f9ecf4564cb3b7153caa8b7039c",
+      "input_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/preflight/cases/h0p46875_0_240s_newton_tol1e-9/wrfinput_d01",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "diagnostics_sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+      "changed_namelist_fields": [
+        "run_seconds: 60 -> 240"
+      ],
+      "effective_fields": {
+        "run_seconds": "240",
+        "num": "15",
+        "den": "32",
+        "history_interval_s": "15",
+        "newton_tol": "1e-9",
+        "krylov_max": "100"
+      },
+      "expected": {
+        "duration_s": 240,
+        "dt_fraction_s": "15/32",
+        "dt_s": 0.46875,
+        "macrosteps": 512,
+        "implicit_stage_calls": 1536,
+        "history_interval_s": 15,
+        "history_times_seconds": [
+          0,
+          15,
+          30,
+          45,
+          60,
+          75,
+          90,
+          105,
+          120,
+          135,
+          150,
+          165,
+          180,
+          195,
+          210,
+          225,
+          240
+        ],
+        "fp64_carry_host_inputs": 1,
+        "fp64_carry_internal_inputs": 511,
+        "fp64_carry_publications": 512,
+        "newton_tol": 1e-09,
+        "krylov_tol": 1e-07,
+        "ewt_effective": 1e-06
+      }
+    }
+  ],
+  "capture_policy": "unchanged stage_operand_diag ON; fullCSV temporary; Green primary plus independent Red parse original CSV before removal; root authorizes delete only after agreement of compact arrays/summaries/hash/retained5details. Discarded fullarrays not losslessly preserved.",
+  "limits": {
+    "maximum_new_native_runs": 2,
+    "coarse_macrosteps": 256,
+    "fine_macrosteps": 512,
+    "coarse_dt_s": 0.9375,
+    "fine_dt_s": 0.46875,
+    "duration_s": 240,
+    "newton_tol_both": 1e-09,
+    "krylov_tol": 1e-07,
+    "effective_ewt_rtol": 1e-06,
+    "newton_relative_tol": 0,
+    "original_e71_initial_state": true,
+    "no_state_only_restart_from60s": true,
+    "early_v3_row_failure": "analysis-only; does NOT stop either healthy run before240s",
+    "actual_process_or_model_error": "stop affected run; no retries or additional runs",
+    "no_new_build_production_edit_or_default_tol_change": true,
+    "candidate_run_count": 0
+  },
+  "disk_before": {
+    "free_bytes": 66492698624,
+    "estimated_raw_csv_bytes": 23082853380
+  }
+}

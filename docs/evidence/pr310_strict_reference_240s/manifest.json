@@ -1,0 +1,161 @@
+{
+  "schema": "pr310_curated_evidence_manifest_v1",
+  "state": "final_after_independent_agreement_and_raw_cleanup",
+  "created_local_time": "2026-10-20T11:12:03.136313+09:00",
+  "source_base_commit": "9614e78dbd71250f571f0e495650eeca1e209a04",
+  "protocol_sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+  "official_result": "22/24; W180 and W240 fail; reference unqualified; candidate not adjudicated",
+  "files": {
+    "README.md": {
+      "sha256": "332b7ed23142a0604d7c291dc3faac63b80b340dc494ae51ba4fbe8be5310a2c",
+      "bytes": 4216
+    },
+    "accepted_step_solver_summary.csv": {
+      "sha256": "42c36a1ffb83ef6d6554bc12afeae434a38535711c027deee0d5fd67f663e9b7",
+      "bytes": 766321
+    },
+    "coarse_compact_agreement.json": {
+      "sha256": "806fc041d0e0a801625aba32c1127429849eda64089964ccd513702eae55237d",
+      "bytes": 1321
+    },
+    "coarse_original_run_receipt.json": {
+      "sha256": "2d4ab1c46d09907b5a0386d76cf2fa2e84bd6ac91760a3b3c03337eab153be41",
+      "bytes": 164038
+    },
+    "coarse_run_receipt.json": {
+      "sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+      "bytes": 276845
+    },
+    "common_time_W_257.csv": {
+      "sha256": "8c80e60ae7e6fd8edf2c9b04b382b3171eae69fb6853950de62a08cd9fd443c4",
+      "bytes": 39687
+    },
+    "compact_derivation_receipt.json": {
+      "sha256": "52904adacda37eada7c797d7a4abee6fd90bf673cbbcfcb0f4833c87a7173b04",
+      "bytes": 2997
+    },
+    "current_runtime_dylib_fingerprint.json": {
+      "sha256": "7395a8a3ebcce7270cec62cb1ca46337d0c10c196bae5357a599e58eec1f23c3",
+      "bytes": 5671
+    },
+    "evidence_tool_graph_binding.json": {
+      "sha256": "b21c3cd726c8f99a5e1284b4870adc92d2db322cb8ba4b80491387b5c603ca66",
+      "bytes": 11508
+    },
+    "figure_manifest.json": {
+      "sha256": "2711809fd5e33174010ce0f68221f92ffc17aeab7b85f76cd755c393c15aec83",
+      "bytes": 6890
+    },
+    "final_graph_figure_lineage.json": {
+      "sha256": "a741586e1a231ff9e7a6a246feee8952f7dcbf211867d68d71bd0097058273b5",
+      "bytes": 10030
+    },
+    "fine_run_receipt.json": {
+      "sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+      "bytes": 310430
+    },
+    "green_analyzer_lineage.json": {
+      "sha256": "423df2d3a4d7b2569abc7236a8cc9ca206baf1fa7eabf29f3d0854be27fc9846",
+      "bytes": 2823
+    },
+    "green_final_analysis_receipt.json": {
+      "sha256": "4ed1d2a1516a185963440d9e4ea0dcfed2fec5ddbb89ca1511dbd21e9b09fee6",
+      "bytes": 14126
+    },
+    "green_red_agreement.json": {
+      "sha256": "168f94cdc635270db8c3ea4f7fe830b2893280dcd189fb9b598370bc5632e60e",
+      "bytes": 1815
+    },
+    "independent_comparison_scope.json": {
+      "sha256": "b6988b51051408599c8f8a5b668ed2aac1c602fba0f00a1b6afff56ef098062b",
+      "bytes": 773
+    },
+    "numerical_summary.json": {
+      "sha256": "3cf795897ce28750edbe2d07643e53c3af8c4edccdf0176931271a69e99cb27a",
+      "bytes": 142089
+    },
+    "official_24row_screen.csv": {
+      "sha256": "a300b5d167b8ed09de2796c6bf658f48f4fbba22f9e14dc7668a2413988e0aa9",
+      "bytes": 2324
+    },
+    "preflight_manifest.json": {
+      "sha256": "9f685f588991566ebdd712cacc64cff25f840ceeddfa33ab88cf27f9e7c3347a",
+      "bytes": 33169
+    },
+    "protocol_final.json": {
+      "sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+      "bytes": 11411
+    },
+    "published_fields_and_W.npz": {
+      "sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+      "bytes": 24901006
+    },
+    "raw_csv_retention_manifest.json": {
+      "sha256": "307a09b558f1a5ce7dfe29e92821be7ef921171efa4445243bab1f6adb0ef925",
+      "bytes": 417119
+    },
+    "receipt_metadata_correction_audit.json": {
+      "sha256": "c9cda872ea7be9f333c30c611d42b4ceebad8d8ec39bde7aac9679caa97ef086",
+      "bytes": 569
+    },
+    "recompute.py": {
+      "sha256": "06cf78ce4461a88a73ea8016148a95c6b5cb7707c167c2d74be9209830ed8f0f",
+      "bytes": 3080
+    },
+    "red_analyzer_version_binding.json": {
+      "sha256": "e52ddab11e5d56c667948032de55e2fcb868ae0e2627d993973be60b837590cd",
+      "bytes": 1776
+    },
+    "red_final_review_receipt.json": {
+      "sha256": "b052ed6cf6c13b914dc5353bb382cc8d7955f004d387b2cab86b8601397234c0",
+      "bytes": 8312
+    },
+    "red_first_attempt_receipt.json": {
+      "sha256": "36d97baf08680b1b848f28100b4d5644b7557618ec07c4732fedc5758a7a19ad",
+      "bytes": 3717
+    },
+    "red_receipt_alias_graph_binding.json": {
+      "sha256": "ba5341f0056d936413673f83945ff82fd48426f6238f0a3a1e8884cf3e0e1f27",
+      "bytes": 6265
+    },
+    "red_recovery_authorization.json": {
+      "sha256": "fbe066fa2440378bb366151fa305d7c6178ca7dd8894874396ce17c2ec995c1a",
+      "bytes": 1127
+    },
+    "root_array_and_publication_audit.json": {
+      "sha256": "90017e91c657563ffbf490c195132bf5c8eeac50521276e5f3467fd63f25b432",
+      "bytes": 6594
+    },
+    "root_launch_binding.json": {
+      "sha256": "8d224408c418f36ef1a4588b5f5e4d2857722d50f29d3e816c708d82c5ab90f5",
+      "bytes": 7642
+    },
+    "root_official_screen.json": {
+      "sha256": "891a5bc7b356e45e1270f2ac0263a2848708e30451e51d0b3ccaa3cb45ea4656",
+      "bytes": 10890
+    },
+    "run_index.json": {
+      "sha256": "0231dfd820b4be260f754bb6f955f03d85d012dd16b84996c9b8cd9f70074f0d",
+      "bytes": 13625
+    },
+    "runtime_config_audit.json": {
+      "sha256": "83d4e415061d3b5d379bbbb1417fdf70a317e0ad55ea543fa75aa8da02388fa6",
+      "bytes": 2702
+    },
+    "stock_rk3_secondary.json": {
+      "sha256": "8c195b0ebeeb0deb20357b77e4716149c27cf742ab0e3ac0e340e7cc48e15980",
+      "bytes": 6097
+    },
+    "w_curve_and_screen.png": {
+      "sha256": "26c62d3051332a63759f95cc4cf8f424214398885aaabbf4e09d4fb0f151c862",
+      "bytes": 437744
+    }
+  },
+  "verification_receipts_excluded_to_avoid_hash_cycles": [
+    "manifest.json",
+    "portable_recomputation.json",
+    "final_green_review.json",
+    "final_red_review.json"
+  ],
+  "scope": "Compact original-field/trajectory and provenance files; not a lossless archive of discarded full-stage arrays."
+}

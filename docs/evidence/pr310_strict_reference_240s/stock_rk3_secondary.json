@@ -1,0 +1,165 @@
+{
+  "comparison_time": {
+    "exact_no_interpolation": true,
+    "seconds": 240,
+    "timestamp": "0001-01-01_00:04:00"
+  },
+  "efficiency": "No runtime ratio: the strict fine run has stage observers and the historical stock-RK3 analysis does not include a wall-time receipt source; the recorded times are contextual only.",
+  "fields": {
+    "MU_plus_MUB": {
+      "count": 256,
+      "max_abs": 0.8391275405883789,
+      "rms": 0.5040889467470031
+    },
+    "PH": {
+      "count": 4096,
+      "max_abs": 0.818359375,
+      "rms": 0.25721155233749543
+    },
+    "T_plus_300": {
+      "count": 4096,
+      "max_abs": 0.002105712890625,
+      "rms": 0.00011142287658533752
+    },
+    "U": {
+      "count": 4096,
+      "max_abs": 0.022851228713989258,
+      "rms": 0.013507233652615679
+    },
+    "V": {
+      "count": 4352,
+      "max_abs": 0.010151397786103189,
+      "rms": 0.003571876542240016
+    },
+    "W": {
+      "count": 4096,
+      "max_abs": 0.0013021097984164953,
+      "rms": 0.00031988159098867363
+    }
+  },
+  "interpretation": "secondary descriptive field distance to the preserved stock RK3 trajectory; neither trajectory is asserted as truth by this comparison",
+  "mask_counts": {
+    "MU": 256,
+    "PH": 4096,
+    "T": 4096,
+    "U": 4096,
+    "V": 4352,
+    "W": 4096
+  },
+  "policy_difference": "Stock RK3 is split-explicit with requested smdiv/emdiv/epssm and time_step_sound settings. Native ARK mode 3 uses split-explicit off and a distinct implicit-divergence/filter pathway. This is not a same-filter accuracy qualification.",
+  "schema": "pr310_fine_h15_32_vs_stock_rk3_h1875_t240_secondary_v1",
+  "stock_rk3": {
+    "analysis_path": "/Users/yhlee/AD-SDIRK3-review-evidence/WRF-accuracy-cost-20261011/analysis_after.json",
+    "analysis_sha256": "e51e1a257be01637f791ade97a330d2d6890e179827a8e187f435eca196dfa54",
+    "dt_s": 1.875,
+    "executable_sha256": "2b629416618ddef4ceeea8ba51d07b8a7df514f5df6abab107c51e3f78fcc2de",
+    "file_receipt_sha256": "d1525eca6beae444287a5420734aed7878e40ce4927d7ec20530de173acaf807",
+    "frame": {
+      "grid": {
+        "dx_m": 100000.0,
+        "dy_m": 100000.0,
+        "nx": 16,
+        "ny": 16,
+        "nz": 16
+      },
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/WRF-accuracy-cost-20261011/after_fix/fortran_rk3_h1p875/wrfout_d01_0001-01-01_00:04:00",
+      "sha256": "d1525eca6beae444287a5420734aed7878e40ce4927d7ec20530de173acaf807",
+      "time": "0001-01-01_00:04:00"
+    },
+    "historical_analysis_wall_receipt_source": null,
+    "historical_analysis_wall_seconds": 1.935781333129853,
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "label": "fortran_rk3_h1p875",
+    "method": "RK3",
+    "namelist_sha256": "2c28bd65a49f43cd377ac90b9d01aa6712d976cf737e4d9dd47790e765f1e8bd",
+    "namelist_transport": {
+      "diff_opt": "2",
+      "emdiv": "0.01",
+      "epssm": "0.1",
+      "khdif": "1000.",
+      "kvdif": "10.",
+      "smdiv": "0.1",
+      "time_step": "1",
+      "time_step_fract_den": "8",
+      "time_step_fract_num": "7",
+      "time_step_sound": "4"
+    },
+    "source_revision": null,
+    "wall_receipt_available": false
+  },
+  "strict_fine_ark": {
+    "dt_s": 0.46875,
+    "executable_sha256": "5bf90cd95e6d5ac4a5a76f73ec407d9ee6e91c1b6919488df20c9df09a2a7769",
+    "frame": {
+      "grid": {
+        "dx_m": 100000.0,
+        "dy_m": 100000.0,
+        "nx": 16,
+        "ny": 16,
+        "nz": 16
+      },
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/wrfout_d01_0001-01-01_00:04:00",
+      "sha256": "a7ff3616362d01fcf98d63826feeda5c71cf39bb9af71743a679ba27a853ca81",
+      "time": "0001-01-01_00:04:00"
+    },
+    "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist_sha256": "afc0043b726084aa84e4b319352f0bf3e72b1947667a17e7813aac56729f9e7b",
+    "namelist_transport": {
+      "diff_opt": "2",
+      "emdiv": "0.01",
+      "epssm": "0.1",
+      "khdif": "1000.",
+      "kvdif": "10.",
+      "sdirk3_imex_split_mode": "3",
+      "sdirk3_newton_tol": "1e-9",
+      "smdiv": "0.1",
+      "time_integration_scheme": "6",
+      "v_sca_adv_order": "3"
+    },
+    "newton_tol": 1e-09,
+    "observer_run_wall_seconds": 1673.05,
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/run_receipt.json",
+    "receipt_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+    "run_status": "completed",
+    "runtime_effective_lines": [
+      "[CONFIG EFFECTIVE] mass_coordinate_mode=1 (WRFParity) -> omega_ww_cp=ON, mu_horizontal_div_only=ON",
+      "[CONFIG EFFECTIVE] split_explicit=off (ARK324 implicit)"
+    ],
+    "source_commit": null,
+    "source_impl_sha256": null
+  },
+  "strict_pair_gate": {
+    "final_screen": {
+      "failed_rows": [
+        {
+          "field": "W",
+          "limit": 2.5981466189324436e-06,
+          "rms": 3.401066375668074e-06,
+          "time_seconds": 180
+        },
+        {
+          "field": "W",
+          "limit": 2.5981466189324436e-06,
+          "rms": 3.271516649049352e-06,
+          "time_seconds": 240
+        }
+      ],
+      "interpretation": "strict h=15/32 screen result; failure closes the formal archived-candidate gate",
+      "pass_count": 22,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_official_screen.json",
+      "sha256": "891a5bc7b356e45e1270f2ac0263a2848708e30451e51d0b3ccaa3cb45ea4656",
+      "total_rows": 24
+    },
+    "formal_archived_candidate_gate_open": false,
+    "stock_RK3_distance_remains_secondary_and_is_not_a_qualification": true
+  },
+  "transforms": {
+    "MU": "MU+MUB Pa",
+    "T": "T+300 K"
+  },
+  "v3_helper": {
+    "owner_policy": "official benchmark_wrf_accuracy_cost._owned physical field masks",
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/tools/benchmark_wrf_accuracy_cost.py",
+    "sha256": "ccda168475638bcb8bd5a3b26abf127350b31fde08fba0396fa3293c8c9547a8"
+  }
+}

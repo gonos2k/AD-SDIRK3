@@ -1,0 +1,111 @@
+{
+  "schema": "pr310_final_red_acceptance_review_v1",
+  "reviewed_local_time": "2026-10-20T11:13:25+09:00",
+  "status": "PASS_no_actionable_P0_P1_P2",
+  "scope": "Bounded review of the completed strict-ARK 240 s reference screen, its scientific claims, the Green/Red/root comparison scope, and raw-capture retention. No model run, test, source change, CSV reparse, or new threshold was performed by this review.",
+  "reviewed_document_hashes": {
+    "strict_240s_report": {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/(202610201044)_strict_ark_240s_reference_screen.md",
+      "sha256": "ab022a23b17bf286099e88c1a427ec3f8c2410fb26e350f4dbc11e4660002402"
+    },
+    "problem_definition": {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/PROBLEM_DEFINITION.md",
+      "sha256": "f109beb4091ceb90e21de1b7e4854c8a9bec6eb84d3e093a94bc2aa8ba9ca410"
+    }
+  },
+  "curated_evidence": {
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s",
+    "manifest_sha256": "2ae23ec1757392f12bf6cf1f9cf98d223ab556dda41a7f6f7c9ddeab4620d00a",
+    "manifest_data_file_count": 36,
+    "manifest_data_bytes": 27636749,
+    "portable_recomputation_sha256": "a6c02d91a40a134763d8671ba12caef425b8cd1fa73136300a587c7cb206bde0"
+  },
+  "scientific_result": {
+    "fixed_protocol_sha256": "af8e50eeba754a9c2e95b99495b4649374cf4afa66f3d6c48506761e6549e3ad",
+    "run_pair": {
+      "coarse_dt_seconds": 0.9375,
+      "fine_dt_seconds": 0.46875,
+      "horizon_seconds": 240,
+      "newton_tolerance_both": 1e-09,
+      "runs_completed": 2,
+      "model_steps": {
+        "coarse": 256,
+        "fine": 512
+      },
+      "failed_implicit_solves": 0
+    },
+    "official_screen": {
+      "rows": 24,
+      "passes": 22,
+      "fails": [
+        {
+          "field": "W",
+          "time_seconds": 180,
+          "rms_m_s": 3.401066375668074e-06,
+          "epsilon_over_3_ratio": 1.30903558362905
+        },
+        {
+          "field": "W",
+          "time_seconds": 240,
+          "rms_m_s": 3.271516649049352e-06,
+          "epsilon_over_3_ratio": 1.2591732218690532
+        }
+      ],
+      "reference_qualified": false,
+      "archived_h15_candidate_official_gate": "withheld because the preregistered 24/24 reference condition failed"
+    },
+    "claims_checked": [
+      "The 22/24 result is kept distinct from the earlier 1e-7 series result.",
+      "The fixed V3 epsilon/3 screen is unchanged and remains a named-case reference sensitivity rule, not an adopted project-wide target.",
+      "The report makes no true-error bound, Richardson/order, universal forecast-accuracy, or efficiency claim.",
+      "The reported internal-W maximum at 170.625 s is clearly separated from the four official screen checkpoints; it does not alter the frozen failure selection at 180 s.",
+      "The h15 candidate comparison remains withheld; no candidate run or additional model run was performed."
+    ]
+  },
+  "independent_comparison_scope": {
+    "official_24_rows": "Root direct NetCDF, Green, and Red results agree exactly.",
+    "79_npz_arrays": "Bitwise equality is among Green's original compact NPZ, Red's first completed partial NPZ, and Red's recovered compact NPZ. Root did not produce a third independent W NPZ.",
+    "root_independent_checks": [
+      "direct NetCDF 24-row screen",
+      "34 internal-W-to-FP32 publication casts",
+      "E309 prefix checks and scalar/array comparisons recorded in the separate root receipts"
+    ],
+    "solver_metrics": {
+      "implicit_stages": 2304,
+      "newton_count_all_implicit_stages": 2,
+      "max_green_red_G_stat_difference_m_s": 7.888609052210118e-31,
+      "max_green_red_K_minus_FI_stat_difference_m_s2": 6.310887241768095e-30,
+      "max_green_red_local_increment_sum_difference_m_s": 1.262177448353619e-29,
+      "interpretation": "Local diagnostics only; not propagated state-error bounds."
+    },
+    "red_serializer_recovery": "One authorized offline re-read recovered the scalar summary after a serializer field-list failure; the original partial products and failure receipt remain preserved. No model, formula, screen, or budget changed."
+  },
+  "raw_capture_retention": {
+    "manifest_sha256": "307a09b558f1a5ce7dfe29e92821be7ef921171efa4445243bab1f6adb0ef925",
+    "original_csv_files": 768,
+    "original_bytes": 23031718152,
+    "retained_selected_csv_files": 5,
+    "retained_selected_bytes": 147043773,
+    "temporary_csv_files_removed": 763,
+    "temporary_csv_bytes_removed": 22884674379,
+    "selected_steps": {
+      "coarse": [
+        1,
+        192
+      ],
+      "fine": [
+        1,
+        383,
+        384
+      ]
+    },
+    "filesystem_check": "All five retained CSV hashes and sizes match the manifest; all 763 nonselected temporary paths are absent.",
+    "preservation_limit": "Per-file original hashes/sizes, full compact W/solver products, and five selected full CSVs remain. Discarded stage arrays are not claimed to be losslessly preserved."
+  },
+  "remaining_limitations": [
+    "The strict pair does not qualify the proposed reference because W fails at 180 and 240 s.",
+    "The archived h15 candidate has no official accuracy verdict under the preregistered gate.",
+    "The result does not resolve other open project-level forward/AD/operator goals."
+  ],
+  "finding": "The final report and curated evidence present the measured result and its limits accurately. No remaining actionable P0/P1/P2 issue was found."
+}

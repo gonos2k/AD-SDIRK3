@@ -1,0 +1,106 @@
+{
+  "change_class": "receipt/schema aliases only in `_receipt`; no numerical processing function changed.",
+  "coarse_cache_reuse": {
+    "agreement_checks": {
+      "W_internal_projected_kji": {
+        "bitwise_equal": true,
+        "shape": [
+          257,
+          16,
+          16,
+          16
+        ]
+      },
+      "W_internal_raw_final_kji": {
+        "bitwise_equal": true,
+        "shape": [
+          256,
+          16,
+          16,
+          16
+        ]
+      },
+      "final_packed_state": {
+        "bitwise_equal": true,
+        "shape": [
+          24531
+        ]
+      },
+      "initial_packed_state": {
+        "bitwise_equal": true,
+        "shape": [
+          24531
+        ]
+      },
+      "packed_state_at_60s": {
+        "bitwise_equal": true,
+        "shape": [
+          24531
+        ]
+      }
+    },
+    "agreement_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/root_coarse_compact_agreement.json",
+    "agreement_sha256": "806fc041d0e0a801625aba32c1127429849eda64089964ccd513702eae55237d",
+    "coarse_compact_metadata_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/coarse_streamed_compact.json",
+    "coarse_compact_metadata_sha256": "8172f1af2eeaf4bc5858d68af9eea5bd66ca2dfbab92f4b56b0130b7cdbc7cc7",
+    "coarse_stream_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/cache/coarse_stream_receipt.json",
+    "coarse_stream_receipt_sha256": "5b66a6fba6bda1bdae27856d84e5e583500b9bec490f745153a542d9b8e21b71",
+    "explicitly_reused": true,
+    "prior_version_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyzer_version_binding.json",
+    "prior_version_binding_sha256": "7222926bdec8cafa3f4c616ab966bd615a517d019a8d29a292cab613a7dcb02c",
+    "reason": "Coarse cache was already produced from the old analyzer; `_read_steps` and all non-_receipt AST are identical, and existing pairwise Green/Red agreement validates the cached compact arrays bitwise. This metadata-only receipt compatibility change does not invalidate coarse numerical data."
+  },
+  "current_source": {
+    "delta_copy_sha256": "02539d8181c07c1970e3535da1cdfc6893f676baad7c1faa2a948b2913ecba9d",
+    "delta_corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_red_alias_delta_corpus/source/evidence/red_validator/analyze_pr310_240s_red.py",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/analyze_pr310_240s_red.py",
+    "sha256": "02539d8181c07c1970e3535da1cdfc6893f676baad7c1faa2a948b2913ecba9d"
+  },
+  "graph_binding": {
+    "delta_edges": 72,
+    "delta_graph_sha256": "85b449faed7885ca1ac27cf3262cc5ff4fb4d06d9ce6ff00b1a403086ad4b8f9",
+    "delta_nodes": 24,
+    "edge_comparison_note": "The single-file delta and old multi-file corpus produce different extracted edge tuples (72 vs 79 for this source subset), although the AST outside _receipt is identical. This is recorded as extraction-context variability; no call-flow or numerical claim is based on these edges.",
+    "extractor": "graphify update --no-cluster; AST-only, no semantic LLM, no clustering",
+    "fresh_single_file_delta_graph": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_red_alias_delta_corpus/source/graphify-out/graph.json",
+    "graphify_input_tokens": 0,
+    "graphify_output_tokens": 0,
+    "llm_token_cost": "0; local AST extraction only.",
+    "original_graph_sha256": "b94e065cad94af7e2b2a0a73ecf3bc4d00f3c59ea6ee377e30390067ac2d1c0f",
+    "original_graph_unchanged": true,
+    "preserved_original_7file_graph": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/graphify-out/graph.json",
+    "prior_red_source_edge_tuples": 79,
+    "prior_red_source_nodes": 24,
+    "source_graph_edge_count": 72,
+    "source_graph_node_count": 24
+  },
+  "head": "9614e78dbd71250f571f0e495650eeca1e209a04",
+  "nonclaims": [
+    "No analyzer execution, data recomputation, model run, build, test, or W310 source modification was performed for this graph binding.",
+    "Receipt compatibility and exact AST equality establish source scope, not scientific correctness; results remain governed by run and validation receipts."
+  ],
+  "preserved_previous_source": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/red_validator/versions/analyze_pr310_240s_red_16daf7b.py",
+    "prior_copy_sha256": "16daf7b72a93986631877d8257a6fa263a12d8b570f62a759a32061e71c87b5b",
+    "sha256": "16daf7b72a93986631877d8257a6fa263a12d8b570f62a759a32061e71c87b5b",
+    "was_prior_graph_corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/red_validator/analyze_pr310_240s_red.py"
+  },
+  "receipt_alias_gates": {
+    "accepted_stage_manifest": "accepts stage_csvs or accepted_stage_csvs and their corresponding count aliases; still requires exact step count, contiguous sequence, all accepted and exact dt gates.",
+    "required_timestamps": "accepts either actual.netcdf_times/netcdf_times_match_expected or actual.history_times/history_times_exact, then strictly requires the expected 17 timestamps and exact=true."
+  },
+  "schema": "pr310_red_receipt_alias_graph_binding_v1",
+  "semantic_ast_checks": {
+    "_read_steps_identical": true,
+    "all_ast_outside__receipt_identical": true,
+    "scope": "AST dumps omit line attributes. _read_steps includes stage-array decoding and per-step numerical/statistical calculations."
+  },
+  "supersedes_binding_for_path": {
+    "note": "Preserved unchanged; this additive receipt binds the final Red analyzer hash.",
+    "previous_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_final_evidence_tool_graph_binding_receipt.json",
+    "previous_receipt_sha256": "b21c3cd726c8f99a5e1284b4870adc92d2db322cb8ba4b80491387b5c603ca66"
+  },
+  "tracked_status_at_binding": "clean",
+  "tree": "24f37b93aa7f93eefe2b291de019fa6a6754474d",
+  "worktree": "/private/tmp/pr310-strict-reference-240s-20261020"
+}

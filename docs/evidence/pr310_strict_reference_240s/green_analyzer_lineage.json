@@ -1,0 +1,42 @@
+{
+  "ast_function_comparison": {
+    "ast_location": "analyze() output serialization block; old line 484 onward and current line 484 onward",
+    "changed_functions": [
+      "analyze"
+    ],
+    "changed_scope": "Only the `solver_summary.csv` serializer in analyze() was extended to flatten already-computed per-stage G_W, K\u2212FI_RK, same-Y Full\u2212FI\u2212FE, availability, and direct local W increment fields. No data-loading, validation, budget, array, or numerical calculation code changed.",
+    "unchanged_function_count": 16
+  },
+  "compaction_bindings": {
+    "coarse": {
+      "compact_json_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/compact_cases/pr310_coarse_compact.json",
+      "compact_json_sha256": "2e86ce669f07fa7905bb22a4388a0259d7aeea1b544e034089c9cec0c8635365",
+      "compact_npz_sha256": "3744e337310108cd911e30f1c0663dfdbb1f6dbde511393c874a3752164567bd",
+      "loaded_source_sha256": "e5298e85cf8e8cefddfd12367a08022e4aa84f491c38bfaaa27555fa1f36aa29",
+      "receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257"
+    },
+    "fine": {
+      "compact_json_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/compact_cases/pr310_fine_compact.json",
+      "compact_json_sha256": "9156a95b5faec02a11e587014b53e3d28054a9fdf1e52bc81455907baf65d48f",
+      "compact_npz_sha256": "82c0d637edd2962a2c7706fd34a0202d980cf91ee7b2bae52562f453af994976",
+      "loaded_source_sha256": "e5298e85cf8e8cefddfd12367a08022e4aa84f491c38bfaaa27555fa1f36aa29",
+      "receipt_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8"
+    }
+  },
+  "current_final_analyzer": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/analyze_pr310_240s.py",
+    "sha256": "0ed0a5791c10f50a268fa2802a1a8d6dcb219d7dcc87b41215fa62b8db37c9c4"
+  },
+  "final_analysis": {
+    "loaded_source_sha256": "0ed0a5791c10f50a268fa2802a1a8d6dcb219d7dcc87b41215fa62b8db37c9c4",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_metric/final/pr310_240s_analysis.json",
+    "sha256": "6985f6d2f78b3d4c8822a9593ebf35963b7f7d23b18864f0b9e7ca8d69ea46fb"
+  },
+  "schema": "pr310_green_analyzer_lineage_v1",
+  "source_copy_used_for_both_compactions": {
+    "basis": "verified Graphify corpus source snapshot; equals the previously frozen pre-serialization analyzer hash",
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_graph/pr310_bounded_tool_ast_corpus/source/evidence/green_metric/analyze_pr310_240s.py",
+    "sha256": "e5298e85cf8e8cefddfd12367a08022e4aa84f491c38bfaaa27555fa1f36aa29"
+  },
+  "source_diff_sha256": "407162c09bcb023d05e1166fe47e87aafc7070cb55bfc418f06db6ccc9103ec3"
+}

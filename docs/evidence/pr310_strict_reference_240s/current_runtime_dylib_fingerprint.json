@@ -1,0 +1,125 @@
+{
+  "created_local_time": "2026-10-20T09:58:31+09:00",
+  "scope": "current reused executable direct dylib fingerprint only; no claim old runtime bytes were identical if older receipt did not record them; actual60s prefix comparison remains required",
+  "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf_v2.exe",
+  "direct_dylibs": [
+    {
+      "path": "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/pytorch/2.10.0/libexec/lib/python3.14/site-packages/torch/lib/libtorch.dylib",
+      "bytes": 133968,
+      "sha256": "3cb51bdf67ca14c93a99c06d7b80f002ddeeb5f1212c8e9f00ce85c7aaea0899"
+    },
+    {
+      "path": "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch_cpu.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/pytorch/2.10.0/libexec/lib/python3.14/site-packages/torch/lib/libtorch_cpu.dylib",
+      "bytes": 189553408,
+      "sha256": "f8f2c1b648fafcac93cd01f47a5bfcb2bf8d816cec1f83f0eb0297299c66ff6d"
+    },
+    {
+      "path": "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libc10.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/pytorch/2.10.0/libexec/lib/python3.14/site-packages/torch/lib/libc10.dylib",
+      "bytes": 1056736,
+      "sha256": "cb56ee731b2cbddf4e58dc42f4b8422735c414c6466d9902fc73e9633af767e6"
+    },
+    {
+      "path": "/opt/homebrew/opt/gcc/lib/gcc/current/libgfortran.5.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/gcc/15.2.0/lib/gcc/current/libgfortran.5.dylib",
+      "bytes": 2215232,
+      "sha256": "d3167911d6f65ec5a07320865a2314a3d145dddf529dde52ba4b6e1211018378"
+    },
+    {
+      "path": "/opt/homebrew/opt/gcc/lib/gcc/current/libquadmath.0.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/gcc/15.2.0/lib/gcc/current/libquadmath.0.dylib",
+      "bytes": 362768,
+      "sha256": "9f231a97e89de90f72a0471d69c4b12fb60e0ef869b2ba1dd3c6e6a0f0e054e7"
+    },
+    {
+      "path": "/opt/homebrew/opt/open-mpi/lib/libmpi_usempif08.40.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/open-mpi/5.0.9/lib/libmpi_usempif08.40.dylib",
+      "bytes": 399808,
+      "sha256": "dcba94f0016ccc8607c886035471a107da98701b3fd90a438d8f135438a2ac04"
+    },
+    {
+      "path": "/opt/homebrew/opt/open-mpi/lib/libmpi_usempi_ignore_tkr.40.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/open-mpi/5.0.9/lib/libmpi_usempi_ignore_tkr.40.dylib",
+      "bytes": 107968,
+      "sha256": "4d3c132d7b1ddad3fbaaa8210fdf38a346f38f64dde3391a1302abb49a16bdcd"
+    },
+    {
+      "path": "/opt/homebrew/opt/open-mpi/lib/libmpi_mpifh.40.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/open-mpi/5.0.9/lib/libmpi_mpifh.40.dylib",
+      "bytes": 449696,
+      "sha256": "6378b0a3be49de77450ed18078b8e1729e8dd52c3f74205047d985bc2e7f88ca"
+    },
+    {
+      "path": "/opt/homebrew/opt/open-mpi/lib/libmpi.40.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/open-mpi/5.0.9/lib/libmpi.40.dylib",
+      "bytes": 2572816,
+      "sha256": "d062fbf7dc584dc3efdc774aa481c6029c184399e25a11ffa93f31259f8cc0ec"
+    },
+    {
+      "path": "/opt/homebrew/opt/netcdf/lib/libnetcdf.22.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/netcdf/4.9.3_2/lib/libnetcdf.22.dylib",
+      "bytes": 1309408,
+      "sha256": "4689109b96ac38d62e396f28064dbe56909bf736bbf5409321e4ea85b405a27a"
+    },
+    {
+      "path": "/opt/homebrew/opt/netcdf-fortran/lib/libnetcdff.7.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib/libnetcdff.7.1.0.dylib",
+      "bytes": 894768,
+      "sha256": "792c2fc7f924362fa19e80661b071510d8f71f11c0215e7035e2bd10d1107d04"
+    },
+    {
+      "path": "/opt/homebrew/opt/hdf5/lib/libhdf5_hl_fortran.320.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/hdf5/2.0.0/lib/libhdf5_hl_fortran.320.0.0.dylib",
+      "bytes": 153296,
+      "sha256": "5a42a2e22e3770c4a5afdd36f0a95d400e3574ff1f57f29a704bdd881254cd06"
+    },
+    {
+      "path": "/opt/homebrew/opt/hdf5/lib/libhdf5_hl.320.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/hdf5/2.0.0/lib/libhdf5_hl.320.0.0.dylib",
+      "bytes": 173424,
+      "sha256": "0e1930606f3ab17fc8ff7b97adf4c672eb7afdd29dede05bd0ea3dc007d656b9"
+    },
+    {
+      "path": "/opt/homebrew/opt/hdf5/lib/libhdf5_fortran.320.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/hdf5/2.0.0/lib/libhdf5_fortran.320.0.0.dylib",
+      "bytes": 370288,
+      "sha256": "ba033db04409e8b99adc99151ab644804ec5a509b8237f4a0c18ae6c74e3cd91"
+    },
+    {
+      "path": "/opt/homebrew/opt/hdf5/lib/libhdf5.320.dylib",
+      "exists_as_file": true,
+      "resolved_path": "/opt/homebrew/Cellar/hdf5/2.0.0/lib/libhdf5.320.0.0.dylib",
+      "bytes": 4311696,
+      "sha256": "8ae8133e04b6c46357b79b642b7b95f070966d10d040524e9d5bb1581c40007b"
+    },
+    {
+      "path": "/usr/lib/libSystem.B.dylib",
+      "exists_as_file": false
+    },
+    {
+      "path": "/usr/lib/libz.1.dylib",
+      "exists_as_file": false
+    },
+    {
+      "path": "/usr/lib/libc++.1.dylib",
+      "exists_as_file": false
+    }
+  ],
+  "dyld_shared_cache_note": "/usr/lib system dependencies may be provided by dyld shared cache and need not exist as standalone files"
+}

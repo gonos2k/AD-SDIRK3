@@ -1,0 +1,92 @@
+{
+  "schema": "pr310_all_768_csv_runtime_config_audit_v1",
+  "created_local_time": "2026-10-20T10:41:50+09:00",
+  "expected": {
+    "newton_tol": 1e-09,
+    "krylov_tol": 1e-07,
+    "effective_ewt_rtol": 1e-06,
+    "steps": {
+      "h0p9375_0_240s_newton_tol1e-9": 256,
+      "h0p46875_0_240s_newton_tol1e-9": 512
+    }
+  },
+  "total_csv_count": 768,
+  "all_rows_match": true,
+  "cases": [
+    {
+      "label": "h0p9375_0_240s_newton_tol1e-9",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/corrected_full_run_receipt.json",
+      "receipt_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+      "csv_count": 256,
+      "expected_csv_count": 256,
+      "all_accepted": true,
+      "all_dt_exact": true,
+      "dt_seconds": 0.9375,
+      "runtime_config": {
+        "newton_tol_config": {
+          "count": 256,
+          "unique_values": [
+            9.999999717180685e-10
+          ],
+          "expected": 1e-09,
+          "all_close": true
+        },
+        "krylov_tol_config": {
+          "count": 256,
+          "unique_values": [
+            1.0000000116860974e-07
+          ],
+          "expected": 1e-07,
+          "all_close": true
+        },
+        "effective_ewt_rtol_config": {
+          "count": 256,
+          "unique_values": [
+            9.999999974752427e-07
+          ],
+          "expected": 1e-06,
+          "all_close": true
+        }
+      },
+      "all_config_fields_match": true
+    },
+    {
+      "label": "h0p46875_0_240s_newton_tol1e-9",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p46875_0_240s_newton_tol1e-9/run_receipt.json",
+      "receipt_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+      "csv_count": 512,
+      "expected_csv_count": 512,
+      "all_accepted": true,
+      "all_dt_exact": true,
+      "dt_seconds": 0.46875,
+      "runtime_config": {
+        "newton_tol_config": {
+          "count": 512,
+          "unique_values": [
+            9.999999717180685e-10
+          ],
+          "expected": 1e-09,
+          "all_close": true
+        },
+        "krylov_tol_config": {
+          "count": 512,
+          "unique_values": [
+            1.0000000116860974e-07
+          ],
+          "expected": 1e-07,
+          "all_close": true
+        },
+        "effective_ewt_rtol_config": {
+          "count": 512,
+          "unique_values": [
+            9.999999974752427e-07
+          ],
+          "expected": 1e-06,
+          "all_close": true
+        }
+      },
+      "all_config_fields_match": true
+    }
+  ],
+  "raw_csv_unchanged": true
+}
