@@ -1,0 +1,166 @@
+{
+  "AD_and_same_map_navigation": {
+    "JVP": "README.md:20-24; Newton solver JVP is an internal Krylov matvec (newton_solver.cpp:371, 6908-6952), not a derivative of the public screen/observation map.",
+    "README_scope": "README.md:7-8 and 312-328 separate production forecast validation from full observation-window adjoint; fixed trajectory wraps caller cotangents and explicitly does not differentiate caller-side maps.",
+    "VJP": "README.md:312-328; C++ fixed trajectory pullback plus Fortran wrappers module_implicit_sdirk3.F:2514-2581. `rg` found wrapper definitions/public exports but no CALL sites in dyn_em/solve_em.",
+    "observation_flags": "config.h:946-948 default false; Fortran passes values at module_implicit_sdirk3.F:2324-2331; C++ observation-aware flag is used at tile_unified_impl.cpp:7678 in an adjoint support guard, not a W observation operator.",
+    "research_forward_map_path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/research_forward_map.json",
+    "research_forward_map_sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7",
+    "same_map_evidence_gaps": [
+      "No existing caller binds an observation operator H, sample geometry/time, fixed R/covariance, control/prior and terminal objective to the current h=.9375 forward map.",
+      "No JVP/VJP/finite-difference comparison exists for that exact observation/caller-side W map.",
+      "The direct coarse-candidate helper is a public-field forward comparison only; it does not establish a full-window adjoint, map derivative, continuous-truth bound, or accepted order."
+    ]
+  },
+  "base_tree_2637": "341397cb4c674ff5dda2bdf787ade974f9a66541",
+  "branch": "codex/research-forward-setting-20261020",
+  "existing_source_binding_reuse": {
+    "all_match_worktree": true,
+    "compiled_source_pin_records_rechecked": 28,
+    "existing_helper_graph_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_final_helper_ast_source_graph_binding_receipt.json",
+    "existing_helper_graph_receipt_sha256": "0614946dbfc7166125516a8758ad7d8b9630d87e593acb52b70701af61001aeb",
+    "note": "No production graph, C++/Fortran corpus, or prior receipt was rebuilt or modified.",
+    "preserved_graph_references": [
+      {
+        "available": true,
+        "current_file_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+        "hash_still_matches": true,
+        "name": "pr307_v2_cpp",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+        "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5",
+        "hash_still_matches": true,
+        "name": "pr307_accepted_parser",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_committed_parser_graph/graphify-out/graph.json",
+        "sha256": "54c86647a09867248e4cdcb9f4b9470432204789d4f7ca3187efaa5190f7cdc5"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257",
+        "hash_still_matches": true,
+        "name": "pr305_read_payload",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/rk3-reference-update-20261013/green_graph/pr305_graph/graphify-out/graph.json",
+        "sha256": "b93feeba349739ae1cd231e2d1122427e26c724dd84122a76b1111db70f34257"
+      },
+      {
+        "available": false,
+        "current_file_sha256": null,
+        "hash_still_matches": null,
+        "name": "pr299_benchmark_helpers",
+        "path": "/private/tmp/pr299-pressure-lineage-graph-20261012/graphify-out/graph.json",
+        "sha256": "0de17d4b0055583169cfdc5709c091027c6534637f76065836c0aa8be05e2230"
+      },
+      {
+        "available": true,
+        "current_file_sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9",
+        "hash_still_matches": true,
+        "name": "pr308_fine_pair_analyzer",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/fine-pair-w-trajectory-20261015/green_graph/pr308_fine_pair_analyzer_graph/graphify-out/graph.json",
+        "sha256": "4949f828f58ccd2e6219855f64da166be3818a5890aacd754bcb32f7578003a9"
+      }
+    ],
+    "source_audit_path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/pr311_h3_existing_capture_source_audit.json",
+    "source_audit_sha256": "da56311a03a231330f3cb83ca011108bf7673e440af07a52f845c3d94bf1ffaa",
+    "unique_source_paths": 27
+  },
+  "head": "cb17e73c83c25d3827c3742a971dfa88d182bc01",
+  "helper_ast_graph": {
+    "edges": 13,
+    "method": "graphify update --no-cluster; local AST-only",
+    "nodes": 5,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/research_candidate_check_ast_corpus/source/graphify-out/graph.json",
+    "scope": "one new helper file only",
+    "sha256": "5848f16206cd9bd969219367a355a9888b804c1c69e6d06a34f8b6475632326c",
+    "tokens": {
+      "LLM_cost": 0,
+      "input": 0,
+      "output": 0
+    }
+  },
+  "limitations": [
+    "Graph relations are navigation only, not mathematical evidence.",
+    "No model/build/test or numerical computation was executed by this source-binding task.",
+    "The older PR299 benchmark scratch graph remains absent; not needed because the helper imports no benchmark/source loader."
+  ],
+  "matches_base_tree": true,
+  "new_helper": {
+    "corpus_copy": "/Users/yhlee/AD-SDIRK3-review-evidence/three-level-w-reference-20261020/green_graph/research_candidate_check_ast_corpus/source/worktree/docs/evidence/research_forward_setting/check_existing_coarse_candidate.py",
+    "corpus_copy_sha256": "fed2a888a69ec92e7c5c9cdd2279359718463b914a04cefa04514ef336c32d7e",
+    "imports": "Python stdlib + NumPy only; no repository source/WRF loader import. It consumes pinned transformed checkpoint NPZs, receipts and root protocol.",
+    "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/check_existing_coarse_candidate.py",
+    "sha256": "fed2a888a69ec92e7c5c9cdd2279359718463b914a04cefa04514ef336c32d7e"
+  },
+  "pinned_data_inputs": [
+    {
+      "expected_sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+      "match": true,
+      "name": "old_240s_public_checkpoint_npz",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/published_fields_and_W.npz",
+      "sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e"
+    },
+    {
+      "expected_sha256": "28f4fee625a6fedfb27ffdb376586df6cd6d5c8e5f2ca6c023f37bfec7ad0029",
+      "match": true,
+      "name": "h3_public_checkpoint_npz",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/three_level_w_reference/h3_published_physical_fields.npz",
+      "sha256": "28f4fee625a6fedfb27ffdb376586df6cd6d5c8e5f2ca6c023f37bfec7ad0029"
+    },
+    {
+      "expected_sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0",
+      "match": true,
+      "name": "root_protocol",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/three_level_w_reference/root_final_protocol.json",
+      "sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0"
+    },
+    {
+      "expected_sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257",
+      "match": true,
+      "name": "h09375_run_receipt",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/coarse_run_receipt.json",
+      "sha256": "7577abe80774eac04418563d37332379189383016ae241a650e97ad110945257"
+    },
+    {
+      "expected_sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8",
+      "match": true,
+      "name": "h046875_run_receipt",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/pr310_strict_reference_240s/fine_run_receipt.json",
+      "sha256": "7fc31f45206dd9dbbf16f214b7b9456fc07202acceac9bf4e3ff28857c2adfc8"
+    },
+    {
+      "expected_sha256": "ef6fb87deba873141306d78fe23a834b3533519750e46a3babf5c9d378194e95",
+      "match": true,
+      "name": "h0234375_run_receipt",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/three_level_w_reference/new_run_receipt.json",
+      "sha256": "ef6fb87deba873141306d78fe23a834b3533519750e46a3babf5c9d378194e95"
+    }
+  ],
+  "produced_artifact_hashes": [
+    {
+      "name": "direct_candidate_json",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/direct_h09375_vs_h0234375_full_epsilon.json",
+      "sha256": "a209bd2d7f224cdd283566b2ad25dff3da37fc449be767a1b43eeea74fd0bdae"
+    },
+    {
+      "name": "direct_candidate_csv",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/direct_h09375_vs_h0234375_full_epsilon.csv",
+      "sha256": "1952c9883d10c2910c36d4ac7eb34d952c7fada2e2dc204c706fd23463f522b2"
+    },
+    {
+      "name": "root_independent_candidate_check",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/root_independent_candidate_check.json",
+      "sha256": "8d7204c533f3a17a3170110e5455c92ce939e92b6fcf465b674b9b35cd1db99e"
+    },
+    {
+      "name": "research_forward_map",
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/research_forward_map.json",
+      "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+    }
+  ],
+  "schema": "research_forward_setting_candidate_source_graph_receipt_v1",
+  "target_worktree": "/private/tmp/pr310-strict-reference-240s-20261020",
+  "tree": "341397cb4c674ff5dda2bdf787ade974f9a66541",
+  "worktree_status": "M docs/PROBLEM_DEFINITION.md"
+}

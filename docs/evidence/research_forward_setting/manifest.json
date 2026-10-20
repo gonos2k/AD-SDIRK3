@@ -1,0 +1,72 @@
+{
+  "exclusions": [
+    "manifest.json (self-hash)",
+    "green_closing_review.json/red_closing_review.json (review this manifest, avoid cycles)"
+  ],
+  "external_inputs": "Six dependencies are pinned by the comparison script and fresh-folder receipt; reused from existing PR310 evidence directories.",
+  "files": [
+    {
+      "bytes": 2370,
+      "file": "README.md",
+      "sha256": "2b38e56cc2cf74a316df7b006239d9f9728363c3556b021dc935ae73f31f5151"
+    },
+    {
+      "bytes": 8510,
+      "file": "check_existing_coarse_candidate.py",
+      "sha256": "fed2a888a69ec92e7c5c9cdd2279359718463b914a04cefa04514ef336c32d7e"
+    },
+    {
+      "bytes": 5176,
+      "file": "direct_h09375_vs_h0234375_full_epsilon.csv",
+      "sha256": "1952c9883d10c2910c36d4ac7eb34d952c7fada2e2dc204c706fd23463f522b2"
+    },
+    {
+      "bytes": 29541,
+      "file": "direct_h09375_vs_h0234375_full_epsilon.json",
+      "sha256": "a209bd2d7f224cdd283566b2ad25dff3da37fc449be767a1b43eeea74fd0bdae"
+    },
+    {
+      "bytes": 1815,
+      "file": "fresh_folder_direct_candidate_test.json",
+      "sha256": "e2de41fc3bd80518368c4f0a85bdb3ac4f4ffa5a480668aeebe3f66266484998"
+    },
+    {
+      "bytes": 948,
+      "file": "independent_agreement.json",
+      "sha256": "c34c14022a9abdad5152261f3bb5fcc9b5c2d729df065a6865a3688b1aed7bc8"
+    },
+    {
+      "bytes": 6274,
+      "file": "namelist.input",
+      "sha256": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5"
+    },
+    {
+      "bytes": 1292,
+      "file": "red_independent_comparison_receipt.json",
+      "sha256": "fc9d973fb20b4b9ee71127666161c3e7e04773ab3d1b9691003e0e5f4b09f853"
+    },
+    {
+      "bytes": 8145,
+      "file": "research_forward_map.json",
+      "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+    },
+    {
+      "bytes": 7973,
+      "file": "root_independent_candidate_check.json",
+      "sha256": "8d7204c533f3a17a3170110e5455c92ce939e92b6fcf465b674b9b35cd1db99e"
+    },
+    {
+      "bytes": 10111,
+      "file": "source_graph_receipt.json",
+      "sha256": "36c9b7feeb2a4f551bd8c3443b6debff4178419cb7a44692cd8dc180329ed63b"
+    },
+    {
+      "bytes": 5493,
+      "file": "stock_rk3_secondary_comparison.json",
+      "sha256": "cecda8ca055dfd30ca7aac97d4af3212b3c2179273d87403415384cf6512d0c7"
+    }
+  ],
+  "new_model_runs": 0,
+  "new_npz_files": 0,
+  "schema": "research_forward_setting_manifest_v1"
+}

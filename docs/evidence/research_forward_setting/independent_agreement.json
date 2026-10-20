@@ -1,0 +1,21 @@
+{
+  "schema": "research_forward_setting_independent_agreement_v1",
+  "inputs": {
+    "root": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/research-forward-setting-20261020/root_direct_candidate_check.json",
+      "sha256": "8d7204c533f3a17a3170110e5455c92ce939e92b6fcf465b674b9b35cd1db99e"
+    },
+    "green": {
+      "path": "/private/tmp/pr310-strict-reference-240s-20261020/docs/evidence/research_forward_setting/direct_h09375_vs_h0234375_full_epsilon.json",
+      "sha256": "a209bd2d7f224cdd283566b2ad25dff3da37fc449be767a1b43eeea74fd0bdae"
+    },
+    "red": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/research-forward-setting-20261020/red_validator/direct_coarse_h09375_vs_h3_independent.json",
+      "sha256": "4a91dd3a8fd5847f3d1fd66bbc8bb7b5af3d46e7bfc3f2fc5ddd045e898a0a75"
+    }
+  },
+  "row_count": 24,
+  "all_direct_RMS_ratio_pass_exact": true,
+  "all_triangle_upper_bound_exact": true,
+  "no_model_runs": true
+}

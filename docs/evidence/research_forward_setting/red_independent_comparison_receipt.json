@@ -1,0 +1,19 @@
+{
+  "csv_bytes": 4290,
+  "csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/research-forward-setting-20261020/red_validator/direct_coarse_h09375_vs_h3_independent.csv",
+  "csv_sha256": "ea375095ec34333a1251a46eefc1024bf3adece2a722fedc458d59c7805a2afc",
+  "direct_pass_count": 24,
+  "h3_npz_sha256": "28f4fee625a6fedfb27ffdb376586df6cd6d5c8e5f2ca6c023f37bfec7ad0029",
+  "independent_analyzer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/research-forward-setting-20261020/red_validator/direct_h09375_vs_h3_independent.py",
+  "independent_analyzer_sha256": "9b232d04a698683a7dcf30f9d363f2000c93fbb876d9cd79a6ede92d42b9229a",
+  "maximum_direct_ratio": 0.5025718510754528,
+  "maximum_triangle_bound_ratio": 0.5029398053871652,
+  "old_npz_sha256": "4fe480ad79bc9957488f8b02498fde4bb9a45bff7f10d246bd1826490778070e",
+  "result_bytes": 56877,
+  "result_path": "/Users/yhlee/AD-SDIRK3-review-evidence/research-forward-setting-20261020/red_validator/direct_coarse_h09375_vs_h3_independent.json",
+  "result_sha256": "4a91dd3a8fd5847f3d1fd66bbc8bb7b5af3d46e7bfc3f2fc5ddd045e898a0a75",
+  "root_direct_row_exact_match_count": 24,
+  "root_protocol_sha256": "7a3055189a01233837a67e8c7e7044ad34b165a42218c5f8160076657a9f83e0",
+  "rows": 24,
+  "schema": "research_forward_red_direct_coarse_h3_receipt_v1"
+}

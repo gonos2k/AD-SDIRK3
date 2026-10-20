@@ -1,0 +1,57 @@
+{
+  "schema": "research_forward_setting_green_final_review_v1",
+  "reviewed_local_time": "2026-10-20T19:30:00+09:00",
+  "status": "PASS",
+  "scope": "Final bounded read-only review of the named-case research forward-map report, PROBLEM_DEFINITION update, final evidence manifest, exact namelist copy, baseline receipt, numerical comparison and source graph. No model run, build, or production edit was made.",
+  "artifacts": {
+    "report": {
+      "path": "docs/(202610201926)_research_forward_setting_h09375.md",
+      "sha256": "94e6af8584a369ac2961e045a33ffddc7f167ef06b8d8bf2c34b21db46c478fb"
+    },
+    "problem_definition": {
+      "path": "docs/PROBLEM_DEFINITION.md",
+      "sha256": "58fd97cc4cb3603423fb943fce37a71bd7d00608c05a80d0f93c9a20d34c8d80"
+    },
+    "manifest": {
+      "path": "docs/evidence/research_forward_setting/manifest.json",
+      "sha256": "80fe087fc58f041a9890d29aa453cdb4d1047d9da3f8db840218d0009d8e421e",
+      "file_count": 12,
+      "declared_bytes": 87648,
+      "all_files_verified": true
+    },
+    "research_forward_map": {
+      "path": "docs/evidence/research_forward_setting/research_forward_map.json",
+      "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+    },
+    "direct_comparison": {
+      "path": "docs/evidence/research_forward_setting/direct_h09375_vs_h0234375_full_epsilon.json",
+      "sha256": "a209bd2d7f224cdd283566b2ad25dff3da37fc449be767a1b43eeea74fd0bdae"
+    },
+    "independent_agreement": {
+      "path": "docs/evidence/research_forward_setting/independent_agreement.json",
+      "sha256": "c34c14022a9abdad5152261f3bb5fcc9b5c2d729df065a6865a3688b1aed7bc8",
+      "rows": 24,
+      "root_green_red_direct_values_and_triangle_bounds_match": true
+    },
+    "fresh_folder_test": {
+      "path": "docs/evidence/research_forward_setting/fresh_folder_direct_candidate_test.json",
+      "sha256": "e2de41fc3bd80518368c4f0a85bdb3ac4f4ffa5a480668aeebe3f66266484998",
+      "status": "pass",
+      "rows_reproduced": 24
+    },
+    "source_graph_receipt": {
+      "path": "docs/evidence/research_forward_setting/source_graph_receipt.json",
+      "sha256": "36c9b7feeb2a4f551bd8c3443b6debff4178419cb7a44692cd8dc180329ed63b"
+    }
+  },
+  "review_findings": [],
+  "verified_claims": {
+    "mapping": "The copied namelist is byte-identical by SHA to the archived .9375 coarse_run_receipt. The receipt binds original e71 input, 5bf90c executable, dd87b4 C++ archive, 11e6b4 Fortran archive, 240 s duration, 256 macrosteps, 768 implicit stages, exact 17 output times, actual environment and 28 compiled-source pin records (27 paths); all source pins are recorded as matching the worktree.",
+    "forward_accuracy": "The existing .9375 run is compared directly with the already qualified .234375 reference using full candidate epsilon, four published times, six physical fields and the declared owner masks. All 24 rows pass. Maximum direct RMS/budget ratio is 0.5025718511 (W, 180 s); the separate triangle upper-bound ratio is 0.5029398054. The triangle bound is not substituted for the direct gate.",
+    "prior_results": "The old .9375/.46875 epsilon/3 result 22/24, qualified .46875/.234375 epsilon/3 result 24/24, and archived h15 full-epsilon result 20/24 with W failing all four times remain distinct and preserved.",
+    "case_scope": "Selection applies only to this dry em_b_wave, original e71, 240 s research forward instance. It does not change production defaults or establish universal step acceptance, truth/error bound, order, or efficiency advantage.",
+    "derivatives": "The report/map clearly leave same-map observation-window derivatives, caller-side observation/cotangent connection, H/sampling/R/controls/prior and file-initialization derivatives open. It does not identify forecast epsilon with observation covariance R.",
+    "validation": "The fresh-folder portable test reproduces the 24 direct comparison rows. Final 12-file manifest was independently hash-checked. Graphify receipt is navigation/source-pin evidence, not numerical proof."
+  },
+  "limitations": "This closeout checks the report/map against existing receipts and the final packaged hashes; it does not rerun the native model or independently regenerate NetCDF inputs."
+}

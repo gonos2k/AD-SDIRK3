@@ -2,13 +2,14 @@
 
 Local timestamp: 2026-10-11 17:47:15 JST (+0900)
 
-Last updated: 2026-10-15 01:03:08 JST (+0900)
+Last updated: 2026-10-20 19:26:51 JST (+0900)
 
 This is the single project-level definition of the first-stage research target.
 Case reports retain their own inputs, numerical budgets and completion status.
-This definition does not certify the first-stage target as complete. The target
-forecast window and field-error budgets remain unselected; until those required
-choices are specified, project-level completion is withheld. Efficiency is an
+This definition does not certify the first-stage target as complete. A named dry `em_b_wave` forward instance now selects a 240 s window and fixed
+field-error budgets with `h=0.9375 s`, Newton `1e-9`. This case-scoped selection
+does not fix broader forecast/assimilation targets or certify their derivatives;
+project-level completion remains withheld. Efficiency is an
 optional acceptance target, not adopted by this definition. If it is selected,
 its same-accuracy cost/timestep criterion must be specified and met.
 
@@ -50,7 +51,7 @@ not permission to reuse a value from a previous experiment.
 | Initial and auxiliary inputs | Initial/base fields, prescribed coefficients/forcing and frozen stage references | Exact case hashes required |
 | Time map | Effective mode 3, tableau, schedule, precision/handoff, nonlinear and transpose residual norms/tolerances; accepted/failure rules | Supported-path contracts exist; chosen integrated window remains open |
 | Numerical state | Predictor/cache policy, carry/publication and warm versus state-only cold restart | Must name the policy; state-only equality does not imply warm-trajectory equality |
-| Forward accuracy | Evaluation times/window, owned/physical sampling positions, per-field units, physical weights/scales \(s_X\), and budgets \(\epsilon_X\) | **Window, scales and budgets unselected** |
+| Forward accuracy | Evaluation times/window, owned/physical sampling positions, per-field units, physical weights/scales \(s_X\), and budgets \(\epsilon_X\) | Named dry 240 s forward case selected and accepted below; broader targets remain unselected |
 | Derivative accuracy | Directions/cotangents and norms/scales, dot/Taylor/FD budgets, true transpose residual and replay checks for that same map/window | Existing budgets apply to their fixtures only; integrated-window coverage remains open |
 | Observation/control problem | Observation operator, times, \(R\), control parameterization, any prior and admissible set | The completed rotating case specifies these; a broader instance is not selected |
 | Efficiency | Same-accuracy comparator, timestep/stability requirement, whole-run cost definition and required improvement | **Optional target not adopted**; if selected, its criterion must be fixed. No equal-accuracy cost win is established |
@@ -311,6 +312,27 @@ stock RK3의 기존 60초 프레임은 다른 필터 정책의 보조 비교로�
 다음 결정은 후보 시간간격·설정과 목표 W 정확도의 적합성이다. 더 작은 기준 간격,
 감쇠·초기조건·예산 변경 또는 추가 후보 실행은 이 결과의 자동 후속조건이 아니다.
 
+## 선택한 건조 연구 사례의 전방 설정
+
+[원배열 직접 후보 평가](<(202610201926)_research_forward_setting_h09375.md>)로 보존된
+`h=0.9375 s`, Newton 절대 `1e-9` 계산도 새 `h=0.234375 s` 기준에 대해
+**원래 전체 epsilon의 24/24 조건을 충족**함을 확인했다. 최대 직접 거리/예산은
+W 180초의 `0.5025718511`이며, 별도 삼각부등식 상한은 `0.5029398054`다.
+기존 `epsilon/3` 기준쌍의 22/24와 후보용 전체 예산의 판정은 서로 다르다.
+기존 기록과 15초 후보의 W 네 시각 미충족은 그대로 보존한다.
+
+이 사례의 연구용 전방 설정은
+[`dry_em_b_wave_e71_240s_h15over16_strict_v1`](evidence/research_forward_setting/research_forward_map.json)로
+고정한다. 원래 e71 입력, 240초 연속 계산, 같은 native 연산자/보조 상태·수송·CF·감쇠·경계,
+내부 FP64/carry, `h=15/16 s`, Newton `1e-9`/상대 0, Krylov `1e-7`/유효 EWT `1e-6`이다.
+이는 새로운 생산 기본값이나 다른 조건의 자동 수용이 아니다. 새 적분은 수행하지 않았다.
+
+이제 이 고정 시간맵의 접선·수반·관측창 연결이 남는다. 기존 짧은 fixed-trajectory
+계약/CI는 이 240초 native 관측창을 인증하지 않는다. 실제 관측 H·sampling·시각·R·
+controls/prior·미분 예산은 별도로 고정해야 하며, 전방 평가시각이나 epsilon을 관측 설정으로
+자동 전환하지 않는다. 같은 맵의 실제 호출·수치 상태·경계·옵션과 관측 cotangent의 연결을
+확인한다. 더 큰 시간간격의 정확도·효율 개선은 이 연결의 선행조건이 아니다.
+
 ## Completed restricted rotating inverse
 
 The completed validation instance has a 484-component complex linear source,
@@ -376,10 +398,12 @@ target; it cannot revoke a completed restricted validation instance.
 
 ## Next action and validation of this definition
 
-Fix the still-unselected forecast window and physical error budgets, then map
-existing evidence to that instance and address its first unmet gate. Adopt an
-efficiency target only through an explicit scope decision; if adopted, fix its
-same-accuracy cost/timestep criterion too. Do not automatically add another wave, optimizer run, Hessian test,
+For the selected dry 240 s forward instance, continue with same-map JVP/VJP and
+observation-window connection; do not reopen its completed reference screen or
+require the 15 s candidate to pass first. Declare the observation/control problem
+and derivative budgets before that test. For broader instances, freeze their own
+window and physical error budgets. Adopt an efficiency target only through an
+explicit scope decision; if adopted, fix its same-accuracy cost/timestep criterion too. Do not automatically add another wave, optimizer run, Hessian test,
 moisture, terrain or MPI experiment. No project completion percentage is implied.
 
 This documentation was checked against main
