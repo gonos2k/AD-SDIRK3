@@ -213,7 +213,16 @@ CONTAINS
     IF (.NOT. active) RETURN
     c_status = native_terminal_after_step_c(INT(host_step,C_INT))
     IF (c_status /= 1_C_INT) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: after_step failed")
-    IF (host_step > expected_steps .OR. MOD(host_step,window_steps) /= 0) RETURN
+    IF (host_step > expected_steps) RETURN
+    IF (expected_steps > window_steps .AND. host_step == expected_steps-window_steps) THEN
+      schedule = 0.9375_C_FLOAT
+      CALL sdirk3_begin_fixed_trajectory(1, window_steps, schedule, ierr)
+      IF (ierr /= 0) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: suffix trajectory begin failed")
+      c_status = native_terminal_rearm_window_c()
+      IF (c_status /= 1_C_INT) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: suffix trajectory rearm failed")
+      RETURN
+    END IF
+    IF (host_step < expected_steps) RETURN
     ALLOCATE(endpoint(packed_size))
     its = grid%i_start(1); ite = grid%i_end(1)
     jts = grid%j_start(1); jte = grid%j_end(1)
@@ -263,17 +272,6 @@ CONTAINS
     c_status = native_terminal_record_endpoint_c(endpoint, INT(packed_size,C_INT), &
          INT(host_step,C_INT))
     IF (c_status /= 1_C_INT) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: endpoint capture failed")
-
-    IF (host_step < expected_steps) THEN
-      CALL sdirk3_close_fixed_trajectory(1, ierr)
-      IF (ierr /= 0) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: fixed trajectory close failed")
-      schedule = 0.9375_C_FLOAT
-      CALL sdirk3_begin_fixed_trajectory(1, window_steps, schedule, ierr)
-      IF (ierr /= 0) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: next window begin failed")
-      c_status = native_terminal_rearm_window_c()
-      IF (c_status /= 1_C_INT) CALL wrf_error_fatal("NATIVE_TERMINAL_TEST: next window rearm failed")
-      RETURN
-    END IF
 
     ALLOCATE(gradient(packed_size),gradient64(packed_size))
     gradient = 0.0_C_FLOAT; gradient64 = 0.0_C_DOUBLE

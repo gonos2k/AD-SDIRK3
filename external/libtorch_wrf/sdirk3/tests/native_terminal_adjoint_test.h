@@ -9,6 +9,8 @@ namespace wrf::sdirk3::native_terminal_test {
 // Called from the production bridge only in the separately compiled test build.
 void capture_gradient64(const torch::Tensor& gradient);
 void capture_theta_omega(const torch::Tensor& omega);
+torch::Tensor control_input64(const torch::Tensor& packed);
+void capture_accepted_state(const torch::Tensor& state);
 
 }  // namespace wrf::sdirk3::native_terminal_test
 

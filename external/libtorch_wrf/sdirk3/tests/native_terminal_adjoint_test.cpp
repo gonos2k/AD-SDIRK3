@@ -22,6 +22,7 @@
 #include <string>
 #include <sys/resource.h>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 using TileSDIRK3UnifiedSolver = ::TileSDIRK3UnifiedSolver;
@@ -41,6 +42,7 @@ struct RunState {
     std::string reference_path;
     int mode = -1;  // 0=baseline, 1=replay, 2=FD, 3=prefix.
     int expected_steps = kSteps;
+    int graph_start_step = kSteps - kWindowSteps + 1;
     float eta = 0.0f;
     int host_step = 0;
     int window_start_step = 0;
@@ -49,7 +51,9 @@ struct RunState {
     int nx = 0, ny = 0, nz = 0, nx_u = 0, ny_v = 0, nz_w = 0;
     bool prepared = false;
     bool forward_active = false;
+    bool warm_forward = false;
     bool endpoint_recorded = false;
+    bool suffix_seed_matched = false;
     torch::Tensor initial_seed64;
     torch::Tensor lambda64_chain;
     torch::Tensor lambda64_in;
@@ -303,6 +307,50 @@ void make_terminal(const wrf::sdirk3::StateLayout& layout, int nx, int ny, int n
 
 namespace wrf::sdirk3::native_terminal_test {
 
+torch::Tensor control_input64(const torch::Tensor& packed) {
+    std::lock_guard<std::mutex> lock(run.mutex);
+    if (!run.prepared || !run.forward_active) return packed;
+    TORCH_CHECK(packed.defined() && packed.numel() == 24531 && packed.is_cpu(),
+                "native terminal control input has an invalid packed tensor");
+    if (run.warm_forward && run.host_step == 1) {
+        auto published = run.initial_seed64.to(torch::kFloat32).contiguous();
+        TORCH_CHECK(bitwise_equal(packed.to(torch::kFloat32).contiguous(), published),
+                    "warm-forward initial FP32 publication differs from frozen FP64 seed");
+        return run.initial_seed64;
+    }
+    if (!run.warm_forward && run.expected_steps > kWindowSteps &&
+        run.host_step == run.graph_start_step) {
+        TORCH_CHECK(!run.endpoints64.empty() &&
+                    bitwise_equal(packed, run.endpoints64.back()),
+                    "retained graph did not start from the exact warm FP64 checkpoint");
+        run.suffix_seed_matched = true;
+    }
+    return packed;
+}
+
+void capture_accepted_state(const torch::Tensor& state) {
+    std::lock_guard<std::mutex> lock(run.mutex);
+    if (!run.prepared || !run.forward_active) return;
+    if (!run.warm_forward) return;
+    TORCH_CHECK(run.host_step > 0 && run.host_step < run.graph_start_step,
+                "accepted warm state captured outside the configured warm prefix");
+    TORCH_CHECK(state.defined() && state.is_cpu() &&
+                state.scalar_type() == torch::kFloat64 && state.numel() == 24531 &&
+                torch::isfinite(state).all().item<bool>(),
+                "invalid accepted warm FP64 state");
+    TORCH_CHECK(run.endpoints64.size() == static_cast<std::size_t>(run.host_step),
+                "warm FP64 endpoint ledger is not consecutive");
+    auto endpoint = state.detach().to(torch::kCPU, torch::kFloat64).contiguous().clone();
+    if (run.mode == 1 || run.mode == 3) {
+        TORCH_CHECK(run.reference_checkpoints64.defined() &&
+                    run.host_step < run.reference_checkpoints64.size(0) &&
+                    bitwise_equal(endpoint, run.reference_checkpoints64[run.host_step]),
+                    "warm-prefix FP64 endpoint differs from baseline at host step ", run.host_step);
+        ++run.reference_match_count;
+    }
+    run.endpoints64.push_back(std::move(endpoint));
+}
+
 void capture_gradient64(const torch::Tensor& gradient) {
     std::lock_guard<std::mutex> lock(run.mutex);
     TORCH_CHECK(run.prepared && run.endpoint_recorded && !run.forward_active,
@@ -445,8 +493,13 @@ extern "C" int sdirk3_native_terminal_prepare(
                     wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint,
                     "native terminal case requires FP64 carry and retained graph from test namelist");
         solver.cancelFixedTrajectoryRequest();
-        solver.requestFixedTrajectory(kWindowSteps,
-            std::vector<float>(kWindowSteps, 0.9375f), seed64);
+        if (expected_steps == kWindowSteps) {
+            solver.requestFixedTrajectory(kWindowSteps,
+                std::vector<float>(kWindowSteps, 0.9375f), seed64);
+        } else {
+            wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint = false;
+            wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent = false;
+        }
 
         std::copy(publication.data_ptr<float>(), publication.data_ptr<float>() + n, packed_x0);
         std::copy(dcontig.data_ptr<float>(), dcontig.data_ptr<float>() + n, direction_out);
@@ -461,6 +514,7 @@ extern "C" int sdirk3_native_terminal_prepare(
             run.output_prefix = prefix;
             run.mode = mode;
             run.expected_steps = expected_steps;
+            run.graph_start_step = expected_steps - kWindowSteps + 1;
             run.eta = eta;
             run.nx = nx; run.ny = ny; run.nz = nz;
             run.nx_u = nx_u; run.ny_v = ny_v; run.nz_w = nz_w;
@@ -478,6 +532,7 @@ extern "C" int sdirk3_native_terminal_prepare(
             run.terminal32 = terminal.detach().clone();
             run.prepared = true;
             run.forward_active = true;
+            run.warm_forward = expected_steps > kWindowSteps;
             run.omega_binary.open(prefix + ".omega_sign.bin", std::ios::binary | std::ios::trunc);
             run.omega_csv.open(prefix + ".omega_sign.csv", std::ios::trunc);
             TORCH_CHECK(run.omega_binary && run.omega_csv, "cannot open Omega trace outputs");
@@ -496,6 +551,10 @@ extern "C" int sdirk3_native_terminal_prepare(
                  << "  \"mode\": \"" << mode_name << "\",\n"
                  << "  \"chain\": \"" << chain_name << "\",\n"
                  << "  \"expected_steps\": " << expected_steps << ",\n"
+                 << "  \"warm_steps\": " << std::max(0, expected_steps - kWindowSteps) << ",\n"
+                 << "  \"graph_start_step\": " << (expected_steps - kWindowSteps + 1) << ",\n"
+                 << "  \"warm_graph_flags\": \"retain_graph_for_adjoint=false,imex_slow_in_tangent=false\",\n"
+                 << "  \"suffix_graph_flags\": \"retain_graph_for_adjoint=true,imex_slow_in_tangent=true\",\n"
                  << "  \"eta\": " << eta << ",\n"
                  << "  \"packed_size\": " << n << ",\n"
                  << "  \"dims\": [17,17,16,18,18,17],\n"
@@ -539,6 +598,20 @@ extern "C" int sdirk3_native_terminal_after_step(int host_step) {
         std::lock_guard<std::mutex> lock(run.mutex);
         TORCH_CHECK(run.prepared && run.forward_active && host_step == run.host_step,
                     "native terminal after_step does not match the completed host step");
+        if (run.warm_forward) {
+            TORCH_CHECK(host_step < run.graph_start_step &&
+                        run.endpoints64.size() == static_cast<std::size_t>(host_step + 1),
+                        "warm forward did not capture the completed FP64 endpoint");
+            if (host_step == 1 || host_step == 2 || host_step == 4 || host_step == 8 ||
+                host_step == 16 || host_step % 32 == 0) {
+                const auto rss = peak_rss_bytes();
+                TORCH_CHECK(rss <= kMemoryCapBytes,
+                            "peak RSS exceeded the 18 GiB cap during warm forward");
+                std::cerr << "NATIVE_TERMINAL_WARM_PROGRESS step=" << host_step
+                          << " peak_rss_bytes=" << rss << '\n';
+            }
+            return 1;
+        }
         const int window_step = host_step - run.window_start_step;
         TORCH_CHECK(window_step >= 1 && window_step <= kWindowSteps,
                     "native terminal completed step is outside its 32-step window");
@@ -575,8 +648,9 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
         TORCH_CHECK(packed_terminal && n == 24531 && run.prepared && run.forward_active &&
                     host_step == run.host_step && host_step > 0 &&
                     host_step % kWindowSteps == 0 && host_step <= run.expected_steps &&
+                    host_step == run.expected_steps && !run.warm_forward &&
                     host_step - run.window_start_step == kWindowSteps,
-                    "native terminal endpoint is not a complete 32-step window");
+                    "native terminal endpoint is not the final retained 32-step window");
 
         std::vector<torch::Tensor> checkpoints;
         {
@@ -593,7 +667,7 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                         torch::isfinite(checkpoint).all().item<bool>(),
                         "invalid retained FP64 checkpoint");
             auto c = checkpoint.to(torch::kCPU, torch::kFloat64).contiguous();
-            const int absolute_endpoint = run.endpoints64.size();
+            const int absolute_endpoint = static_cast<int>(run.endpoints64.size());
             if (run.mode == 1 || run.mode == 3) {
                 TORCH_CHECK(run.reference_checkpoints64.defined() && absolute_endpoint <= host_step,
                             "prefix has no baseline endpoint reference");
@@ -651,6 +725,8 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                     << "  \"eta\": " << run.eta << ",\n"
                     << "  \"host_steps\": " << host_step << ",\n"
                     << "  \"expected_steps\": " << run.expected_steps << ",\n"
+                    << "  \"warm_steps\": " << (run.expected_steps - kWindowSteps) << ",\n"
+                    << "  \"graph_start_step\": " << run.graph_start_step << ",\n"
                     << "  \"endpoint_count_including_seed\": " << run.endpoints64.size() << ",\n"
                     << "  \"objective_is_registered_terminal\": " <<
                         (run.mode == 3 ? "false" : "true") << ",\n"
@@ -708,18 +784,22 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
 extern "C" int sdirk3_native_terminal_rearm_window() {
     try {
         std::lock_guard<std::mutex> run_lock(run.mutex);
-        TORCH_CHECK(run.prepared && run.forward_active && run.host_step < run.expected_steps &&
-                    run.host_step % kWindowSteps == 0 &&
+        TORCH_CHECK(run.prepared && run.forward_active && run.warm_forward &&
+                    run.host_step == run.expected_steps - kWindowSteps &&
                     run.endpoints64.size() == static_cast<std::size_t>(run.host_step + 1),
-                    "rearm requested outside a completed forward window");
+                    "rearm requested outside the warm-prefix/suffix boundary");
         std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
         auto& solver = unique_solver_locked();
         TORCH_CHECK(solver.fixedTrajectoryRequested(), "Fortran did not request the next trajectory window");
         solver.cancelFixedTrajectoryRequest();
+        wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint = true;
+        wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent = true;
+        solver.resetInternalFp64Carry();
         solver.requestFixedTrajectory(kWindowSteps,
             std::vector<float>(kWindowSteps,0.9375f), run.endpoints64.back());
         run.window_start_step = run.host_step;
         run.rss_window_step4 = 0;
+        run.warm_forward = false;
         return 1;
     } catch (const std::exception& e) {
         std::cerr << "NATIVE_TERMINAL_REARM_ERROR: " << e.what() << '\n';
@@ -815,6 +895,8 @@ extern "C" int sdirk3_native_terminal_finish(
                  << "  \"chain\": \"" << run.chain_name << "\",\n"
                  << "  \"eta\": " << run.eta << ",\n"
                  << "  \"expected_steps\": " << run.expected_steps << ",\n"
+                 << "  \"warm_steps\": " << (run.expected_steps - kWindowSteps) << ",\n"
+                 << "  \"graph_start_step\": " << run.graph_start_step << ",\n"
                  << "  \"gradient_control_step\": " << (run.expected_steps - kWindowSteps) << ",\n"
                  << "  \"pullback_checked_by_fortran\": " << (vjp_expected ? "true" : "false") << ",\n"
                  << "  \"wrapper_gradient_f32_equals_cast_f64\": "

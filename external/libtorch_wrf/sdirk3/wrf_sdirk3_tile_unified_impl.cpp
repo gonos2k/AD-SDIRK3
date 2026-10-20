@@ -6193,6 +6193,9 @@ vertical_coefficients:
         U_n = next_fp64_state_for_test_;
         next_fp64_state_for_test_ = torch::Tensor();
     }
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+    U_n = wrf::sdirk3::native_terminal_test::control_input64(U_n);
+#endif
     if (fixed_trajectory_open_) {
         checkFixedTrajectoryFingerprint();
         TORCH_CHECK(U_n.device().is_cpu(),
@@ -13090,6 +13093,13 @@ vertical_coefficients:
         last_step_output_graph_ = adjoint_output_graph;
         recordFixedTrajectoryStep(step_input_graph, adjoint_output_graph, F_phys, dt);
     }
+
+#ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
+    if (carry_fp64 && getLastStepOutcomeCode() ==
+            static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED)) {
+        wrf::sdirk3::native_terminal_test::capture_accepted_state(U_new);
+    }
+#endif
 
     // PR307: persist the already-captured, accepted mode-3 stage witness only
     // after the outcome and projected endpoint are known. All tensor values
