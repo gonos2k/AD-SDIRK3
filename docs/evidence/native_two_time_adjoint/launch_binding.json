@@ -1,0 +1,86 @@
+{
+  "created_at": "2026-10-21T09:07:19.411986+09:00",
+  "executable": {
+    "bytes": 52799256,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+    "sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249"
+  },
+  "head": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+  "injection_receipt": {
+    "bytes": 1433,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/injection/injection_receipt.json",
+    "sha256": "cd028670c1253d8c2a579c76b84cc2751c073988471fcecaf49ee9ad95cdb9fd"
+  },
+  "pre_edit_graph": {
+    "bytes": 8694,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_graph/pre_edit_binding.json",
+    "sha256": "fff2b1ece54a16ae59fd97b5d11a7db5dd92ca46862771733be9120fcb2aad8e"
+  },
+  "protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/protocol.json",
+    "sha256": "c34274526f96434f9c7581d1d41ca701952887f29680431111c733199b00d3bb"
+  },
+  "q128": {
+    "bytes": 98124,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/q128_theta_f32.bin",
+    "sha256": "dcd695ef7c6fa2fefabefc7bf12d57948891917bee983dc17ed47aa96f959bf8"
+  },
+  "red_design_review": {
+    "bytes": 5894,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/red_design/two_time_plan_review.json",
+    "sha256": "90a59cc45aad1aa2ee26c9c765c271bcc9bf85f91b7ab1c1ea09f4b333319df9"
+  },
+  "required_scope": "Reuseupper4Fortranwindows andall6fullforwardledgers; exactlyfournewnativeprefixes128,96,64,32; bothfull andmidincrement FDchecks separately; one q128 addition ataccepted120sec; physics/h/tols unchanged; no rebuild.",
+  "retained_input_audit": {
+    "bytes": 48565,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_preflight/retained_inputs.json",
+    "sha256": "d1cb7e42b5194198432481a5031b7fbe5ba44bef5bc0deca6e8a9d47fcdca498"
+  },
+  "runner": {
+    "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+    "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8"
+  },
+  "schema": "native_two_time_launch_binding_v1",
+  "source_files": [
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ]
+}

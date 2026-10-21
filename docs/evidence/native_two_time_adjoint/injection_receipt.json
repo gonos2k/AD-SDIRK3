@@ -1,0 +1,30 @@
+{
+  "schema": "native_midpoint_cotangent_injection_v1",
+  "created_at": "2026-10-21T08:44:29.597804+09:00",
+  "accepted_step": 128,
+  "accepted_time_s": 120.0,
+  "old_terminal_lambda128": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/baseline_prefix_160/terminal.lambda_out_f32.bin",
+    "sha256": "d15976e5b36601236ee4832e3ca65dcbcf404614013343e24611210c914aa532",
+    "bytes": 98124
+  },
+  "old_source_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/baseline_prefix_160/run_receipt.json",
+    "sha256": "3795857f798fcf828a7fd6353b26cc413c89955f2fc2d0405757e4d2241ffcd0",
+    "bytes": 16710
+  },
+  "q128": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/q128_theta_f32.bin",
+    "sha256": "dcd695ef7c6fa2fefabefc7bf12d57948891917bee983dc17ed47aa96f959bf8",
+    "bytes": 98124
+  },
+  "sum_formula": "Q32(promote64(lambda128_terminal_f32)+promote64(q128_f32)) ONCE at128",
+  "new_lambda128": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/injection/lambda128_two_f32.bin",
+    "sha256": "479b7d23b2780ddc59ed0970c4da964907d4d2e93961097bc5d731ef9480798b",
+    "bytes": 98124
+  },
+  "q128_is_not_redefined_from_actual_delta": true,
+  "actual_delta_minus_q_maxabs": 1.905485987663269e-06,
+  "actual_delta_minus_q_relative_l2": 2.9150945272858652e-05
+}

@@ -1,0 +1,22 @@
+{
+  "schema": "native_two_time_fixed_midpoint_objective_v1",
+  "frozen_at_jst": "2026-10-21T08:42:30.739221+09:00",
+  "before_midpoint_FD_values_inspected": true,
+  "midpoint_step": 128,
+  "midpoint_seconds": 120,
+  "total_steps": 256,
+  "h_seconds": 0.9375,
+  "packed_size": 24531,
+  "field": "dry theta_m perturbation in packed T block; unit K",
+  "objective": "q128_f32 promotedDouble dot Z128_internal_f64; raw perturbation field, no constant300K offset",
+  "owner_layout": "[j,k,i] j,i0..15,k0..15 in Tblock[17,16,17]; ghosts andotherblocks weights0",
+  "coefficient_formula": "c=cos(.23*(i+1)+.19*(j+1)+.07*(k+1)); q=cast32(c/||c||2/1K)",
+  "scale_K": 1.0,
+  "q128_file": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/q128_theta_f32.bin",
+  "q128_sha256": "dcd695ef7c6fa2fefabefc7bf12d57948891917bee983dc17ed47aa96f959bf8",
+  "q128_nonzero_count": 4096,
+  "q128_norm_f64": 1.0000000012904808,
+  "terminal_objective": "unchanged PR312 actual once-roundedWcotangent",
+  "control_direction_and_widths": "unchanged PR312 actualv_f32 and symmetric eta_f32 \u00b1.01,\u00b1.03",
+  "no_result_fitting": "q formula/scale/point fixedbefore midpoint FD/AD comparison; no q/eta/norm/tolerance adjustment to make pass"
+}

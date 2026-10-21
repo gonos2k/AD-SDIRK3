@@ -1,0 +1,93 @@
+{
+  "schema": "native_two_time_adjoint_runner_source_binding_v1",
+  "captured_at_local": "2026-10-21T09:10:22.438709+09:00",
+  "worktree": "/private/tmp/native-two-time-adjoint-20261021",
+  "branch": "codex/native-two-time-adjoint-20261021",
+  "head": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+  "worktree_status": [
+    "?? external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py"
+  ],
+  "pr312_source_graph_reuse": {
+    "final_commit_verification_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/final_commit_verification.json",
+    "final_commit_verification_sha256": "0b39814887151cbbb1eaec1ed54b33936e126d78960b291b0c4e6ba3c134afd0",
+    "ten_pr312_source_pins_match_w2": true,
+    "production_graph_binding_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/v5_skip_source_binding.json",
+    "production_graph_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+    "recompute_helper_ast_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/w6_recompute_ast/graphify-out/graph.json",
+    "recompute_helper_ast_sha256": "256aaa8a6c1385f873f6da6916558c484df7db6174ab571980cfa6e36ae21adf"
+  },
+  "w2_base_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_graph/pre_edit_binding.json",
+    "sha256": "fff2b1ece54a16ae59fd97b5d11a7db5dd92ca46862771733be9120fcb2aad8e",
+    "registered_map_path": "/private/tmp/native-two-time-adjoint-20261021/docs/evidence/research_forward_setting/research_forward_map.json",
+    "registered_map_sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7",
+    "same_registered_map_as_pr312": true
+  },
+  "runner": {
+    "source_path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+    "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8",
+    "status": "frozen untracked Python runner"
+  },
+  "runner_ast": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_graph/runner_ast/graphify-out/graph.json",
+    "sha256": "48fc33c4a5fbc750fd8b8485d8e5836788ccb8244f9dba8401e198e2bd667587",
+    "source_sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8",
+    "nodes": 15,
+    "edges": 52,
+    "method": "single-file code-only Graphify AST; no semantic extraction"
+  },
+  "launch_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/launch_binding.json",
+    "sha256": "c217c5a9012a8254e9b6c7ed305d9b1a9c1779561892f9bb059a943c96cafdbd"
+  },
+  "protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/protocol.json",
+    "sha256": "c34274526f96434f9c7581d1d41ca701952887f29680431111c733199b00d3bb"
+  },
+  "p6_executable_reuse": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+    "sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+    "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/build_receipt.json",
+    "build_receipt_sha256": "d166bd91298840df5cb626eb40da4e8b88cc94c6ad396ec074c6c00b3399d1bb",
+    "built_from_commit": "559b7a861105e5db5838f1a933a6661111aec1cb",
+    "seven_native_build_sources_match_w2": true,
+    "conclusion": "All native P6 executable source inputs match the W2 tree. Prefix-specific control is supplied by the frozen Python runner, so the existing P6 binary remains reusable."
+  },
+  "source_verified_caller_edges": [
+    {
+      "caller": "native_two_time_prefix.py",
+      "edge": "run(args) launches the P6 MPI executable with native prefix mode, step count, and incoming FP32 cotangent path",
+      "source_location": "native_two_time_prefix.py:217-258"
+    },
+    {
+      "caller": "solve_em.F",
+      "edge": "native_terminal_test_prepare/before_step/after_step under the existing test macro",
+      "source_location": "dyn_em/solve_em.F:84-87, 741-744, 747-778"
+    },
+    {
+      "caller": "native_terminal_test_prepare/after_step",
+      "edge": "fixed-trajectory begin, suffix rearm, then checked Fortran pullback through existing wrappers",
+      "source_location": "native_terminal_adjoint_test.F:132-141, 196-214, 263-281"
+    },
+    {
+      "edge_limit": "Python runner to native execution is via argv/environment and the known P6 executable; no additional cross-language edge is inferred from AST."
+    }
+  ],
+  "requested_prefixes": {
+    "steps": [
+      128,
+      96,
+      64,
+      32
+    ],
+    "incoming_cotangent_role": "new lambda128 supplied as external FP32 packed-state cotangent file"
+  },
+  "verification_limits": {
+    "fd_midpoint_states_read": false,
+    "numerical_midpoint_objectives_read": false,
+    "model_run": false,
+    "build_or_harness_rebuild": false,
+    "graph_rebuild": false,
+    "cross_language_edges": "manually source-verified, not AST-derived"
+  }
+}

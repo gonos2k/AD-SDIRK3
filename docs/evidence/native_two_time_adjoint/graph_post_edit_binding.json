@@ -1,0 +1,92 @@
+{
+  "schema": "native_two_time_adjoint_post_edit_source_graph_binding_v1",
+  "captured_at_local": "2026-10-21T09:39:51.580311+09:00",
+  "worktree": "/private/tmp/native-two-time-adjoint-20261021",
+  "branch": "codex/native-two-time-adjoint-20261021",
+  "head": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+  "worktree_status": [
+    "?? external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py"
+  ],
+  "source_scope": {
+    "pre_edit_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_graph/pre_edit_binding.json",
+    "pre_edit_binding_sha256": "fff2b1ece54a16ae59fd97b5d11a7db5dd92ca46862771733be9120fcb2aad8e",
+    "ten_pr312_source_pins_match_current_w2": true,
+    "registered_map_path": "/private/tmp/native-two-time-adjoint-20261021/docs/evidence/research_forward_setting/research_forward_map.json",
+    "registered_map_sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+  },
+  "changed_python_artifacts": {
+    "recompute_helper": {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/docs/evidence/native_two_time_adjoint/recompute.py",
+      "sha256": "3a2e4f1d2cda62a02ba85e2595dc3da85b6d07f981e746d5e67d6a4539f2e32c",
+      "git_status": "ignored under docs/ but frozen content hash verified"
+    },
+    "prefix_runner": {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+      "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8",
+      "git_status": "untracked frozen source"
+    },
+    "launch_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/launch_binding.json",
+      "sha256": "c217c5a9012a8254e9b6c7ed305d9b1a9c1779561892f9bb059a943c96cafdbd"
+    },
+    "protocol": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/protocol.json",
+      "sha256": "c34274526f96434f9c7581d1d41ca701952887f29680431111c733199b00d3bb"
+    }
+  },
+  "bounded_python_ast": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_graph/post_edit_ast/graphify-out/graph.json",
+    "sha256": "9bbfc9191f3bf915ec637556a87332dfe8c6f6c1330616859b2c23be5a70060d",
+    "file_count": 2,
+    "nodes": 36,
+    "edges": 114,
+    "method": "code-only Graphify AST; no semantic extraction",
+    "input_hashes": [
+      {
+        "path": "/private/tmp/native-two-time-adjoint-20261021/docs/evidence/native_two_time_adjoint/recompute.py",
+        "sha256": "3a2e4f1d2cda62a02ba85e2595dc3da85b6d07f981e746d5e67d6a4539f2e32c"
+      },
+      {
+        "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+        "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8"
+      }
+    ]
+  },
+  "cached_cpp_graph_reuse": {
+    "pr312_verification_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/final_commit_verification.json",
+    "pr312_verification_sha256": "0b39814887151cbbb1eaec1ed54b33936e126d78960b291b0c4e6ba3c134afd0",
+    "production_graph_binding_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/v5_skip_source_binding.json",
+    "production_graph_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+    "p6_executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+    "p6_executable_sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+    "note": "Reused verified PR312 C++/production graph and existing P6 binary; no whole-source Graphify extraction or executable rebuild."
+  },
+  "source_verified_wrapper_caller_bridge": [
+    {
+      "edge": "native_two_time_prefix.py -> launch_binding/protocol and P6 executable",
+      "details": "Runner loads and validates source/executable bindings, maps prefix cases and incoming FP32 cotangent file path into environment, then launches the frozen executable with MPI.",
+      "source_location": "tests/native_two_time_prefix.py:44-109, 217-258"
+    },
+    {
+      "edge": "solve_em.F -> native-terminal Fortran module -> existing C/C++ test bridge and fixed-trajectory Fortran wrappers",
+      "details": "Existing verified caller path is unchanged at the ten pinned sources; runner handoff remains process/environment based.",
+      "source_locations": "solve_em.F:84-87, 741-744, 747-778; native_terminal_adjoint_test.F:20-29, 132-141, 196-214, 263-281"
+    },
+    {
+      "extraction_gap": "Graphify AST has no reliable Fortran/C++ ABI edge or Python-to-WRF process edge; these edges were traced manually. The recompute helper and prefix runner share artifacts through the frozen manifest/protocol/files, with no direct import edge asserted."
+    }
+  ],
+  "input_handling_limits": {
+    "FD_midpoint_payload_opened": false,
+    "numerical_midpoint_objective_opened": false,
+    "lambda128_payload_opened": false,
+    "runner_source_was_read_for_call_contract": true
+  },
+  "validation_scope": {
+    "ten_source_pins_reverified": true,
+    "registered_map_reverified": true,
+    "p6_binary_source_compatibility_reverified": true,
+    "no_build_or_model_run": true,
+    "no_production_source_edit": true
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "mode": "prefix",
+  "chain": "baseline",
+  "eta": 0,
+  "expected_steps": 32,
+  "warm_steps": 0,
+  "graph_start_step": 1,
+  "suffix_seed_bitwise_match": true,
+  "window_start": 0,
+  "window_end": 32,
+  "window_endpoint_count": 32,
+  "local_terminal_c_dot": -2.7893953117168531,
+  "reference_checkpoints_expected": 33,
+  "reference_checkpoints_matched": 33,
+  "endpoint_reference_exact": true,
+  "window_endpoint_f64_fnv1a64": "1efef46ce3758ba5",
+  "peak_rss_bytes": 3797008384
+}

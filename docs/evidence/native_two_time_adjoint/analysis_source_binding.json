@@ -1,0 +1,26 @@
+{
+  "frozen_at": "2026-10-21T09:33:40.400595+09:00",
+  "new_gradients_read": false,
+  "files": [
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/docs/evidence/native_two_time_adjoint/recompute.py",
+      "bytes": 31116,
+      "sha256": "3a2e4f1d2cda62a02ba85e2595dc3da85b6d07f981e746d5e67d6a4539f2e32c"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/red_design/portable_source_review.json",
+      "bytes": 2500,
+      "sha256": "fb849da001725135c947fefc5694766f2add7a87c9d2fd7fc89545d2d25068b0"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_retained_review.json",
+      "bytes": 22215,
+      "sha256": "1910cade0154f8a20412b1b318e587cad59e2f7e863a4f759ee9de965aaf2453"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/analysis_pre_new_result_check.json",
+      "bytes": 596,
+      "sha256": "160ae7b11566802f166bf13b930ea726fd8db6c40c8686b5cb24d52842fa70f9"
+    }
+  ]
+}

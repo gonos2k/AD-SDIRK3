@@ -1,0 +1,176 @@
+{
+  "base_case": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline",
+  "checks": {
+    "FD": "Reuseactual6oldfull257checkpointledgers byreceiptSHA; obtain Z128/Z256 atindices128/256, nointerpolation. eta=actualoldFloat32 \u00b1.01\u00b1.03; terminal/mid/fullJ separatelycomputedfromrawstates",
+    "Taylor": "Reuseold4FDforresidualdiagnostics terminal/mid/full; no newTaylorpassgate, no result-fitting ofsteps/weights. Recordroundoff-limitedcaseshonestly",
+    "full_dAD": "dot(v_old32 promoted64,newg0_F32promoted64)",
+    "mid_dAD_increment": "dot(v_old32 promoted64, newg0_F32promoted64-oldg0_terminal_F32promoted64); subtractvectorsafterpromotion, notrelyonlyonlargefullsum",
+    "nonclaims": "Not all-directions/fullJacobian/generalobservation R/prior/initializationgradient/globalexactFP64/secondnativegradientreplay/efficiencycertification",
+    "one_sided": "Reportbothside-slopesforfullandmid; ifrelativegap>1%atBOTHwidths foraterm thenfinite-widthdirectioncheckunresolved; no classicaldifferentiabilityproofotherwise",
+    "plateau": "Forfullandmid separately, adjacentwidthFDdifference/max(|FD.01|,|FD.03|,|AD|)<=.01",
+    "relative": "Forbothwidths and BOTHfull+mid contributions, |FD-AD|/max(|FD|,|AD|)<=.01; no denominatorfloor; no usingfullterminalsignal denominatorforMID",
+    "runtime": "Beforeeachcasebindsource/exe/protocol/input/NML,h,options;exactallN+1fullpackedFP64checkpoints byteequaloldbaselinebeforeFortranVJP; return0/SUCCESS/3NNewton/finitepositivepublishedtheta,mass,PHthickness/RSSsamples; checkedpullback and input/output/FP64precast\u2192FP32bytecasts",
+    "signal_full": "|Jtwo+ -Jtwo-|>100eps64 max(|Jtwo+|,|Jtwo-|, ||qN||*||ZN_baseline||+||q128||*||Z128_baseline||)",
+    "signal_mid": "|Jmid+ -Jmid-|>100eps64 max(|Jmid+|,|Jmid-|, ||q128||*||Z128_baseline||)"
+  },
+  "conditional_diagnostic": {
+    "after_initial4": "If mid incrementfails despite FD signal and input/state/runtime gates valid, stopscientificacceptanceand inspect recordedinjection/localcast quantities. A separatelyrecordedmid-only q128 front4VJPdiagnostic maybedoneonly ifquantizationattributionisnecessary. Noauto q/eta/h/tol/normchanges; a mid-onlypassdoesnoteraseactualtwo-timeincrementfailure.",
+    "max_additional_model_cases": 4,
+    "not_automatic": true
+  },
+  "executable": {
+    "bytes": 52799256,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+    "sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249"
+  },
+  "execution": "Root sole model executor; sequentialfourprefixes; no models/baselines/refinement/newFD/rebuild. Preservefirstfailure no overwrite/autoretry. Freeze allcriteria/q beforemidpoint FD values inspected.",
+  "first_lambda128": {
+    "bytes": 98124,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/injection/lambda128_two_f32.bin",
+    "sha256": "479b7d23b2780ddc59ed0970c4da964907d4d2e93961097bc5d731ef9480798b"
+  },
+  "fixed_midpoint_objective": {
+    "bytes": 1242,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/midpoint_objective_frozen.json",
+    "sha256": "40e92b2b9702c34d1e51a23dc27b2dab8505196753808e04fecc65ccdfbce756"
+  },
+  "frozen_at_jst": "2026-10-21T08:47:31.338331+09:00",
+  "injection_receipt": {
+    "bytes": 1433,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/injection/injection_receipt.json",
+    "sha256": "cd028670c1253d8c2a579c76b84cc2751c073988471fcecaf49ee9ad95cdb9fd"
+  },
+  "input_pins": {
+    "diagnostics.txt": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+    "namelist.input": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "wrfinput_d01": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "objective": {
+    "lower_chain": "fouractualFortranchecked32-stepVJPs through128\u219296\u219264\u219232\u21920, original nativeprefixreexecutions, no state-onlyrestart",
+    "mid": "q128_f32 promoted64 dot packed Z128_internal64, Tperturb physicalowners4096, scale1K",
+    "old_upper_reuse": "oldFortranFP32 chain 256\u2192224\u2192192\u2192160\u2192128 unchanged; old\u03bb128 comesfromprefix160 OUT, notprefix128 OUT",
+    "rounding": "actual_delta128-q128 reported aslocaladditionrounding, never redefinetheobjective q128 fromdelta",
+    "single_injection": "Ataccepted128 only: Q32(promote64(oldterminal_lambda128_f32)+promote64(q128_f32)); firstnewprefix128 consumes this exactfile; lowerprefixes consume onlypreviousnewFP32return",
+    "terminal": "unchanged qN_f32 promoted64 dot Z256_internal64, W physicalowners4096 scale.001m/s",
+    "two_time": "Jmid+Jterminal; identicalfixedqforbase/replay/all4retainedFDcases"
+  },
+  "old_direction": {
+    "bytes": 98124,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.direction_f32.bin",
+    "sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347"
+  },
+  "old_g0": {
+    "bytes": 98124,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/baseline_prefix_032/terminal.lambda_out_f32.bin",
+    "sha256": "9c5477d4629073e946c6465a1f2686d8e76378e19c121b7c0d32e786838e96c0"
+  },
+  "old_lambda128": {
+    "bytes": 98124,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/baseline_prefix_160/terminal.lambda_out_f32.bin",
+    "sha256": "d15976e5b36601236ee4832e3ca65dcbcf404614013343e24611210c914aa532"
+  },
+  "old_terminal_q": {
+    "bytes": 98124,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.terminal_f32.bin",
+    "sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90"
+  },
+  "pre_edit_graph": {
+    "bytes": 8694,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_graph/pre_edit_binding.json",
+    "sha256": "fff2b1ece54a16ae59fd97b5d11a7db5dd92ca46862771733be9120fcb2aad8e"
+  },
+  "previous_evidence_root": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020",
+  "q128": {
+    "bytes": 98124,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/q128_theta_f32.bin",
+    "sha256": "dcd695ef7c6fa2fefabefc7bf12d57948891917bee983dc17ed47aa96f959bf8"
+  },
+  "red_design_review": {
+    "bytes": 5894,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/red_design/two_time_plan_review.json",
+    "sha256": "90a59cc45aad1aa2ee26c9c765c271bcc9bf85f91b7ab1c1ea09f4b333319df9"
+  },
+  "registered_map": {
+    "bytes": 8145,
+    "path": "/private/tmp/native-two-time-adjoint-20261021/docs/evidence/research_forward_setting/research_forward_map.json",
+    "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+  },
+  "retained_input_audit": {
+    "bytes": 48565,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/green_preflight/retained_inputs.json",
+    "sha256": "d1cb7e42b5194198432481a5031b7fbe5ba44bef5bc0deca6e8a9d47fcdca498"
+  },
+  "schema": "native_two_time_adjoint_protocol_v1",
+  "source_case": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9",
+  "source_files": [
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-two-time-adjoint-20261021/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ],
+  "source_revision": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+  "source_tree_same_as_pr312_head": "63a9197f3468290ed779178b332262f9f5a1f1cf",
+  "target": {
+    "N": 24531,
+    "control": "unchanged PR312 solver-entry state after initialization/CQ",
+    "ewt": 1e-06,
+    "h_seconds": 0.9375,
+    "initial_model_count": 4,
+    "krylov": 1e-07,
+    "midpoint_seconds": 120,
+    "midpoint_step": 128,
+    "new_implicit_stages": 960,
+    "new_model_steps": 320,
+    "newton_abs": 1e-09,
+    "newton_rel": 0.0,
+    "omp": 1,
+    "per_case_rss_cap_bytes": 19327352832,
+    "per_case_wall_cap_s": 7200,
+    "physics": "unchanged registered dry ARK map; PH1/scalarvert3/CF/nativeKDAMP.2/diffopt2/allboundary/FP64carry fixed",
+    "prefix_ends": [
+      128,
+      96,
+      64,
+      32
+    ],
+    "ranks": 1,
+    "time_seconds": 240,
+    "total_steps": 256
+  }
+}

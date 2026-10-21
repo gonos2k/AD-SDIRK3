@@ -1,0 +1,42 @@
+{
+  "schema": "native_two_time_red_final_prelaunch_review_v1",
+  "reviewed_at_local": "2026-10-21T09:09:23 JST +0900",
+  "worktree": "/private/tmp/native-two-time-adjoint-20261021",
+  "head": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+  "working_tree_status": "Only the hash-pinned new runner is untracked; all ten bound core/test sources match.",
+  "scope": "Read-only final prelaunch identity and frozen-contract review. No model outputs/FD numbers were inspected, no source edits/builds/tests/models were run.",
+  "decision": "PASS_FOR_ROOT_EXECUTION",
+  "findings": [],
+  "binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/launch_binding.json",
+    "sha256": "c217c5a9012a8254e9b6c7ed305d9b1a9c1779561892f9bb059a943c96cafdbd",
+    "protocol_sha256": "c34274526f96434f9c7581d1d41ca701952887f29680431111c733199b00d3bb",
+    "runner_sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8",
+    "executable_sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+    "all_ten_source_hashes_match": true,
+    "source_graph_sha256": "88f8110223aedf78e70994fea93da194a11fb8e3b56c1253929428ee358a641f",
+    "README_sha256": "a7e48e654fc9266d8d5214e88ed5a70a32cf9d5e0d2267c4bbc31361405fdb56"
+  },
+  "cotangent_injection": {
+    "old_lambda128_sha256": "d15976e5b36601236ee4832e3ca65dcbcf404614013343e24611210c914aa532",
+    "q128_sha256": "dcd695ef7c6fa2fefabefc7bf12d57948891917bee983dc17ed47aa96f959bf8",
+    "new_lambda128_sha256": "479b7d23b2780ddc59ed0970c4da964907d4d2e93961097bc5d731ef9480798b",
+    "sizes_bytes": [98124, 98124, 98124],
+    "independent_byte_check": "new_lambda128 == cast32(promote64(old_lambda128)+promote64(q128))",
+    "local_addition_residual_relative_l2": 2.9150945272858652e-05,
+    "interpretation": "Local FP32 addition quantization only; q128 remains fixed by its frozen objective formula."
+  },
+  "frozen_execution_contract": {
+    "new_prefixes": [128, 96, 64, 32],
+    "new_host_steps": 320,
+    "new_implicit_stages": 960,
+    "midpoint": "step 128, t=120 s",
+    "upper_chain": "Reuse existing actual Fortran FP32 windows through prefix160 output lambda128.",
+    "injection": "One rounded FP32 old-lambda plus q128 sum at step128; lower windows chain the actual preceding FP32 return.",
+    "checks": "Exact old-baseline checkpoint-prefix comparison before each checked Fortran pullback; all four complete result, 3N counts, finite/admissible published states, RSS and wall limits.",
+    "FD_policy": "Separate frozen full-objective and midpoint-increment FD comparisons, per-width shared denominators, plateau, signal floors and one-sided rules; q/eta/thresholds are fixed.",
+    "conditional_diagnostic": "At most four extra midpoint-only prefix VJPs, only if the declared initial midpoint-increment check fails and quantization diagnosis is necessary; diagnostic cannot erase failure or trigger retuning.",
+    "execution": "Root sole executor; four sequential native prefixes; no rebuild/full-forward/FD/replay run."
+  },
+  "result_boundary": "This is prelaunch identity readiness only. It makes no claim about the two-time adjoint, FD, or scientific acceptance."
+}

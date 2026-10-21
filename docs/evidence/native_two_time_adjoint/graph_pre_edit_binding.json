@@ -1,0 +1,159 @@
+{
+  "schema": "native_two_time_adjoint_pre_edit_source_binding_v1",
+  "captured_at_local": "2026-10-21T08:42:46.080736+09:00",
+  "worktree": "/private/tmp/native-two-time-adjoint-20261021",
+  "branch": "codex/native-two-time-adjoint-20261021",
+  "head": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+  "worktree_status": "clean",
+  "source_revision": {
+    "pr312_head": "63a9197f3468290ed779178b332262f9f5a1f1cf",
+    "new_head": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+    "source_pin_count": 10,
+    "all_source_hashes_match": true,
+    "source_bindings": [
+      {
+        "path": "dyn_em/solve_em.F",
+        "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "dyn_em/module_implicit_sdirk3.F",
+        "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+        "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+        "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+        "sha256": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+        "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      },
+      {
+        "path": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+        "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2",
+        "matches_pr312_source_binding": true,
+        "matches_current_commit_blob": true
+      }
+    ]
+  },
+  "registered_map": {
+    "path": "/private/tmp/native-two-time-adjoint-20261021/docs/evidence/research_forward_setting/research_forward_map.json",
+    "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7",
+    "matches_pr312_and_v6_protocol_map": true,
+    "other_worktree_copy": "/private/tmp/pr312-native-fortran-chain-20261020/docs/evidence/research_forward_setting/research_forward_map.json",
+    "other_copy_sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+  },
+  "cached_graphs": {
+    "pr312_final_commit_verification": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/final_commit_verification.json",
+      "sha256": "0b39814887151cbbb1eaec1ed54b33936e126d78960b291b0c4e6ba3c134afd0"
+    },
+    "production_graph_binding_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/v5_skip_source_binding.json",
+    "production_graph_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+    "recompute_helper_ast_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/w6_recompute_ast/graphify-out/graph.json",
+    "recompute_helper_ast_sha256": "256aaa8a6c1385f873f6da6916558c484df7db6174ab571980cfa6e36ae21adf",
+    "note": "Reuse verified PR312 graphs; no source-corpus rebuild performed."
+  },
+  "p6_executable_reuse": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+    "sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+    "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/build_receipt.json",
+    "build_receipt_sha256": "d166bd91298840df5cb626eb40da4e8b88cc94c6ad396ec074c6c00b3399d1bb",
+    "link_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/link_receipt.json",
+    "link_receipt_sha256": "9677a9dca25b5aee687b694f14d955d5c42255614e36da845f1a6e83a2003d19",
+    "symbol_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/symbol_receipt.json",
+    "symbol_receipt_sha256": "06203664fc9605f736fef35d7f02136424d2cff03f7afa56e398685ef3a11af8",
+    "built_from_commit": "559b7a861105e5db5838f1a933a6661111aec1cb",
+    "compiled_source_hashes": {
+      "cpp": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d",
+      "fortran": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+      "test_header": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53",
+      "class_header": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "interface_cpp": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab",
+      "tile_impl_cpp": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+      "solve_em_F": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    "all_compiled_inputs_match_new_worktree": true,
+    "conclusion": "Existing P6 executable is source-compatible for prefix runs: all seven native compile inputs match W2, and all ten verified PR312 source pins match the current commit. No production or harness rebuild is needed for the described runner-only prefix cases."
+  },
+  "runtime_inputs": {
+    "protocol_path": "/private/tmp/native-two-time-adjoint-20261021/docs/evidence/native_terminal_adjoint/protocol_v6.json",
+    "protocol_sha256": "9971cb56d28022951dfe00c1b7707532cf53c9cc71ca88983c738812751e2650",
+    "runner_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/run_case_v6.py",
+    "runner_sha256": "69f84d75f2c368e9f82502e2025eb2733180965e763ee69f8a9b2ac532a3de94",
+    "registered_forward_map_sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+  },
+  "source_verified_fortran_prefix_call_chain": [
+    {
+      "caller": "solve_em.F",
+      "target": "native_terminal_test_prepare/before_step/after_step under WRF_SDIRK3_NATIVE_TERMINAL_TEST",
+      "locations": "solve_em.F:84-87, 741-744, 747-778"
+    },
+    {
+      "caller": "native_terminal_test_prepare",
+      "target": "begin 32-step fixed trajectory and call BIND(C) prepare bridge",
+      "locations": "tests/native_terminal_adjoint_test.F:20-29, 132-141"
+    },
+    {
+      "caller": "native_terminal_test_after_step",
+      "target": "at suffix/prefix handoff begin next 32-step tape and rearm; at requested prefix endpoint call single checked Fortran pullback then close",
+      "locations": "tests/native_terminal_adjoint_test.F:196-214, 263-281"
+    },
+    {
+      "runner_interface": "run_case_v6.py accepts --prefix-end and a supplied FP32 cotangent file via --lambda32, validates input size and binds file path/hash in receipts; no input values were inspected."
+    }
+  ],
+  "requested_prefixes": {
+    "ends_steps": [
+      128,
+      96,
+      64,
+      32
+    ],
+    "incoming_cotangent_role": "new externally supplied FP32 lambda at step 128 (lambda128); runner uses its existing packed-FP32 cotangent-file input"
+  },
+  "scope_controls": {
+    "fd_midpoint_state_or_midpoint_objective_read": false,
+    "model_run": false,
+    "build_or_harness_rebuild": false,
+    "source_edit": false,
+    "graph_rebuild": false
+  }
+}

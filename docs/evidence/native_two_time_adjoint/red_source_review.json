@@ -1,0 +1,23 @@
+{
+  "schema": "native_two_time_portable_source_review_v1",
+  "reviewed_at_local": "2026-10-21T09:32:38 JST +0900",
+  "worktree": "/private/tmp/native-two-time-adjoint-20261021",
+  "head": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+  "scope": "Read-only source review of the stable portable two-time recomputer and README. No model outputs/gradients read; no source edits, tests, builds, or reruns.",
+  "source_hashes": {
+    "docs/evidence/native_two_time_adjoint/recompute.py": "3a2e4f1d2cda62a02ba85e2595dc3da85b6d07f981e746d5e67d6a4539f2e32c",
+    "docs/evidence/native_two_time_adjoint/README.md": "5437f22d716d78178cd66064d1113d98ab5cd199d0bfd9a0e33eaffb98fe0de7",
+    "previous_design_receipt_sha256": "90a59cc45aad1aa2ee26c9c765c271bcc9bf85f91b7ab1c1ea09f4b333319df9"
+  },
+  "decision": "SOURCE_SCOPE_PASS",
+  "findings": [],
+  "checked_semantics": [
+    "Portable objective is Jmid+Jterminal, with FP64 state arrays and the fixed once-rounded FP32 cotangents promoted to FP64.",
+    "The reused old lambda128 is provenance-checked as the prefix160 output at gradient_control_step=128. The first new prefix input is checked bytewise against cast32(promote64(old lambda128)+promote64(q128)); lower three inputs must equal the prior new FP32 output.",
+    "Full dAD is dot(v, new_g0_f32 promoted). Midpoint incremental dAD is dot(v, FP64(new_g0_f32)-FP64(old_terminal_g0_f32)); vector subtraction occurs after promotion. Partial prefix window dots are not used as global dAD.",
+    "Full and midpoint finite differences are computed separately with frozen eta values, shared max(abs(dFD),abs(dAD)) denominators without a floor, per-component plateau checks, one-sided gaps, and separate signal floors. The full two-term signal scale uses the sum of both norm bounds; the midpoint uses its single-term bound.",
+    "The analyzer preserves state-only replay, no global exact-FP64 gradient, no second full gradient replay, no general smoothness claim, and reports local cast/injection residuals only as diagnostics.",
+    "Raw collection verifies the four new prefixes against the retained baseline bytes, receipts, inputs, source/executable/protocol, pullback role, and exact Fortran FP64-to-FP32 cast; portable mode verifies NPZ/schema hashes and reproduces the stored arrays."
+  ],
+  "scope_boundary": "This is only a stable source/meaning review. The four-prefix chain and two-time numerical results remain subject to the later actual-data review. No midpoint FD numeric results were read."
+}
