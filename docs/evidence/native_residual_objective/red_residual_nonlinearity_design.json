@@ -1,0 +1,42 @@
+{
+  "schema": "red_residual_nonlinearity_design_v1",
+  "reviewed_at": "2026-10-21T11:18:00+09:00",
+  "status": "PASS_FOR_PRE_DATA_FREEZE",
+  "scope": "Mathematical review only, before viewing any new residual finite-difference values. No source, build, or model actions.",
+  "finding": {
+    "priority": "P1 protocol correction before freeze",
+    "statement": "One-sided slope-gap <=1% is not a valid acceptance gate for a squared residual cost at finite eta. The residual objective is quadratic even when the underlying observation h is exactly affine, so its one-sided slopes differ by an expected O(eta) curvature term while its central FD equals the exact derivative.",
+    "required_action": "For full, midpoint, and terminal squared-residual cost components, gate on central FD-versus-AD <=1% at both widths, adjacent central-FD plateau <=1%, and resolved central signal. Report one-sided cost slopes/gaps as diagnostics only. Keep the already-frozen <=1% one-sided tests on the underlying linear h_mid/h_terminal diagnostics as the separate map-branch/directional consistency check; do not introduce a new threshold or claim classical smoothness."
+  },
+  "synthetic_exact_affine_counterexample": {
+    "h_eta": "1 + 1000*eta",
+    "J_eta": "0.5*h_eta^2",
+    "exact_dJ_deta_at_zero": 1000,
+    "eta_0p01": {
+      "J_plus": 60.5,
+      "J_minus": 40.5,
+      "central_fd": 1000,
+      "exact_ad": 1000,
+      "one_sided_plus": 6000,
+      "one_sided_minus": -4000,
+      "one_sided_relative_gap": 1.6666666666666667
+    },
+    "eta_0p03": {
+      "J_plus": 480.5,
+      "J_minus": 420.5,
+      "central_fd": 1000,
+      "exact_ad": 1000,
+      "one_sided_plus": 16000,
+      "one_sided_minus": -14000,
+      "one_sided_relative_gap": 1.875
+    },
+    "conclusion": "Both central checks are exact while both cost one-sided gaps exceed 1%; applying the old linear-objective one-sided gate to cost would falsely reject this smooth, exactly differentiated quadratic."
+  },
+  "signal_floor": {
+    "midpoint_or_terminal_component": "100*eps64*max(abs(J_plus), abs(J_minus), 0.5*((abs(q^T Z0)+abs(y))/sigma)^2)",
+    "full_cost": "100*eps64*max(abs(J_plus), abs(J_minus), sum_r 0.5*((abs(q_r^T Z_r0)+abs(y_r))/sigma_r)^2)",
+    "note": "Use a local baseline magnitude bound per component and their sum for the full objective. Keep this only for signal resolution; use no floor in FD/AD relative-error or width-plateau denominators."
+  },
+  "midpoint_component_guard": "The terminal residual FD guard and the midpoint residual FD check remain separate; the scaled old-terminal gradient guard must use central FD, plateau and signal gates, while its underlying linear h_N one-sided check remains the pre-existing branch diagnostic.",
+  "data_boundary": "No new residual FD values were inspected or used to choose this correction. Freeze this rule before revealing them."
+}

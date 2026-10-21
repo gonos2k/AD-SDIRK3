@@ -1,0 +1,100 @@
+{
+  "baseline_objective_receipt": {
+    "bytes": 1708,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/baseline_objective.json",
+    "sha256": "4f02fbdcc84a730257aba4b67400c63eb8db559bb7331b7089cccaf2086e5777"
+  },
+  "build_receipt": {
+    "bytes": 7271,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/build_receipt.json",
+    "sha256": "04b35cb35929e68e97f23d2e0e5094c61fe16f9c5fcf70a8e3e4dda78ea506cf"
+  },
+  "cost_helper": {
+    "bytes": 15689,
+    "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_residual_objective/recompute.py",
+    "sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89"
+  },
+  "executable": {
+    "bytes": 52799248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/wrf_native_residual_objective.exe",
+    "sha256": "fd8ba93955a7f45fef10eef7646a5e1554cb1b0ba3c8718514f97c1ad346e744"
+  },
+  "input_pins": {
+    "diagnostics.txt": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+    "namelist.input": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "wrfinput_d01": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "midpoint_cotangent": {
+    "bytes": 196248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/incoming/midpoint_residual_f64.bin",
+    "sha256": "f6155760231f5ab0d2d59948da98864ec393a72af9bd39780b7697c002693e4b"
+  },
+  "protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/protocol.json",
+    "sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb"
+  },
+  "reference_checkpoints": {
+    "bytes": 50435736,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+    "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+  },
+  "reused_helper": {
+    "bytes": 20450,
+    "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+    "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8"
+  },
+  "runner": {
+    "bytes": 22328,
+    "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_residual_prefix.py",
+    "sha256": "ae07695cd48ebfcd427f0053f7f3d5766c70534c5b09fd54141f3a9c64ee47d9"
+  },
+  "schema": "native_residual_launch_binding_v1",
+  "source_case": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9",
+  "source_files": [
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    }
+  ],
+  "terminal_seed": {
+    "bytes": 98124,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/incoming/terminal_residual_f32.bin",
+    "sha256": "d449dfbd25e9881561faeaaced1fdbf9fc31b860ee436f60d157e5d6300a5cef"
+  }
+}

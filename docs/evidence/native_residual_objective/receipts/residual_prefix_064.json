@@ -1,0 +1,387 @@
+{
+  "actual": {
+    "all_eight_fields_finite": true,
+    "checkpoint_bytes": 12756120,
+    "elapsed_seconds": 842.5061677498743,
+    "full_baseline_prefix_byte_equal": true,
+    "native_rss_monitor_has_samples": true,
+    "netcdf_files": [
+      {
+        "bytes": 1040888,
+        "path": "wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf",
+        "times": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:00:15"
+        ]
+      },
+      {
+        "bytes": 1079765,
+        "path": "wrfout_d01_0001-01-01_00:00:30",
+        "sha256": "d8f80633e95a3636e11fe4610e9699f9fa8892fe6a37636b43e84dfeb76d5600",
+        "times": [
+          "0001-01-01_00:00:30",
+          "0001-01-01_00:00:45"
+        ]
+      },
+      {
+        "bytes": 984442,
+        "path": "wrfout_d01_0001-01-01_00:01:00",
+        "sha256": "af2a83cd29a92e1b045088e77d17666ae5b4308b92a94c83db3b1db058f08217",
+        "times": [
+          "0001-01-01_00:01:00"
+        ]
+      }
+    ],
+    "netcdf_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15",
+      "0001-01-01_00:00:30",
+      "0001-01-01_00:00:45",
+      "0001-01-01_00:01:00"
+    ],
+    "newton_convergence_record_count": 192,
+    "output_hashes": {
+      "diagnostics.txt": {
+        "bytes": 84,
+        "sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224"
+      },
+      "namelist.diff": {
+        "bytes": 72,
+        "sha256": "4aa86c7218992ab52a76757b1e68baa32e1e3c84c061e09726a60821e6132d6d"
+      },
+      "namelist.input": {
+        "bytes": 6355,
+        "sha256": "627e7d0e3fe961f7207d2245ec944a2c2ef23353143be840234be64c72b3bd12"
+      },
+      "namelist.output": {
+        "bytes": 93292,
+        "sha256": "2b6e920455ecb40ea2bad41f84867d0d5cb41c9c16eed75101afeafad1e4f6f6"
+      },
+      "rsl.error.0000": {
+        "bytes": 20076771,
+        "sha256": "8b2b9300f34c6993734b1f4c19f01d2361a28442006e27166fa30c7864700c28"
+      },
+      "rsl.out.0000": {
+        "bytes": 427773,
+        "sha256": "58516a67c800509d8e223d5b28ee27ef244fd451abb52acc864c7d3f01878717"
+      },
+      "run.log": {
+        "bytes": 49,
+        "sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df"
+      },
+      "terminal.checkpoints_f64.bin": {
+        "bytes": 12756120,
+        "sha256": "79acdd520a3bc63f69eaf6e514068059f97347caa32a61d8b0e6bb1f6e2416ec"
+      },
+      "terminal.direction_f32.bin": {
+        "bytes": 98124,
+        "sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347"
+      },
+      "terminal.endpoint.json": {
+        "bytes": 826,
+        "sha256": "71aee50f0df7e2a9f4143d58d6f9931c8b1910c4792736e5348012406ed9003d"
+      },
+      "terminal.gradient32.bin": {
+        "bytes": 98124,
+        "sha256": "b37e10efa038b5c22c238fdbab711d403b096a834ebf5fbaa90cca8db4f6f03c"
+      },
+      "terminal.gradient64.bin": {
+        "bytes": 196248,
+        "sha256": "4401cf86ae85ffc8e54f2aaa956a6601ce90f7d5f4e594dcc85831815c0eb54f"
+      },
+      "terminal.gradient_f32.bin": {
+        "bytes": 98124,
+        "sha256": "b37e10efa038b5c22c238fdbab711d403b096a834ebf5fbaa90cca8db4f6f03c"
+      },
+      "terminal.gradient_f64.bin": {
+        "bytes": 196248,
+        "sha256": "4401cf86ae85ffc8e54f2aaa956a6601ce90f7d5f4e594dcc85831815c0eb54f"
+      },
+      "terminal.lambda_in_f32.bin": {
+        "bytes": 98124,
+        "sha256": "5bb70898bf95b636dfbe065e91e0e23a72571044c11f2bc4bcde130a5bb9e2fd"
+      },
+      "terminal.lambda_in_f64.bin": {
+        "bytes": 196248,
+        "sha256": "7589130a0b25abbaf6bd40b683045734054043cd4bc6df2f3431c2a011f1bb79"
+      },
+      "terminal.lambda_out_f32.bin": {
+        "bytes": 98124,
+        "sha256": "b37e10efa038b5c22c238fdbab711d403b096a834ebf5fbaa90cca8db4f6f03c"
+      },
+      "terminal.lambda_out_f64.bin": {
+        "bytes": 196248,
+        "sha256": "4401cf86ae85ffc8e54f2aaa956a6601ce90f7d5f4e594dcc85831815c0eb54f"
+      },
+      "terminal.omega_sign.bin": {
+        "bytes": 1504256,
+        "sha256": "72c3d94ad8525402ae7b8a85f89d61411dce31d481647e7e99782719f43b3190"
+      },
+      "terminal.omega_sign.csv": {
+        "bytes": 24311,
+        "sha256": "66c9c4aa60ef4d18930bb44ebd9f7409938616107bd2c4c45aa9d76038212685"
+      },
+      "terminal.prepare.json": {
+        "bytes": 716,
+        "sha256": "96a1b947cb2f4b6891cd771f0c97da91290a727897d044aa47fa1457cb0abaed"
+      },
+      "terminal.result.json": {
+        "bytes": 857,
+        "sha256": "5e0f5c21ab419a9915fbb5daa96eed21e46bf55781f42b1b3eb019ce2e6ffc9b"
+      },
+      "terminal.suffix_seed_f64.bin": {
+        "bytes": 196248,
+        "sha256": "4c1a68810315793dc7d39bc7465229c9ab0835ebe6aaa5d97e2d5c29adb3da71"
+      },
+      "terminal.terminal_f32.bin": {
+        "bytes": 98124,
+        "sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90"
+      },
+      "terminal.terminal_state_f64.bin": {
+        "bytes": 196248,
+        "sha256": "f5b5261d107d29f1c21ab676a5652f549f54a785d5923b5cb15e2d997d9f1aef"
+      },
+      "terminal.terminal_state_published_f32.bin": {
+        "bytes": 98124,
+        "sha256": "327c9f17b1ff6652e2db8cf48a21a5824f115301b414443c4b84f9c8f90e71e4"
+      },
+      "terminal.window_64.json": {
+        "bytes": 483,
+        "sha256": "924ec48367fb91cb0c51e1c0f698798e93299d3c4ba2e4fe883d48522a61e878"
+      },
+      "terminal.wrapper_gradient_f64.bin": {
+        "bytes": 196248,
+        "sha256": "4401cf86ae85ffc8e54f2aaa956a6601ce90f7d5f4e594dcc85831815c0eb54f"
+      },
+      "terminal.x0_internal_f64.bin": {
+        "bytes": 196248,
+        "sha256": "d2684934e033e879fab865ab4bd37b0aa1507b41408f7601bf30e75022cd5994"
+      },
+      "terminal.x0_published_f32.bin": {
+        "bytes": 98124,
+        "sha256": "9e21079b1332cfafad3775b80d463eb0462ae96a02643ee59a006e71a91e555f"
+      },
+      "time.log": {
+        "bytes": 777,
+        "sha256": "3524a2a62ab24744cd9633d336855b3fa5ad7e70ee4703ad968edeada927c6af"
+      },
+      "wrfinput_d01": {
+        "bytes": 976675,
+        "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+      },
+      "wrfout_d01_0001-01-01_00:00:00": {
+        "bytes": 1040888,
+        "sha256": "7f97e1931371027d786e15abe3b308e1f02d62092b4d4a5fc4aaa37a06295daf"
+      },
+      "wrfout_d01_0001-01-01_00:00:30": {
+        "bytes": 1079765,
+        "sha256": "d8f80633e95a3636e11fe4610e9699f9fa8892fe6a37636b43e84dfeb76d5600"
+      },
+      "wrfout_d01_0001-01-01_00:01:00": {
+        "bytes": 984442,
+        "sha256": "af2a83cd29a92e1b045088e77d17666ae5b4308b92a94c83db3b1db058f08217"
+      }
+    },
+    "peak_sampled_native_rss_bytes": 4029087744,
+    "physical_minima": {
+      "column_mass_Pa": 89091.65737581253,
+      "layer_dph": 9247.41748046875,
+      "theta_K": 302.2530517578125
+    },
+    "return_code": 0,
+    "runner_stop_reason": null,
+    "stage_csv_count": 0,
+    "step_telemetry_count": 64,
+    "success_marker": true,
+    "terminal_endpoint": {
+      "actual_prefix_fnv1a64": "e5155462313cd3c",
+      "chain": "baseline",
+      "control_input64_calls": 64,
+      "endpoint_count_including_seed": 65,
+      "endpoint_reference_exact": true,
+      "eta": 0,
+      "expected_steps": 64,
+      "graph_start_step": 33,
+      "host_steps": 64,
+      "initial_control_seed_applied": true,
+      "local_terminal_c_dot": -4.43994411065324,
+      "mode": "prefix",
+      "objective": null,
+      "objective_is_registered_terminal": false,
+      "peak_rss_bytes": 3760422912,
+      "reference_checkpoints_expected": 65,
+      "reference_checkpoints_matched": 65,
+      "reference_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+      "reference_prefix_fnv1a64": "e5155462313cd3c",
+      "suffix_seed_bitwise_match": true,
+      "warm_endpoint_capture_count": 32,
+      "warm_steps": 32
+    },
+    "terminal_prepare": {
+      "chain": "baseline",
+      "cotangent_chain": "fortran_fp32_chain",
+      "dims": [
+        17,
+        17,
+        16,
+        18,
+        18,
+        17
+      ],
+      "dt_seconds": 0.9375,
+      "eta": 0,
+      "expected_steps": 64,
+      "graph_start_step": 33,
+      "input_scales": [
+        1.7794605468479088,
+        0.00010122007244795247,
+        7.79443985679733e-06,
+        3801.50094009332,
+        61.27946198285178,
+        8.001955354370356
+      ],
+      "mode": "prefix",
+      "packed_size": 24531,
+      "replay_role": "not_replay",
+      "steps": 64,
+      "suffix_graph_flags": "retain_graph_for_adjoint=true,imex_slow_in_tangent=true",
+      "terminal": "normalized W physical owners, scale 0.001, FP32 cotangent",
+      "warm_endpoint_capture_target": 32,
+      "warm_graph_flags": "retain_graph_for_adjoint=false,imex_slow_in_tangent=false",
+      "warm_steps": 32
+    },
+    "terminal_result": {
+      "chain": "baseline",
+      "control_input64_calls": 64,
+      "cotangent_chain": "fortran_fp32_chain",
+      "directional_local_precast_f64": null,
+      "directional_vjp_f32_chain": null,
+      "endpoint_reference_exact": true,
+      "eta": 0,
+      "expected_steps": 64,
+      "gradient_control_step": 32,
+      "gradient_f64_semantics": "local_precast_fp64",
+      "gradient_scope": "local_32_step_window",
+      "graph_start_step": 33,
+      "initial_control_seed_applied": true,
+      "lambda_in_f64_semantics": "actual_fp32_cotangent_promoted_for_audit",
+      "mode": "prefix",
+      "peak_rss_bytes": 4029120512,
+      "pullback_checked_by_fortran": true,
+      "reference_checkpoints_expected": 65,
+      "reference_checkpoints_matched": 65,
+      "replay_role": "not_replay",
+      "suffix_seed_bitwise_match": true,
+      "warm_endpoint_capture_count": 32,
+      "warm_steps": 32,
+      "wrapper_gradient_f32_equals_cast_f64": true
+    }
+  },
+  "bound_incoming_files": [
+    {
+      "bytes": 50435736,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+      "role": "old_full_baseline_reference",
+      "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+    },
+    {
+      "bytes": 98124,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/terminal.lambda_out_f32.bin",
+      "role": "incoming_residual_cotangent_f32",
+      "sha256": "5bb70898bf95b636dfbe065e91e0e23a72571044c11f2bc4bcde130a5bb9e2fd"
+    }
+  ],
+  "command": [
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "time.log",
+    "/opt/homebrew/bin/mpirun",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/wrf_native_residual_objective.exe"
+  ],
+  "cost_helper_sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89",
+  "created_at": "2026-10-21T16:30:28.850029+09:00",
+  "ended_at": "2026-10-21T16:44:31.568132+09:00",
+  "environment": {
+    "OMP_NUM_THREADS": "1",
+    "WRF_SDIRK3_NATIVE_TERMINAL_CHAIN": "baseline",
+    "WRF_SDIRK3_NATIVE_TERMINAL_ETA": "0",
+    "WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA32_IN": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/terminal.lambda_out_f32.bin",
+    "WRF_SDIRK3_NATIVE_TERMINAL_MODE": "prefix",
+    "WRF_SDIRK3_NATIVE_TERMINAL_OUT": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_064/terminal",
+    "WRF_SDIRK3_NATIVE_TERMINAL_REFERENCE": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+    "WRF_SDIRK3_NATIVE_TERMINAL_STEPS": "64",
+    "WRF_SDIRK3_RHS_COUNT": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0"
+  },
+  "executable": {
+    "bytes": 52799248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/wrf_native_residual_objective.exe",
+    "sha256": "fd8ba93955a7f45fef10eef7646a5e1554cb1b0ba3c8718514f97c1ad346e744"
+  },
+  "expected_h_seconds": 0.9375,
+  "expected_implicit_stages": 192,
+  "expected_steps": 64,
+  "incoming_lambda_source": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/run_receipt.json",
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "label": "residual_prefix_064",
+  "launch_binding_sha256": "d1f3e3c9b74c49f69ee7732f5db55b6fdc477be88237e4ec74d7abe92121d5c0",
+  "midpoint_injection_receipt": null,
+  "namelist_sha256": "627e7d0e3fe961f7207d2245ec944a2c2ef23353143be840234be64c72b3bd12",
+  "new_model_timestep": false,
+  "objective_kind": "residual",
+  "pid": 20644,
+  "primary_label": "residual",
+  "protocol_sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb",
+  "reused_helper_sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8",
+  "runner_sha256": "ae07695cd48ebfcd427f0053f7f3d5766c70534c5b09fd54141f3a9c64ee47d9",
+  "schema": "native_residual_prefix_receipt_v1",
+  "source_files": [
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    }
+  ],
+  "status": "completed"
+}

@@ -1,0 +1,55 @@
+{
+  "chain_semantics": {
+    "actual_packed_physics_and_accepted_states_remain_bound_to_existing_executable_and_baseline_ledger": true,
+    "no_old_native_upper_window_lambda_reused_as_actual_new_chain": true,
+    "prefix128_uses_new_prefix160_lambda_then_one_fp64_addition_of_bound_alpha_mid_q_then_one_fp32_cast": true,
+    "prefix160_endpoint128_checkpoint_is_checked_against_frozen_baseline_before_injection": true,
+    "prefixes_224_192_160_use_only_previous_new_residual_lambda_output": true,
+    "prefixes_96_64_32_use_only_previous_new_residual_fp32_return": true,
+    "terminal_prefix_256_starts_from_bound_new_alpha_terminal_q32_seed": true
+  },
+  "checks": {
+    "all_10_source_hashes_match_binding_and_current_files": true,
+    "build_receipt_matches_candidate": true,
+    "cost_helper_matches_binding": true,
+    "executable_matches_binding": true,
+    "launch_binding_sha_matches_frozen": true,
+    "prefix_sweep_and_resource_caps_frozen": true,
+    "protocol_hash_matches_binding": true,
+    "reused_helper_matches_binding": true,
+    "root_direct_prelaunch_probe_passed_no_model": true,
+    "runner_matches_updated_frozen_hash": true,
+    "source_list_matches_build_receipt": true,
+    "test_driver_cpp_matches_binding": true
+  },
+  "findings": [],
+  "lifecycle_and_scope": {
+    "RSS_cap_bytes": 19327352832,
+    "direct_preflight_probe_status": "PASS",
+    "environment_receipt_records_only_explicit_overrides_not_inherited_os_environment": true,
+    "rss_monitor_matches_wrf_native_residual_objective_executable": true,
+    "run_directory_appeared_during_final_review": true,
+    "run_receipts_or_outputs_inspected": false,
+    "runner_limits_prefix_end_to_eight_frozen_endpoints": true,
+    "runner_refuses_existing_case_directory_and_has_no_automatic_retry": true,
+    "source_input_namelist_timestep_tolerances_and_executable_are_hash_bound": true,
+    "wall_cap_seconds": 7200
+  },
+  "pins": {
+    "build_receipt_sha256": "04b35cb35929e68e97f23d2e0e5094c61fe16f9c5fcf70a8e3e4dda78ea506cf",
+    "cost_helper_sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89",
+    "executable_sha256": "fd8ba93955a7f45fef10eef7646a5e1554cb1b0ba3c8718514f97c1ad346e744",
+    "launch_binding_sha256": "d1f3e3c9b74c49f69ee7732f5db55b6fdc477be88237e4ec74d7abe92121d5c0",
+    "protocol_sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb",
+    "reused_helper_sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8",
+    "root_prelaunch_probe_sha256": "76f298c973bfcefdf1fb21a94875c41d3e42fde34aa3461615d5cd2971d3eaee",
+    "runner_sha256": "ae07695cd48ebfcd427f0053f7f3d5766c70534c5b09fd54141f3a9c64ee47d9",
+    "source_base": "ea5c39b8eeee2f73d6fc23bc964df22c2be34a33",
+    "test_driver_cpp_sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86",
+    "worktree": "/private/tmp/native-residual-objective-20261021"
+  },
+  "reviewed_at": "2026-10-21T11:25:00+09:00",
+  "schema": "red_native_residual_prelaunch_review_v1",
+  "scope": "Bounded read-only review of final frozen runner, objective helper, test driver, build/source pins, and launch limits. No code edits, build, model launch, or residual-result inspection by this reviewer.",
+  "status": "PASS_SOURCE_AND_LAUNCH_BINDING"
+}

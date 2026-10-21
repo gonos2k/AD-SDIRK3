@@ -1,0 +1,45 @@
+{
+  "findings": [],
+  "frozen_pins": {
+    "baseline_checkpoint_stream_sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50",
+    "cost_helper_sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89",
+    "launch_binding_sha256": "d1f3e3c9b74c49f69ee7732f5db55b6fdc477be88237e4ec74d7abe92121d5c0",
+    "old_manifest_sha256": "79eba3dc569f29b77c1649e689cc5405e1a02c2b4a277d16679899a79b50fed1",
+    "old_packet_sha256": "747f8c8347f3659340c691016b5ea5c25e686e86162abbeadb9c37a503d6bd1e",
+    "protocol_sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb",
+    "runner_sha256": "ae07695cd48ebfcd427f0053f7f3d5766c70534c5b09fd54141f3a9c64ee47d9"
+  },
+  "midpoint_injection": {
+    "accepted_step": 128,
+    "accepted_time_seconds": 120,
+    "alpha_mid_from_pinned_baseline": -420.1114023998378,
+    "formula": "Q32(FP64(lambda128 from new residual_prefix_160 output)+FP64(alpha_mid*q_mid)); exactly one FP32 cast at accepted step128",
+    "injection_equals_independent_formula_bytewise": true,
+    "injection_receipt_binds_prefix160_output_and_baseline_Z128": true,
+    "injection_sha256": "6def973c4b8a4e8b86ddbe89b6ab51a9b577fadf576c4561a10df732fa8df5fc",
+    "midpoint_operand_is_authoritative_objective_pair_output": true,
+    "midpoint_operand_sha256": "f6155760231f5ab0d2d59948da98864ec393a72af9bd39780b7697c002693e4b",
+    "prefix256_seed_matches_Q32_alpha_terminal_qN": true,
+    "receipt_sha256": "d0aed5571083611e6888cea65cc6154e016b2504531d67b9be0ad84188d42bef"
+  },
+  "prefix160": {
+    "accepted_Z128_checkpoint_matches_baseline_bytewise": true,
+    "baseline_Z128_sha256": "e7b4230680244cd0f439001db0528b93c22c04c6cc79f36ef263f9d43458d6d1",
+    "fortran_pullback_checked": true,
+    "gradient_control_step": 128,
+    "gradient_scope": "local_32_step_window",
+    "incoming_prefix160_is_previous_new_prefix192_output": true,
+    "lambda128_actual_new_prefix160_sha256": "01b66c2931950494eb40520815147dd5aa328468249f048d121a7b3b3f90978c",
+    "lambda128_bytes": 98124,
+    "new_prefix160_Z128_sha256": "e7b4230680244cd0f439001db0528b93c22c04c6cc79f36ef263f9d43458d6d1",
+    "return_code": 0,
+    "run_receipt_sha256": "ef4bd438a9039ed4117a920535ec8529edd1bb435482e60978cd48f23d475a72",
+    "stages": 480,
+    "status": "completed",
+    "steps": 160
+  },
+  "reviewed_at": "2026-10-21T11:42:00+09:00",
+  "schema": "red_residual_midpoint_actual_review_v1",
+  "scope": "Read-only verification of the completed new prefix160 lambda128 and the single pending prefix128 midpoint injection. No prefix128 partial gradient/output was read; no full eight-run closure is claimed.",
+  "status": "PASS_MIDPOINT_HANDOFF_ONLY"
+}

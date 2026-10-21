@@ -400,9 +400,13 @@ target; it cannot revoke a completed restricted validation instance.
 
 For the selected dry 240 s forward instance, the native terminal and
 [one-midpoint linear VJP/FD probes](<(202610210936)_native_two_time_adjoint.md>)
-are complete within their one-direction, FP32-chained scopes. Continue with the
-actual observation-window connection; these probes do not certify a full-map
-JVP or all directions. Do not reopen the completed reference screen or require
+are complete within their one-direction, FP32-chained scopes. The
+[synthetic two-diagnostic squared-residual caller](<(202610211456)_native_residual_objective.md>)
+also passes the declared full-cost and derived midpoint-increment checks with
+fresh residual-dependent cotangents. Its fixed synthetic targets and weights
+do not define a physical observation problem. Continue with the actual
+observation-window definition and connection; these probes do not certify a
+full-map JVP or all directions. Do not reopen the completed reference screen or require
 the 15 s candidate to pass first. Declare the observation/control problem and
 derivative budgets before that test. For broader instances, freeze their own
 window and physical error budgets. Adopt an efficiency target only through an

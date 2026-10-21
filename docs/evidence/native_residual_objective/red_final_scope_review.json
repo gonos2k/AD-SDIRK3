@@ -1,0 +1,25 @@
+{
+  "artifact_manifest": {
+    "declared_file_count": 43,
+    "mismatches": [],
+    "verified_file_count": 43
+  },
+  "delta_review": {
+    "README_change_lines": 2,
+    "clarifies_root_packet_audit_local_E_packet_layout": true,
+    "identifies_check_packet_as_flat_portable_command": true,
+    "raw_and_numerical_receipts_unchanged_by_scope": true,
+    "report_unchanged": true
+  },
+  "findings": [],
+  "pins": {
+    "README_sha256": "002b7c55d4912fbc69fd7fb1202bd0c270ddd464038ec00d4997347a620bcb70",
+    "artifact_manifest_sha256": "8ddf85c3a37cce333fdf97d5745bbc2005905449c9fdce3b03330b5531aea37f",
+    "prior_review_sha256": "0cdffb243acb6f2e11f69e4ea19ff2e2c144f4bc77bee98bfc811f7e43abcf35",
+    "report_sha256": "c795ece6cebcf2897e103c760f977052f452c5563bbc07e856c218a4563fee7e"
+  },
+  "reviewed_at": "2026-10-21T17:08:00+09:00",
+  "schema": "red_residual_final_scope_review_v2",
+  "scope": "Read-only verification of the final two-line README clarification, unchanged report, and complete 43-file outer artifact manifest. No models/build/source edits.",
+  "status": "PASS"
+}

@@ -1,0 +1,140 @@
+{
+  "composition": {
+    "full_dAD": "dot(v64,new_g0_fp32 promoted64)",
+    "lower": "128/96/64/32 pass actual preceding FP32 return",
+    "mid_increment_dAD": "dot(v64,new_g0_fp32 promoted64 \u2212 \u03b1N*old_terminal_g0_fp32 promoted64), FD-tested derived composite increment, not independent new terminal-only native VJP",
+    "middle": "after prefix160 gives lambda128, exactly once Q32(FP64(lambda128)+\u03b1m*FP64(qmid)); validate same accepted Z128",
+    "postprocess_prediction": "\u03b1m*(old_two_time_g0\u2212old_terminal_g0)+\u03b1N*old_terminal_g0, FP64 after promotion; comparison only, not replacement for actual new native calls",
+    "start": "actual Q32(\u03b1N*qN), new native upper windows 256/224/192/160; no reuse of old unscaled terminal chain as actual new chain",
+    "terminal_reference_dAD": "\u03b1N*dot(v64,old_terminal_g0_fp32 promoted64), reference only; separate terminal-residual FD guard required"
+  },
+  "execution": "Root sole model executor, exactly eight sequential native prefix windows; reuse raw forward ledgers, preserve first failure, no overwrite/automatic retry, no new refinement/physics/optimizer",
+  "failure_policy": "Any component FD/plateau/signal or underlying-h guard fails => stop scientific acceptance; no automatic extra model/time refinement. At most four lower terminal-only diagnostic runs only if separately justified for attribution; diagnostic pass cannot erase initial failure.",
+  "fd": {
+    "Taylor": "diagnostic only, no new acceptance gate",
+    "baseline_cost_magnitude_bound": "per term .5*((sum(abs(q*z_base))+abs(y))/sigma)^2; sum both for total; objective arithmetic scale only, not state-error bound",
+    "components": [
+      "total cost",
+      "midpoint cost increment",
+      "terminal cost reference guard"
+    ],
+    "cost_one_sided": "report only: quadratic curvature gives different finite-width side slopes even with exact AD; NOT a gate",
+    "eta_actual": "use existing FP32 eta promoted64 for \u00b1 pairs",
+    "eta_nominal": [
+      0.01,
+      0.03
+    ],
+    "plateau_formula": "abs(FD01-FD03)/max(abs(FD01),abs(FD03),abs(AD))",
+    "plateau_limit": 0.01,
+    "relative_formula": "abs(FD-AD)/max(abs(FD),abs(AD)); zero denominator unresolved, no floor",
+    "relative_limit": 0.01,
+    "signal_formula": "each width: abs(Jplus-Jminus)>100*eps64*max(abs(Jplus),abs(Jminus),baseline component cost magnitude bound)",
+    "source": "Reuse six retained actual primal midpoint/end arrays; no new forward FD runs or interpolation",
+    "underlying_h_one_sided": "existing linear h diagnostics retain 1% both-width unresolved rule; do not claim general differentiability"
+  },
+  "frozen_at": "2026-10-21T14:16:34.073358+09:00",
+  "frozen_pre_data_notes": "Old linear statistics are known from PR312/313; y/sigma and cost criteria fixed before evaluating new squared-cost FD numbers. No tuning y/sigma/eta/h/thresholds after results. Optional actual-observation problem not supplied; announced numeric-fixture assumption.",
+  "launch_binding": "created after matching build and code/runner hashes; must bind this immutable protocol before models",
+  "negative_checks": [
+    "wrong sigma instead of sigma squared",
+    "state-changed but stale residual coefficient",
+    "omitted midpoint contribution independently checked",
+    "affine h quadratic cost has exact central derivative but large finite-width side gap"
+  ],
+  "nonclaims": [
+    "all directions or global exact FP64 adjoint",
+    "second whole-gradient native replay",
+    "input-file initialization gradient",
+    "actual observation H/times/R/prior",
+    "new optimization or efficiency certification"
+  ],
+  "objective": {
+    "accepted_steps": [
+      128,
+      256
+    ],
+    "alpha": "(h-y)/sigma**2, recompute for EVERY state through one authoritative function",
+    "control": "unchanged registered post-initialization/CQ solver-entry state",
+    "cotangents": "baseline current-primal \u03b1N*qN and \u03b1m*qmid in FP64; Q32 only at actual Fortran boundaries",
+    "formula": "J=.5*sum(((h-y)/sigma)^2), h=[qmid.T Z128,qN.T Z256]",
+    "seconds": [
+      120,
+      240
+    ],
+    "sigma": [
+      1.0,
+      1.0
+    ],
+    "units": "dimensionless diagnostic values (original physical q scales retained)",
+    "y": [
+      0.0,
+      0.0
+    ]
+  },
+  "old_base_case": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline",
+  "old_horizon": 256,
+  "old_manifest": {
+    "bytes": 10667,
+    "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_two_time_adjoint/manifest.json",
+    "sha256": "79eba3dc569f29b77c1649e689cc5405e1a02c2b4a277d16679899a79b50fed1"
+  },
+  "old_packet": {
+    "bytes": 3432010,
+    "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_two_time_adjoint/native_two_time_adjoint.npz",
+    "sha256": "747f8c8347f3659340c691016b5ea5c25e686e86162abbeadb9c37a503d6bd1e"
+  },
+  "packed_dimension": 24531,
+  "pre_edit_graph": {
+    "bytes": 8908,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/pre_edit_binding.json",
+    "sha256": "91f507f814e2611d56703c2036b0b1816e6fd4330a2bf2923cf0af38147eedcf"
+  },
+  "purpose": "Synthetic two-diagnostic squared-residual caller, not actual observations/R/prior/assimilation performance",
+  "red_design": {
+    "bytes": 5610,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/red_design_review.json",
+    "sha256": "97a305cea66ee6301e9c58035a78243e7f8575893f91c409f511c6ef4d4c2755"
+  },
+  "red_nonlinearity_addendum": {
+    "bytes": 2873,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/red_residual_nonlinearity_design.json",
+    "sha256": "2869e77233faba75472c1daed637149c9bce6e502392e51c4debf42e38642a51"
+  },
+  "registered_map": {
+    "bytes": 8145,
+    "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/research_forward_setting/research_forward_map.json",
+    "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+  },
+  "schema": "native_residual_objective_protocol_v1",
+  "source_base": "ea5c39b8eeee2f73d6fc23bc964df22c2be34a33",
+  "target": {
+    "checkpoint_comparisons": 1160,
+    "ewt": 1e-06,
+    "h_seconds": 0.9375,
+    "krylov": 1e-07,
+    "new_implicit_stages": 3456,
+    "new_model_steps": 1152,
+    "newton_abs": 1e-09,
+    "newton_rel": 0.0,
+    "omp": 1,
+    "prefix_ends": [
+      256,
+      224,
+      192,
+      160,
+      128,
+      96,
+      64,
+      32
+    ],
+    "ranks": 1,
+    "rss_cap_bytes": 19327352832,
+    "wall_cap_seconds": 7200,
+    "window_steps": 32
+  },
+  "test_driver_cpp": {
+    "bytes": 50481,
+    "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+    "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+  }
+}
