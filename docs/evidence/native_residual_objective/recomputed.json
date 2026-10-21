@@ -1,0 +1,480 @@
+{
+  "component_checks": {
+    "baseline_replay_states_equal": true,
+    "eight_local_casts": true,
+    "eight_window_FP32_chain": true,
+    "frozen_injection_and_handoffs_equal": true,
+    "full_cost": true,
+    "midpoint_cost": true,
+    "terminal_residual_guard": true,
+    "underlying_linear_h_midpoint": true,
+    "underlying_linear_h_terminal": true
+  },
+  "external_evidence_scope": "Receipt/source/executable pins are reported from the manifest; this portable checker does not reparse raw checkpoint ledgers or receipts. The raw collector owns that verification.",
+  "external_provenance": {
+    "executable_sha256": "fd8ba93955a7f45fef10eef7646a5e1554cb1b0ba3c8718514f97c1ad346e744",
+    "old_provenance": {
+      "baseline_objective_receipt": {
+        "bytes": 1708,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/baseline_objective.json",
+        "sha256": "4f02fbdcc84a730257aba4b67400c63eb8db559bb7331b7089cccaf2086e5777"
+      },
+      "baseline_receipt": {
+        "bytes": 16582,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/run_receipt.json",
+        "sha256": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689"
+      },
+      "old_manifest": {
+        "bytes": 10667,
+        "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_two_time_adjoint/manifest.json",
+        "sha256": "79eba3dc569f29b77c1649e689cc5405e1a02c2b4a277d16679899a79b50fed1"
+      },
+      "old_packet": {
+        "bytes": 3432010,
+        "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_two_time_adjoint/native_two_time_adjoint.npz",
+        "sha256": "747f8c8347f3659340c691016b5ea5c25e686e86162abbeadb9c37a503d6bd1e"
+      },
+      "old_two_time_g0_array": "new_lambda_out_f32[-1]",
+      "reference_checkpoints": {
+        "bytes": 50435736,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+        "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+      }
+    },
+    "receipt_pins": [
+      {
+        "label": "residual_prefix_256",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_256.json",
+        "receipt_bytes": 18168,
+        "receipt_sha256": "c5e4018d138fcfd80a31006dfe16e419a213eaa44a1898f6173b1f757866afc9",
+        "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_256/run_receipt.json"
+      },
+      {
+        "label": "residual_prefix_224",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_224.json",
+        "receipt_bytes": 17728,
+        "receipt_sha256": "bef380e52ed7e4a44920cb599d885eceecfde1ddb2bd5aa4130302b9c4650a96",
+        "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_224/run_receipt.json"
+      },
+      {
+        "label": "residual_prefix_192",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_192.json",
+        "receipt_bytes": 17230,
+        "receipt_sha256": "d7c65ebef0909158494761ec8417f4a697e8a192128e220ec1331e3703150e33",
+        "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_192/run_receipt.json"
+      },
+      {
+        "label": "residual_prefix_160",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_160.json",
+        "receipt_bytes": 16740,
+        "receipt_sha256": "ef4bd438a9039ed4117a920535ec8529edd1bb435482e60978cd48f23d475a72",
+        "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_160/run_receipt.json"
+      },
+      {
+        "label": "residual_prefix_128",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_128.json",
+        "receipt_bytes": 17775,
+        "receipt_sha256": "0073d521c7bf3bca0aa63668265853cf365691f8a510da3676a4a29f31a79cda",
+        "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/run_receipt.json"
+      },
+      {
+        "label": "residual_prefix_096",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_096.json",
+        "receipt_bytes": 15728,
+        "receipt_sha256": "e4ef4377654f99a38d2603538f735047273f9088f07ddbfcd3947340e04345c6",
+        "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/run_receipt.json"
+      },
+      {
+        "label": "residual_prefix_064",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_064.json",
+        "receipt_bytes": 15232,
+        "receipt_sha256": "7d91eff3278bc6e5513717d6de6bb7f00996ae52c121207f820368bbffc58a91",
+        "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_064/run_receipt.json"
+      },
+      {
+        "label": "residual_prefix_032",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_032.json",
+        "receipt_bytes": 14598,
+        "receipt_sha256": "07a1cc3216efebc8d66572e24a49cbbf0f8ad3d4b32cf07bf639a3b986694f19",
+        "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_032/run_receipt.json"
+      }
+    ],
+    "source_files": [
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/dyn_em/module_implicit_sdirk3.F",
+        "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/dyn_em/solve_em.F",
+        "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+        "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+        "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+        "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+        "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+        "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+      }
+    ]
+  },
+  "manifest_sha256": "a54e5828b932828d71c11d9641372ba4a5a590b9323a3cdb20c2b6b1a2522304",
+  "npz_sha256": "f630fdf5b07ea358b61eb903b759d7c7ce1766cafc62612cbf3ac88911b5112d",
+  "overall_pass": true,
+  "per_window_local_casts": [
+    {
+      "byte_cast_equal": true,
+      "different_elements": 20992,
+      "max_abs": 0.00012204810445837211,
+      "rms": 6.277933345070584e-06
+    },
+    {
+      "byte_cast_equal": true,
+      "different_elements": 20992,
+      "max_abs": 0.00024231055431300774,
+      "rms": 1.1799890405438115e-05
+    },
+    {
+      "byte_cast_equal": true,
+      "different_elements": 20992,
+      "max_abs": 0.00024302917063323548,
+      "rms": 1.1431684951832082e-05
+    },
+    {
+      "byte_cast_equal": true,
+      "different_elements": 20992,
+      "max_abs": 6.0327018900352414e-05,
+      "rms": 3.5523588347422783e-06
+    },
+    {
+      "byte_cast_equal": true,
+      "different_elements": 20992,
+      "max_abs": 5.8672685099736555e-05,
+      "rms": 3.3776930058007517e-06
+    },
+    {
+      "byte_cast_equal": true,
+      "different_elements": 20992,
+      "max_abs": 0.00022862355672259582,
+      "rms": 8.979528990563999e-06
+    },
+    {
+      "byte_cast_equal": true,
+      "different_elements": 20992,
+      "max_abs": 0.00024397119432251202,
+      "rms": 1.1577216936825641e-05
+    },
+    {
+      "byte_cast_equal": true,
+      "different_elements": 20992,
+      "max_abs": 0.00024377492809435353,
+      "rms": 9.626849389752493e-06
+    }
+  ],
+  "protocol_sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb",
+  "recomputed": {
+    "alpha_f64": [
+      [
+        -420.1114023998378,
+        -11.718318303682182
+      ],
+      [
+        -420.1114023998378,
+        -11.718318303682182
+      ],
+      [
+        -419.9476648302275,
+        -122.24746142001814
+      ],
+      [
+        -420.2751399807264,
+        98.80549138025434
+      ],
+      [
+        -419.6201897179904,
+        -343.3217476308596
+      ],
+      [
+        -420.60261517867826,
+        319.8370984826659
+      ]
+    ],
+    "claim_scope": {
+      "global_exact_fp64_g0_claim": false,
+      "midpoint_increment_is_derived_composite_not_independent_native_vjp": true,
+      "new_full_dAD_is_actual_fp32_chain": true,
+      "quadratic_cost_one_sided_gaps_are_not_gates": true,
+      "second_full_gradient_replay_claim": false,
+      "terminal_residual_guard_uses_scaled_old_terminal_chain_only": true
+    },
+    "cost_components": [
+      [
+        88246.79521317923,
+        68.65949193320643
+      ],
+      [
+        88246.79521317923,
+        68.65949193320643
+      ],
+      [
+        88178.02059818055,
+        7472.220911819411
+      ],
+      [
+        88315.59664290959,
+        4881.262563446757
+      ],
+      [
+        88040.55180948113,
+        58934.91119815382
+      ],
+      [
+        88453.27994757166,
+        51147.88478290527
+      ]
+    ],
+    "cost_total_f64": [
+      88315.45470511244,
+      88315.45470511244,
+      95650.24150999996,
+      93196.85920635634,
+      146975.46300763494,
+      139601.1647304769
+    ],
+    "fd_full_quadratic_cost": {
+      "both_signals_above_frozen_floor": true,
+      "both_widths_fd_ad_pass_1_percent": true,
+      "central_width_plateau_relative": 0.0019190119107326087,
+      "central_widths_pass_1_percent": true,
+      "frozen_cost_fd_ad_plateau_signal_pass": true,
+      "quadratic_cost_one_sided_gaps_are_diagnostic_only": true,
+      "widths": {
+        "0p01": {
+          "J0": 88315.45470511244,
+          "J_minus": 93196.85920635634,
+          "J_plus": 95650.24150999996,
+          "central_fd": 122669.11792404957,
+          "eta_minus_actual": -0.009999999776482582,
+          "eta_plus_actual": 0.009999999776482582,
+          "one_sided_minus_diagnostic": -488140.46103517973,
+          "one_sided_plus_diagnostic": 733478.6968832789,
+          "one_sided_relative_gap_diagnostic": 1.6655141630007821,
+          "relative_shared_signal_error": 0.00024026839946613234,
+          "signal_above_frozen_floor": true,
+          "signal_abs_Jplus_minus_Jminus": 2453.3823036436224,
+          "signal_floor": 8.109434435780947e-08
+        },
+        "0p03": {
+          "J0": 88315.45470511244,
+          "J_minus": 139601.1647304769,
+          "J_plus": 146975.46300763494,
+          "central_fd": 122904.97403310738,
+          "eta_minus_actual": -0.029999999329447746,
+          "eta_plus_actual": 0.029999999329447746,
+          "one_sided_minus_diagnostic": -1709523.7057229816,
+          "one_sided_plus_diagnostic": 1955333.6537891964,
+          "one_sided_relative_gap_diagnostic": 1.8742874661877449,
+          "relative_shared_signal_error": 0.002158819232278393,
+          "signal_above_frozen_floor": true,
+          "signal_abs_Jplus_minus_Jminus": 7374.298277158028,
+          "signal_floor": 8.109434435780947e-08
+        }
+      }
+    },
+    "fd_midpoint_quadratic_cost": {
+      "both_signals_above_frozen_floor": true,
+      "both_widths_fd_ad_pass_1_percent": true,
+      "central_width_plateau_relative": 9.457606307054522e-09,
+      "central_widths_pass_1_percent": true,
+      "frozen_cost_fd_ad_plateau_signal_pass": true,
+      "quadratic_cost_one_sided_gaps_are_diagnostic_only": true,
+      "widths": {
+        "0p01": {
+          "J0": 88246.79521317923,
+          "J_minus": 88315.59664290959,
+          "J_plus": 88178.02059818055,
+          "central_fd": -6878.802390205099,
+          "eta_minus_actual": -0.009999999776482582,
+          "eta_plus_actual": 0.009999999776482582,
+          "one_sided_minus_diagnostic": -6880.143126819164,
+          "one_sided_plus_diagnostic": -6877.461653591034,
+          "one_sided_relative_gap_diagnostic": 0.00038974090781302085,
+          "relative_shared_signal_error": 1.8822578830357206e-07,
+          "signal_above_frozen_floor": true,
+          "signal_abs_Jplus_minus_Jminus": 137.57604472903768,
+          "signal_floor": 8.108172263254934e-08
+        },
+        "0p03": {
+          "J0": 88246.79521317923,
+          "J_minus": 88453.27994757166,
+          "J_plus": 88040.55180948113,
+          "central_fd": -6878.802455262105,
+          "eta_minus_actual": -0.029999999329447746,
+          "eta_plus_actual": 0.029999999329447746,
+          "one_sided_minus_diagnostic": -6882.824633590915,
+          "one_sided_plus_diagnostic": -6874.780276933295,
+          "one_sided_relative_gap_diagnostic": 0.0011687580442425963,
+          "relative_shared_signal_error": 1.976833928304612e-07,
+          "signal_above_frozen_floor": true,
+          "signal_abs_Jplus_minus_Jminus": 412.7281380905333,
+          "signal_floor": 8.108172263254934e-08
+        }
+      }
+    },
+    "fd_terminal_residual_guard": {
+      "both_signals_above_frozen_floor": true,
+      "both_widths_fd_ad_pass_1_percent": true,
+      "central_width_plateau_relative": 0.0018173009022903334,
+      "central_widths_pass_1_percent": true,
+      "frozen_cost_fd_ad_plateau_signal_pass": true,
+      "quadratic_cost_one_sided_gaps_are_diagnostic_only": true,
+      "widths": {
+        "0p01": {
+          "J0": 68.65949193320643,
+          "J_minus": 4881.262563446757,
+          "J_plus": 7472.220911819411,
+          "central_fd": 129547.9203142544,
+          "eta_minus_actual": -0.009999999776482582,
+          "eta_plus_actual": 0.009999999776482582,
+          "one_sided_minus_diagnostic": -481260.3179083614,
+          "one_sided_plus_diagnostic": 740356.1585368701,
+          "one_sided_relative_gap_diagnostic": 1.6500389202670411,
+          "relative_shared_signal_error": 0.00022752049838982959,
+          "signal_above_frozen_floor": true,
+          "signal_abs_Jplus_minus_Jminus": 2590.9583483726547,
+          "signal_floor": 1.6591663402774983e-10
+        },
+        "0p03": {
+          "J0": 68.65949193320643,
+          "J_minus": 51147.88478290527,
+          "J_plus": 58934.91119815382,
+          "central_fd": 129783.77648836936,
+          "eta_minus_actual": -0.029999999329447746,
+          "eta_plus_actual": 0.029999999329447746,
+          "one_sided_minus_diagnostic": -1702640.8810893914,
+          "one_sided_plus_diagnostic": 1962208.43406613,
+          "one_sided_relative_gap_diagnostic": 1.8677166255784268,
+          "relative_shared_signal_error": 0.0020444079274731498,
+          "signal_above_frozen_floor": true,
+          "signal_abs_Jplus_minus_Jminus": 7787.026415248554,
+          "signal_floor": 1.3086179073285869e-09
+        }
+      }
+    },
+    "full_dAD_from_new_fortran_fp32_g0": 122639.64441142204,
+    "h": [
+      [
+        -420.1114023998378,
+        -11.718318303682182
+      ],
+      [
+        -420.1114023998378,
+        -11.718318303682182
+      ],
+      [
+        -419.9476648302275,
+        -122.24746142001814
+      ],
+      [
+        -420.2751399807264,
+        98.80549138025434
+      ],
+      [
+        -419.6201897179904,
+        -343.3217476308596
+      ],
+      [
+        -420.60261517867826,
+        319.8370984826659
+      ]
+    ],
+    "midpoint_increment_dAD_composite": -6878.801095437097,
+    "old_linear_h_one_sided_checks": {
+      "midpoint_h": {
+        "frozen_linear_h_one_sided_check_pass": true,
+        "one_sided_gap_over_1_percent_at_both_widths": false,
+        "widths": {
+          "0p01": {
+            "minus_slope": 16.37375845484279,
+            "plus_slope": 16.37375732701249,
+            "relative_gap": 6.888035520963206e-08
+          },
+          "0p03": {
+            "minus_slope": 16.373759660664156,
+            "plus_slope": 16.373756427562,
+            "relative_gap": 1.9745630953300996e-07
+          }
+        }
+      },
+      "terminal_h": {
+        "frozen_linear_h_one_sided_check_pass": true,
+        "one_sided_gap_over_1_percent_at_both_widths": false,
+        "widths": {
+          "0p01": {
+            "minus_slope": -11052.381215433623,
+            "plus_slope": -11052.914558685488,
+            "relative_gap": 4.825363021072219e-05
+          },
+          "0p03": {
+            "minus_slope": -11051.847473239644,
+            "plus_slope": -11053.44789130306,
+            "relative_gap": 0.000144789035887584
+          }
+        }
+      }
+    },
+    "old_terminal_scaled_postprocess_prediction_diagnostic": 122639.63798918795,
+    "residual_f64": [
+      [
+        -420.1114023998378,
+        -11.718318303682182
+      ],
+      [
+        -420.1114023998378,
+        -11.718318303682182
+      ],
+      [
+        -419.9476648302275,
+        -122.24746142001814
+      ],
+      [
+        -420.2751399807264,
+        98.80549138025434
+      ],
+      [
+        -419.6201897179904,
+        -343.3217476308596
+      ],
+      [
+        -420.60261517867826,
+        319.8370984826659
+      ]
+    ],
+    "terminal_residual_reference_dAD": 129518.44550685913
+  },
+  "schema": "native_residual_objective_portable_check_v1"
+}

@@ -433,9 +433,9 @@ extern "C" int sdirk3_native_terminal_prepare(
         const std::string chain_name = mode == 3 ? required_env("WRF_SDIRK3_NATIVE_TERMINAL_CHAIN") : mode_name;
         TORCH_CHECK(mode == 3 || expected_steps == kSteps,
                     "only prefix mode may shorten the frozen timestep horizon");
-        TORCH_CHECK(mode != 3 || (expected_steps < kSteps &&
+        TORCH_CHECK(mode != 3 || (expected_steps <= kSteps &&
                     (chain_name == "baseline" || chain_name == "replay")),
-                    "prefix mode requires baseline/replay chain and a shortened horizon");
+                    "prefix mode requires baseline/replay chain and a horizon in [32,256]");
 
         auto x0 = torch::from_blob(packed_x0, {n}, torch::TensorOptions().dtype(torch::kFloat32)
                                                     .device(torch::kCPU)).clone();

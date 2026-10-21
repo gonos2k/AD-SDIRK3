@@ -1,0 +1,61 @@
+{
+  "schema": "native_residual_objective_packet_checker_binding_v1",
+  "captured_at_local": "2026-10-21T14:37:16.149829+09:00",
+  "worktree": "/private/tmp/native-residual-objective-20261021",
+  "branch": "codex/native-residual-objective-20261021",
+  "head": "ea5c39b8eeee2f73d6fc23bc964df22c2be34a33",
+  "worktree_status": [
+    " M external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+    "?? external/libtorch_wrf/sdirk3/tests/native_residual_prefix.py"
+  ],
+  "prior_three_file_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/post_edit_binding.json",
+    "sha256": "2377224ab20e0997b4ee40f1b367bbbdcdf5ccbfea75a83bb7bc3507a30732a5",
+    "ast_graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/post_edit_ast_final/graphify-out/graph.json",
+    "ast_graph_sha256": "d9489311a38f60366643713d601a28864071a42bdfcc07e55f6ad58ec515c156",
+    "production_graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+    "production_graph_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+  },
+  "packet_checker": {
+    "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_residual_objective/check_packet.py",
+    "sha256": "bf2b0259fb3b5ac3d8b332906718054d8acea788d8c267dd5cb6db7e6dfca88a",
+    "git_status": "ignored docs helper"
+  },
+  "authoritative_recompute_helper": {
+    "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_residual_objective/recompute.py",
+    "sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89",
+    "git_status": "ignored docs helper",
+    "imported_as": "recompute as core",
+    "direct_calls": [
+      "objective_pair",
+      "inject_midpoint_f32",
+      "recompute_components",
+      "summarize_local_casts"
+    ]
+  },
+  "runner": {
+    "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_residual_prefix.py",
+    "sha256": "ae07695cd48ebfcd427f0053f7f3d5766c70534c5b09fd54141f3a9c64ee47d9",
+    "git_status": "untracked frozen source"
+  },
+  "packet_checker_ast": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/packet_checker_ast/graphify-out/graph.json",
+    "sha256": "73e7397457d823f6aa145ddf00b1b7ce4dda4970b7b911252db0b22c05fe7e33",
+    "source_sha256": "bf2b0259fb3b5ac3d8b332906718054d8acea788d8c267dd5cb6db7e6dfca88a",
+    "nodes": 10,
+    "edges": 30,
+    "method": "single-file code-only Graphify AST; no semantic extraction"
+  },
+  "wrapper_dependency_bridge": {
+    "source_locations": [
+      "check_packet.py:7, 54, 60, 72, 95, 99, 126, 129"
+    ],
+    "description": "The offline checker imports the authoritative recompute helper, verifies the helper hash pinned in the manifest, computes residual components and midpoint cotangent injection, and checks packet schema. The native runner does not import this checker; they communicate via packet files."
+  },
+  "uncertainty_and_limits": [
+    "Graph AST is navigation only.",
+    "Python runner to native Fortran bridge is source-confirmed in the prior binding, not an AST-derived edge.",
+    "No numerical packet payloads read and checker not executed.",
+    "No build or model run."
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "schema": "native_residual_objective_post_edit_source_graph_binding_v1",
+  "captured_at_local": "2026-10-21T14:32:01.642021+09:00",
+  "worktree": "/private/tmp/native-residual-objective-20261021",
+  "branch": "codex/native-residual-objective-20261021",
+  "head": "ea5c39b8eeee2f73d6fc23bc964df22c2be34a33",
+  "worktree_status": [
+    " M external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+    "?? external/libtorch_wrf/sdirk3/tests/native_residual_prefix.py"
+  ],
+  "source_base_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/pre_edit_binding.json",
+    "sha256": "91f507f814e2611d56703c2036b0b1816e6fd4330a2bf2923cf0af38147eedcf",
+    "base_tree": "ed4bddee09211fedc4c067ee7012e368cd81f01c",
+    "ten_base_source_pins_verified": true
+  },
+  "source_delta_vs_pre_edit": [
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86",
+      "base_source_sha256": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d",
+      "matches_base": false
+    }
+  ],
+  "changed_artifacts": {
+    "recompute_helper": {
+      "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_residual_objective/recompute.py",
+      "sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89",
+      "status": "ignored docs artifact"
+    },
+    "prefix_runner": {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_residual_prefix.py",
+      "sha256": "ae07695cd48ebfcd427f0053f7f3d5766c70534c5b09fd54141f3a9c64ee47d9",
+      "status": "untracked frozen source"
+    },
+    "test_driver_cpp": {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86",
+      "status": "tracked source modification"
+    },
+    "launch_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/launch_binding.json",
+      "sha256": "d1f3e3c9b74c49f69ee7732f5db55b6fdc477be88237e4ec74d7abe92121d5c0"
+    },
+    "protocol": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/protocol.json",
+      "sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb"
+    }
+  },
+  "targeted_python_cpp_ast": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/post_edit_ast_final/graphify-out/graph.json",
+    "sha256": "d9489311a38f60366643713d601a28864071a42bdfcc07e55f6ad58ec515c156",
+    "files": 3,
+    "nodes": 103,
+    "edges": 269,
+    "method": "code-only Graphify AST; no semantic extraction",
+    "inputs": [
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+        "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_residual_prefix.py",
+        "sha256": "ae07695cd48ebfcd427f0053f7f3d5766c70534c5b09fd54141f3a9c64ee47d9"
+      },
+      {
+        "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_residual_objective/recompute.py",
+        "sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89"
+      }
+    ]
+  },
+  "cached_production_graph": {
+    "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/v5_skip_source_binding.json",
+    "receipt_sha256": "ad4ce2ae89f81f81aa191b6ca74dbe1b0154c77c60d73c00451c8573e5d2ed85",
+    "graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+    "graph_sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+    "no_full_corpus_rebuild": true
+  },
+  "test_build_provenance": {
+    "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/build_receipt.json",
+    "build_receipt_sha256": "04b35cb35929e68e97f23d2e0e5094c61fe16f9c5fcf70a8e3e4dda78ea506cf",
+    "status": "compiled_and_linked_no_model_run",
+    "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/wrf_native_residual_objective.exe",
+    "executable_sha256": "fd8ba93955a7f45fef10eef7646a5e1554cb1b0ba3c8718514f97c1ad346e744",
+    "source_hash": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86",
+    "no_model_run": true
+  },
+  "wrapper_caller_bridge_source_verified": [
+    {
+      "runner": "native_residual_prefix.py -> P6 executable",
+      "detail": "Validates frozen launch/protocol/source pins and launches P6 with residual-cotangent path via prefix environment."
+    },
+    {
+      "recompute.py": "Separate portable NumPy postprocessor of frozen evidence files; no import edge from runner."
+    },
+    {
+      "language_boundary": "Existing Fortran BIND(C)/fixed-trajectory wrapper chain remains unchanged; direct cross-language calls are manually verified, not Graphify-derived."
+    }
+  ],
+  "graph_limitations": [
+    "Graphify edges are navigation, not numerical proof.",
+    "No cross-language Fortran/C++ AST edge claims.",
+    "No FD payload or midpoint-state values were read.",
+    "No model run."
+  ]
+}

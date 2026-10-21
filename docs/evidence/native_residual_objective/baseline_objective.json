@@ -1,0 +1,48 @@
+{
+  "schema": "native_residual_baseline_objective_v1",
+  "evaluated_at": "2026-10-21T14:24:07.049785+09:00",
+  "protocol_sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb",
+  "cost_helper": {
+    "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_residual_objective/recompute.py",
+    "bytes": 15689,
+    "sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89"
+  },
+  "old_packet": {
+    "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_two_time_adjoint/native_two_time_adjoint.npz",
+    "bytes": 3432010,
+    "sha256": "747f8c8347f3659340c691016b5ea5c25e686e86162abbeadb9c37a503d6bd1e"
+  },
+  "y": [
+    0.0,
+    0.0
+  ],
+  "sigma": [
+    1.0,
+    1.0
+  ],
+  "h": [
+    -420.1114023998378,
+    -11.718318303682182
+  ],
+  "alpha": [
+    -420.1114023998378,
+    -11.718318303682182
+  ],
+  "cost_components": [
+    88246.79521317923,
+    68.65949193320643
+  ],
+  "cost_total": 88315.45470511244,
+  "terminal_seed": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/incoming/terminal_residual_f32.bin",
+    "bytes": 98124,
+    "sha256": "d449dfbd25e9881561faeaaced1fdbf9fc31b860ee436f60d157e5d6300a5cef"
+  },
+  "midpoint_cotangent": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/incoming/midpoint_residual_f64.bin",
+    "bytes": 196248,
+    "sha256": "f6155760231f5ab0d2d59948da98864ec393a72af9bd39780b7697c002693e4b"
+  },
+  "baseline_mid_state_sha256": "e7b4230680244cd0f439001db0528b93c22c04c6cc79f36ef263f9d43458d6d1",
+  "baseline_terminal_state_sha256": "75b5c79ba0a6ab8c5fe9754b9a8eb8bd4295c95e5bb0ed7f001038f89e3e2b15"
+}

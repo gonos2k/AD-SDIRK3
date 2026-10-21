@@ -1,0 +1,12 @@
+{
+  "schema": "native_residual_fresh_folder_check_v1",
+  "fresh_directory": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/native-residual-portable-odkymkv_",
+  "portable_output_byte_equal": true,
+  "overall_pass": true,
+  "all_component_checks_pass": true,
+  "self_tests": [
+    "objective primitive and cost/side-gap distinction",
+    "packet schema and omitted-injection rejection"
+  ],
+  "recomputed_sha256": "c9a19cf758e01df8ccbe3c08a25b360d175cea1356f284e3e4f87a4f919349d3"
+}

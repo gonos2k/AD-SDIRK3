@@ -1,0 +1,173 @@
+{
+  "base_commit": "ea5c39b8eeee2f73d6fc23bc964df22c2be34a33",
+  "baseline_v6_launch_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/launch_binding_v6.json",
+    "sha256": "714b5e500da2e0bd40e49e77498b99e503ed61be39700d0103f02562dbfb7439"
+  },
+  "candidate_executable": {
+    "bytes": 52799248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/wrf_native_residual_objective.exe",
+    "sha256": "fd8ba93955a7f45fef10eef7646a5e1554cb1b0ba3c8718514f97c1ad346e744"
+  },
+  "changed_source": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+  "checks": {
+    "archive_other_members_unchanged": true,
+    "compile_return_code": 0,
+    "link_return_code": 0,
+    "model_run": false,
+    "old_archive_and_executable_pins_unchanged": true,
+    "required_symbols_present": 16,
+    "source_pin_gate_passed": true
+  },
+  "compiler_stack": {
+    "cpp_compiler": {
+      "flags": [
+        "-std=c++17",
+        "-O3",
+        "-DMACOS",
+        "-DDMPARALLEL",
+        "-DUSE_SDIRK3",
+        "-DWRF_SDIRK3_NATIVE_TERMINAL_TEST",
+        "-D_GLIBCXX_USE_CXX11_ABI=0"
+      ],
+      "path": "/usr/bin/g++",
+      "version": "Apple clang 21.0.0 (clang-2100.3.34.2)"
+    },
+    "libtorch": "2.10.0; /opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch; ABI=0",
+    "link_driver": "g++",
+    "mpi": "Open MPI 5.0.9; /opt/homebrew/opt/open-mpi",
+    "mpi_fortran_compiler": {
+      "flags": [
+        "-O2",
+        "-ftree-vectorize",
+        "-funroll-loops",
+        "-w",
+        "-ffree-form",
+        "-ffree-line-length-none",
+        "-fconvert=big-endian",
+        "-frecord-marker=4",
+        "-fallow-argument-mismatch",
+        "-fallow-invalid-boz",
+        "-DUSE_SDIRK3"
+      ],
+      "version": "GNU Fortran 15.2.0",
+      "wrapper": "mpif90"
+    },
+    "netcdf": "netCDF 4.9.3, netCDF-Fortran 4.6.2 via explicit /opt/homebrew/bin probes; dylib SHA pins in symbol_receipt.json"
+  },
+  "graph_pre_edit_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/pre_edit_binding.json",
+    "sha256": "91f507f814e2611d56703c2036b0b1816e6fd4330a2bf2923cf0af38147eedcf"
+  },
+  "receipts": {
+    "archive_update_receipt.json": {
+      "bytes": 7011,
+      "path": "archive_update_receipt.json",
+      "sha256": "385a1d30b3e46965953fe312f2b6bc4c2769bc2e0a4763e4d2b79c8b3a860c35"
+    },
+    "compile_receipt.json": {
+      "bytes": 2025,
+      "path": "compile_receipt.json",
+      "sha256": "aa80fc40ae51c76ff56ad1b6f52bee5905174e8299cf48f0e777211dbcbadadf"
+    },
+    "link_receipt.json": {
+      "bytes": 5291,
+      "path": "link_receipt.json",
+      "sha256": "2ac502b4cd23913e2f033385f7fb843f11ee4cea627b3b2c033381dd4da48851"
+    },
+    "symbol_receipt.json": {
+      "bytes": 5632,
+      "path": "symbol_receipt.json",
+      "sha256": "5dfc425b77ec69383322a5ecb9db755284f1c12e5109a48a36efcffdae97aedb"
+    }
+  },
+  "reused_inputs": {
+    "new_cpp_archive": {
+      "bytes": 11738376,
+      "only_member_replaced": "native_terminal_adjoint_test.o",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/archives/libwrf_sdirk3_libtorch.a",
+      "sha256": "0b7b6978cc12a05e2bf9f4708d2e1501004267e0dd6e2951796424b24349d94e"
+    },
+    "p6_cpp_archive_source": {
+      "bytes": 11738376,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/candidate/libwrf_sdirk3_libtorch.a",
+      "sha256": "a4ba233ada016f4c03f2e974358b10f72f324cde84f270566312785ce2fdefa5",
+      "untouched": true
+    },
+    "p6_executable": {
+      "matches_launch_binding": true,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/wrf_native_terminal_fortran_chain.exe",
+      "sha256": "71927be0736ecd7c8e51b4a22177122af1a38b924e345836d1d6590470514249",
+      "untouched": true
+    },
+    "p6_fortran_archive": {
+      "bytes": 54890320,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/candidate/libwrflib.a",
+      "sha256": "4241f06c0f60d1f29f05bb9d8e8c75c5977dabe4d20fcb1b330e1733f4f12833",
+      "untouched": true
+    }
+  },
+  "schema": "native_residual_objective_build_receipt_v1",
+  "source_change_summary": "Prefix mode now accepts the full 256-step horizon (expected_steps <= kSteps); error text says horizon [32,256].",
+  "source_files": {
+    "dyn_em/module_implicit_sdirk3.F": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    "dyn_em/solve_em.F": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp": {
+      "changed_for_this_build": true,
+      "matches_v6_binding": false,
+      "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+    },
+    "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": {
+      "changed_for_this_build": false,
+      "matches_v6_binding": true,
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    }
+  },
+  "source_pin_gate": {
+    "changed_cpp_matches_authorized_root_pin": true,
+    "changed_cpp_sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86",
+    "graph_pre_edit_binding_sha256_matches_root_pin": true,
+    "unchanged_v6_bound_source_count": 9,
+    "unchanged_v6_bound_sources_match": true
+  },
+  "status": "compiled_and_linked_no_model_run",
+  "worktree": "/private/tmp/native-residual-objective-20261021"
+}

@@ -1,0 +1,62 @@
+{
+  "findings": [
+    {
+      "finding": "The proposed midpoint difference against alpha_terminal times the old unscaled terminal gradient is not self-justifying under repeated FP32 handoffs. Keep it only with a separately frozen terminal-residual FD guard at both widths. If that guard fails, do not report the midpoint component as passed; an actual alpha-scaled terminal-only chain may be run as a bounded diagnostic.",
+      "priority": "P1 design freeze"
+    },
+    {
+      "finding": "State explicitly that y=0 and sigma=1 are synthetic numeric residual settings, not observations or R. Freeze the exact h(q,Z), alpha values, arithmetic order, FP32 cast points, and all component-specific denominators before revealing any new residual FD values.",
+      "priority": "P2 provenance/scope"
+    }
+  ],
+  "frozen_acceptance_recommendation": {
+    "each_component": "Predeclare <=1% FD/AD discrepancy at both widths, resolved signal using the frozen no-floor 100*eps64 scale, <=1% adjacent-width difference, and no >1% one-sided gap at both widths. Use separate component denominators; a full-objective pass must not hide a missing midpoint.",
+    "full": "Compare dot(v, g_new_0_f32) to central FD of the complete two-residual J at actual transmitted FP32 eta +/-0.01 and +/-0.03.",
+    "midpoint": "Compare dAD_mid to central FD of the midpoint residual term alone at the same two widths.",
+    "scaled_terminal_guard": "Compare alpha_terminal*dot(v,g_old_terminal_0_f32) to central FD of the terminal residual term alone at the same widths.",
+    "trajectory_gate": "Each new prefix must reproduce all N+1 packed FP64 states bytewise against the accepted baseline before its checked Fortran pullback; bind source, executable, input, namelist, protocol, eta, tolerances, and runtime evidence."
+  },
+  "midpoint_increment_decision": {
+    "extra_terminal_only_lower_windows_required_by_default": false,
+    "interpretation": "Call this the midpoint increment of the tested composite-chain gradient relative to the checked scaled terminal baseline; it is not a claim that finite-precision window composition is exactly additive. Require its own midpoint-residual FD comparison. If the scaled-terminal guard fails due to FP32 rescaling, stop acceptance; four additional lower terminal-only VJPs may diagnose that discrepancy but cannot erase a failed primary composite check.",
+    "reason": "This is a bounded, independently FD-checkable midpoint increment relative to the reused terminal-only baseline. The old terminal chain is for unscaled q_N, so FP32 handoff nonlinearity means alpha_terminal*g_old is not automatically identical to a newly run alpha-scaled terminal-only chain.",
+    "recommended_dAD_mid": "dot(FP64(v_f32), FP64(g_new_composite_0_f32) - alpha_terminal*FP64(g_old_terminal_0_f32))",
+    "required_guard": "Before treating dAD_mid as an accepted component comparison, separately compare alpha_terminal*dot(v,g_old_terminal_0_f32) with the terminal residual FD contribution at both frozen widths, including signal, plateau, and one-sided checks. The old unscaled q_N check alone does not validate arbitrary FP32 cotangent rescaling."
+  },
+  "negative_tests": [
+    "Omit the midpoint cotangent while retaining the terminal term; the separate midpoint component check must fail even if the total discrepancy is small.",
+    "Use the wrong sign or omit the residual factor alpha=(h-y)/sigma^2; independent scalar residual derivatives and the component FD checks must reject it.",
+    "Change either frozen sigma or y after alpha/objective freeze; the protocol binding should reject the changed fixture, and a wrong-sigma or baseline-frozen-alpha synthetic calculation should fail the corresponding residual FD test."
+  ],
+  "objective": {
+    "J": "0.5*((h_mid-y_mid)/sigma_mid)^2 + 0.5*((h_terminal-y_terminal)/sigma_terminal)^2",
+    "alpha_mid": "(h_mid-y_mid)/sigma_mid^2 at the baseline accepted Z128",
+    "alpha_terminal": "(h_terminal-y_terminal)/sigma_terminal^2 at the baseline accepted Z256",
+    "h_mid": "q_mid^T Z128",
+    "h_terminal": "q_N^T Z256",
+    "numeric_fixture": "y_mid=y_terminal=0 and sigma_mid=sigma_terminal=1 are explicitly synthetic fixed scalar settings, not observations, measurement uncertainties, R, or a production observation cost.",
+    "perturbed_FD": "Recompute h_mid and h_terminal from each retained perturbed accepted state and evaluate the same frozen residual formula; do not freeze alpha at the baseline when evaluating perturbed J."
+  },
+  "recommended_cotangent_and_chain": {
+    "control": "Keep the original post-initialization solver-entry control and old eta values; only the objective cotangents change.",
+    "lower_windows": [
+      128,
+      96,
+      64,
+      32
+    ],
+    "midpoint_injection_at_128": "cast32(FP64(lambda_terminal_at_128_f32) + alpha_mid * FP64(q_mid_f32))",
+    "precision": "Compute baseline h and alpha in FP64 from the accepted FP64 states and frozen FP32 q vectors. Use FP64 for alpha scaling and cotangent addition, then one specified FP32 publication at each Fortran ABI handoff.",
+    "terminal_input": "cast32(alpha_terminal * FP64(q_N_f32))",
+    "upper_windows": [
+      256,
+      224,
+      192,
+      160
+    ]
+  },
+  "reviewed_at": "2026-10-21T11:12:00+09:00",
+  "schema": "red_native_residual_design_review_v1",
+  "scope": "Read-only preflight of the proposed two-time scalar residual objective and segmented native Fortran FP32 VJP plan. No new residual finite-difference results were inspected; no source, build, or model changes were made.",
+  "status": "CONDITIONAL_PASS_AFTER_FREEZE_NOTE"
+}

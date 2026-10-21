@@ -1,0 +1,229 @@
+{
+  "schema": "native_residual_archive_integrity_v1",
+  "created_at": "2026-10-21T17:02:40.072547+09:00",
+  "source_base": "ea5c39b8eeee2f73d6fc23bc964df22c2be34a33",
+  "scope": "Integrity of committed code/report/compact evidence; raw external-ledger proof is in the collector and Red raw receipt.",
+  "excluded": [
+    "artifact_manifest.json (self)",
+    "red_final_scope_review.json (closing review pins this manifest; excluded to avoid a hash cycle)",
+    "__pycache__/**"
+  ],
+  "files": [
+    {
+      "path": "docs/(202610211456)_native_residual_objective.md",
+      "bytes": 9723,
+      "sha256": "c795ece6cebcf2897e103c760f977052f452c5563bbc07e856c218a4563fee7e"
+    },
+    {
+      "path": "docs/PROBLEM_DEFINITION.md",
+      "bytes": 30141,
+      "sha256": "1e5b7eb6685b7f2b47aa7978607accdc80d08298a83a13cf2a5568bce153d929"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/README.md",
+      "bytes": 4662,
+      "sha256": "002b7c55d4912fbc69fd7fb1202bd0c270ddd464038ec00d4997347a620bcb70"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/baseline_objective.json",
+      "bytes": 1708,
+      "sha256": "4f02fbdcc84a730257aba4b67400c63eb8db559bb7331b7089cccaf2086e5777"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/build_receipt.json",
+      "bytes": 7271,
+      "sha256": "04b35cb35929e68e97f23d2e0e5094c61fe16f9c5fcf70a8e3e4dda78ea506cf"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/check_packet.py",
+      "bytes": 9648,
+      "sha256": "bf2b0259fb3b5ac3d8b332906718054d8acea788d8c267dd5cb6db7e6dfca88a"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/collect_packet.py",
+      "bytes": 19774,
+      "sha256": "8c35fca8dda98a8bd2c8e832d4229dcebaeb81ca9fa26cbb7d81f3bad8b84927"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/directional_checks.csv",
+      "bytes": 839,
+      "sha256": "9379c830bf20bc5e82cc1ccdba75c321403c1222c429e21dce788bab38812c0d"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/fd_pre_native_reference_only.json",
+      "bytes": 8419,
+      "sha256": "ed3e22d0cebea02d8ba911ac8b8f252b1cdd4ec40bfa67869354c96dd19600cb"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/finite_width_cost_identity.json",
+      "bytes": 2421,
+      "sha256": "a38e498aca919f63f099bc6d9357497e429b2783c3d36fbae9af2ecd272b6b6a"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/fresh_folder_check.json",
+      "bytes": 485,
+      "sha256": "78832cc5da1a02ee29494f4bd75e6081b0604c226339b20931702103ba5c59de"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/graph_collector_archive_binding.json",
+      "bytes": 10361,
+      "sha256": "106f68fc7a5b111d9c14935ffe14f221d77558bb09fbf9d9dd5773750c830dd5"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/graph_packet_checker_binding.json",
+      "bytes": 3409,
+      "sha256": "591e64b40c1fcf5d300d898e5a4e0bdf079cf8004fff0ab76c51912c651aa2de"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/graph_post_edit_binding.json",
+      "bytes": 5571,
+      "sha256": "2377224ab20e0997b4ee40f1b367bbbdcdf5ccbfea75a83bb7bc3507a30732a5"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/graph_pre_edit_binding.json",
+      "bytes": 8908,
+      "sha256": "91f507f814e2611d56703c2036b0b1816e6fd4330a2bf2923cf0af38147eedcf"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/green_closing_numerical_review.json",
+      "bytes": 10438,
+      "sha256": "172b4912d76d98125a01a6eced4a2636a0e0707b56f7a59bb2bc649fc9daf53a"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/launch_binding.json",
+      "bytes": 5137,
+      "sha256": "d1f3e3c9b74c49f69ee7732f5db55b6fdc477be88237e4ec74d7abe92121d5c0"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/manifest.json",
+      "bytes": 26576,
+      "sha256": "a54e5828b932828d71c11d9641372ba4a5a590b9323a3cdb20c2b6b1a2522304"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/midpoint_injection.json",
+      "bytes": 1248,
+      "sha256": "d0aed5571083611e6888cea65cc6154e016b2504531d67b9be0ad84188d42bef"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/native_residual_objective.npz",
+      "bytes": 4671113,
+      "sha256": "f630fdf5b07ea358b61eb903b759d7c7ce1766cafc62612cbf3ac88911b5112d"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/objective_values.csv",
+      "bytes": 915,
+      "sha256": "f34c99d079a68a1daf9a3b07312663ae694f5c15857de75f89072c601e8a89d2"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/protocol.json",
+      "bytes": 6926,
+      "sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/receipts/residual_prefix_032.json",
+      "bytes": 14598,
+      "sha256": "07a1cc3216efebc8d66572e24a49cbbf0f8ad3d4b32cf07bf639a3b986694f19"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/receipts/residual_prefix_064.json",
+      "bytes": 15232,
+      "sha256": "7d91eff3278bc6e5513717d6de6bb7f00996ae52c121207f820368bbffc58a91"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/receipts/residual_prefix_096.json",
+      "bytes": 15728,
+      "sha256": "e4ef4377654f99a38d2603538f735047273f9088f07ddbfcd3947340e04345c6"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/receipts/residual_prefix_128.json",
+      "bytes": 17775,
+      "sha256": "0073d521c7bf3bca0aa63668265853cf365691f8a510da3676a4a29f31a79cda"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/receipts/residual_prefix_160.json",
+      "bytes": 16740,
+      "sha256": "ef4bd438a9039ed4117a920535ec8529edd1bb435482e60978cd48f23d475a72"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/receipts/residual_prefix_192.json",
+      "bytes": 17230,
+      "sha256": "d7c65ebef0909158494761ec8417f4a697e8a192128e220ec1331e3703150e33"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/receipts/residual_prefix_224.json",
+      "bytes": 17728,
+      "sha256": "bef380e52ed7e4a44920cb599d885eceecfde1ddb2bd5aa4130302b9c4650a96"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/receipts/residual_prefix_256.json",
+      "bytes": 18168,
+      "sha256": "c5e4018d138fcfd80a31006dfe16e419a213eaa44a1898f6173b1f757866afc9"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/recompute.py",
+      "bytes": 15689,
+      "sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/recomputed.json",
+      "bytes": 18873,
+      "sha256": "c9a19cf758e01df8ccbe3c08a25b360d175cea1356f284e3e4f87a4f919349d3"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/red_closing_raw_review.json",
+      "bytes": 8559,
+      "sha256": "c71616aedf69ec01ccff0822ece11b914939a0458beecf598d041bd674533874"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/red_design_review.json",
+      "bytes": 5610,
+      "sha256": "97a305cea66ee6301e9c58035a78243e7f8575893f91c409f511c6ef4d4c2755"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/red_midpoint_actual_review.json",
+      "bytes": 2685,
+      "sha256": "bf4b662dcdf616215d62d9fb2357d33d6578fcb6828ee0b1676ca0348dff8ec0"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/red_prelaunch_review.json",
+      "bytes": 3272,
+      "sha256": "5df50b7dabe62a4418cbd824678d4b3195c801ec220652f2818b589eb288ef67"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/red_residual_nonlinearity_design.json",
+      "bytes": 2873,
+      "sha256": "2869e77233faba75472c1daed637149c9bce6e502392e51c4debf42e38642a51"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/root_actual_scalar_audit.json",
+      "bytes": 2492,
+      "sha256": "4a9c68e8bf167f3064f0942d17aba905fcebbc7bfd3f71fa01420cf6f1c2eec4"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/root_packet_audit.py",
+      "bytes": 1740,
+      "sha256": "1348f5ac797ba68892479f9a99e3ad96622b043c082fe03cc68cd64ca336ec80"
+    },
+    {
+      "path": "docs/evidence/native_residual_objective/run_summary.json",
+      "bytes": 3092,
+      "sha256": "a9ac7d386f3fc6a1f56823d7a522dfbe15263e54ae172fa5da2c1b0b5e45e4ef"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/README.md",
+      "bytes": 31741,
+      "sha256": "18ea78fac660a985738994e49644c66067c6326fd5d86f741b76c870b806c8d3"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/native_residual_prefix.py",
+      "bytes": 22328,
+      "sha256": "ae07695cd48ebfcd427f0053f7f3d5766c70534c5b09fd54141f3a9c64ee47d9"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "bytes": 50481,
+      "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+    }
+  ],
+  "updated_at": "2026-10-21T17:07:34.747693+09:00"
+}

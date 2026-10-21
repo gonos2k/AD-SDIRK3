@@ -1,0 +1,541 @@
+{
+  "all_prefix_checkpoints_byte_equal_baseline": true,
+  "arrays": {
+    "case_labels": {
+      "dtype": "<U10",
+      "sha256": "0088b970f20d04c467d1f975ee68d01b43d0fc0424765aa7b8977b185a92668c",
+      "shape": [
+        6
+      ]
+    },
+    "direction_f32": {
+      "dtype": "<f4",
+      "sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "shape": [
+        24531
+      ]
+    },
+    "eta_actual_f32": {
+      "dtype": "<f4",
+      "sha256": "84733bc11317740b719d60ced45f3fd9db5bc6398e10e229f9f58bdfcce2996b",
+      "shape": [
+        6
+      ]
+    },
+    "lambda_in_f32": {
+      "dtype": "<f4",
+      "sha256": "aebc3baed0e18d95ee9779d96441fb08f89a678948f0d746e9dbe92e3009e336",
+      "shape": [
+        8,
+        24531
+      ]
+    },
+    "lambda_out_f32": {
+      "dtype": "<f4",
+      "sha256": "3e33cf257a8f35ac71c24b1204077a13afcc33ec4a3d1b56d3b16dfda6ebe901",
+      "shape": [
+        8,
+        24531
+      ]
+    },
+    "local_precast_f64": {
+      "dtype": "<f8",
+      "sha256": "a553e3d6d5ba88dfce6a94e1dcb68ad44946f4c3a9583ba9f5addb70db310a6f",
+      "shape": [
+        8,
+        24531
+      ]
+    },
+    "mid_states_f64": {
+      "dtype": "<f8",
+      "sha256": "d0542c6bd9cf87503e8c0f034e2b86604ff1302b4ea46212d16faf35304783ac",
+      "shape": [
+        6,
+        24531
+      ]
+    },
+    "old_terminal_g0_f32": {
+      "dtype": "<f4",
+      "sha256": "9c5477d4629073e946c6465a1f2686d8e76378e19c121b7c0d32e786838e96c0",
+      "shape": [
+        24531
+      ]
+    },
+    "old_two_time_g0_f32": {
+      "dtype": "<f4",
+      "sha256": "ebfdc92a0bdbd4921a99be415eb021df5275739f7135f4b26b245eae3a5b1bfd",
+      "shape": [
+        24531
+      ]
+    },
+    "prefix_ends_i32": {
+      "dtype": "<i4",
+      "sha256": "fbe87def5c7942e6e6b9b321a26ed9366d5fc28bcb5b0987ee1d3af665c9f841",
+      "shape": [
+        8
+      ]
+    },
+    "q_mid_f32": {
+      "dtype": "<f4",
+      "sha256": "dcd695ef7c6fa2fefabefc7bf12d57948891917bee983dc17ed47aa96f959bf8",
+      "shape": [
+        24531
+      ]
+    },
+    "q_terminal_f32": {
+      "dtype": "<f4",
+      "sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "shape": [
+        24531
+      ]
+    },
+    "sigma_f64": {
+      "dtype": "<f8",
+      "sha256": "5f07eef034c5a21fedede8ef2f970fefbcc8ea44c02fd970117dacbee5483005",
+      "shape": [
+        2
+      ]
+    },
+    "terminal_states_f64": {
+      "dtype": "<f8",
+      "sha256": "1b3cbfd287c856ee9c4b3e46fca5364413678096885031298dee31e7331ae539",
+      "shape": [
+        6,
+        24531
+      ]
+    },
+    "y_f64": {
+      "dtype": "<f8",
+      "sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+      "shape": [
+        2
+      ]
+    }
+  },
+  "build_receipt": {
+    "bytes": 7271,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/build_receipt.json",
+    "sha256": "04b35cb35929e68e97f23d2e0e5094c61fe16f9c5fcf70a8e3e4dda78ea506cf"
+  },
+  "checkpoint_comparisons": 1160,
+  "executable_sha256": "fd8ba93955a7f45fef10eef7646a5e1554cb1b0ba3c8718514f97c1ad346e744",
+  "helper_sha256": "b15f647b90967af1c95abd7915d4b496a60d6bbc7e793147c783f2040c143d89",
+  "input_pins": {
+    "diagnostics.txt": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+    "namelist.input": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "wrfinput_d01": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "lambda_chain": {
+    "all_fortran_inputs_equal_bound_files": true,
+    "all_other_inputs_equal_previous_f32_output": true,
+    "all_outputs_equal_cast32_local_precast64": true,
+    "partial_dot_fields_null_for_steps_over_32": true,
+    "prefix32_warm0_no_suffix_seed": true,
+    "row0_alphaN_qN_seed_exact": true,
+    "row4_once_rounded_midpoint_injection_exact": true
+  },
+  "npz_bytes": 4671113,
+  "npz_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/native_residual_objective.npz",
+  "npz_sha256": "f630fdf5b07ea358b61eb903b759d7c7ce1766cafc62612cbf3ac88911b5112d",
+  "old_provenance": {
+    "baseline_objective_receipt": {
+      "bytes": 1708,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/baseline_objective.json",
+      "sha256": "4f02fbdcc84a730257aba4b67400c63eb8db559bb7331b7089cccaf2086e5777"
+    },
+    "baseline_receipt": {
+      "bytes": 16582,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/run_receipt.json",
+      "sha256": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689"
+    },
+    "old_manifest": {
+      "bytes": 10667,
+      "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_two_time_adjoint/manifest.json",
+      "sha256": "79eba3dc569f29b77c1649e689cc5405e1a02c2b4a277d16679899a79b50fed1"
+    },
+    "old_packet": {
+      "bytes": 3432010,
+      "path": "/private/tmp/native-residual-objective-20261021/docs/evidence/native_two_time_adjoint/native_two_time_adjoint.npz",
+      "sha256": "747f8c8347f3659340c691016b5ea5c25e686e86162abbeadb9c37a503d6bd1e"
+    },
+    "old_two_time_g0_array": "new_lambda_out_f32[-1]",
+    "reference_checkpoints": {
+      "bytes": 50435736,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+      "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+    }
+  },
+  "protocol_sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb",
+  "raw_case_artifacts": [
+    {
+      "checkpoints_f64": {
+        "bytes": 50435736,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_256/terminal.checkpoints_f64.bin",
+        "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+      },
+      "elapsed_seconds": 1407.6716783330776,
+      "expected_implicit_stages": 768,
+      "h_seconds": 0.9375,
+      "incoming_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/incoming/terminal_residual_f32.bin",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "residual_prefix_256",
+      "lambda_in_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_256/terminal.lambda_in_f32.bin",
+        "sha256": "d449dfbd25e9881561faeaaced1fdbf9fc31b860ee436f60d157e5d6300a5cef"
+      },
+      "lambda_out_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_256/terminal.lambda_out_f32.bin",
+        "sha256": "c1961169a3ef49dbdd9fbc32c3a03f55cf5bf30031ce3906de9aa4f7ee08ede5"
+      },
+      "namelist_sha256": "4e14a0fb331b98cb5726a6f6de46637564e6b740342d8a881ac866e3e21b2736",
+      "peak_sampled_native_rss_bytes": 4076847104,
+      "receipt_sha256": "c5e4018d138fcfd80a31006dfe16e419a213eaa44a1898f6173b1f757866afc9",
+      "steps": 256,
+      "wrapper_gradient_f64": {
+        "bytes": 196248,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_256/terminal.wrapper_gradient_f64.bin",
+        "sha256": "ff348ee3bef0f589de322a76c246ed56a2f673f94334cc87322776b72c9de8a5"
+      }
+    },
+    {
+      "checkpoints_f64": {
+        "bytes": 44155800,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_224/terminal.checkpoints_f64.bin",
+        "sha256": "b181832610e5b6785ceda7c55f64841729a6711362b8d73693b25c75a5804b20"
+      },
+      "elapsed_seconds": 1441.8891766667366,
+      "expected_implicit_stages": 672,
+      "h_seconds": 0.9375,
+      "incoming_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_256/terminal.lambda_out_f32.bin",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "residual_prefix_224",
+      "lambda_in_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_224/terminal.lambda_in_f32.bin",
+        "sha256": "c1961169a3ef49dbdd9fbc32c3a03f55cf5bf30031ce3906de9aa4f7ee08ede5"
+      },
+      "lambda_out_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_224/terminal.lambda_out_f32.bin",
+        "sha256": "ac990d17c72dc926a17db5611f81434ba757c1b6a11f1f77b15a32079b802399"
+      },
+      "namelist_sha256": "1870a15506aeef13192fe17d3fa671b6bae9c3f3d7ba4da25cd950ddda8754ca",
+      "peak_sampled_native_rss_bytes": 4042964992,
+      "receipt_sha256": "bef380e52ed7e4a44920cb599d885eceecfde1ddb2bd5aa4130302b9c4650a96",
+      "steps": 224,
+      "wrapper_gradient_f64": {
+        "bytes": 196248,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_224/terminal.wrapper_gradient_f64.bin",
+        "sha256": "2c1c74e768a5799a4b57c0597a69f1bc8f781c6ebde0d103ff011114c0a866a6"
+      }
+    },
+    {
+      "checkpoints_f64": {
+        "bytes": 37875864,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_192/terminal.checkpoints_f64.bin",
+        "sha256": "2208e71a8c6c74642628aa6463f77aa56340a914f2cf6267d2f0205bfa2faa1c"
+      },
+      "elapsed_seconds": 1254.39798087487,
+      "expected_implicit_stages": 576,
+      "h_seconds": 0.9375,
+      "incoming_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_224/terminal.lambda_out_f32.bin",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "residual_prefix_192",
+      "lambda_in_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_192/terminal.lambda_in_f32.bin",
+        "sha256": "ac990d17c72dc926a17db5611f81434ba757c1b6a11f1f77b15a32079b802399"
+      },
+      "lambda_out_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_192/terminal.lambda_out_f32.bin",
+        "sha256": "93d9d2afd5c5f6e70df12c5369b9a4bc534f32b3f12b395fb6333490ff78d085"
+      },
+      "namelist_sha256": "ad9f36b0708e8efbd22af072f0673772830971f07a3af8a64aae637041bbd6c7",
+      "peak_sampled_native_rss_bytes": 4065853440,
+      "receipt_sha256": "d7c65ebef0909158494761ec8417f4a697e8a192128e220ec1331e3703150e33",
+      "steps": 192,
+      "wrapper_gradient_f64": {
+        "bytes": 196248,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_192/terminal.wrapper_gradient_f64.bin",
+        "sha256": "b09888abce410acf2312217a14289ab3a5075d43e6d01e2a8eedcba937dae718"
+      }
+    },
+    {
+      "checkpoints_f64": {
+        "bytes": 31595928,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_160/terminal.checkpoints_f64.bin",
+        "sha256": "68d8ae43f05beee656cc58f44797ed98c461821dabf3f54771d636a3a3715cce"
+      },
+      "elapsed_seconds": 982.565501042176,
+      "expected_implicit_stages": 480,
+      "h_seconds": 0.9375,
+      "incoming_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_192/terminal.lambda_out_f32.bin",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "residual_prefix_160",
+      "lambda_in_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_160/terminal.lambda_in_f32.bin",
+        "sha256": "93d9d2afd5c5f6e70df12c5369b9a4bc534f32b3f12b395fb6333490ff78d085"
+      },
+      "lambda_out_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_160/terminal.lambda_out_f32.bin",
+        "sha256": "01b66c2931950494eb40520815147dd5aa328468249f048d121a7b3b3f90978c"
+      },
+      "namelist_sha256": "2c34689e23d80017e23bb148142f4b64050efe7854236006aa1698316849a120",
+      "peak_sampled_native_rss_bytes": 4067262464,
+      "receipt_sha256": "ef4bd438a9039ed4117a920535ec8529edd1bb435482e60978cd48f23d475a72",
+      "steps": 160,
+      "wrapper_gradient_f64": {
+        "bytes": 196248,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_160/terminal.wrapper_gradient_f64.bin",
+        "sha256": "068758d53366a540ef8e21f2c5d55b4b94073310c2f19a3a07a1405de7afb22a"
+      }
+    },
+    {
+      "checkpoints_f64": {
+        "bytes": 25315992,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/terminal.checkpoints_f64.bin",
+        "sha256": "4c5005ef8a24cf2713ec71784e90e6f67232c1c862668b5dce3e6c3a29eed272"
+      },
+      "elapsed_seconds": 1041.6118720420636,
+      "expected_implicit_stages": 384,
+      "h_seconds": 0.9375,
+      "incoming_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/incoming_lambda128_residual_f32.bin",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "residual_prefix_128",
+      "lambda_in_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/terminal.lambda_in_f32.bin",
+        "sha256": "6def973c4b8a4e8b86ddbe89b6ab51a9b577fadf576c4561a10df732fa8df5fc"
+      },
+      "lambda_out_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/terminal.lambda_out_f32.bin",
+        "sha256": "d517d62d0ebe89998acfc8fec5e25a6b874a05dacc8036509a54e865e9da7611"
+      },
+      "namelist_sha256": "efb34312f5c864cbd99c50a4cea5eaa48cc6948fdcab77cad6f6df948d8c740c",
+      "peak_sampled_native_rss_bytes": 4046405632,
+      "receipt_sha256": "0073d521c7bf3bca0aa63668265853cf365691f8a510da3676a4a29f31a79cda",
+      "steps": 128,
+      "wrapper_gradient_f64": {
+        "bytes": 196248,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/terminal.wrapper_gradient_f64.bin",
+        "sha256": "65eeae39f6016dc4ca1aee7ae320d72a6053e097c4766c4cf4bb6f44e90a1c48"
+      }
+    },
+    {
+      "checkpoints_f64": {
+        "bytes": 19036056,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/terminal.checkpoints_f64.bin",
+        "sha256": "fca8701b8e447e89af980a4b7ed1ba2262752c1394d4bf60bd80a32d817f1f21"
+      },
+      "elapsed_seconds": 1028.1768514174037,
+      "expected_implicit_stages": 288,
+      "h_seconds": 0.9375,
+      "incoming_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/terminal.lambda_out_f32.bin",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "residual_prefix_096",
+      "lambda_in_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/terminal.lambda_in_f32.bin",
+        "sha256": "d517d62d0ebe89998acfc8fec5e25a6b874a05dacc8036509a54e865e9da7611"
+      },
+      "lambda_out_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/terminal.lambda_out_f32.bin",
+        "sha256": "5bb70898bf95b636dfbe065e91e0e23a72571044c11f2bc4bcde130a5bb9e2fd"
+      },
+      "namelist_sha256": "f58b587954801259b5c7a0f3bf3384566014cb0390d6e94b53dc03b5287bebd5",
+      "peak_sampled_native_rss_bytes": 4047749120,
+      "receipt_sha256": "e4ef4377654f99a38d2603538f735047273f9088f07ddbfcd3947340e04345c6",
+      "steps": 96,
+      "wrapper_gradient_f64": {
+        "bytes": 196248,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/terminal.wrapper_gradient_f64.bin",
+        "sha256": "0dea1d39e7a264d0bd4cfddcd028e0345f675fd08f7dd725bbfdc544e53ec5dc"
+      }
+    },
+    {
+      "checkpoints_f64": {
+        "bytes": 12756120,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_064/terminal.checkpoints_f64.bin",
+        "sha256": "79acdd520a3bc63f69eaf6e514068059f97347caa32a61d8b0e6bb1f6e2416ec"
+      },
+      "elapsed_seconds": 842.5061677498743,
+      "expected_implicit_stages": 192,
+      "h_seconds": 0.9375,
+      "incoming_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/terminal.lambda_out_f32.bin",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "residual_prefix_064",
+      "lambda_in_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_064/terminal.lambda_in_f32.bin",
+        "sha256": "5bb70898bf95b636dfbe065e91e0e23a72571044c11f2bc4bcde130a5bb9e2fd"
+      },
+      "lambda_out_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_064/terminal.lambda_out_f32.bin",
+        "sha256": "b37e10efa038b5c22c238fdbab711d403b096a834ebf5fbaa90cca8db4f6f03c"
+      },
+      "namelist_sha256": "627e7d0e3fe961f7207d2245ec944a2c2ef23353143be840234be64c72b3bd12",
+      "peak_sampled_native_rss_bytes": 4029087744,
+      "receipt_sha256": "7d91eff3278bc6e5513717d6de6bb7f00996ae52c121207f820368bbffc58a91",
+      "steps": 64,
+      "wrapper_gradient_f64": {
+        "bytes": 196248,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_064/terminal.wrapper_gradient_f64.bin",
+        "sha256": "4401cf86ae85ffc8e54f2aaa956a6601ce90f7d5f4e594dcc85831815c0eb54f"
+      }
+    },
+    {
+      "checkpoints_f64": {
+        "bytes": 6476184,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_032/terminal.checkpoints_f64.bin",
+        "sha256": "e1cd536e5b0f5d19d90473edfcafc059dfe3b04a41a4cc1b1bc5ede26fe16095"
+      },
+      "elapsed_seconds": 785.7832827088423,
+      "expected_implicit_stages": 96,
+      "h_seconds": 0.9375,
+      "incoming_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_064/terminal.lambda_out_f32.bin",
+      "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+      "label": "residual_prefix_032",
+      "lambda_in_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_032/terminal.lambda_in_f32.bin",
+        "sha256": "b37e10efa038b5c22c238fdbab711d403b096a834ebf5fbaa90cca8db4f6f03c"
+      },
+      "lambda_out_f32": {
+        "bytes": 98124,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_032/terminal.lambda_out_f32.bin",
+        "sha256": "0bb7e7bd65ac2f8fbab653177291da1455f8714f156db29dc64374f7b9e286a7"
+      },
+      "namelist_sha256": "510c84ec107dd317af94f5bb4917eebb1e6d9791d61d84f583c89a4ab0b6ace3",
+      "peak_sampled_native_rss_bytes": 4021813248,
+      "receipt_sha256": "07a1cc3216efebc8d66572e24a49cbbf0f8ad3d4b32cf07bf639a3b986694f19",
+      "steps": 32,
+      "wrapper_gradient_f64": {
+        "bytes": 196248,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_032/terminal.wrapper_gradient_f64.bin",
+        "sha256": "6b6eae0e73e01969a1ba3d458090bb8403df71798010e94bf4443eebf7f92ca0"
+      }
+    }
+  ],
+  "receipt_pins": [
+    {
+      "label": "residual_prefix_256",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_256.json",
+      "receipt_bytes": 18168,
+      "receipt_sha256": "c5e4018d138fcfd80a31006dfe16e419a213eaa44a1898f6173b1f757866afc9",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_256/run_receipt.json"
+    },
+    {
+      "label": "residual_prefix_224",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_224.json",
+      "receipt_bytes": 17728,
+      "receipt_sha256": "bef380e52ed7e4a44920cb599d885eceecfde1ddb2bd5aa4130302b9c4650a96",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_224/run_receipt.json"
+    },
+    {
+      "label": "residual_prefix_192",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_192.json",
+      "receipt_bytes": 17230,
+      "receipt_sha256": "d7c65ebef0909158494761ec8417f4a697e8a192128e220ec1331e3703150e33",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_192/run_receipt.json"
+    },
+    {
+      "label": "residual_prefix_160",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_160.json",
+      "receipt_bytes": 16740,
+      "receipt_sha256": "ef4bd438a9039ed4117a920535ec8529edd1bb435482e60978cd48f23d475a72",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_160/run_receipt.json"
+    },
+    {
+      "label": "residual_prefix_128",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_128.json",
+      "receipt_bytes": 17775,
+      "receipt_sha256": "0073d521c7bf3bca0aa63668265853cf365691f8a510da3676a4a29f31a79cda",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/run_receipt.json"
+    },
+    {
+      "label": "residual_prefix_096",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_096.json",
+      "receipt_bytes": 15728,
+      "receipt_sha256": "e4ef4377654f99a38d2603538f735047273f9088f07ddbfcd3947340e04345c6",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_096/run_receipt.json"
+    },
+    {
+      "label": "residual_prefix_064",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_064.json",
+      "receipt_bytes": 15232,
+      "receipt_sha256": "7d91eff3278bc6e5513717d6de6bb7f00996ae52c121207f820368bbffc58a91",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_064/run_receipt.json"
+    },
+    {
+      "label": "residual_prefix_032",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/packet/receipts/residual_prefix_032.json",
+      "receipt_bytes": 14598,
+      "receipt_sha256": "07a1cc3216efebc8d66572e24a49cbbf0f8ad3d4b32cf07bf639a3b986694f19",
+      "source_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_032/run_receipt.json"
+    }
+  ],
+  "reused_runner_helper_sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8",
+  "run_order": [
+    256,
+    224,
+    192,
+    160,
+    128,
+    96,
+    64,
+    32
+  ],
+  "schema": "native_residual_objective_portable_packet_v1",
+  "scope": "Old six primal states reuse the pinned portable packet; old full ledgers are not re-parsed. New eight raw case outputs and receipts are verified from disk. Objective formulas are not duplicated.",
+  "source_base": "ea5c39b8eeee2f73d6fc23bc964df22c2be34a33",
+  "source_files": [
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-residual-objective-20261021/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    }
+  ]
+}

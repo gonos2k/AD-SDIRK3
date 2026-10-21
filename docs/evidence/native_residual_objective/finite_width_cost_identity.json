@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-10-21T14:37:41.249338+09:00",
+  "protocol_sha256": "b65b2b01bbac7d00ecf18e71e4492701581c1b7059b6db8ac23fabf68f94acfb",
+  "identity": "FD(.5*((h-y)/sigma)^2)=((hplus+hminus-2y)/(2 sigma^2))*FD(h)",
+  "rows": [
+    {
+      "width": "0p01",
+      "term": "midpoint",
+      "cost_central_FD": -6878.802390205099,
+      "exact_factored_FD": -6878.802390205355,
+      "identity_roundoff_difference": 2.5556801119819283e-10,
+      "baseline_alpha": -420.1114023998378,
+      "mean_residual_coefficient": -420.11140240547695,
+      "even_coefficient_shift": -5.639151368086459e-09,
+      "finite_width_curvature_contribution": -9.233409921134105e-08,
+      "meaning": "Exact scalar cost-difference identity; not a new gradient or acceptance gate."
+    },
+    {
+      "width": "0p01",
+      "term": "terminal",
+      "cost_central_FD": 129547.9203142544,
+      "exact_factored_FD": 129547.92031425438,
+      "identity_roundoff_difference": 1.4551915228366852e-11,
+      "baseline_alpha": -11.718318303682182,
+      "mean_residual_coefficient": -11.720985019881901,
+      "even_coefficient_shift": -0.0026667161997195876,
+      "finite_width_curvature_contribution": 29.474275170218185,
+      "meaning": "Exact scalar cost-difference identity; not a new gradient or acceptance gate."
+    },
+    {
+      "width": "0p03",
+      "term": "midpoint",
+      "cost_central_FD": -6878.802455262105,
+      "exact_factored_FD": -6878.802455262041,
+      "identity_roundoff_difference": -6.366462912410498e-11,
+      "baseline_alpha": -420.1114023998378,
+      "mean_residual_coefficient": -420.11140244833433,
+      "even_coefficient_shift": -4.8496531235286966e-08,
+      "finite_width_curvature_contribution": -7.940704684253611e-07,
+      "meaning": "Exact scalar cost-difference identity; not a new gradient or acceptance gate."
+    },
+    {
+      "width": "0p03",
+      "term": "terminal",
+      "cost_central_FD": 129783.77648836936,
+      "exact_factored_FD": 129783.77648836937,
+      "identity_roundoff_difference": -1.4551915228366852e-11,
+      "baseline_alpha": -11.718318303682182,
+      "mean_residual_coefficient": -11.742324574096841,
+      "even_coefficient_shift": -0.024006270414659525,
+      "finite_width_curvature_contribution": 265.3328490585659,
+      "meaning": "Exact scalar cost-difference identity; not a new gradient or acceptance gate."
+    }
+  ],
+  "actual_new_native_g0_used": false
+}

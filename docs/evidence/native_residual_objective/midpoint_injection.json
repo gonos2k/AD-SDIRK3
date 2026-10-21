@@ -1,0 +1,16 @@
+{
+  "accepted_step": 128,
+  "accepted_time_s": 120,
+  "baseline_Z128_checkpoint_sha256": "e7b4230680244cd0f439001db0528b93c22c04c6cc79f36ef263f9d43458d6d1",
+  "baseline_Z128_sha256": "e7b4230680244cd0f439001db0528b93c22c04c6cc79f36ef263f9d43458d6d1",
+  "bytes": 98124,
+  "formula": "Q32(FP64(lambda128_from_new_prefix160)+midpoint_cotangent_f64)",
+  "midpoint_cotangent_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/incoming/midpoint_residual_f64.bin",
+  "midpoint_cotangent_sha256": "f6155760231f5ab0d2d59948da98864ec393a72af9bd39780b7697c002693e4b",
+  "new_lambda_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_128/incoming_lambda128_residual_f32.bin",
+  "new_lambda_sha256": "6def973c4b8a4e8b86ddbe89b6ab51a9b577fadf576c4561a10df732fa8df5fc",
+  "previous_lambda_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/runs/residual_prefix_160/terminal.lambda_out_f32.bin",
+  "previous_lambda_sha256": "01b66c2931950494eb40520815147dd5aa328468249f048d121a7b3b3f90978c",
+  "previous_prefix_receipt_sha256": "ef4bd438a9039ed4117a920535ec8529edd1bb435482e60978cd48f23d475a72",
+  "schema": "native_residual_midpoint_injection_v1"
+}
