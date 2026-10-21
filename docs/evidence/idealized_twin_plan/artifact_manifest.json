@@ -1,0 +1,57 @@
+{
+  "schema": "native_idealized_twin_plan_archive_integrity_v1",
+  "created_at_jst": "2026-10-22T06:03:53.163785+09:00",
+  "source_base": "b21620c4e529bae91ac029bcbf42a41b9977d67b",
+  "scope": "Plan/docs/static-review files only. Runtime artifacts and E0/E1/E2 are not implemented or executed by registration.",
+  "excluded": [
+    "artifact_manifest.json (self)",
+    "red_plan_closing_review.json (closing reviewer pins this manifest; avoid hash cycle)"
+  ],
+  "files": [
+    {
+      "path": "docs/(202610220520)_native_idealized_twin_plan_registration.md",
+      "bytes": 6103,
+      "sha256": "bb2d743f419131202a56315a438a09aa4810fb5ffff1ad6cdbe403f4d9c2a158"
+    },
+    {
+      "path": "docs/PROBLEM_DEFINITION.md",
+      "bytes": 32013,
+      "sha256": "fb655c46af55ebcc15f3bed76f7d6ec6ce63e53f9380f613ef7b9c782d9eeabf"
+    },
+    {
+      "path": "docs/evidence/idealized_twin_plan/graph_post_edit_binding.json",
+      "bytes": 8785,
+      "sha256": "546e2edb12a3b48694ac294709c9f0ab5cd9e7a668bbae0aab4cc7c5f1194c4d"
+    },
+    {
+      "path": "docs/evidence/idealized_twin_plan/graph_pre_edit_binding.json",
+      "bytes": 12363,
+      "sha256": "3aa49e8616b6f1f9bc26843c9f06705808400fbb43696a47f012360a6001b4bc"
+    },
+    {
+      "path": "docs/evidence/idealized_twin_plan/green_plan_closing_review.json",
+      "bytes": 4272,
+      "sha256": "b0767ed21879ed23ab6807f409e1b522552c0405c4fa51ff42c959c25cf5576c"
+    },
+    {
+      "path": "docs/evidence/idealized_twin_plan/static_validation.json",
+      "bytes": 1840,
+      "sha256": "027078a2834f1af212f2d716e275cd3013817a59c7e9afa20f72ae655ecde642"
+    },
+    {
+      "path": "docs/plans/native_idealized_twin_v1.json",
+      "bytes": 15590,
+      "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+    },
+    {
+      "path": "docs/plans/native_idealized_twin_v1.md",
+      "bytes": 11500,
+      "sha256": "986c32d7f95d5928cb50740b70a31dc2ce18e4fa15e379e0d651f5a27a01315c"
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/README.md",
+      "bytes": 32081,
+      "sha256": "7e8f767fc7768b71799437d9b324b7e666745da0c56b94d973b4540668b0a39f"
+    }
+  ]
+}

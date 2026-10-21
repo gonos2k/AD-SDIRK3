@@ -1,0 +1,43 @@
+{
+  "artifact_manifest": {
+    "all_file_sizes_and_hashes_match": true,
+    "file_count": 9,
+    "mismatches": []
+  },
+  "findings": [],
+  "pins": {
+    "archive_manifest_sha256": "4027bd09aacc84a05da6b144827b43ab407bfb2d4a72ffe5f4941f36e03083bd",
+    "core_readme_sha256": "7e8f767fc7768b71799437d9b324b7e666745da0c56b94d973b4540668b0a39f",
+    "green_review_sha256": "b0767ed21879ed23ab6807f409e1b522552c0405c4fa51ff42c959c25cf5576c",
+    "plan_json_sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc",
+    "plan_markdown_sha256": "986c32d7f95d5928cb50740b70a31dc2ce18e4fa15e379e0d651f5a27a01315c",
+    "problem_definition_sha256": "fb655c46af55ebcc15f3bed76f7d6ec6ce63e53f9380f613ef7b9c782d9eeabf",
+    "progress_report_sha256": "bb2d743f419131202a56315a438a09aa4810fb5ffff1ad6cdbe403f4d9c2a158",
+    "static_validation_sha256": "027078a2834f1af212f2d716e275cd3013817a59c7e9afa20f72ae655ecde642"
+  },
+  "plan_gates": {
+    "27_static_checks_pass": true,
+    "40_call_cap_explicitly_scoped_to_E1_optimizer": true,
+    "E2_not_run": true,
+    "E3_optional": true,
+    "optimizer_and_replay_caps_remain_pre_run_freezes": true,
+    "plan_not_executed": true,
+    "preflight_E0_FD_truth_calls_separately_counted": true,
+    "rank_at_E1_start_both_widths_frozen": true,
+    "ready_to_execute_false": true,
+    "results_null": true
+  },
+  "reviewed_at": "2026-10-22T05:25:00+09:00",
+  "schema": "red_idealized_twin_plan_closing_review_v2",
+  "scope": "Final read-only review of the frozen selected-twin plan and its nine-file archive manifest. No model/build/test/source changes.",
+  "scope_checks": {
+    "384_noiseless_native_stagger_observations": true,
+    "E0_and_E1_roles_distinct": true,
+    "PR314_and_rotating_fixture_remain_separate": true,
+    "real_observations_not_required_or_claimed": true,
+    "source_attachment_provenance_disclaimed": true,
+    "truth_control_signs_consistent": true,
+    "withheld_60_180_metrics_per_time": true
+  },
+  "status": "PASS_PLAN_ONLY"
+}

@@ -1,0 +1,469 @@
+{
+  "schema": "native_idealized_twin_plan_v1",
+  "case_id": "dry_em_b_wave_native_two_control_twin_240s_v1",
+  "created_at_jst": "2026-10-22T05:16:23+09:00",
+  "status": "planned_not_executed",
+  "is_solver_runtime_config": false,
+  "ready_to_execute": false,
+  "selection": {
+    "idealized_observation_control_problem_selected": true,
+    "real_world_observation_problem_selected": false,
+    "purpose": "Initial-control restoration on the accepted native map using model-generated noiseless observations.",
+    "prior_completed_cases_remain_closed": [
+      "PR314 synthetic residual-cost caller",
+      "completed rotating-wave inverse"
+    ],
+    "mandatory_experiments": [
+      "E0",
+      "E1",
+      "E2"
+    ],
+    "optional_experiments": [
+      "E3"
+    ],
+    "results": null
+  },
+  "forward_map": {
+    "file": "../evidence/research_forward_setting/research_forward_map.json",
+    "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7",
+    "case_id": "dry_em_b_wave_e71_240s_h15over16_strict_v1",
+    "physical_grid": [
+      16,
+      16,
+      16
+    ],
+    "duration_seconds": 240,
+    "h_fraction_seconds": "15/16",
+    "h_seconds": 0.9375,
+    "accepted_steps": 256,
+    "newton_absolute_tolerance": 1e-09,
+    "newton_relative_tolerance": 0.0,
+    "krylov_tolerance": 1e-07,
+    "effective_ewt_relative_tolerance": 1e-06,
+    "MPI_ranks": 1,
+    "OMP_threads": 1,
+    "tiles": 1,
+    "precision": "internal FP64 continuous state carry; declare existing FP32 cotangent handoffs",
+    "unchanged_contracts": [
+      "transport",
+      "diffusion",
+      "damping",
+      "CF",
+      "boundary branches",
+      "dry physics",
+      "auxiliary-state policy"
+    ],
+    "control_boundary": "solver entry after WRF initialization and CQ; no initialization-map differentiation"
+  },
+  "numerical_truth": {
+    "initial": "original registered solver-entry Z_star",
+    "trajectory": "Z_star_n=G_0_to_n(Z_star)",
+    "precision": "internal FP64 accepted endpoints",
+    "reuse_first": true,
+    "reuse_requires": [
+      "source/executable or verified forward-neutrality binding",
+      "same inputs/effective options",
+      "same initialized numerical auxiliary-state policy",
+      "same internal FP64 control boundary and continuous carry"
+    ],
+    "maximum_new_truth_forwards_if_reuse_unverified": 1,
+    "state_only_cold_restart_allowed": false,
+    "observation_generation_from_FP32_history_allowed": false,
+    "required_frozen_artifacts": [
+      "truth trajectory source/manifest",
+      "input and effective settings",
+      "executable and source pins",
+      "accepted checkpoint/time ledger"
+    ]
+  },
+  "observations": {
+    "accepted_steps": [
+      128,
+      256
+    ],
+    "times_seconds": [
+      120,
+      240
+    ],
+    "fields": [
+      "U",
+      "V",
+      "theta"
+    ],
+    "units": {
+      "U": "m s-1",
+      "V": "m s-1",
+      "theta": "K"
+    },
+    "stagger": {
+      "U": "X face",
+      "V": "Y face",
+      "theta": "mass"
+    },
+    "theta_definition": "T + 300 K in the registered dry case; not air temperature",
+    "H": "select directly at each field native stagger; no destaggering or interpolation",
+    "HT": "scatter-add to identical packed slots; theta constant has zero derivative",
+    "index_basis": "one-based ordinal within each field physical owned unique box; not memory/halo/packed indices",
+    "axis_owner_indices": {
+      "i": [
+        2,
+        6,
+        10,
+        14
+      ],
+      "j": [
+        2,
+        6,
+        10,
+        14
+      ],
+      "k": [
+        2,
+        6,
+        10,
+        14
+      ]
+    },
+    "row_order": [
+      "accepted_step",
+      "field in [U,V,theta]",
+      "k",
+      "j",
+      "i fastest"
+    ],
+    "count_per_field_per_time": 64,
+    "count_total": 384,
+    "required_row_metadata": [
+      "unique_id",
+      "accepted_step",
+      "time_seconds",
+      "field",
+      "stagger",
+      "unit",
+      "owner_i",
+      "owner_j",
+      "owner_k",
+      "global_i",
+      "global_j",
+      "global_k",
+      "packed_slot",
+      "horizontal_physical_coordinates",
+      "native_vertical_coordinate",
+      "grid_layout_id"
+    ],
+    "coordinates_source": "matched runtime grid/layout; do not equate U/V/mass coordinates at the same ordinal",
+    "exclude": [
+      "periodic duplicate closing faces",
+      "halo aliases",
+      "fixed-bottom duplicate observations"
+    ],
+    "truth_values": "y=H(Z_star_n) in FP64",
+    "noise": {
+      "enabled": false,
+      "std": 0
+    },
+    "sigma": {
+      "U": 0.05,
+      "V": 0.05,
+      "theta": 0.01
+    },
+    "R": "diagonal sigma squared",
+    "variance": {
+      "U": 0.0025,
+      "V": 0.0025,
+      "theta": 0.0001
+    },
+    "weight_meaning": "fixed research residual scaling, not estimated physical observation error; never forecast epsilon"
+  },
+  "controls": {
+    "order": [
+      "wind",
+      "theta"
+    ],
+    "dimension": 2,
+    "P": "[p_wind,p_theta], full packed physical templates including authoritative boundary extension",
+    "background_coefficients": [
+      0.5,
+      -0.5
+    ],
+    "background": "Z_b=Z_star+0.5*p_wind-0.5*p_theta",
+    "initial_state": "Z_0(a)=Z_b+a[0]*p_wind+a[1]*p_theta",
+    "start": [
+      0.0,
+      0.0
+    ],
+    "truth_validation_only": [
+      -0.5,
+      0.5
+    ],
+    "bounds": {
+      "lower": [
+        -1.0,
+        -1.0
+      ],
+      "upper": [
+        1.0,
+        1.0
+      ]
+    },
+    "optimizer_may_use_truth_control_for_updates_or_stop": false,
+    "mode_precision": "freeze actual representable templates and control-state construction before runs",
+    "wind": {
+      "active_fields": [
+        "U",
+        "V"
+      ],
+      "corner_streamfunction": "sin(2*pi*x/Lx)*sin(pi*y/Ly)*sin(pi*(1-ZNU_k))",
+      "U": "negative adjacent-corner forward y difference divided by dy",
+      "V": "adjacent-corner forward x difference divided by dx",
+      "Lx": "16*dx",
+      "Ly": "16*dy",
+      "common_max_abs_owner_amplitude_m_s": 0.1,
+      "normalize_blocks_together": true,
+      "not_claimed": [
+        "hydrostatic balance",
+        "geostrophic balance",
+        "zero physical mass-weighted divergence"
+      ]
+    },
+    "theta": {
+      "active_fields": [
+        "T"
+      ],
+      "mass_template": "sin(2*pi*x/Lx)*cos(pi*y/Ly)*sin(pi*(1-ZNU_k))",
+      "max_abs_owner_amplitude_K": 0.01,
+      "pressure": "current EOS diagnostic, not externally fixed"
+    },
+    "boundary_policy": "generate unique owners then use existing periodic/symmetric/antisymmetric extension; exact V=0 at walls; zero changes to W/PH bottom and all other fields",
+    "required_preflight": [
+      "source-confirm owner/coordinate/metric conventions",
+      "generate and hash P/Z_b; verify nonzero finite norms and common wind normalization",
+      "check boundary aliases and physically admissible controlled states",
+      "verify actual applied perturbations and use identical P in P^T*lambda0"
+    ]
+  },
+  "objective": {
+    "formula": "0.5*sum_over_all_observations((H_n G_n(Z_0(a))-y_n)^2/sigma_field^2)",
+    "sum_not_count_or_time_mean": true,
+    "background_penalty_enabled": false,
+    "background_penalty_value": 0.0,
+    "endpoint_cotangent": "H_n^T*((H_n Z_n-y_n)/sigma_field^2)",
+    "state_dependent_residual_recomputed_at_each_control": true,
+    "injection": "once at each specified accepted endpoint; add midpoint to propagated terminal value",
+    "control_gradient": "P^T*lambda_initial; P includes boundary extension",
+    "actual_rounding_and_incoming_outgoing_cotangents_recorded": true
+  },
+  "E0": {
+    "parameterization": "Z_0_E0(b)=Z_star+P*b",
+    "start": [
+      0.0,
+      0.0
+    ],
+    "observations": "same noiseless truth",
+    "checks": {
+      "max_cost": 1e-12,
+      "max_control_gradient_inf": 1e-08,
+      "max_control_update_inf": 1e-08
+    },
+    "use_same_objective_adjoint_minimizer_path": true,
+    "does_not_disclose_E1_truth_to_optimizer": true
+  },
+  "identifiability": {
+    "matrix": "A=R^(-1/2)*d(HG)/da",
+    "shape": [
+      384,
+      2
+    ],
+    "required_rank": 2,
+    "minimum_singular_value_ratio": 0.001,
+    "method": "reuse two-axis observation central differences at both frozen widths; report both SVDs",
+    "diagnostics": [
+      "singular values",
+      "column cosine",
+      "two-width matrix difference",
+      "arithmetic and solver signal resolution"
+    ],
+    "unresolved_or_failed_action": "do not start optimizer; new observation/control version required; do not tune this version after results",
+    "at_control": [
+      0.0,
+      0.0
+    ],
+    "require_ratio_on": "both frozen FD widths at E1 start"
+  },
+  "control_gradient_check": {
+    "at_control": [
+      0.0,
+      0.0
+    ],
+    "directions": [
+      [
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "dimensionless_widths": [
+      0.01,
+      0.03
+    ],
+    "all_four_comparisons_required": true,
+    "FD": "(J(a+eta*e_i)-J(a-eta*e_i))/(2*eta_actual)",
+    "relative_error_denominator": "max(abs(FD),abs(AD)); no additive denominator floor",
+    "maximum_relative_error": 0.01,
+    "minimum_cost_difference_signal": "100*eps64*max(abs(J_plus),abs(J_minus),abs(J0))",
+    "additional_resolution_requirement": "actual input perturbation nonzero and FD signal resolved above measured solver variability; freeze evaluation policy before runs",
+    "zero_signal_or_denominator": "unresolved, never relative_error=0/pass",
+    "record_actual_precision_and_applied_width": true,
+    "separate_midpoint_contribution_required": true
+  },
+  "E1": {
+    "start_control": [
+      0.0,
+      0.0
+    ],
+    "optimizer": "reuse an existing minimization implementation after caller audit; identity/settings must be frozen before run",
+    "optimizer_settings_frozen": false,
+    "maximum_accepted_iterations": 12,
+    "maximum_objective_forward_evaluations": 40,
+    "objective_evaluation_budget_includes": [
+      "initial objective",
+      "all accepted line-search trials",
+      "all rejected line-search trials",
+      "any extra final objective evaluation"
+    ],
+    "separately_counted_preflight": [
+      "E0 evaluation",
+      "two axes times two widths times plus/minus = 8 FD forward evaluations",
+      "at most one new truth forward if needed"
+    ],
+    "replay_accounting": "log all gradient calls/prefix replays/steps/wall time separately; optimizer gradient/replay hard caps must be frozen before execution",
+    "budget_exhaustion_status": "incomplete; no automatic budget extension or retuning",
+    "acceptance": {
+      "max_final_over_initial_cost": 0.0001,
+      "cost_ratio_requires": "positive resolved initial J",
+      "max_control_relative_L2_error": 0.01,
+      "control_error_formula": "norm2(a_final-a_truth)/norm2(a_start-a_truth)",
+      "max_normalized_gradient_inf": 0.0001,
+      "normalized_gradient_formula": "norm_inf(g_final)/max(1,norm_inf(g_initial)); full gradient, not projected-only gradient",
+      "withheld_each_time_max_final_over_background_error": 0.5,
+      "physical_numerical_checks": [
+        "finite values",
+        "positive total theta",
+        "positive column mass",
+        "positive layer thickness",
+        "unchanged boundary constraints",
+        "all stages accepted normally"
+      ]
+    },
+    "objective_evaluation_budget_scope": "E1 optimizer only; E0/FD/possible one truth run counted separately; all adjoint prefix replays separately logged and capped before execution"
+  },
+  "withheld_validation": {
+    "accepted_steps": [
+      64,
+      192
+    ],
+    "times_seconds": [
+      60,
+      180
+    ],
+    "not_in_objective": true,
+    "fields": [
+      "U",
+      "V",
+      "W",
+      "PH",
+      "T",
+      "MU"
+    ],
+    "region": "same whole physical owners as registered forward acceptance: exclude U periodic duplicate and W/PH fixed bottom, retain V physical walls and W/PH dynamic top",
+    "per_field_report": "physical-unit RMS; near-zero background field errors reported absolutely, not unstable relative improvement",
+    "composite_scale_source": "referenced forward_map.file#/forward_acceptance/candidate_limits; display only, not R",
+    "composite_formula": "E_t=sqrt(sum_X[(RMS_owner(error_X(t))/epsilon_X)^2]/6)",
+    "acceptance_at_each_time": "E_t_final<=0.5*E_t_background, with resolved positive background composite",
+    "also_report_unobserved_positions_at_seconds": [
+      120,
+      240
+    ],
+    "unobserved_positions": "per-field physical owner complement of the observation mask at that time"
+  },
+  "E2": {
+    "no_new_long_primal_trajectory_for_negative_tests": true,
+    "reuse": "cached states/residuals and local observation/transpose/caller checks",
+    "mutations": [
+      {
+        "id": "omit_midpoint",
+        "expect": "nonzero expected midpoint cotangent missing; component injection/derivative check fails"
+      },
+      {
+        "id": "wrong_injection_step",
+        "expect": "current accepted step or observation ID/step does not match128; explicit rejection"
+      },
+      {
+        "id": "duplicate_injection",
+        "expect": "endpoint contribution count is not exactly one; explicit rejection"
+      },
+      {
+        "id": "sigma_not_squared",
+        "expect": "injected weights differ from declared residual/sigma^2; component check fails"
+      },
+      {
+        "id": "nonfinite_observation",
+        "expect": "validation error"
+      },
+      {
+        "id": "nonpositive_sigma_or_weight",
+        "expect": "validation error for0andnegative"
+      },
+      {
+        "id": "duplicate_observation_id",
+        "expect": "validation error"
+      },
+      {
+        "id": "grid_or_layout_mismatch",
+        "expect": "validation error"
+      }
+    ],
+    "component_rule": "total-gradient pass cannot conceal missing/unresolved midpoint contribution",
+    "status": "planned_not_run"
+  },
+  "E3": {
+    "required_for_E0_E1_E2_completion": false,
+    "status": "optional_not_selected",
+    "requires_new_version": true,
+    "noise_seed": "must be fixed if selected",
+    "background_penalty": "0.5*a^T*inv(Ba)*a with Ba=I2",
+    "do_not_require": [
+      "exact truth-control recovery under noise/prior",
+      "Jo=0",
+      "probabilistic certification from one noise realization"
+    ]
+  },
+  "pre_execution_freeze_gates": [
+    "truth/source/executable/settings/auxiliary-state/precision reuse receipt or one new truth trajectory",
+    "control-mode generator, actual P/Z_b/control construction, observation384row coordinates/slots/values and hashes",
+    "existing minimizer identity, box/line-search rules and gradient/prefix replay hard caps",
+    "implemented metric and signal/solver-resolution checks, E2 expected failures, all acceptance settings/hash manifest"
+  ],
+  "completion": {
+    "require": [
+      "E0",
+      "E1",
+      "E2"
+    ],
+    "claim": "Correct native initial-control / forward / H / adjoint / minimizer / state-restoration connection within this declared dry case",
+    "not_claimed": [
+      "continuous-atmosphere truth accuracy",
+      "real-observation assimilation skill",
+      "all atmospheric states or directions",
+      "full-map global exact-FP64 adjoint"
+    ],
+    "current_result": "not_executed",
+    "new_model_runs_this_plan_registration": 0,
+    "new_builds_this_plan_registration": 0,
+    "new_RK3_comparison_this_plan_registration": false
+  },
+  "source": "User supplied plan text on2026-10-22; linked sandbox attachments were not locally available. This is a repository transcription with explicit pre-run conventions, not a claim to have applied the supplied ZIP bytes."
+}

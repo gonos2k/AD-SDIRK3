@@ -1,0 +1,75 @@
+{
+  "delta_checks": {
+    "40_forward_budget_is_E1_optimizer_only": true,
+    "docs_scope_consistent": true,
+    "idealized_vs_real_claims_clear": true,
+    "identifiability_and_gradient_fd_point_match": true,
+    "identifiability_explicit_at_E1_origin": true,
+    "plan_only_not_ready_no_results": true,
+    "preflight_fd_truth_and_prefix_replays_separate": true,
+    "registration_claims_no_result": true,
+    "static_validation_is_labeled_static_only": true,
+    "static_validation_is_pinned_to_current_plan": true,
+    "two_width_rank_and_gradient_gates": true,
+    "user_thresholds_preserved": true,
+    "withheld_epsilon_source_is_pinned": true,
+    "withheld_equation_matches_gate": true
+  },
+  "execution_status": {
+    "all_static_checks_pass": true,
+    "new_builds_reported": 0,
+    "new_model_runs_reported": 0,
+    "plan_status": "planned_not_executed",
+    "pre_execution_freeze_gates": [
+      "truth/source/executable/settings/auxiliary-state/precision reuse receipt or one new truth trajectory",
+      "control-mode generator, actual P/Z_b/control construction, observation384row coordinates/slots/values and hashes",
+      "existing minimizer identity, box/line-search rules and gradient/prefix replay hard caps",
+      "implemented metric and signal/solver-resolution checks, E2 expected failures, all acceptance settings/hash manifest"
+    ],
+    "ready_to_execute": false,
+    "static_checks_reported": 27
+  },
+  "overall_review_pass": true,
+  "pins": {
+    "previous_review_v1_sha256": "3f6045bbe750ada32e616d414b4780b31b1d89937306b41b76190cd096455c32",
+    "reviewed_files": {
+      "core_readme": {
+        "path": "external/libtorch_wrf/sdirk3/README.md",
+        "sha256": "7e8f767fc7768b71799437d9b324b7e666745da0c56b94d973b4540668b0a39f"
+      },
+      "forward_map": {
+        "path": "docs/evidence/research_forward_setting/research_forward_map.json",
+        "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+      },
+      "plan_json": {
+        "path": "docs/plans/native_idealized_twin_v1.json",
+        "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+      },
+      "plan_md": {
+        "path": "docs/plans/native_idealized_twin_v1.md",
+        "sha256": "986c32d7f95d5928cb50740b70a31dc2ce18e4fa15e379e0d651f5a27a01315c"
+      },
+      "problem_definition": {
+        "path": "docs/PROBLEM_DEFINITION.md",
+        "sha256": "fb655c46af55ebcc15f3bed76f7d6ec6ce63e53f9380f613ef7b9c782d9eeabf"
+      },
+      "registration_report": {
+        "path": "docs/(202610220520)_native_idealized_twin_plan_registration.md",
+        "sha256": "bb2d743f419131202a56315a438a09aa4810fb5ffff1ad6cdbe403f4d9c2a158"
+      }
+    },
+    "static_validation_v2_sha256": "027078a2834f1af212f2d716e275cd3013817a59c7e9afa20f72ae655ecde642",
+    "worktree_head": "b21620c4e529bae91ac029bcbf42a41b9977d67b",
+    "worktree_head_tree": "93270cbc601a237f25397574bc01691fb3ec90e2"
+  },
+  "review_findings": [
+    "The SVD point is explicitly E1 start a=(0,0); both widths .01/.03 must meet the ratio requirement. Markdown and JSON agree.",
+    "The 40 forward-evaluation limit is scoped to the E1 optimizer only; preflight E0/FD/possible truth forwards are separately counted, and adjoint prefix replays are separately logged/capped before execution.",
+    "The withheld scale pointer resolves to the pinned forward map\u2019s candidate_limits; epsilon is a display scale, separate from observation R. Each withheld time independently requires final composite error <= half its background error.",
+    "Updated docs preserve plan-only/no-result language. The 27 passing static checks remain explicitly static and do not certify generated H/HT, runtime rank, gradients, optimizer, or E0\u2013E2.",
+    "This plan selects an idealized synthetic twin, not a real-observation problem; the historic forward-map observation_problem_selected=false remains immutable. No numerical outcome is claimed."
+  ],
+  "review_scope": "Read-only final delta review of clarifications and prose claim scope. No code, plan, documentation, model, build, or fixture edits by this review; no runtime outcomes recomputed.",
+  "schema": "native_idealized_twin_plan_delta_closing_review_v2",
+  "status": "PASS_PLAN_ONLY_PREFLIGHT_OPEN"
+}

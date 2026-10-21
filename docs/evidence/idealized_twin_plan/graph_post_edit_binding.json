@@ -1,0 +1,182 @@
+{
+  "captured_at_local": "2026-10-22T05:22:50.937843+09:00",
+  "clarifications_pinned": {
+    "e1_budget_scope": "the optimizer has the explicit E1-only 40-forward-evaluation budget",
+    "identifiability": "rank ratio is checked at control [0,0], and the minimum ratio must pass for both finite-difference widths",
+    "markdown": "rank is checked at E1 start and for both widths; the 40-evaluation cap is E1-only",
+    "withheld_state_scale": "the scale pointer resolves to the referenced forward-map file"
+  },
+  "document_relationships": [
+    {
+      "from": "native_idealized_twin_v1.md",
+      "relation": "declares single source of numerical plan parameters",
+      "status": "DOCUMENTED_PLAN",
+      "to": "native_idealized_twin_v1.json"
+    },
+    {
+      "from": "PROBLEM_DEFINITION.md",
+      "relation": "selects this as a separate next validation instance",
+      "status": "DOCUMENTED_PLAN",
+      "to": "native_idealized_twin_v1.md and .json"
+    },
+    {
+      "from": "sdirk3/README.md",
+      "relation": "links execution documentation to the plan record",
+      "status": "DOCUMENTED_PLAN",
+      "to": "native_idealized_twin_v1.md"
+    },
+    {
+      "from": "plan record",
+      "relation": "future observation, control, optimization, and validation work",
+      "status": "PLAN_INFERRED_NOT_IMPLEMENTED_SOURCE_CALLS",
+      "to": "H / initial two-control parameterization / minimizer / E0-E1-E2"
+    }
+  ],
+  "documents": [
+    {
+      "git_state": "ignored",
+      "path": "docs/plans/native_idealized_twin_v1.md",
+      "sha256": "986c32d7f95d5928cb50740b70a31dc2ce18e4fa15e379e0d651f5a27a01315c"
+    },
+    {
+      "git_state": "ignored",
+      "path": "docs/plans/native_idealized_twin_v1.json",
+      "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+    },
+    {
+      "git_state": "M docs/PROBLEM_DEFINITION.md",
+      "path": "docs/PROBLEM_DEFINITION.md",
+      "sha256": "fb655c46af55ebcc15f3bed76f7d6ec6ce63e53f9380f613ef7b9c782d9eeabf"
+    },
+    {
+      "git_state": "M external/libtorch_wrf/sdirk3/README.md",
+      "path": "external/libtorch_wrf/sdirk3/README.md",
+      "sha256": "7e8f767fc7768b71799437d9b324b7e666745da0c56b94d973b4540668b0a39f"
+    }
+  ],
+  "gaps_and_limits": [
+    "Markdown/JSON semantics are recorded as explicit document references and planned relationships; they are not AST-extracted source-call edges.",
+    "H, control application, minimizer integration, and E0/E1/E2 execution are planned only; this binding asserts no runtime implementation or completed numerical result.",
+    "Cached graph relations remain navigation aids; the pre-edit source receipt pins source-level packing, staggering, ownership, boundaries, and existing caller timing.",
+    "The plan files under docs/ are ignored by repository .gitignore; their immutable evidence copies and hashes are in this receipt. No code/source changes occurred."
+  ],
+  "head": "b21620c4e529bae91ac029bcbf42a41b9977d67b",
+  "head_tree": "93270cbc601a237f25397574bc01691fb3ec90e2",
+  "plan_status": {
+    "json_is_runtime_config": false,
+    "ready_to_execute": false,
+    "results": null,
+    "status": "planned_not_executed"
+  },
+  "previous_binding": {
+    "immutable": true,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/idealized-twin-plan-20261022/green_graph/post_edit_plan_binding.json",
+    "sha256": "94577bdc4b5dac5ca48e79d0fb081ce357790e8893c51f7945b406bc72de4246"
+  },
+  "reused_graphs": {
+    "full_corpus_rebuilt": false,
+    "native_residual_pr314_graph_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/post_edit_binding.json",
+      "sha256": "2377224ab20e0997b4ee40f1b367bbbdcdf5ccbfea75a83bb7bc3507a30732a5"
+    },
+    "pr314_pre_edit_plan_binding": "/Users/yhlee/AD-SDIRK3-review-evidence/idealized-twin-plan-20261022/green_graph/pre_edit_plan_binding.json",
+    "pr314_targeted_code_ast": {
+      "edges": 269,
+      "files": 3,
+      "nodes": 103,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/post_edit_ast_final/graphify-out/graph.json",
+      "sha256": "d9489311a38f60366643713d601a28864071a42bdfcc07e55f6ad58ec515c156"
+    },
+    "production_graph": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+      "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a",
+      "source_count": "verified cached production corpus"
+    }
+  },
+  "schema": "idealized_twin_plan_post_edit_graph_binding_v2",
+  "source_base": {
+    "pre_edit_binding_path": "/Users/yhlee/AD-SDIRK3-review-evidence/idealized-twin-plan-20261022/green_graph/pre_edit_plan_binding.json",
+    "pre_edit_binding_sha256": "3aa49e8616b6f1f9bc26843c9f06705808400fbb43696a47f012360a6001b4bc",
+    "rechecks": [
+      {
+        "baseline_sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc",
+        "current_sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc",
+        "path": "dyn_em/solve_em.F",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+        "current_sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+        "path": "dyn_em/module_implicit_sdirk3.F",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+        "current_sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+        "path": "Registry/Registry.EM_COMMON",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab",
+        "current_sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab",
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+        "current_sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "current_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b",
+        "current_sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b",
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a",
+        "current_sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a",
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+        "current_sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86",
+        "current_sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86",
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53",
+        "current_sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53",
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+        "unchanged": true
+      },
+      {
+        "baseline_sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2",
+        "current_sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2",
+        "path": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+        "unchanged": true
+      }
+    ],
+    "source_count": 12,
+    "source_hashes_unchanged": true
+  },
+  "worktree": "/private/tmp/idealized-twin-plan-20261022",
+  "worktree_status": [
+    "M docs/PROBLEM_DEFINITION.md",
+    " M external/libtorch_wrf/sdirk3/README.md"
+  ]
+}
