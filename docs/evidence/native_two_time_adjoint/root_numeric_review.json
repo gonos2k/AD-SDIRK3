@@ -1,0 +1,8 @@
+{
+  "reviewed_at": "2026-10-21T10:46:16.104491+09:00",
+  "method": "independent math.fsum on actual compact arrays, vector subtraction after FP64 promotion",
+  "full_dAD": -11036.274071545184,
+  "mid_increment_dAD": 16.373770096162122,
+  "npz_sha256": "747f8c8347f3659340c691016b5ea5c25e686e86162abbeadb9c37a503d6bd1e",
+  "total_and_mid_frozen_checks_pass": true
+}

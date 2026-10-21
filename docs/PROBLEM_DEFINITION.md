@@ -398,10 +398,13 @@ target; it cannot revoke a completed restricted validation instance.
 
 ## Next action and validation of this definition
 
-For the selected dry 240 s forward instance, continue with same-map JVP/VJP and
-observation-window connection; do not reopen its completed reference screen or
-require the 15 s candidate to pass first. Declare the observation/control problem
-and derivative budgets before that test. For broader instances, freeze their own
+For the selected dry 240 s forward instance, the native terminal and
+[one-midpoint linear VJP/FD probes](<(202610210936)_native_two_time_adjoint.md>)
+are complete within their one-direction, FP32-chained scopes. Continue with the
+actual observation-window connection; these probes do not certify a full-map
+JVP or all directions. Do not reopen the completed reference screen or require
+the 15 s candidate to pass first. Declare the observation/control problem and
+derivative budgets before that test. For broader instances, freeze their own
 window and physical error budgets. Adopt an efficiency target only through an
 explicit scope decision; if adopted, fix its same-accuracy cost/timestep criterion too. Do not automatically add another wave, optimizer run, Hessian test,
 moisture, terrain or MPI experiment. No project completion percentage is implied.

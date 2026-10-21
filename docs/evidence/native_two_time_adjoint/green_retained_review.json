@@ -1,0 +1,556 @@
+{
+  "Taylor_diagnostic_only": {
+    "full_symmetric_second_difference": {
+      "acceptance_gate": false,
+      "kind": "symmetric_second_difference_order_diagnostic_no_AD",
+      "order_exponent": 2.000220791223692,
+      "widths": {
+        "0p01": {
+          "abs_d2_over_2h2": 26.667219580756104,
+          "absolute_second_difference": 0.0053334436777277006,
+          "signed_second_difference": -0.0053334436777277006
+        },
+        "0p03": {
+          "abs_d2_over_2h2": 26.673688871491855,
+          "absolute_second_difference": 0.0480126378223531,
+          "signed_second_difference": -0.0480126378223531
+        }
+      }
+    },
+    "interpretation": "Midpoint/full symmetric second-difference exponents are diagnostics only, not AD Taylor acceptance tests.",
+    "midpoint_symmetric_second_difference": {
+      "acceptance_gate": false,
+      "kind": "symmetric_second_difference_order_diagnostic_no_AD",
+      "order_exponent": 1.9586151630754542,
+      "widths": {
+        "0p01": {
+          "abs_d2_over_2h2": 5.639151620176178e-05,
+          "absolute_second_difference": 1.1278302736172918e-08,
+          "signed_second_difference": -1.1278302736172918e-08
+        },
+        "0p03": {
+          "abs_d2_over_2h2": 5.388503711472325e-05,
+          "absolute_second_difference": 9.699306247057393e-08,
+          "signed_second_difference": -9.699306247057393e-08
+        }
+      }
+    },
+    "terminal_symmetric_second_difference": {
+      "acceptance_gate": false,
+      "kind": "symmetric_second_difference_order_diagnostic_no_AD",
+      "order_exponent": 2.0002208772223806,
+      "widths": {
+        "0p01": {
+          "abs_d2_over_2h2": 26.667163189310955,
+          "absolute_second_difference": 0.005333432399439175,
+          "signed_second_difference": -0.005333432399439175
+        },
+        "0p03": {
+          "abs_d2_over_2h2": 26.673634986470528,
+          "absolute_second_difference": 0.04801254082931905,
+          "signed_second_difference": -0.04801254082931905
+        }
+      }
+    }
+  },
+  "checks": {
+    "all_signal_floors_pass": true,
+    "baseline_replay_exact_pass": true,
+    "injection_input_formula_pass": true,
+    "new_two_time_AD_checks": "pending",
+    "old_terminal_AD_FD_Taylor_recompute_pass": true,
+    "one_sided_gaps_all_components_pass": true,
+    "q128_mask_formula_fp32_pass": true,
+    "raw_ledgers_receipt_and_endpoint_rows_pass": true
+  },
+  "created_at_local": "2026-10-21 Asia/Tokyo",
+  "finite_difference": {
+    "actual_positive_eta": {
+      "0p01": 0.009999999776482582,
+      "0p03": 0.029999999329447746
+    },
+    "full_two_time_objective": {
+      "0p01": {
+        "J0": -431.82972070351997,
+        "Jminus": -321.46964860047206,
+        "Jplus": -542.1951262502456,
+        "central_fd": -11036.274129168627,
+        "eta_actual": 0.009999999776482582,
+        "one_sided_minus": -11036.007456978781,
+        "one_sided_plus": -11036.540801358475,
+        "one_sided_relative_gap": 4.8325321248109584e-05,
+        "signal": 220.72547764977355,
+        "signal_floor": 5.923247647670901e-06,
+        "signal_pass": true
+      },
+      "0p03": {
+        "J0": -431.82972070351997,
+        "Jminus": -100.76551669601236,
+        "Jplus": -762.9419373488499,
+        "central_fd": -11036.273924227238,
+        "eta_actual": 0.029999999329447746,
+        "one_sided_minus": -11035.47371357898,
+        "one_sided_plus": -11037.074134875496,
+        "one_sided_relative_gap": 0.00014500412672405606,
+        "signal": 662.1764206528376,
+        "signal_floor": 5.923247647670901e-06,
+        "signal_pass": true
+      }
+    },
+    "midpoint_contribution": {
+      "0p01": {
+        "J0": -420.1114023998378,
+        "Jminus": -420.2751399807264,
+        "Jplus": -419.9476648302275,
+        "central_fd": 16.37375789092764,
+        "eta_actual": 0.009999999776482582,
+        "one_sided_minus": 16.37375845484279,
+        "one_sided_plus": 16.37375732701249,
+        "one_sided_relative_gap": 6.888035520963206e-08,
+        "signal": 0.3274751504989126,
+        "signal_floor": 5.9172818796053275e-09,
+        "signal_pass": true
+      },
+      "0p03": {
+        "J0": -420.1114023998378,
+        "Jminus": -420.60261517867826,
+        "Jplus": -419.6201897179904,
+        "central_fd": 16.373758044113078,
+        "eta_actual": 0.029999999329447746,
+        "one_sided_minus": 16.373759660664156,
+        "one_sided_plus": 16.373756427562,
+        "one_sided_relative_gap": 1.9745630953300996e-07,
+        "signal": 0.982425460687864,
+        "signal_floor": 5.9172818796053275e-09,
+        "signal_pass": true
+      }
+    },
+    "new_two_time_AD_relative_checks": "pending; gradients intentionally not read",
+    "one_sided_gap_below_1pct_all_components_both_widths": true,
+    "plateau": {
+      "caveat": "New midpoint/full AD terms are unavailable; FD-only ratios upper-bound the frozen ratios once finite AD is inserted.",
+      "frozen_criterion": "abs(FD.01-FD.03)/max(abs(FD.01),abs(FD.03),abs(AD)) <= .01",
+      "full_FD_only_upper_bound": 1.8569798684142508e-08,
+      "full_upper_bound_below_1pct": true,
+      "midpoint_FD_only_upper_bound": 9.35554556453152e-09,
+      "midpoint_upper_bound_below_1pct": true,
+      "terminal_old_AD_ratio": 1.8528429252487766e-08,
+      "terminal_pass": true
+    },
+    "signal_floor_formula": "100*eps64*max(abs(Jplus),abs(Jminus),component_norm_scale); full scale sums both components",
+    "terminal_only_prior_objective": {
+      "0p01": {
+        "J0": -11.718318303682182,
+        "Jminus": 98.80549138025434,
+        "Jplus": -122.24746142001814,
+        "central_fd": -11052.647887059555,
+        "eta_actual": 0.009999999776482582,
+        "one_sided_minus": -11052.381215433623,
+        "one_sided_plus": -11052.914558685488,
+        "one_sided_relative_gap": 4.825363021072219e-05,
+        "signal": 221.05295280027246,
+        "signal_floor": 5.917330365791296e-06,
+        "signal_pass": true
+      },
+      "0p03": {
+        "J0": -11.718318303682182,
+        "Jminus": 319.8370984826659,
+        "Jplus": -343.3217476308596,
+        "central_fd": -11052.64768227135,
+        "eta_actual": 0.029999999329447746,
+        "one_sided_minus": -11051.847473239644,
+        "one_sided_plus": -11053.44789130306,
+        "one_sided_relative_gap": 0.000144789035887584,
+        "signal": 663.1588461135254,
+        "signal_floor": 5.917330365791296e-06,
+        "signal_pass": true
+      }
+    }
+  },
+  "gradient_scope": "Only old terminal g0Fortran32 was read from completed prefix032 output. No new two-time gradient or gradient array from retained_states.npz/run outputs was read.",
+  "injection_input": {
+    "actual_delta_minus_q_l2": 2.9150945310477388e-05,
+    "actual_delta_minus_q_max_abs": 1.905485987663269e-06,
+    "actual_delta_minus_q_relative_l2": 2.915094527285862e-05,
+    "file": {
+      "bytes": 98124,
+      "dtype": "float32",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/injection/lambda128_two_f32.bin",
+      "sha256": "479b7d23b2780ddc59ed0970c4da964907d4d2e93961097bc5d731ef9480798b",
+      "shape": [
+        24531
+      ]
+    },
+    "formula": "cast32(promote64(g128_old)+promote64(q128_f32))",
+    "matches_formula_bitwise": true,
+    "q128_not_redefined_from_delta": true,
+    "receipt": {
+      "bytes": 1433,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/injection/injection_receipt.json",
+      "sha256": "cd028670c1253d8c2a579c76b84cc2751c073988471fcecaf49ee9ad95cdb9fd"
+    }
+  },
+  "npz_arrays_read": [
+    "case_order",
+    "mid_states_f64",
+    "terminal_states_f64",
+    "q128_f32",
+    "direction_f32"
+  ],
+  "objective_recomputation": {
+    "Jfull": "Jterminal+Jmidpoint",
+    "Jmidpoint": "dot(q128_f32 promoted64,Z128_internal_f64)",
+    "Jterminal": "dot(lambda_N32_f32 promoted64,Z256_internal_f64)",
+    "cases": [
+      {
+        "Jfull": -431.82972070351997,
+        "Jfull_minus_saved": -5.684341886080802e-14,
+        "Jmidpoint": -420.1114023998378,
+        "Jmidpoint_minus_saved": -5.684341886080802e-14,
+        "Jterminal": -11.718318303682182,
+        "case": "baseline"
+      },
+      {
+        "Jfull": -431.82972070351997,
+        "Jfull_minus_saved": -5.684341886080802e-14,
+        "Jmidpoint": -420.1114023998378,
+        "Jmidpoint_minus_saved": -5.684341886080802e-14,
+        "Jterminal": -11.718318303682182,
+        "case": "replay"
+      },
+      {
+        "Jfull": -542.1951262502456,
+        "Jfull_minus_saved": 1.1368683772161603e-13,
+        "Jmidpoint": -419.9476648302275,
+        "Jmidpoint_minus_saved": 1.1368683772161603e-13,
+        "Jterminal": -122.24746142001814,
+        "case": "plus_0p01"
+      },
+      {
+        "Jfull": -321.46964860047206,
+        "Jfull_minus_saved": -1.1368683772161603e-13,
+        "Jmidpoint": -420.2751399807264,
+        "Jmidpoint_minus_saved": -1.1368683772161603e-13,
+        "Jterminal": 98.80549138025434,
+        "case": "minus_0p01"
+      },
+      {
+        "Jfull": -762.9419373488499,
+        "Jfull_minus_saved": 0.0,
+        "Jmidpoint": -419.6201897179904,
+        "Jmidpoint_minus_saved": -1.1368683772161603e-13,
+        "Jterminal": -343.3217476308596,
+        "case": "plus_0p03"
+      },
+      {
+        "Jfull": -100.76551669601236,
+        "Jfull_minus_saved": 0.0,
+        "Jmidpoint": -420.60261517867826,
+        "Jmidpoint_minus_saved": -5.684341886080802e-14,
+        "Jterminal": 319.8370984826659,
+        "case": "minus_0p03"
+      }
+    ],
+    "max_abs_saved_summary_difference": {
+      "full": 1.1368683772161603e-13,
+      "midpoint": 1.1368683772161603e-13
+    },
+    "reduction": "Python math.fsum over FP64 products"
+  },
+  "old_pins": {
+    "baseline_receipt": {
+      "bytes": 16582,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/run_receipt.json",
+      "sha256": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689"
+    },
+    "g0Fortran32": {
+      "bytes": 98124,
+      "control_step": 0,
+      "dtype": "float32",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/baseline_prefix_032/terminal.lambda_out_f32.bin",
+      "protocol_sha256": "9c5477d4629073e946c6465a1f2686d8e76378e19c121b7c0d32e786838e96c0",
+      "sha256": "9c5477d4629073e946c6465a1f2686d8e76378e19c121b7c0d32e786838e96c0",
+      "shape": [
+        24531
+      ]
+    },
+    "g0_receipt": {
+      "bytes": 14568,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/baseline_prefix_032/run_receipt.json",
+      "sha256": "a7776b973d526c82d4ad6ec2b0cb820b54762bb23c5f97ca4ac26d4fd5e0650e"
+    },
+    "lambda128_g128": {
+      "bytes": 98124,
+      "control_step": 128,
+      "dtype": "float32",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/baseline_prefix_160/terminal.lambda_out_f32.bin",
+      "protocol_sha256": "d15976e5b36601236ee4832e3ca65dcbcf404614013343e24611210c914aa532",
+      "sha256": "d15976e5b36601236ee4832e3ca65dcbcf404614013343e24611210c914aa532",
+      "shape": [
+        24531
+      ]
+    },
+    "lambda128_receipt": {
+      "bytes": 16710,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/baseline_prefix_160/run_receipt.json",
+      "sha256": "3795857f798fcf828a7fd6353b26cc413c89955f2fc2d0405757e4d2241ffcd0"
+    },
+    "lambda_N32": {
+      "bytes": 98124,
+      "dtype": "float32",
+      "equals_saved_terminal_f32_copy": true,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.lambda_in_f32.bin",
+      "protocol_sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90",
+      "shape": [
+        24531
+      ]
+    },
+    "namelist_sha256": "4e14a0fb331b98cb5726a6f6de46637564e6b740342d8a881ac866e3e21b2736",
+    "v32": {
+      "bytes": 98124,
+      "dtype": "float32",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.direction_f32.bin",
+      "protocol_sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347",
+      "shape": [
+        24531
+      ]
+    },
+    "wrfinput_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "old_terminal_AD_Taylor": {
+    "abs_difference": 3.637978807091713e-12,
+    "dAD_dot_v32_g0Fortran32": -11052.647841641345,
+    "one_sided_Taylor_remainders_and_orders": {
+      "minus": {
+        "order_exponent": 2.0005571835356246,
+        "widths": [
+          {
+            "remainder": 0.0026662620176267637,
+            "remainder_over_abs_eta": 0.2666262077222365,
+            "signed_eta": -0.009999999776482582,
+            "width": "0p01"
+          },
+          {
+            "remainder": 0.02401105151432148,
+            "remainder_over_abs_eta": 0.8003684017003438,
+            "signed_eta": -0.029999999329447746,
+            "width": "0p03"
+          }
+        ]
+      },
+      "plus": {
+        "order_exponent": 1.9998845612092075,
+        "widths": [
+          {
+            "remainder": 0.0026671703818124115,
+            "remainder_over_abs_eta": 0.26671704414283165,
+            "signed_eta": 0.009999999776482582,
+            "width": "0p01"
+          },
+          {
+            "remainder": 0.024001489315025992,
+            "remainder_over_abs_eta": 0.8000496617167032,
+            "signed_eta": 0.029999999329447746,
+            "width": "0p03"
+          }
+        ]
+      }
+    },
+    "saved_prior_dAD": -11052.647841641348,
+    "terminal_FD_relative_error_vs_old_AD": {
+      "0p01": 4.109260555211108e-09,
+      "0p03": 1.441916875652878e-08
+    }
+  },
+  "packed_layout": {
+    "N": 24531,
+    "T_offset": 19618,
+    "T_shape_jki": [
+      17,
+      16,
+      17
+    ],
+    "block_order": [
+      "U",
+      "V",
+      "W",
+      "PH",
+      "T",
+      "MU"
+    ],
+    "checkpoint_bytes": 50435736,
+    "checkpoint_shape": [
+      257,
+      24531
+    ],
+    "owner_count": 4096,
+    "owner_flat_index": "19618+(j*16+k)*17+i",
+    "physical_T_owner_ranges": {
+      "i": "0..15",
+      "j": "0..15",
+      "k": "0..15"
+    },
+    "q_v_g_dtype": "little-endian IEEE-754 float32",
+    "state_dtype": "little-endian IEEE-754 float64"
+  },
+  "protocol": {
+    "file": {
+      "bytes": 10450,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/protocol.json",
+      "sha256": "c34274526f96434f9c7581d1d41ca701952887f29680431111c733199b00d3bb"
+    },
+    "frozen_at_jst": "2026-10-21T08:47:31.338331+09:00",
+    "midpoint_definition": {
+      "bytes": 1242,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/midpoint_objective_frozen.json",
+      "sha256": "40e92b2b9702c34d1e51a23dc27b2dab8505196753808e04fecc65ccdfbce756"
+    },
+    "pre_ad_summary": {
+      "bytes": 5000,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/fd_pre_ad.json",
+      "sha256": "8638a1fe4c0d73bdcbed7964682f8498c9d09a46b0b32c223ac62ae3b8491f90"
+    },
+    "retained_npz": {
+      "bytes": 2046093,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/retained_states.npz",
+      "sha256": "af502c902b6aee3b80cc6b54f330818e20af7d245f9b3af3b47e86118192b749"
+    },
+    "schema": "native_two_time_adjoint_protocol_v1"
+  },
+  "q128_audit": {
+    "c_norm_f64": 45.29416528464988,
+    "equals_npz_q128": true,
+    "field": "dry theta_m perturbation in T, K; raw perturbation, no 300 K offset",
+    "file": {
+      "bytes": 98124,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-two-time-adjoint-20261021/q128_theta_f32.bin",
+      "sha256": "dcd695ef7c6fa2fefabefc7bf12d57948891917bee983dc17ed47aa96f959bf8"
+    },
+    "formula": "float32(c/||c||2/1K), c=cos(.23(i+1)+.19(j+1)+.07(k+1)); numeric 1K scale=1.0",
+    "formula_cast32_bitwise_equal": true,
+    "nonowners_zero": true,
+    "nonzero_count": 4096,
+    "owner_mask_exact": true,
+    "q_l2_f64": 1.000000001290482
+  },
+  "schema": "native_two_time_retained_data_review_v1",
+  "scope": "Independent retained-data, source-pin, and arithmetic review. No build/model/source edit. No new two-time gradient was loaded or used.",
+  "six_raw_ledgers": {
+    "NPZ_mid128_and_terminal256_byte_match_raw_rows": true,
+    "all_states_finite": true,
+    "baseline_replay_full257_sha_exact": true,
+    "baseline_replay_mid128_terminal256_exact": true,
+    "cases": [
+      {
+        "case": "baseline",
+        "checkpoints_f64": {
+          "bytes": 50435736,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+          "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+        },
+        "eta_actual": 0,
+        "expected_steps": 256,
+        "midpoint128_sha256": "e7b4230680244cd0f439001db0528b93c22c04c6cc79f36ef263f9d43458d6d1",
+        "run_receipt": {
+          "bytes": 16582,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/run_receipt.json",
+          "sha256": "053829500428bc4fd3a8340267cfd21792bf8607277c550ba04c464896f44689"
+        },
+        "terminal256_sha256": "75b5c79ba0a6ab8c5fe9754b9a8eb8bd4295c95e5bb0ed7f001038f89e3e2b15"
+      },
+      {
+        "case": "replay",
+        "checkpoints_f64": {
+          "bytes": 50435736,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/replay/terminal.checkpoints_f64.bin",
+          "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50"
+        },
+        "eta_actual": 0,
+        "expected_steps": 256,
+        "midpoint128_sha256": "e7b4230680244cd0f439001db0528b93c22c04c6cc79f36ef263f9d43458d6d1",
+        "run_receipt": {
+          "bytes": 16260,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/replay/run_receipt.json",
+          "sha256": "9fd6db916906d15c7df29fb0d094835e71982391bd2bfa3439da6b238f76bd7b"
+        },
+        "terminal256_sha256": "75b5c79ba0a6ab8c5fe9754b9a8eb8bd4295c95e5bb0ed7f001038f89e3e2b15"
+      },
+      {
+        "case": "plus_0p01",
+        "checkpoints_f64": {
+          "bytes": 50435736,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p01/terminal.checkpoints_f64.bin",
+          "sha256": "d334ee2aad1ed1dba279f9ac01257fe8322d0f59b463e0b7a1a3da8ac2173562"
+        },
+        "eta_actual": 0.009999999776482582,
+        "expected_steps": 256,
+        "midpoint128_sha256": "191672c85ed80d8b903678c6aaa6922be148e60add21c04ad0cfe26ea249ef40",
+        "run_receipt": {
+          "bytes": 15755,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p01/run_receipt.json",
+          "sha256": "8a10d696fddeecf6a326eb014f9dd3be8a608dacef61028acaf1e6ce6ab9d4c1"
+        },
+        "terminal256_sha256": "5414f1ade5fbcb0c9f00d60e376358c2625a89272824ef2484adedd26fef7d54"
+      },
+      {
+        "case": "minus_0p01",
+        "checkpoints_f64": {
+          "bytes": 50435736,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p01/terminal.checkpoints_f64.bin",
+          "sha256": "ef7568494046116e21affb00082a8dd3e35de818cc586e4887fe370b88933b6c"
+        },
+        "eta_actual": -0.009999999776482582,
+        "expected_steps": 256,
+        "midpoint128_sha256": "3ffd43e4c03404d6c772e78f1ec6c2ddf33d7135e1452d508861cdd2dce49b45",
+        "run_receipt": {
+          "bytes": 15768,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p01/run_receipt.json",
+          "sha256": "2590bf2f1d4a3c13e9a7dbe5e0364f8aac648264db157481fdf9d5ddb517cc39"
+        },
+        "terminal256_sha256": "11860184e928096c37c60e5cf617d54d7dc936f06b1188d9180f0ad656e6c486"
+      },
+      {
+        "case": "plus_0p03",
+        "checkpoints_f64": {
+          "bytes": 50435736,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p03/terminal.checkpoints_f64.bin",
+          "sha256": "bd8217a47c17f619a4f071e6c0ef9d35e2f464aefb47803cadb3a705c46a16d2"
+        },
+        "eta_actual": 0.029999999329447746,
+        "expected_steps": 256,
+        "midpoint128_sha256": "7de4a6cec3a88920d048c7112d3d6374c8479b10a3e97f8d3153adecd3c44a87",
+        "run_receipt": {
+          "bytes": 15758,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/plus_0p03/run_receipt.json",
+          "sha256": "cbf0f969249e487ebb17818a2479df6edf17322fc3430c975d66f087632c423f"
+        },
+        "terminal256_sha256": "8339c3d34e115d88097e7b8e108335660ad1ad11e4f5e7d430b136e7dbe1a5af"
+      },
+      {
+        "case": "minus_0p03",
+        "checkpoints_f64": {
+          "bytes": 50435736,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p03/terminal.checkpoints_f64.bin",
+          "sha256": "e7223bb439acae168c1a446d7e06f53e1884c74451401e6d9cc3558ef1c543ee"
+        },
+        "eta_actual": -0.029999999329447746,
+        "expected_steps": 256,
+        "midpoint128_sha256": "1fb7f2bdcee8d4242b519e95ded453f84e471cf2737fc4db4f6116e1ebd28059",
+        "run_receipt": {
+          "bytes": 15765,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v6/minus_0p03/run_receipt.json",
+          "sha256": "8e6bc906eb55bb40dab6d156a60f3bad02952725727e99c0403c35e23f7f6db0"
+        },
+        "terminal256_sha256": "1ecc6e3fb26451976da8928beed441e33b45262686c1d7aa689d3cebf4e7a61d"
+      }
+    ],
+    "full_hashes_match_run_receipts_and_pre_ad_pins": true
+  },
+  "worktree": {
+    "head": "a8c470f6f194104bd7090dd990682c19f1ca8e34",
+    "path": "/private/tmp/native-two-time-adjoint-20261021",
+    "source_changes_made_by_review": false
+  }
+}

@@ -323,6 +323,10 @@ Begin copies the request; recording starts after the first owner call publishes
 its buffers. Pullback uses the native packed Float32 layout and preserves the
 caller's output on error. These wrappers do not differentiate caller-side maps.
 The full Fortran/MPI and observation-window adjoint remain outside this API.
+The registered dry 256-step terminal and one-midpoint linear VJP/FD probes are
+recorded in the [native two-time report](<../../../docs/(202610210936)_native_two_time_adjoint.md>).
+They use segmented checked Fortran pullbacks with FP32 cotangent handoffs;
+production observation-cost scheduling remains separate.
 
 When observation-aware replay is enabled, enforce endpoint semantics:
 - `x0` (window-start state) must be present for replay-enabled windows.

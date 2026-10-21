@@ -1,0 +1,18 @@
+{
+  "recorded_at": "2026-10-21T11:07:58.674319+09:00",
+  "checks_observed_return_code_zero": [
+    "python3 -m py_compile (two changed Python files)",
+    "native_two_time_prefix.py --self-test",
+    "recompute.py --self-test",
+    "portable NPZ/manifest recomputation in a separate output directory",
+    "git diff --check"
+  ],
+  "analysis_source_sha256": "3a2e4f1d2cda62a02ba85e2595dc3da85b6d07f981e746d5e67d6a4539f2e32c",
+  "portable_recomputed_sha256": "c09af0f19d708bbd9faec5002c77e313d760aca930f5779b1a0c7ebe179c74ac",
+  "native_accepted_model_steps": 320,
+  "native_implicit_stages": 960,
+  "new_model_runs": 4,
+  "new_forward_fd_runs": 0,
+  "new_builds": 0,
+  "ci": "pending draft PR"
+}
