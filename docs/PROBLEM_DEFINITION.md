@@ -2,7 +2,7 @@
 
 Local timestamp: 2026-10-11 17:47:15 JST (+0900)
 
-Last updated: 2026-10-20 19:26:51 JST (+0900)
+Last updated: 2026-10-22 05:16:23 JST (+0900)
 
 This is the single project-level definition of the first-stage research target.
 Case reports retain their own inputs, numerical budgets and completion status.
@@ -53,7 +53,7 @@ not permission to reuse a value from a previous experiment.
 | Numerical state | Predictor/cache policy, carry/publication and warm versus state-only cold restart | Must name the policy; state-only equality does not imply warm-trajectory equality |
 | Forward accuracy | Evaluation times/window, owned/physical sampling positions, per-field units, physical weights/scales \(s_X\), and budgets \(\epsilon_X\) | Named dry 240 s forward case selected and accepted below; broader targets remain unselected |
 | Derivative accuracy | Directions/cotangents and norms/scales, dot/Taylor/FD budgets, true transpose residual and replay checks for that same map/window | Existing budgets apply to their fixtures only; integrated-window coverage remains open |
-| Observation/control problem | Observation operator, times, \(R\), control parameterization, any prior and admissible set | The completed rotating case specifies these; a broader instance is not selected |
+| Observation/control problem | Observation operator, times, \(R\), control parameterization, any prior and admissible set | Completed rotating case retained; a separate native two-control idealized twin is now selected as a plan below. Real-observation assimilation remains separate |
 | Efficiency | Same-accuracy comparator, timestep/stability requirement, whole-run cost definition and required improvement | **Optional target not adopted**; if selected, its criterion must be fixed. No equal-accuracy cost win is established |
 
 The selected case record and this definition together form the completion
@@ -396,6 +396,31 @@ budgets. If efficiency is included in its acceptance contract, its same-accuracy
 cost/timestep criterion must also pass. Scope expansion needs an explicit new
 target; it cannot revoke a completed restricted validation instance.
 
+## Selected next validation instance: native idealized twin (plan only)
+
+The [new native idealized-twin plan](plans/native_idealized_twin_v1.md) and its
+[plan JSON](plans/native_idealized_twin_v1.json) define a separate two-control
+initial-state restoration case on the accepted dry 240 s native map. It uses
+model-generated FP64 truth and noiseless point samples of U, V and dry total
+theta at accepted steps 128/256 (120/240 s), with 384 observations, fixed
+research R, a rotational wind mode and a smooth theta mode. No background
+penalty is selected for its mandatory experiment. Real observations are not a
+prerequisite for this explicitly selected twin case.
+
+E0 zero innovation/update, E1 identifiable two-control recovery and withheld
+60/180 s state improvement, and E2 deliberate-error detection are its mandatory
+completion gates. All are **planned, not executed**. Concrete control/observation
+artifacts, minimizer/line-search and replay caps, source/truth bindings and the
+metric/negative-test implementation must be frozen before any acceptance run.
+The JSON is a plan schema, not an existing solver runtime configuration.
+
+PR #314's synthetic residual caller and the earlier rotating inverse remain
+closed within their own scopes. This new plan neither repeats those studies nor
+certifies real-atmosphere assimilation, all directions, general physics or MPI.
+Its E0–E2 completion is not contingent on optional noise/prior E3, a 15 s
+candidate, a new timestep ladder or deployment work. Plan registration launched
+no model/build or new same-setup RK3 field/runtime comparison.
+
 ## Next action and validation of this definition
 
 For the selected dry 240 s forward instance, the native terminal and
@@ -404,9 +429,12 @@ are complete within their one-direction, FP32-chained scopes. The
 [synthetic two-diagnostic squared-residual caller](<(202610211456)_native_residual_objective.md>)
 also passes the declared full-cost and derived midpoint-increment checks with
 fresh residual-dependent cotangents. Its fixed synthetic targets and weights
-do not define a physical observation problem. Continue with the actual
-observation-window definition and connection; these probes do not certify a
-full-map JVP or all directions. Do not reopen the completed reference screen or require
+do not define a physical observation problem. The user has now selected the
+separate idealized twin above to validate native control restoration without
+real observations. Proceed through that plan's pre-execution freeze gates,
+then E0–E2; do not interpret plan registration as an executed recovery result.
+These earlier probes do not certify a full-map JVP or all directions.
+Do not reopen the completed reference screen or require
 the 15 s candidate to pass first. Declare the observation/control problem and
 derivative budgets before that test. For broader instances, freeze their own
 window and physical error budgets. Adopt an efficiency target only through an

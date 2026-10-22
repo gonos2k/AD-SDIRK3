@@ -1,0 +1,211 @@
+{
+  "base_verification": {
+    "pr314_source_commit": "32f8dee2",
+    "target_tree_matches_pr314_source_commit": true,
+    "working_tree_clean": true
+  },
+  "branch": "codex/idealized-twin-plan-20261022",
+  "caller_chain": [
+    "solve_em.F guarded test calls prepare/before_step before advance_implicit and after_step after the three-call compatibility loop; accepted endpoint is before later physics/boundary work.",
+    "module_implicit_sdirk3.F passes WRF whole-memory arrays and boundary flags to C bindings.",
+    "wrf_sdirk3_tile_unified_impl.cpp packs U_n in shared StateLayout order and runs the test-only input hook before fixed-trajectory graph validation/recording.",
+    "Graphify C++/Python edges are reused from PR314 targeted graph; cross-language Fortran/C++ call edges above are source-confirmed manual bridges, not AST-derived."
+  ],
+  "captured_at_local": "2026-10-22T05:14:27.147954+09:00",
+  "comparison_to_previous_native_binding": [
+    {
+      "current_sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc",
+      "path": "dyn_em/solve_em.F",
+      "previous_cached_sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc",
+      "same_as_pr312_base_pin": true
+    },
+    {
+      "current_sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+      "path": "dyn_em/module_implicit_sdirk3.F",
+      "previous_cached_sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+      "same_as_pr312_base_pin": true
+    },
+    {
+      "current_sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab",
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "previous_cached_sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab",
+      "same_as_pr312_base_pin": true
+    },
+    {
+      "current_sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "previous_cached_sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+      "same_as_pr312_base_pin": true
+    },
+    {
+      "current_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "previous_cached_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "same_as_pr312_base_pin": true
+    },
+    {
+      "current_sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b",
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "previous_cached_sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b",
+      "same_as_pr312_base_pin": true
+    },
+    {
+      "current_sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "previous_cached_sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+      "same_as_pr312_base_pin": true
+    },
+    {
+      "current_sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86",
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "previous_cached_sha256": "e84101e2a2e5ba83a9f59bcf8b8ba6f94a600ae64290b44995338f4607f8ac3d",
+      "same_as_pr312_base_pin": false
+    },
+    {
+      "current_sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53",
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "previous_cached_sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53",
+      "same_as_pr312_base_pin": true
+    },
+    {
+      "current_sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2",
+      "path": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "previous_cached_sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2",
+      "same_as_pr312_base_pin": true
+    }
+  ],
+  "current_source_pins": [
+    {
+      "head_blob_matches": true,
+      "path": "dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "Registry/Registry.EM_COMMON",
+      "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+      "sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "head_blob_matches": true,
+      "path": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ],
+  "gaps_and_limits": [
+    "Graph relationships are navigation aids. Packed order, ownership, timing, and boundary restrictions were checked against cited source lines.",
+    "The prior PR314 native source receipt predates this planning worktree; exact tree equality to PR314 merge-source commit plus clean status establishes that its pins apply here.",
+    "This audit does not specify the discrete-curl stencil, boundary closure, truth extraction, observation operator, or optimizer update; those belong to the plan/problem definition and require explicit decisions.",
+    "No numerical data or model output was inspected and no build/model run was performed."
+  ],
+  "head": "b21620c4e529bae91ac029bcbf42a41b9977d67b",
+  "head_tree": "93270cbc601a237f25397574bc01691fb3ec90e2",
+  "plan_boundary": {
+    "authorized_artifacts": "documentation plan, JSON plan metadata, and problem definition only",
+    "not_authorized_here": "production/runtime/test-source edits, builds, model runs, numerical experiments, and reading FD or old-truth payload values"
+  },
+  "reused_graphs": {
+    "method": "reused verified PR314 production and targeted graphs; no full corpus rebuild or new extraction",
+    "pr314_cached_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/post_edit_binding.json",
+      "sha256": "2377224ab20e0997b4ee40f1b367bbbdcdf5ccbfea75a83bb7bc3507a30732a5"
+    },
+    "pr314_pre_edit_native_binding": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/pre_edit_binding.json",
+      "sha256": "91f507f814e2611d56703c2036b0b1816e6fd4330a2bf2923cf0af38147eedcf",
+      "source_pins": 10
+    },
+    "production_graph": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_graph/pr307_postfreeze_stage_w_corpus_v2/graphify-out/graph.json",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_graph/v5_skip_source_binding.json",
+      "receipt_sha256": "ad4ce2ae89f81f81aa191b6ca74dbe1b0154c77c60d73c00451c8573e5d2ed85",
+      "sha256": "14a1128b6163e3598c00232e359178d2be59fbd1dca5a3a76153730e50e7d14a"
+    },
+    "targeted_pr314_cpp_python_graph": {
+      "edges": 269,
+      "nodes": 103,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/green_graph/post_edit_ast_final/graphify-out/graph.json",
+      "sha256": "d9489311a38f60366643713d601a28864071a42bdfcc07e55f6ad58ec515c156",
+      "source_count": 3
+    }
+  },
+  "schema": "idealized_twin_plan_pre_edit_source_graph_binding_v1",
+  "source_contracts": [
+    {
+      "contract": "Packed blocks are u, v, w, ph, t, mu. The legacy ru/rv/rw labels do not mean coupled momentum: first three blocks are velocity basis. Registry declares U/V as wind velocities; t is perturbation potential temperature and may be moist or dry depending on use_theta_m.",
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h:16-30,60-78,105-148; Registry/Registry.EM_COMMON:159-160,170-172,219-223",
+      "topic": "packed prognostic vector order and basis"
+    },
+    {
+      "contract": "Fortran serializes u then v then w then ph then t then mu, with i fastest, then k, then j; U uses x-staggered extent, V y-staggered, W/PH z-staggered. Solver dimensions are nx_u=nx+1, ny_v=ny+1, nz_w=nz+1 regardless of boundary flags.",
+      "source": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F:76-130,217-262; dyn_em/module_implicit_sdirk3.F:670-690,1428-1438",
+      "topic": "Fortran pack order and native dimensions"
+    },
+    {
+      "contract": "Mass owners end at min(ite,ide-1)/min(jte,jde-1); X-staggered U owns i through ite, Y-staggered V owns j through jte; vertical W/PH include nz_w. The specified local sample coordinates {2,6,10,14} avoid these upper owner boundaries for the current 17x17x16 native fixture. Three fields x 64 points x states 128 and 256 = 384 scalar samples.",
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h:8-22,65-95",
+      "topic": "owner and sample validity"
+    },
+    {
+      "contract": "Fortran passes whole-memory base pointers at ims/jms/kms; C++ adapts from memory origin to tile origin. Boundary flags (periodic, symmetric, open, specified, nested) are published separately at solver setup; do not infer ownership extents from periodicity.",
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h:8-22,45-61; dyn_em/module_implicit_sdirk3.F:730-744,1428-1441",
+      "topic": "tile origin and boundary publication"
+    },
+    {
+      "contract": "Native test prepare is guarded and runs after WRF initialization/CQ setup before the first advance; after-step capture runs on accepted internal endpoint before later physics/boundary processing. The current control_input64 hook is test-only at packed native entry; the accepted-state hook only captures the warm-prefix states it was designed for, so arbitrary twin controls/observations need an explicit later implementation decision.",
+      "source": "dyn_em/solve_em.F:738-778; dyn_em/module_implicit_sdirk3.F:1428-1438; external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:6100-6220,13097-13102",
+      "topic": "test hook and caller timing"
+    },
+    {
+      "contract": "Retained FP64 fixed-trajectory carry is mode 3 on one CPU tile covering the domain, rk_step 1, no split explicit/adaptive timestep, and rejects open, specified, nested, or polar boundaries. The code here does not establish which periodic setup the proposed experiment should choose.",
+      "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:6110-6190",
+      "topic": "trajectory restrictions"
+    }
+  ],
+  "status": [],
+  "worktree": "/private/tmp/idealized-twin-plan-20261022"
+}

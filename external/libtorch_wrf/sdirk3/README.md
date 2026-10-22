@@ -330,6 +330,10 @@ the [synthetic two-diagnostic residual-cost caller](<../../../docs/(202610211456
 also passes its full-cost and separated midpoint FD checks on the same map.
 Its targets/weights are numerical fixtures; production observation operators,
 data, error weights and scheduling remain separate.
+The separate [native two-control idealized-twin plan](<../../../docs/plans/native_idealized_twin_v1.md>)
+selects noiseless point observations and initial-state recovery on that same
+map. It is a plan only: E0–E2 have not run, and its JSON is not a solver runtime
+configuration. This selected twin case does not require real observations.
 
 When observation-aware replay is enabled, enforce endpoint semantics:
 - `x0` (window-start state) must be present for replay-enabled windows.
