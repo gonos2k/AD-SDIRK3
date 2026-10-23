@@ -59,7 +59,17 @@
     "guard_failure_interpretation": "After verified SIGCONT, ps observed owned launcher as zombie with comm <defunct>; driver refused identity match and kept strict baseline inconclusive. OS launcher RC0 and empty final group remain distinct raw observations.",
     "delayed_hold_executed": false,
     "historical_cause_established": false,
-    "additional_attempts": 0
+    "additional_attempts": 0,
+    "hold_clock_clarification": {
+      "schema": "diagnostic_hold_clock_clarification_v1",
+      "recorded_at_local": "2026-10-24T01:36:12.215249+09:00",
+      "reported_actual_hold_seconds_field_measures": "Post-GO hold loop only; excludes setup/identity queries before SIGCONT",
+      "post_GO_hold_loop_seconds": 1.0285477498546243,
+      "SIGSTOP_to_SIGCONT_request_interval_python_monotonic_seconds": 1.615045209,
+      "SIGSTOP_to_SIGCONT_request_interval_wall_seconds": 1.615055,
+      "no_cross_language_monotonic_subtraction": true,
+      "no_receipt_edits": true
+    }
   },
   "raw_evidence_root": "/Users/yhlee/AD-SDIRK3-review-evidence/mpi-exit-20261023",
   "old_case_preservation": {
