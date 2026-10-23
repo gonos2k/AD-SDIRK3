@@ -1,0 +1,98 @@
+{
+  "all_unchanged_pins_match": true,
+  "authorized_changed_source": {
+    "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+    "sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+  },
+  "head": "e111d2bea3a2c3fa34eb117b131cb03cf89eda5f",
+  "pins": [
+    {
+      "final_sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc",
+      "only_approved_cpp_change": false,
+      "path": "dyn_em/solve_em.F",
+      "pre_edit_pin_sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "final_sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a",
+      "only_approved_cpp_change": false,
+      "path": "dyn_em/module_implicit_sdirk3.F",
+      "pre_edit_pin_sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "final_sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+      "only_approved_cpp_change": false,
+      "path": "Registry/Registry.EM_COMMON",
+      "pre_edit_pin_sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+    },
+    {
+      "final_sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab",
+      "only_approved_cpp_change": false,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "pre_edit_pin_sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "final_sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4",
+      "only_approved_cpp_change": false,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "pre_edit_pin_sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "final_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+      "only_approved_cpp_change": false,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "pre_edit_pin_sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "final_sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b",
+      "only_approved_cpp_change": false,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "pre_edit_pin_sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "final_sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a",
+      "only_approved_cpp_change": false,
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+      "pre_edit_pin_sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+    },
+    {
+      "final_sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+      "only_approved_cpp_change": false,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "pre_edit_pin_sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "final_sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7",
+      "only_approved_cpp_change": true,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "pre_edit_pin_sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+    },
+    {
+      "final_sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53",
+      "only_approved_cpp_change": false,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "pre_edit_pin_sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "final_sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2",
+      "only_approved_cpp_change": false,
+      "path": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "pre_edit_pin_sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ],
+  "pre_edit_graph": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/pre_edit_binding.json",
+    "sha256": "e0c3438d218b9d1cd6178a9e96d89db7d058f29d82c8eaf9df67c28786bf8b79"
+  },
+  "schema": "native_idealized_twin_source_binding_v1",
+  "unchanged_pin_count": 11,
+  "untracked_nonbuild_inputs_not_used": [
+    "external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+    "tools/__pycache__/"
+  ],
+  "worktree": "/private/tmp/native-idealized-twin-20261022",
+  "worktree_status_observed": [
+    " M external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+    "?? external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+    "?? tools/__pycache__/"
+  ]
+}

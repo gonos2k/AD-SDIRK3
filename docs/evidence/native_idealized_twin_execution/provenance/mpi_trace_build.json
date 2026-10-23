@@ -1,0 +1,86 @@
+{
+  "base_executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin.exe",
+    "sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4",
+    "unchanged": true
+  },
+  "candidate_executable": {
+    "bytes": 52799672,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin_mpi_trace_v3.exe",
+    "sha256": "b900620dea06d4604d3f347a1ac1034d5082924e1b47088a074e03b4dc443e68"
+  },
+  "linkage": {
+    "change": "Separate output path and trace object inserted before all archives/libraries; same remaining WRF link argv.",
+    "mpi_finalize_interposed": true,
+    "pmpi_finalize_resolved_from_openmpi": true,
+    "return_code": 0,
+    "template_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/link_receipt.json",
+    "template_receipt_sha256": "42a7cdcc5cd2903629519ad5f666fabebbf867a810d148df84cf27b9b0135439"
+  },
+  "model_run": false,
+  "purpose": "Trace whether the actual F77 MPI_Finalize call occurs, actual ierr, and PMPI Initialized/Finalized return codes/status before, during, and after the existing call. Constructor/destructor capture skipped call vs clean finalization. Wrapper forwards once via pmpi_finalize_; no synthetic ierr or extra MPI_Finalize.",
+  "receipts": {
+    "mpi_finalize_smoke_v3_receipt.json": {
+      "bytes": 2402,
+      "path": "mpi_finalize_smoke_v3_receipt.json",
+      "sha256": "044e6e9f7527a989d32281e28273b174311a85ed62e5330b7ab91e37db98f330"
+    },
+    "mpi_trace_v3_compile_receipt.json": {
+      "bytes": 1173,
+      "path": "mpi_trace_v3_compile_receipt.json",
+      "sha256": "2c7424a9499e5bc7e291949c0b4939c1d756c51a94761fa83fb531eaef146aee"
+    },
+    "mpi_trace_v3_link_receipt.json": {
+      "bytes": 5177,
+      "path": "mpi_trace_v3_link_receipt.json",
+      "sha256": "0fd546191a7ddea0116b9ef8efc65df197b20ee277f52b60038c1c8e697eed51"
+    },
+    "mpi_trace_v3_symbol_receipt.json": {
+      "bytes": 3313,
+      "path": "mpi_trace_v3_symbol_receipt.json",
+      "sha256": "1a6f6e96ff06e8ab81fbeff01108c6e18f708120a4d3a6f0ff48f43a2e5e8014"
+    }
+  },
+  "schema": "native_idealized_twin_mpi_trace_diagnostic_build_receipt_v3",
+  "smoke": {
+    "F77_finalize_entry_state_logged": true,
+    "constructor_preinit_state_logged": true,
+    "destructor_postfinalize_state_logged": true,
+    "ierr": 0,
+    "post_finalize_state_logged": true,
+    "receipt": {
+      "bytes": 2402,
+      "path": "mpi_finalize_smoke_v3_receipt.json",
+      "sha256": "044e6e9f7527a989d32281e28273b174311a85ed62e5330b7ab91e37db98f330"
+    },
+    "return_code": 0
+  },
+  "source_and_archive_guards": {
+    "archives_unchanged": true,
+    "current_cpp_archive_sha256": "6170525898997118012d62556d273681b1564d12cb576274de412ade0e8b5899",
+    "original_e6_cpp_archive_sha256": "a4ba233ada016f4c03f2e974358b10f72f324cde84f270566312785ce2fdefa5",
+    "original_e6_fortran_archive_sha256": "4241f06c0f60d1f29f05bb9d8e8c75c5977dabe4d20fcb1b330e1733f4f12833",
+    "production_source_changed": false,
+    "test_cpp_sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+  },
+  "status": "built_smoke_passed_awaiting_review_no_wrf_run",
+  "supersedes": [
+    {
+      "receipt": "mpi_trace_build_receipt_v1.json",
+      "sha256": "db0c62c677cc1958fbe9f5a9c5ab48050da06fcd0ac6685b009d8ff905ce4089"
+    },
+    {
+      "receipt": "mpi_trace_build_receipt_v2.json",
+      "sha256": "bf8647c27a3f6e4ecd9b4e53726faaccf07b7ea9fcf07373e14a4668487f1e3a"
+    }
+  ],
+  "trace_environment_variable": "NATIVE_MPI_FINALIZE_TRACE",
+  "trace_object": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/objects/mpi_shutdown_trace_v3.o",
+    "sha256": "b5d2c4d4fed3c9d813c63519bc7db775a912c397d2db69a0fdb95c858492515a"
+  },
+  "trace_source": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/mpi_shutdown_trace_v3.c",
+    "sha256": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032"
+  }
+}

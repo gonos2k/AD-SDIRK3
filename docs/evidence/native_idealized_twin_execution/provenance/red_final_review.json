@@ -1,0 +1,229 @@
+{
+  "schema": "red_native_idealized_twin_final_review_v1",
+  "reviewed_at_local": "2026-10-23T17:07:12.878669+09:00",
+  "status": "PASS_DECLARED_TWO_CONTROL_IDEALIZED_TWIN_CLOSURE",
+  "scope": "Declared dry two-control idealized twin only; evidence does not establish real-observation assimilation, all-directions behavior, or global FP64 gradient fidelity.",
+  "source_provenance": {
+    "worktree": "/private/tmp/native-idealized-twin-20261022",
+    "branch": "codex/native-idealized-twin-20261022",
+    "current_binding_sha256": "112defb345990633f18a06734324ff4930a1a7e1d941b3823006bc73d33abfe8",
+    "current_protocol_sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d",
+    "current_controller_sha256": "4c0e30d8b25142e3696bea9f465aaaf844b1012538886313f2686fba01a277dc",
+    "minimizer_source_path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+    "minimizer_source_sha256": "bb7d196c69196bbd503bef77f5cf8b6a68e7c8c5b0dd41cc532999891324be38",
+    "v5_prelaunch_review_sha256": "d3aa48961450c325a41539cae528ff9d7404e44f08a125beee4f8693c2d57ed2",
+    "profile_equivalence_proof_sha256": "405942141aeada1146cecff380b0e4b0a44463a1b8c5a87f9f1202548f439f7d",
+    "base_executable_sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4"
+  },
+  "final_gradient": {
+    "raw_last_window_label": "e1_grad_001_032",
+    "raw_gradient_f32_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_032/terminal.gradient_f32.bin",
+    "raw_gradient_f32_sha256": "74e44d0f098cb702334742e4176fe08ae58a559fb186905bbf3823689b1ec4cb",
+    "recorded_lambda0_sha256": "74e44d0f098cb702334742e4176fe08ae58a559fb186905bbf3823689b1ec4cb",
+    "lambda_f32_elements": 24531,
+    "P_dot_lambda0": [
+      2.3407969907636702e-07,
+      2.6864879458280385e-06
+    ],
+    "reported_minimizer_gradient": [
+      2.3407969907636702e-07,
+      2.6864879458280385e-06
+    ],
+    "exact_componentwise_match": true,
+    "normalized_gradient_inf_recomputed": 7.820345620803177e-08,
+    "convergence_threshold": 0.0001,
+    "pass": true
+  },
+  "objective_and_solution": {
+    "final_forward_label": "e1_cost_001",
+    "final_forward_receipt_sha256": "7ab8f4eda073b4f4a720fba33b0b85a862aa4917f9ce3effca57d779d5dbddba",
+    "final_checkpoints_sha256": "9f249c3cf25ceeb70e61677a5c8d5a5bd0558bbdfda2b4317e5152d8f3804071",
+    "raw_observation_objective_recomputed": 2.6096924689424757e-13,
+    "reported_J_final": 2.6096924689424757e-13,
+    "J0": 10.319248794826839,
+    "recomputed_final_over_initial": 2.528955857960073e-14,
+    "reported_ratio": 2.528955857960073e-14,
+    "endpoint_contributions": {
+      "128": 1.3047559607462965e-13,
+      "256": 1.3049365081961792e-13
+    },
+    "control": [
+      -0.49999999659290667,
+      0.5000001939857451
+    ],
+    "control_relative_error_recomputed": 2.743795823310935e-07,
+    "reported_control_relative_error": 2.743795823310935e-07,
+    "initial_seed_exactly_matches_frozen_control_templates": true,
+    "accepted_updates": 1,
+    "objective_forwards": 2,
+    "logical_gradient_calls": 2,
+    "accepted_alpha": 1.0,
+    "armijo_accept": true
+  },
+  "withheld_state_reproduction": {
+    "background_composites": {
+      "64": 99.75408910464543,
+      "192": 153.65022771596588
+    },
+    "final_composites": {
+      "64": 2.9510613563641992e-05,
+      "192": 5.4098950790826194e-05
+    },
+    "recomputed_final_over_background": {
+      "64": 2.9583362274687663e-07,
+      "192": 3.520915757497751e-07
+    },
+    "reported_final_over_background": {
+      "64": 2.9583362274687663e-07,
+      "192": 3.520915757497751e-07
+    },
+    "threshold": 0.5
+  },
+  "vjp_provenance": {
+    "windows": [
+      {
+        "label": "e1_grad_001_192_mpi_trace",
+        "steps": 192,
+        "receipt_sha256": "540661d1fddd9151f10d481b7d0e0a4db59fc47a168ed1aa767d7e07f44cde4b",
+        "status": "completed",
+        "return_code": 0,
+        "validation_error": null,
+        "executable_sha256": "b900620dea06d4604d3f347a1ac1034d5082924e1b47088a074e03b4dc443e68",
+        "binding_sha256": "fade692ee2678f2e0f4d21dab54d29262523ac60222a3fab1b24afec9b2437d3",
+        "incoming_lambda_f32_sha256": "83fe8613d589ab0373f8952127cf32f769c6f78e0213ddaae31ebab2437fd13d",
+        "gradient_f32_sha256": "2d5d3a334d47f03c85703f72ea084ce83e46406e8b545246ef7e9f207ad0396c",
+        "all_fields_finite": true,
+        "newton_records": 576,
+        "telemetry_steps": 192
+      },
+      {
+        "label": "e1_grad_001_160",
+        "steps": 160,
+        "receipt_sha256": "8da9f6f77e67b3082c37b26d2f5ab5e51993b8d724414757f419bd6a56923a2b",
+        "status": "completed",
+        "return_code": 0,
+        "validation_error": null,
+        "executable_sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4",
+        "binding_sha256": "112defb345990633f18a06734324ff4930a1a7e1d941b3823006bc73d33abfe8",
+        "incoming_lambda_f32_sha256": "2d5d3a334d47f03c85703f72ea084ce83e46406e8b545246ef7e9f207ad0396c",
+        "gradient_f32_sha256": "21574cd6b428343b892f4f918ea3d9a38790706cc744433a22c7855074415e67",
+        "all_fields_finite": true,
+        "newton_records": 480,
+        "telemetry_steps": 160,
+        "incoming_matches_previous_output": true
+      },
+      {
+        "label": "e1_grad_001_128",
+        "steps": 128,
+        "receipt_sha256": "85472da8e0aab4d96ba3457ed94e2733b0289036733ca9c9bca2bd938b3b0f44",
+        "status": "completed",
+        "return_code": 0,
+        "validation_error": null,
+        "executable_sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4",
+        "binding_sha256": "112defb345990633f18a06734324ff4930a1a7e1d941b3823006bc73d33abfe8",
+        "incoming_lambda_f32_sha256": "1471c24cabf8292f33d4794ec06e8f586eb05103ffa54e9ad1d3be063e07aaab",
+        "gradient_f32_sha256": "8f72f22919b81ef9aafeff72b86f06a3a34393a221a25ac3c706b10a77751b9a",
+        "all_fields_finite": true,
+        "newton_records": 384,
+        "telemetry_steps": 128,
+        "incoming_matches_previous_output": false
+      },
+      {
+        "label": "e1_grad_001_096",
+        "steps": 96,
+        "receipt_sha256": "e6a576e2453d48401362b69cb662cb5500b8aa7d47e050329f4dac318f3e03f9",
+        "status": "completed",
+        "return_code": 0,
+        "validation_error": null,
+        "executable_sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4",
+        "binding_sha256": "112defb345990633f18a06734324ff4930a1a7e1d941b3823006bc73d33abfe8",
+        "incoming_lambda_f32_sha256": "8f72f22919b81ef9aafeff72b86f06a3a34393a221a25ac3c706b10a77751b9a",
+        "gradient_f32_sha256": "adf8742acd86b111f993ac7138049d91131990807155f7617f28d73321c1ea57",
+        "all_fields_finite": true,
+        "newton_records": 288,
+        "telemetry_steps": 96,
+        "incoming_matches_previous_output": true
+      },
+      {
+        "label": "e1_grad_001_064",
+        "steps": 64,
+        "receipt_sha256": "14b8b4c08fe11f5b494062f08a1cc7fe7e63bc7b20d6ffcee3dbb790bc16ce24",
+        "status": "completed",
+        "return_code": 0,
+        "validation_error": null,
+        "executable_sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4",
+        "binding_sha256": "112defb345990633f18a06734324ff4930a1a7e1d941b3823006bc73d33abfe8",
+        "incoming_lambda_f32_sha256": "adf8742acd86b111f993ac7138049d91131990807155f7617f28d73321c1ea57",
+        "gradient_f32_sha256": "fb5af1840b851ca9bd53185320c6ae1c367c49b9186082ba82c3a3436337ad09",
+        "all_fields_finite": true,
+        "newton_records": 192,
+        "telemetry_steps": 64,
+        "incoming_matches_previous_output": true
+      },
+      {
+        "label": "e1_grad_001_032",
+        "steps": 32,
+        "receipt_sha256": "5e8bf16b1b52369594af75c30f6d348997f628676a8a0222d8df0494449805d2",
+        "status": "completed",
+        "return_code": 0,
+        "validation_error": null,
+        "executable_sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4",
+        "binding_sha256": "112defb345990633f18a06734324ff4930a1a7e1d941b3823006bc73d33abfe8",
+        "incoming_lambda_f32_sha256": "fb5af1840b851ca9bd53185320c6ae1c367c49b9186082ba82c3a3436337ad09",
+        "gradient_f32_sha256": "74e44d0f098cb702334742e4176fe08ae58a559fb186905bbf3823689b1ec4cb",
+        "all_fields_finite": true,
+        "newton_records": 96,
+        "telemetry_steps": 32,
+        "incoming_matches_previous_output": true
+      }
+    ],
+    "midpoint_step_128_injection_exact": true,
+    "midpoint_expected_f32_sha256": "1471c24cabf8292f33d4794ec06e8f586eb05103ffa54e9ad1d3be063e07aaab",
+    "midpoint_actual_f32_sha256": "1471c24cabf8292f33d4794ec06e8f586eb05103ffa54e9ad1d3be063e07aaab",
+    "profile_window_only_special_substitution": true,
+    "remaining_160_128_96_64_32_use_original_executable": true,
+    "all_six_vjp_windows_completed_rc0": true
+  },
+  "validation_gates": {
+    "E0_special_zero_innovation_gate": true,
+    "two_width_identifiability_ratios": {
+      "0.01": 0.44896537144675336,
+      "0.03": 0.4489653714291307
+    },
+    "FD_comparisons": 12,
+    "max_FD_relative_error": 2.3358951652867438e-08,
+    "E2_mutations_detected": true,
+    "final_forward_all_fields_finite": true,
+    "minimizer_truth_blind_interface": true,
+    "known_truth_control_used_only_for_posthoc_relative_error_check": true
+  },
+  "budget_and_failure_provenance": {
+    "attempts": 41,
+    "completed": 39,
+    "failed": 2,
+    "attempted_steps": 6880,
+    "caps": {
+      "attempts": 165,
+      "steps": 28992
+    },
+    "actual_budget_file": {
+      "reserved_model_calls": 41,
+      "reserved_model_steps": 6880,
+      "last_label": "e1_grad_001_032",
+      "call_cap": 165,
+      "model_step_cap": 28992
+    },
+    "both_failed_receipts_preserved": [
+      "e1_grad_001_192",
+      "e1_grad_000_096"
+    ],
+    "V5_alias_reuse_and_wrong_horizon_lambda_rejections_verified_in": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/root_prelaunch_v5.json",
+    "new_calls_in_final_review": 0
+  },
+  "limitations": [
+    "The prior untraced MPI RC1 cause remains unknown; the profile proof supports only the saved 192-step artifact substitution.",
+    "The synthetic truth is used to generate the twin observations and for post-run scoring; the optimizer interface itself receives cost/gradient callbacks and an inverse metric, not the true control.",
+    "No claims are made for real observations, broader control directions, or all-FP64 reverse-mode behavior."
+  ],
+  "checks_passed": true
+}

@@ -40,7 +40,8 @@ struct RunState {
     std::string chain_name;
     std::string output_prefix;
     std::string reference_path;
-    int mode = -1;  // 0=baseline VJP, 2=FD, 3=prefix VJP, 4=state-only replay.
+    std::string initial_seed_path;
+    int mode = -1;  // 0=baseline VJP, 2=FD, 3=prefix VJP, 4=replay, 5=forward-only.
     int expected_steps = kSteps;
     int graph_start_step = kSteps - kWindowSteps + 1;
     float eta = 0.0f;
@@ -91,11 +92,12 @@ int parse_mode(const std::string& value) {
     if (value == "baseline") return 0;
     if (value == "replay") return 4;
     if (value == "prefix") return 3;
+    if (value == "forward") return 5;
     if (value == "plus001" || value == "minus001" ||
         value == "plus003" || value == "minus003" ||
         value == "plus_0p01" || value == "minus_0p01" ||
         value == "plus_0p03" || value == "minus_0p03" || value == "fd") return 2;
-    throw std::runtime_error("mode must be baseline, replay, prefix, or one of the four frozen FD runs");
+    throw std::runtime_error("mode must be baseline, replay, prefix, forward, or one of the four frozen FD runs");
 }
 
 int parse_steps() {
@@ -434,8 +436,8 @@ extern "C" int sdirk3_native_terminal_prepare(
         TORCH_CHECK(mode == 3 || expected_steps == kSteps,
                     "only prefix mode may shorten the frozen timestep horizon");
         TORCH_CHECK(mode != 3 || (expected_steps <= kSteps &&
-                    (chain_name == "baseline" || chain_name == "replay")),
-                    "prefix mode requires baseline/replay chain and a horizon in [32,256]");
+                    (chain_name == "baseline" || chain_name == "replay" || chain_name == "twin")),
+                    "prefix mode requires baseline/replay/twin chain and a horizon in [32,256]");
 
         auto x0 = torch::from_blob(packed_x0, {n}, torch::TensorOptions().dtype(torch::kFloat32)
                                                     .device(torch::kCPU)).clone();
@@ -467,10 +469,6 @@ extern "C" int sdirk3_native_terminal_prepare(
             reference = torch::from_blob(reference_bytes.data(),
                 {kSteps + 1, n}, torch::TensorOptions().dtype(torch::kFloat64)
                                       .device(torch::kCPU)).clone();
-            TORCH_CHECK(bitwise_equal(x0.to(torch::kFloat64),
-                                      reference[0]),
-                        "replay/prefix initial state differs from baseline reference seed");
-            initial_reference_matches = 1;
         }
         if (mode != 3) {
             lambda_wrapper.copy_(terminal);
@@ -479,6 +477,28 @@ extern "C" int sdirk3_native_terminal_prepare(
         auto seed64 = eta == 0.0f
             ? x0.to(torch::kFloat64)
             : x0.to(torch::kFloat64) + static_cast<double>(eta) * direction.to(torch::kFloat64);
+        std::string initial_seed_path;
+        if (const char* path = std::getenv("WRF_SDIRK3_NATIVE_TWIN_SEED_F64"); path && *path) {
+            TORCH_CHECK((mode == 3 || mode == 5) && eta == 0.0f,
+                        "twin seed file is supported only for eta-zero prefix/forward runs");
+            initial_seed_path = path;
+            const auto seed_bytes = read_bytes(initial_seed_path,
+                static_cast<std::size_t>(n) * sizeof(double));
+            seed64 = torch::from_blob(const_cast<uint8_t*>(seed_bytes.data()), {n},
+                torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
+            TORCH_CHECK(torch::isfinite(seed64).all().item<bool>(),
+                        "twin FP64 seed contains non-finite values");
+        }
+        TORCH_CHECK(mode != 5 || !initial_seed_path.empty(),
+                    "forward-only mode requires WRF_SDIRK3_NATIVE_TWIN_SEED_F64");
+        TORCH_CHECK(mode != 3 ||
+                    ((chain_name == "twin") == !initial_seed_path.empty()),
+                    "prefix chain=twin and an external seed file must be selected together");
+        if (mode == 4 || mode == 3) {
+            TORCH_CHECK(bitwise_equal(seed64, reference[0]),
+                        "replay/prefix initial state differs from its reference seed");
+            initial_reference_matches = 1;
+        }
         auto publication = seed64.to(torch::kFloat32).contiguous();
         auto dcontig = direction.contiguous();
         auto lcontig = terminal.contiguous();
@@ -511,6 +531,7 @@ extern "C" int sdirk3_native_terminal_prepare(
             run.mode_name = mode_name;
             run.chain_name = chain_name;
             run.output_prefix = prefix;
+            run.initial_seed_path = initial_seed_path;
             run.mode = mode;
             run.expected_steps = expected_steps;
             run.graph_start_step = expected_steps - kWindowSteps + 1;
@@ -555,6 +576,8 @@ extern "C" int sdirk3_native_terminal_prepare(
                  << "  \"warm_graph_flags\": \"retain_graph_for_adjoint=false,imex_slow_in_tangent=false\",\n"
                  << "  \"suffix_graph_flags\": \"retain_graph_for_adjoint=true,imex_slow_in_tangent=true\",\n"
                  << "  \"eta\": " << eta << ",\n"
+                 << "  \"initial_seed_file_used\": " << (initial_seed_path.empty() ? "false" : "true") << ",\n"
+                 << "  \"initial_seed_file_path\": \"" << initial_seed_path << "\",\n"
                  << "  \"cotangent_chain\": \"fortran_fp32_chain\",\n"
                  << "  \"replay_role\": \""
                  << (mode == 4 ? "state_only_replay" : "not_replay") << "\",\n"
@@ -743,11 +766,13 @@ extern "C" int sdirk3_native_terminal_record_endpoint(
                     << "  \"warm_endpoint_capture_count\": " << run.warm_capture_count << ",\n"
                     << "  \"endpoint_count_including_seed\": " << run.endpoints64.size() << ",\n"
                     << "  \"objective_is_registered_terminal\": " <<
-                        (run.mode == 3 ? "false" : "true") << ",\n"
+                        ((run.mode == 3 || run.mode == 5) ? "false" : "true") << ",\n"
                     << "  \"objective\": ";
-                if (run.mode == 3) endpoint_meta << "null";
+                if (run.mode == 3 || run.mode == 5) endpoint_meta << "null";
                 else endpoint_meta << local_terminal_c_dot;
                 endpoint_meta << ",\n  \"local_terminal_c_dot\": " << local_terminal_c_dot << ",\n"
+                    << "  \"initial_seed_file_used\": " << (run.initial_seed_path.empty() ? "false" : "true") << ",\n"
+                    << "  \"initial_seed_file_path\": \"" << run.initial_seed_path << "\",\n"
                     << "  \"reference_path\": \"" << run.reference_path << "\",\n"
                     << "  \"reference_checkpoints_expected\": "
                     << ((run.mode == 4 || run.mode == 3) ? host_step + 1 : 0) << ",\n"
@@ -876,7 +901,8 @@ extern "C" int sdirk3_native_terminal_finish(
             write_tensor(run.output_prefix + ".lambda_out_f64.bin", g64, torch::kFloat64);
             write_tensor(run.output_prefix + ".lambda_out_f32.bin", g32, torch::kFloat32);
         } else {
-            TORCH_CHECK(run.mode == 2 || run.mode == 4, "unexpected non-VJP run mode");
+            TORCH_CHECK(run.mode == 2 || run.mode == 4 || run.mode == 5,
+                        "unexpected non-VJP run mode");
         }
         TORCH_CHECK(peak_rss_bytes() <= kMemoryCapBytes,
                     "peak RSS exceeded the 18 GiB cap during finalization");
@@ -896,6 +922,9 @@ extern "C" int sdirk3_native_terminal_finish(
                  << (vjp_expected ? "\"local_precast_fp64\"" : "\"not_computed\"") << ",\n"
                  << "  \"replay_role\": "
                  << (run.mode == 4 ? "\"state_only_replay\"" : "\"not_replay\"") << ",\n"
+                 << "  \"forward_only\": " << (run.mode == 5 ? "true" : "false") << ",\n"
+                 << "  \"initial_seed_file_used\": " << (run.initial_seed_path.empty() ? "false" : "true") << ",\n"
+                 << "  \"initial_seed_file_path\": \"" << run.initial_seed_path << "\",\n"
                  << "  \"expected_steps\": " << run.expected_steps << ",\n"
                  << "  \"warm_steps\": " << (run.expected_steps - kWindowSteps) << ",\n"
                  << "  \"graph_start_step\": " << run.graph_start_step << ",\n"

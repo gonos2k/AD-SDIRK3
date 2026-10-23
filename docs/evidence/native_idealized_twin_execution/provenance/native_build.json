@@ -1,0 +1,75 @@
+{
+  "build_products": {
+    "all_other_archive_members_unchanged": true,
+    "cpp_object_sha256": "560f6d128b0f4caab60bff8d8751da1cb47249fe62793d66b385d2b0ac9b0b21",
+    "private_pullback_helper_absent": true,
+    "required_symbols_present": 16,
+    "updated_cpp_archive_sha256": "6170525898997118012d62556d273681b1564d12cb576274de412ade0e8b5899"
+  },
+  "candidate_executable": {
+    "bytes": 52799248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin.exe",
+    "sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4"
+  },
+  "graph_pre_edit_binding_sha256": "e0c3438d218b9d1cd6178a9e96d89db7d058f29d82c8eaf9df67c28786bf8b79",
+  "model_run": false,
+  "receipts": {
+    "archive_update_receipt.json": {
+      "bytes": 6990,
+      "path": "archive_update_receipt.json",
+      "sha256": "c240db901c9a172a0fa3a87fa45bbe454789330132540a8ae6356eff05f17a22"
+    },
+    "compile_receipt.json": {
+      "bytes": 1792,
+      "path": "compile_receipt.json",
+      "sha256": "a6f5dfac7b1450e70d1c7fcbdd2580bbc154ab02823e6b5815692fc9c2cae5e5"
+    },
+    "link_receipt.json": {
+      "bytes": 5099,
+      "path": "link_receipt.json",
+      "sha256": "42a7cdcc5cd2903629519ad5f666fabebbf867a810d148df84cf27b9b0135439"
+    },
+    "source_binding_receipt.json": {
+      "bytes": 4752,
+      "path": "source_binding_receipt.json",
+      "sha256": "de26b2e6486648594ce2ab5d20ee54c4731e0376c81fb4908615829b1c3b2097"
+    },
+    "stack_receipt.json": {
+      "bytes": 2418,
+      "path": "stack_receipt.json",
+      "sha256": "e8ed2c88bcc0e76883996eb0f792558af7f05814451bb9a6eb9ef53489f7422a"
+    },
+    "symbol_receipt.json": {
+      "bytes": 5738,
+      "path": "symbol_receipt.json",
+      "sha256": "eb4043f3dfa6181269ea0fd4c5f6f56dc416f42e869444b32dd93fbfcc970e90"
+    }
+  },
+  "reused_archives": {
+    "all_reused_inputs_unchanged": true,
+    "e314_seed_cpp_archive_sha256": "0b7b6978cc12a05e2bf9f4708d2e1501004267e0dd6e2951796424b24349d94e",
+    "original_e6_cpp_archive_sha256": "a4ba233ada016f4c03f2e974358b10f72f324cde84f270566312785ce2fdefa5",
+    "original_e6_fortran_archive_sha256": "4241f06c0f60d1f29f05bb9d8e8c75c5977dabe4d20fcb1b330e1733f4f12833"
+  },
+  "schema": "native_idealized_twin_build_receipt_v1",
+  "source_binding_receipt": {
+    "bytes": 4752,
+    "path": "source_binding_receipt.json",
+    "sha256": "de26b2e6486648594ce2ab5d20ee54c4731e0376c81fb4908615829b1c3b2097"
+  },
+  "source_change": "CPP-only mode-5 idealized forward extension; no Fortran, production C++, class header, or ABI change.",
+  "source_head": "e111d2bea3a2c3fa34eb117b131cb03cf89eda5f",
+  "source_pin_checks": {
+    "final_cpp_sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7",
+    "git_diff_check": "passed",
+    "other_pinned_sources_unchanged": true,
+    "unchanged_source_count": 11
+  },
+  "stack_receipt": {
+    "bytes": 2418,
+    "path": "stack_receipt.json",
+    "sha256": "e8ed2c88bcc0e76883996eb0f792558af7f05814451bb9a6eb9ef53489f7422a"
+  },
+  "status": "linked_ready_no_model_run",
+  "worktree": "/private/tmp/native-idealized-twin-20261022"
+}

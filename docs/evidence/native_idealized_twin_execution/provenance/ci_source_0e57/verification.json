@@ -1,0 +1,31 @@
+{
+  "schema": "native_twin_numerical_source_ci_verification_v1",
+  "verified_at": "2026-10-23T17:25:58.078776+09:00",
+  "repository": "gonos2k/AD-SDIRK3",
+  "pull_request": 316,
+  "numerical_source_commit": "0e57da8e262afec7293d1be744870904fa1e7a02",
+  "workflow_run_id": 39924066107,
+  "workflow_url": "https://github.com/gonos2k/AD-SDIRK3/actions/runs/39924066107",
+  "artifact_id": 12488392514,
+  "artifact_name": "research-core-diagnostics",
+  "zip_sha256": "77cdaa979dde3c5cbe4a3ea631361edb6ce3970fb1b7275bbf117672dec066f5",
+  "matches_github_artifact_digest": true,
+  "zip_bytes": 361569,
+  "zip_crc_passed": true,
+  "selected_ctest_names": [
+    "Diagnostic_Observer_Noninterference_Contract",
+    "FP64_State_Handoff_Contract",
+    "Fixed_Trajectory_Derivative",
+    "Fixed_Trajectory_Lifecycle",
+    "Full_Tile_Step_Adjoint"
+  ],
+  "test_passed_log_count": 5,
+  "pullback_components_compared": 8480,
+  "pullbacks_fp64_byte_equal": true,
+  "pullback_fp64_sha256": "5039f1dbbde1ff4bc6b1131fb65027e9f8036ca9ba5008898e1dc484c048b2df",
+  "reported_endpoint_parity": "all_16_bitwise_equal",
+  "reported_steps_checked": 16,
+  "native_24531_component_twin_is_separate": true,
+  "endpoint_array_bytes_independently_compared": false,
+  "new_optimizer_or_960_step_run": false
+}

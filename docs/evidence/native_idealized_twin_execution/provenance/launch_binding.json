@@ -1,0 +1,1068 @@
+{
+  "schema": "native_idealized_twin_launch_binding_v1",
+  "created_at_jst": "2026-10-22T10:07:39.714076+09:00",
+  "protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/protocol.json",
+    "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+  },
+  "executable": {
+    "bytes": 52799248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin.exe",
+    "sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4"
+  },
+  "source_files": [
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/Registry/Registry.EM_COMMON",
+      "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+      "sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ],
+  "code_files": [
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_execute.py",
+      "bytes": 38716,
+      "sha256": "4c0e30d8b25142e3696bea9f465aaaf844b1012538886313f2686fba01a277dc"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_problem.py",
+      "bytes": 36749,
+      "sha256": "ca82a65cb6b1cc8c1f60cdfff4b58184e887f4a10606826214629bc01d8b8b91"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_runner.py",
+      "bytes": 23103,
+      "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+      "bytes": 19453,
+      "sha256": "bb7d196c69196bbd503bef77f5cf8b6a68e7c8c5b0dd41cc532999891324be38"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+      "bytes": 20450,
+      "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/tools/test_fine_wave_inverse.py",
+      "bytes": 59367,
+      "sha256": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/tools/wave_quadratic_reference.py",
+      "bytes": 32029,
+      "sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/docs/plans/native_idealized_twin_v1.json",
+      "bytes": 15590,
+      "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/docs/evidence/research_forward_setting/research_forward_map.json",
+      "bytes": 8145,
+      "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+    }
+  ],
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/build_receipt.json",
+    "bytes": 3143,
+    "sha256": "c493cf21694130b2a6b7f6730ee0b5f12d44d541c7143f77a0f96fe6083775ed"
+  },
+  "artifact_manifest": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/artifacts/artifact_manifest.json",
+    "bytes": 5460,
+    "sha256": "7c2918d72f565688ffcd676924b37a6b1a7287f6652b051327e1525c17d4f53d"
+  },
+  "source_case": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9",
+  "input_pins": {
+    "wrfinput_d01": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "namelist.input": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "diagnostics.txt": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224"
+  },
+  "reused_completed_native_cases": [
+    {
+      "label": "e0_forward",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_forward/run_receipt.json",
+      "receipt_sha256": "4ef66337fff6f76e94a8582d13ded99437d48a129c65d95af7e30d5418ba6b79",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v1/launch_binding.json",
+        "sha256": "a6f51e982b7f41663bbd70a54651897bbd2ae89a1e6e3c1682c8700674b14ad4"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v1/protocol.json",
+        "sha256": "d38b3a80a79220ada537dea8903623ac7ff04ba69c863398952b223c374db0fc"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v1/native_twin_execute.py",
+        "sha256": "9e75d1cc2cd29539128a0dfe9a531baea3321e6b0154aa2e7cbf423d6090a4fb"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v2/native_twin_runner.py",
+        "sha256": "b417609a3bc4a29004d5ab48c374ad7ab03870df86913aa7d9f0326011ab92a6"
+      }
+    },
+    {
+      "label": "e0_gradient_032",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 32,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": "9327a73b669af30dc3efc5082da2afa220733a79cb892ef8489a76f73f47e866",
+      "incoming_cotangent_f32_sha256": "dc650352bc57c1dd04553cd5b72da95bc49fa8ae439f424dc935e95d2ba4b2f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_gradient_032/run_receipt.json",
+      "receipt_sha256": "5d70837699c4b08b8fe6204c6ea7581127fbcaf5ea7898e89e0e252eb275d3f2",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e0_gradient_064",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 64,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": "9327a73b669af30dc3efc5082da2afa220733a79cb892ef8489a76f73f47e866",
+      "incoming_cotangent_f32_sha256": "dc650352bc57c1dd04553cd5b72da95bc49fa8ae439f424dc935e95d2ba4b2f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_gradient_064/run_receipt.json",
+      "receipt_sha256": "040150ebc714f83e5b9afcaacba522bd49e76a3d7ccbaf9f97277f626a764874",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e0_gradient_096",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 96,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": "9327a73b669af30dc3efc5082da2afa220733a79cb892ef8489a76f73f47e866",
+      "incoming_cotangent_f32_sha256": "dc650352bc57c1dd04553cd5b72da95bc49fa8ae439f424dc935e95d2ba4b2f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_gradient_096/run_receipt.json",
+      "receipt_sha256": "68bad4f32d47073b51257708b7c10daba11c08ad64ebacb8dec9ce595b8dc44d",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e0_gradient_128",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 128,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": "9327a73b669af30dc3efc5082da2afa220733a79cb892ef8489a76f73f47e866",
+      "incoming_cotangent_f32_sha256": "dc650352bc57c1dd04553cd5b72da95bc49fa8ae439f424dc935e95d2ba4b2f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_gradient_128/run_receipt.json",
+      "receipt_sha256": "e71da94947e73252f9bdf94d08138a69a29ae5e431e65e92c45707bd2641db6a",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e0_gradient_160",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 160,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": "9327a73b669af30dc3efc5082da2afa220733a79cb892ef8489a76f73f47e866",
+      "incoming_cotangent_f32_sha256": "dc650352bc57c1dd04553cd5b72da95bc49fa8ae439f424dc935e95d2ba4b2f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_gradient_160/run_receipt.json",
+      "receipt_sha256": "b9c57a54952e1b742bf59a1a9f07e7db2d45caa00919b215900360eb17d71958",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e0_gradient_192",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 192,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": "9327a73b669af30dc3efc5082da2afa220733a79cb892ef8489a76f73f47e866",
+      "incoming_cotangent_f32_sha256": "dc650352bc57c1dd04553cd5b72da95bc49fa8ae439f424dc935e95d2ba4b2f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_gradient_192/run_receipt.json",
+      "receipt_sha256": "e1c0d3b940b8bed0d50e7b2899ac02a1513af4beeca33bd43fa0c78fe1499e2b",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e0_gradient_224",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 224,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": "9327a73b669af30dc3efc5082da2afa220733a79cb892ef8489a76f73f47e866",
+      "incoming_cotangent_f32_sha256": "dc650352bc57c1dd04553cd5b72da95bc49fa8ae439f424dc935e95d2ba4b2f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_gradient_224/run_receipt.json",
+      "receipt_sha256": "d1f2bbf889b192f836ae3e87142865f68b438881d90b43412d6587a4f3133795",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e0_gradient_256",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "5f61de65271948755c444c7f38d671d38a0c7e76002476ec0a95dd18bfe2fffd",
+      "reference_sha256": "9327a73b669af30dc3efc5082da2afa220733a79cb892ef8489a76f73f47e866",
+      "incoming_cotangent_f32_sha256": "dc650352bc57c1dd04553cd5b72da95bc49fa8ae439f424dc935e95d2ba4b2f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e0_gradient_256/run_receipt.json",
+      "receipt_sha256": "def658cacd58153f001f35afbe45fbcc1aa93cda1fd856517f67b0ece51db352",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_cost_000",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_cost_000/run_receipt.json",
+      "receipt_sha256": "8ba652faa49ce06fb7e2bcaaf003ed809fceb18fad1fbb3f0f3f908ded64844a",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_cost_001",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "f859fd7d4a110aae0248667a152e131b29b852ff3f330a6a65cd41e23f1007b7",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_cost_001/run_receipt.json",
+      "receipt_sha256": "7ab8f4eda073b4f4a720fba33b0b85a862aa4917f9ce3effca57d779d5dbddba",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_000_032",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 32,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "cc952c67962c4f996983cf2784c6baf28b5309e2dc3c54885458a002addf57fe",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_032/run_receipt.json",
+      "receipt_sha256": "75fe39711bd9d7906b4b39d27ba37ec2e61f1fb544e5a52920e8b955d2e06164",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_000_064",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 64,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "7ac96db9c1c4c254ab354b069714e45ca6c82915780d43bf1e187935d4c77147",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_064/run_receipt.json",
+      "receipt_sha256": "7775634d40639d268be8d4f4b0f2302d792b402fa8c2e9947f58ce6953b34a83",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_000_096_recovery1",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 96,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "5e3355215c48d3867990c3f3a3a652ca14b354532bab5a86a012d1ec7077c534",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/run_receipt.json",
+      "receipt_sha256": "a7b7a286db510751fcc4ee4167ee93aecec9f96b1a149e983324f577ca51fab9",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_000_128",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 128,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "fadaaa4b470c693bc2b3949a428880de620f88792e35691c8cba4714ff603e5b",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_128/run_receipt.json",
+      "receipt_sha256": "7f273cd8c1d7d247f574926dc59539f9d657730f331bcba1548c2e9ea47b877b",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_000_160",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 160,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "a3583a355bdb001c2e84f6a04149f2ce04b6e06b229c423e400ebdd90905e67e",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_160/run_receipt.json",
+      "receipt_sha256": "f9011528044d79d67e0febfe2bcf97a9ea72a9a2053db1b90d6b8a45193691ea",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_000_192",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 192,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "ae4b5d941d008ff4a0f0deccab65d4e4651c3c9e935acb391a59086598df1423",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_192/run_receipt.json",
+      "receipt_sha256": "0009c5a44ab6886969c22411dc54baa573c370c421151a8fa3678de8d98a15d4",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_000_224",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 224,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "e9949b2a82890d0c548aadf1623412585861562d8ced455cf4132b2701d880a3",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_224/run_receipt.json",
+      "receipt_sha256": "5b56b8eaf4f9a5752fb61bf3fa97c55d957b5f637e8fa4decec7d59e4e7916b1",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_000_256",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "a613278eba0e6118aa8bf28e3ea862fde8f33dd378cd025dd6dbdb260ad85a39",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_256/run_receipt.json",
+      "receipt_sha256": "7b56b6ac3d471c4bb688172099908b1f3e9781a56d4e0eecebea00d29e078a6b",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_001_192_mpi_trace",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 192,
+      "initial_seed_f64_sha256": "f859fd7d4a110aae0248667a152e131b29b852ff3f330a6a65cd41e23f1007b7",
+      "reference_sha256": "9f249c3cf25ceeb70e61677a5c8d5a5bd0558bbdfda2b4317e5152d8f3804071",
+      "incoming_cotangent_f32_sha256": "83fe8613d589ab0373f8952127cf32f769c6f78e0213ddaae31ebab2437fd13d",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/run_receipt.json",
+      "receipt_sha256": "540661d1fddd9151f10d481b7d0e0a4db59fc47a168ed1aa767d7e07f44cde4b",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/mpi_trace_192_diagnostic/diagnostic_launch_binding.json",
+        "sha256": "fade692ee2678f2e0f4d21dab54d29262523ac60222a3fab1b24afec9b2437d3"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      },
+      "mpi_trace_equivalence": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/mpi_trace_192_diagnostic/equivalence.json",
+        "sha256": "405942141aeada1146cecff380b0e4b0a44463a1b8c5a87f9f1202548f439f7d"
+      }
+    },
+    {
+      "label": "e1_grad_001_224",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 224,
+      "initial_seed_f64_sha256": "f859fd7d4a110aae0248667a152e131b29b852ff3f330a6a65cd41e23f1007b7",
+      "reference_sha256": "9f249c3cf25ceeb70e61677a5c8d5a5bd0558bbdfda2b4317e5152d8f3804071",
+      "incoming_cotangent_f32_sha256": "fba7c46e9277b91de4062386c45447606756666a6e2eba912d4c37c8333fc9d2",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_224/run_receipt.json",
+      "receipt_sha256": "d9f45b05d795aba99c6608c3bd35cb8dd1f5d5b3df5e4851b9708b4dca619208",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "e1_grad_001_256",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "f859fd7d4a110aae0248667a152e131b29b852ff3f330a6a65cd41e23f1007b7",
+      "reference_sha256": "9f249c3cf25ceeb70e61677a5c8d5a5bd0558bbdfda2b4317e5152d8f3804071",
+      "incoming_cotangent_f32_sha256": "9dc7bceb1a29c4616b5ddf36180dd6cedf79d1497efed4784b759203bc8e3a1a",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_256/run_receipt.json",
+      "receipt_sha256": "66f3a4065ecdaaaca3edca36ba0fb4773a1289ec137aad3830e9cdb386447601",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "fd_a0_01_minus",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "ff722a65742b8db23d0e2d963ad3d653ad56a1a019b2a6b7c86f8ec838e7a135",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/fd_a0_01_minus/run_receipt.json",
+      "receipt_sha256": "e648a14ecf86252477c136304c7eb915591eed60c9b24a51a4e64e60ca0b9afe",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "fd_a0_01_plus",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "9bcce71baa5586d90bb806f1e3879300f872525c6d52598169a9fc37b7ac55c5",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/fd_a0_01_plus/run_receipt.json",
+      "receipt_sha256": "661500808f132e17d26ba42f22588d3701a07d56be9b59e9d9ff398c1a21227d",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "fd_a0_03_minus",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "0808661e381b161b6e0b05b1d578d161aa5dae59158f3f76da3c2262265603ef",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/fd_a0_03_minus/run_receipt.json",
+      "receipt_sha256": "91165c1b136fbb5675bf20072c48aea057c4eb0a83e3b898fe6555bdaaee97bb",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "fd_a0_03_plus",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "9b9944468c51f9ec1c1fb4355d90e28d16a2ac4723bc6b02e09e38895889ca13",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/fd_a0_03_plus/run_receipt.json",
+      "receipt_sha256": "685f069103734c9b92a00b6850a79ab265d14ff03c1a6bd3d056cc7a455726e2",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "fd_a1_01_minus",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "3bd149c969f29457b38fe9c02f76c2d6e9892f8d6f2c31cc4197b3c148c16d41",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/fd_a1_01_minus/run_receipt.json",
+      "receipt_sha256": "265afd6cf847054b46f588948745f95ff8d29f9196c0912a4296bcfcecd71137",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "fd_a1_01_plus",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "ef68c5c733057abbcbb1bcabea3aacac6741b5bc79ebf13b96295a42f4fe1403",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/fd_a1_01_plus/run_receipt.json",
+      "receipt_sha256": "2cb6961637a68f1590b32ef73df7ddd875049fe80927b63cc518753ad4ea97bd",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "fd_a1_03_minus",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "8cb4ce67ed22778e3f05ad56fa6c72d2b879ee1dd05486aa89b44cc187abea17",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/fd_a1_03_minus/run_receipt.json",
+      "receipt_sha256": "35df881ac5865e299216c636907a9dade3f2484c86be0fe69d02dad72987223e",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "fd_a1_03_plus",
+      "mode": "forward",
+      "chain": "forward",
+      "expected_steps": 256,
+      "initial_seed_f64_sha256": "b2fdd26d5342ab06faa2dffec8bee9e97b9a1f26bba6b332af1ce8fdd3be20b5",
+      "reference_sha256": null,
+      "incoming_cotangent_f32_sha256": null,
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/fd_a1_03_plus/run_receipt.json",
+      "receipt_sha256": "99215b3de98241a8a3d30c1d3dc65d6e35f318a25924c94fa800bb90ba0a8611",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/launch_binding.json",
+        "sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_execute.py",
+        "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v3/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "preflight_terminal_032",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 32,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "1015ae0d76feb4c48e12d46695bb3a5dfc4548bb3685876d2e5c55c974be7e43",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/preflight_terminal_032/run_receipt.json",
+      "receipt_sha256": "fb4bb74f3021bfedd3da6dcb093fff1ec087fe622eb496a9c6974e36831f11b9",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "preflight_terminal_064",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 64,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "5a094ad9135544681eb2cae591db7aeea38431a3892177341e7a09b9f32265f4",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/preflight_terminal_064/run_receipt.json",
+      "receipt_sha256": "1d53e52d1e284e2c8309fa25f856535b36dd43d3a124d0c8994028c3667450c6",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "preflight_terminal_096",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 96,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "d51b96b3e007ad4c51cfa1a8c08ae9023d49615c44a5e5ad9768fc264495f3de",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/preflight_terminal_096/run_receipt.json",
+      "receipt_sha256": "e32e935e944aaaf6671664464a920d5632d1ec38d00865203168e4b1f959e95c",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    },
+    {
+      "label": "preflight_terminal_128",
+      "mode": "prefix",
+      "chain": "twin",
+      "expected_steps": 128,
+      "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+      "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+      "incoming_cotangent_f32_sha256": "2512dfe493a8f468bc6f987e0d60ab0f939729d527763727904d96c7f69873f9",
+      "receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/preflight_terminal_128/run_receipt.json",
+      "receipt_sha256": "ba73e4efa3f42bc11fa3ad924acf1155dd8c19b2868ccb90244d24cc92d549b4",
+      "previous_binding": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/launch_binding.json",
+        "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+      },
+      "previous_protocol": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/protocol.json",
+        "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+      },
+      "prior_controller": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_execute.py",
+        "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+      },
+      "prior_runner": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/validation_v4/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    }
+  ],
+  "recovery_aliases": [
+    {
+      "failed_label": "e1_grad_000_096",
+      "failed_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096/run_receipt.json",
+      "failed_receipt_sha256": "22152fca2f78a27b96d7e40b4243d721b8821c62aa100932d8fa0f5f5d336575",
+      "replacement_label": "e1_grad_000_096_recovery1",
+      "replacement_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/run_receipt.json",
+      "replacement_receipt_sha256": "a7b7a286db510751fcc4ee4167ee93aecec9f96b1a149e983324f577ca51fab9"
+    },
+    {
+      "failed_label": "e1_grad_001_192",
+      "failed_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/run_receipt.json",
+      "failed_receipt_sha256": "d61aa8d859c89a4839d92717a951b28a9973c0627e598f6d682485ec44cd4c69",
+      "replacement_label": "e1_grad_001_192_mpi_trace",
+      "replacement_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/run_receipt.json",
+      "replacement_receipt_sha256": "540661d1fddd9151f10d481b7d0e0a4db59fc47a168ed1aa767d7e07f44cde4b"
+    }
+  ]
+}

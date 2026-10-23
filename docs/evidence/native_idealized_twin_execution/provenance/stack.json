@@ -1,0 +1,57 @@
+{
+  "cpp": {
+    "compiler": "Apple clang 21.0.0 (clang-2100.3.34.2), arm64",
+    "flags": [
+      "-std=c++17",
+      "-O3",
+      "-DMACOS",
+      "-DDMPARALLEL",
+      "-DUSE_SDIRK3",
+      "-DWRF_SDIRK3_NATIVE_TERMINAL_TEST",
+      "-D_GLIBCXX_USE_CXX11_ABI=0"
+    ]
+  },
+  "fortran_reused_no_recompile": {
+    "archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/candidate/libwrflib.a",
+    "archive_sha256": "4241f06c0f60d1f29f05bb9d8e8c75c5977dabe4d20fcb1b330e1733f4f12833",
+    "toolchain": "GNU Fortran 15.2.0 via mpif90"
+  },
+  "libtorch": "2.10.0 via /opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch; C++ ABI=0",
+  "link_driver": "g++",
+  "link_receipt_sha256": "42a7cdcc5cd2903629519ad5f666fabebbf867a810d148df84cf27b9b0135439",
+  "mpi": "Open MPI 5.0.9 via /opt/homebrew/opt/open-mpi",
+  "netcdf": {
+    "explicit_probe_paths": [
+      "/opt/homebrew/bin/nc-config",
+      "/opt/homebrew/bin/nf-config"
+    ],
+    "netcdf": "4.9.3",
+    "netcdf_fortran": "4.6.2",
+    "resolved_dylibs": [
+      {
+        "bytes": 1309408,
+        "resolved_path": "/opt/homebrew/Cellar/netcdf/4.9.3_2/lib/libnetcdf.22.dylib",
+        "sha256": "4689109b96ac38d62e396f28064dbe56909bf736bbf5409321e4ea85b405a27a"
+      },
+      {
+        "bytes": 894768,
+        "resolved_path": "/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib/libnetcdff.7.1.0.dylib",
+        "sha256": "792c2fc7f924362fa19e80661b071510d8f71f11c0215e7035e2bd10d1107d04"
+      }
+    ]
+  },
+  "reuse": {
+    "only_cpp_test_member_replaced": "native_terminal_adjoint_test.o",
+    "original_e6_cpp_archive_unchanged_sha256": "a4ba233ada016f4c03f2e974358b10f72f324cde84f270566312785ce2fdefa5",
+    "original_e6_fortran_archive_unchanged_sha256": "4241f06c0f60d1f29f05bb9d8e8c75c5977dabe4d20fcb1b330e1733f4f12833",
+    "seed_cpp_archive": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-residual-objective-20261021/build/archives/libwrf_sdirk3_libtorch.a",
+      "sha256": "0b7b6978cc12a05e2bf9f4708d2e1501004267e0dd6e2951796424b24349d94e"
+    },
+    "updated_archive_copy": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/archives/libwrf_sdirk3_libtorch.a",
+      "sha256": "6170525898997118012d62556d273681b1564d12cb576274de412ade0e8b5899"
+    }
+  },
+  "schema": "native_idealized_twin_stack_receipt_v1"
+}

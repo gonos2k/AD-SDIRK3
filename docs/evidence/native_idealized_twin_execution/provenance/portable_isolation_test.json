@@ -1,0 +1,11 @@
+{
+  "status": "standalone_copy_pass",
+  "original_source_and_evidence_file_reads_denied": true,
+  "temporary_copy": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/twin_portable_verify_pep7cshm/evidence",
+  "numpy_version": "2.2.6",
+  "verification_status": [
+    "E0",
+    "E2",
+    "FD_gradient_checks"
+  ]
+}

@@ -1,0 +1,327 @@
+{
+  "authenticated_completed_case_reuse": {
+    "completed_case_labels": [
+      "e0_forward",
+      "e0_gradient_032",
+      "e0_gradient_064",
+      "e0_gradient_096",
+      "e0_gradient_128",
+      "e0_gradient_160",
+      "e0_gradient_192",
+      "e0_gradient_224",
+      "e0_gradient_256",
+      "e1_cost_000",
+      "e1_cost_001",
+      "e1_grad_000_032",
+      "e1_grad_000_064",
+      "e1_grad_000_096_recovery1",
+      "e1_grad_000_128",
+      "e1_grad_000_160",
+      "e1_grad_000_192",
+      "e1_grad_000_224",
+      "e1_grad_000_256",
+      "e1_grad_001_192_mpi_trace",
+      "e1_grad_001_224",
+      "e1_grad_001_256",
+      "fd_a0_01_minus",
+      "fd_a0_01_plus",
+      "fd_a0_03_minus",
+      "fd_a0_03_plus",
+      "fd_a1_01_minus",
+      "fd_a1_01_plus",
+      "fd_a1_03_minus",
+      "fd_a1_03_plus",
+      "preflight_terminal_032",
+      "preflight_terminal_064",
+      "preflight_terminal_096",
+      "preflight_terminal_128"
+    ],
+    "explicit_case_pin_count": 34,
+    "scope": "current binding contains explicit receipts for 34 completed cases; exactly one trace-equivalence exception is limited to its pinned 192-step artifact and proof; no general reuse rule asserted"
+  },
+  "captured_at_local": "2026-10-23T15:51:06+09:00",
+  "controller_ast_delta": {
+    "edges": 93,
+    "method": "single-file Graphify AST for the changed controller only; no whole-corpus update",
+    "nodes": 29,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/controller_delta_v5_ast/graphify-out/graph.json",
+    "sha256": "67bea477965c099fa39b6d9c02f111a4d23b317c8c9e93e96bd9d1c5bfb35559",
+    "source_path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_execute.py",
+    "source_sha256": "4c0e30d8b25142e3696bea9f465aaaf844b1012538886313f2686fba01a277dc",
+    "source_snapshot": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/controller_delta_v5_ast/source/native_twin_execute.py"
+  },
+  "controller_relationships": [
+    {
+      "function": "validate_reuse_archive",
+      "location": "native_twin_execute.py:137\u2013190",
+      "relationship": "authenticates each explicit prior completed-case pin against receipt, old binding/protocol/controller/runner, policy, and unchanged backend/inputs; delegates only pins carrying the trace-equivalence record to the case-specific validator"
+    },
+    {
+      "function": "validate_mpi_trace_equivalence",
+      "location": "native_twin_execute.py:191\u2013293",
+      "relationship": "accepts only the named 192-step twin-prefix case; requires exactly one trace-equivalence row; pins proof, bindings, protocol, call identity, source delta (one trace source), link receipts, core artifacts, and failed/normal receipts"
+    },
+    {
+      "function": "resolve_failed_alias",
+      "location": "native_twin_execute.py:294\u2013332",
+      "relationship": "validates explicitly pinned failed receipt and completed replacement identity before reuse; native execution is blocked if replacement is absent"
+    },
+    {
+      "function": "native",
+      "location": "native_twin_execute.py:333\u2013365",
+      "relationship": "resolves pinned aliases before reuse; requires prior archive authentication for stale-binding cases; launch/reuse orchestration remains unchanged"
+    },
+    {
+      "case_pin_metadata": "launch_binding.json",
+      "counts": {
+        "explicit_completed_native_case_pins": 34,
+        "failed_aliases": 2
+      },
+      "declared_recovery": [
+        {
+          "failed_label": "e1_grad_000_096",
+          "failed_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096/run_receipt.json",
+          "failed_receipt_sha256": "22152fca2f78a27b96d7e40b4243d721b8821c62aa100932d8fa0f5f5d336575",
+          "replacement_label": "e1_grad_000_096_recovery1",
+          "replacement_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/run_receipt.json",
+          "replacement_receipt_sha256": "a7b7a286db510751fcc4ee4167ee93aecec9f96b1a149e983324f577ca51fab9"
+        },
+        {
+          "failed_label": "e1_grad_001_192",
+          "failed_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/run_receipt.json",
+          "failed_receipt_sha256": "d61aa8d859c89a4839d92717a951b28a9973c0627e598f6d682485ec44cd4c69",
+          "replacement_label": "e1_grad_001_192_mpi_trace",
+          "replacement_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/run_receipt.json",
+          "replacement_receipt_sha256": "540661d1fddd9151f10d481b7d0e0a4db59fc47a168ed1aa767d7e07f44cde4b"
+        }
+      ],
+      "trace_equivalence_case": {
+        "label": "e1_grad_001_192_mpi_trace",
+        "proof_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/mpi_trace_192_diagnostic/equivalence.json",
+        "proof_sha256": "405942141aeada1146cecff380b0e4b0a44463a1b8c5a87f9f1202548f439f7d"
+      }
+    }
+  ],
+  "current_native_and_code_pins": {
+    "code_checks": [
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_execute.py",
+        "sha256": "4c0e30d8b25142e3696bea9f465aaaf844b1012538886313f2686fba01a277dc"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_problem.py",
+        "sha256": "ca82a65cb6b1cc8c1f60cdfff4b58184e887f4a10606826214629bc01d8b8b91"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+        "sha256": "bb7d196c69196bbd503bef77f5cf8b6a68e7c8c5b0dd41cc532999891324be38"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+        "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/tools/test_fine_wave_inverse.py",
+        "sha256": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/tools/wave_quadratic_reference.py",
+        "sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/docs/plans/native_idealized_twin_v1.json",
+        "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/docs/evidence/research_forward_setting/research_forward_map.json",
+        "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+      }
+    ],
+    "code_pin_count": 9,
+    "executable_sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4",
+    "launch_binding": {
+      "expected_sha256": "112defb345990633f18a06734324ff4930a1a7e1d941b3823006bc73d33abfe8",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/launch_binding.json",
+      "sha256": "112defb345990633f18a06734324ff4930a1a7e1d941b3823006bc73d33abfe8"
+    },
+    "native_cpp_test_sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7",
+    "protocol": {
+      "expected_sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/protocol.json",
+      "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+    },
+    "protocol_matches_binding": true,
+    "source_checks": [
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/solve_em.F",
+        "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/module_implicit_sdirk3.F",
+        "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/Registry/Registry.EM_COMMON",
+        "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+        "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+        "sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+        "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+        "sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+        "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+      },
+      {
+        "matches": true,
+        "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+        "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+      }
+    ],
+    "source_pin_count": 12,
+    "trace_equivalence": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/mpi_trace_192_diagnostic/equivalence.json",
+      "sha256": "405942141aeada1146cecff380b0e4b0a44463a1b8c5a87f9f1202548f439f7d",
+      "case_label": "e1_grad_001_192_mpi_trace",
+      "payload_files": [
+        {
+          "name": "terminal.checkpoints_f64.bin",
+          "bytes": 37875864,
+          "sha256": "300b238c21b1b87da0f15d83be039f448622c856c286065636e74a542b4f833c",
+          "byte_equal": true
+        },
+        {
+          "name": "terminal.gradient_f64.bin",
+          "bytes": 196248,
+          "sha256": "10a5faf8ab602bd957efb5a1df0b45df1edf4d0b6456023beb32a3bbbed9ccfa",
+          "byte_equal": true
+        },
+        {
+          "name": "terminal.gradient_f32.bin",
+          "bytes": 98124,
+          "sha256": "2d5d3a334d47f03c85703f72ea084ce83e46406e8b545246ef7e9f207ad0396c",
+          "byte_equal": true
+        }
+      ],
+      "common_core_artifact_count": 11,
+      "all_core_artifact_pins_match": true,
+      "remaining_calculations_use_base_executable": true,
+      "unchanged_scientific_protocol": true
+    }
+  },
+  "failed_alias_recovery_pin": [
+    {
+      "failed_label": "e1_grad_000_096",
+      "failed_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096/run_receipt.json",
+      "failed_receipt_sha256": "22152fca2f78a27b96d7e40b4243d721b8821c62aa100932d8fa0f5f5d336575",
+      "replacement_label": "e1_grad_000_096_recovery1",
+      "replacement_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/run_receipt.json",
+      "replacement_receipt_sha256": "a7b7a286db510751fcc4ee4167ee93aecec9f96b1a149e983324f577ca51fab9"
+    },
+    {
+      "failed_label": "e1_grad_001_192",
+      "failed_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/run_receipt.json",
+      "failed_receipt_sha256": "d61aa8d859c89a4839d92717a951b28a9973c0627e598f6d682485ec44cd4c69",
+      "replacement_label": "e1_grad_001_192_mpi_trace",
+      "replacement_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/run_receipt.json",
+      "replacement_receipt_sha256": "540661d1fddd9151f10d481b7d0e0a4db59fc47a168ed1aa767d7e07f44cde4b"
+    }
+  ],
+  "head": "e111d2bea3a2c3fa34eb117b131cb03cf89eda5f",
+  "limitations": [
+    "Graphify AST is structural navigation, not proof of mathematical correctness or validator execution.",
+    "This bounded refresh inspected the controller AST and hash-pinned proof. The proof records byte-identical hashes for three payload files and matching pins for common core artifacts; this supports only the named 192-step case and does not establish the historical MPI failure cause.",
+    "No model run or build was performed, no WRF/model source was edited, and the existing native executable was not rebuilt. The remaining calculations stay bound to the original executable according to the pinned proof and prelaunch review.",
+    "Graph relationships are navigation aids. Numerical correctness and broader forecast/gradient behavior require their own validation evidence."
+  ],
+  "prelaunch_review_pin": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/root_prelaunch_v5.json",
+    "sha256": "a1078360712e402616fd7ec2e87205771e3e67693e6d50123c3a766359fd51f7"
+  },
+  "preserved_prior_graph_receipts": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/post_edit_binding.json",
+      "preserved": true,
+      "sha256": "588512afe1b3f69be810867628b43aac6535473e905e56c35e8c8787eab582a0"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/graph_post_v2.json",
+      "preserved": true,
+      "sha256": "e8abd61b1a27cc06ec753b3a23a9d1e893abb2c89d6c5c0e4b7830d975002600"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/graph_post_v3.json",
+      "preserved": true,
+      "sha256": "f807255ad5d6a8b9715b22c15372b127ae0cff904f86c0c834a9abf196ca566a"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/graph_post_v4.json",
+      "preserved": true,
+      "sha256": "d73157791fa988b36f74fa3c6abc4484e693ae4945ee5fee9c97d410a1d2f75c"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/mpi_shutdown_trace_v3_graph_binding.json",
+      "preserved": true,
+      "sha256": "8fbd8ac244bfbde22420d84533da0fde170efeea4f764abec54ac84222b6d61f"
+    }
+  ],
+  "schema": "native_idealized_twin_graph_post_v5",
+  "tree": "b88237b1d282855e79e9ab51fd323fdfe1d115a5",
+  "worktree": "/private/tmp/native-idealized-twin-20261022",
+  "worktree_status": [
+    " M external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+    "?? external/libtorch_wrf/sdirk3/tests/native_twin_execute.py",
+    "?? external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+    "?? external/libtorch_wrf/sdirk3/tests/native_twin_problem.py",
+    "?? external/libtorch_wrf/sdirk3/tests/native_twin_runner.py",
+    "?? tools/__pycache__/"
+  ]
+}

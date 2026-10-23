@@ -1,0 +1,367 @@
+{
+  "actual": {
+    "all_fields_finite": true,
+    "checkpoint_bytes": 37875864,
+    "checkpoint_zero_sha256": "f859fd7d4a110aae0248667a152e131b29b852ff3f330a6a65cd41e23f1007b7",
+    "elapsed_seconds": 810.2059794580564,
+    "gradient_f32_path": null,
+    "native_rss_monitor_has_samples": true,
+    "netcdf_files": [
+      {
+        "bytes": 1040880,
+        "path": "wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "229eabdb7c7becdb2f793f371620d68ea904e525b91a5c2187e336a33cebd8a9",
+        "times": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:00:15"
+        ]
+      },
+      {
+        "bytes": 1079781,
+        "path": "wrfout_d01_0001-01-01_00:00:30",
+        "sha256": "6c59a3180278736cbbe6572edecb4f46975f85e40a3794ed458e45f8ffb609c4",
+        "times": [
+          "0001-01-01_00:00:30",
+          "0001-01-01_00:00:45"
+        ]
+      },
+      {
+        "bytes": 1082438,
+        "path": "wrfout_d01_0001-01-01_00:01:00",
+        "sha256": "de9202b6fe3fcb5731954bb025bbc866582152d325b28cb288664fb10f76f0e3",
+        "times": [
+          "0001-01-01_00:01:00",
+          "0001-01-01_00:01:15"
+        ]
+      },
+      {
+        "bytes": 1084240,
+        "path": "wrfout_d01_0001-01-01_00:01:30",
+        "sha256": "b185aa43c6e33f05bcd08f161227e019e28173cbce2fa077cd18fa7218da8acb",
+        "times": [
+          "0001-01-01_00:01:30",
+          "0001-01-01_00:01:45"
+        ]
+      },
+      {
+        "bytes": 1085716,
+        "path": "wrfout_d01_0001-01-01_00:02:00",
+        "sha256": "5558271b39296049f2a3865198811d822df474323eaf18bb0692d9a4d3cb53c8",
+        "times": [
+          "0001-01-01_00:02:00",
+          "0001-01-01_00:02:15"
+        ]
+      },
+      {
+        "bytes": 1086318,
+        "path": "wrfout_d01_0001-01-01_00:02:30",
+        "sha256": "f0e0db91a776eccfa0c5f209df5dc4d00650884f51db167bcbbcb743a5a692f0",
+        "times": [
+          "0001-01-01_00:02:30",
+          "0001-01-01_00:02:45"
+        ]
+      },
+      {
+        "bytes": 986852,
+        "path": "wrfout_d01_0001-01-01_00:03:00",
+        "sha256": "856cb123c08f575bb3e80e2c4a1ae626e94450fef9c94f56af38e6314681ec7e",
+        "times": [
+          "0001-01-01_00:03:00"
+        ]
+      }
+    ],
+    "netcdf_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15",
+      "0001-01-01_00:00:30",
+      "0001-01-01_00:00:45",
+      "0001-01-01_00:01:00",
+      "0001-01-01_00:01:15",
+      "0001-01-01_00:01:30",
+      "0001-01-01_00:01:45",
+      "0001-01-01_00:02:00",
+      "0001-01-01_00:02:15",
+      "0001-01-01_00:02:30",
+      "0001-01-01_00:02:45",
+      "0001-01-01_00:03:00"
+    ],
+    "newton_convergence_record_count": 576,
+    "peak_sampled_native_rss_bytes": 4062609408,
+    "physical_minima": {
+      "column_mass_Pa": 89090.0483174324,
+      "layer_dph": 9247.39111328125,
+      "theta_K": 302.2530517578125
+    },
+    "prefix_reference_byte_equal": true,
+    "return_code": 1,
+    "runner_stop_reason": null,
+    "stage_csv_count": 0,
+    "step_telemetry_count": 192,
+    "success_marker": true,
+    "terminal_endpoint": {
+      "actual_prefix_fnv1a64": "8069441c8529cc4a",
+      "chain": "twin",
+      "control_input64_calls": 192,
+      "endpoint_count_including_seed": 193,
+      "endpoint_reference_exact": true,
+      "eta": 0,
+      "expected_steps": 192,
+      "graph_start_step": 161,
+      "host_steps": 192,
+      "initial_control_seed_applied": true,
+      "initial_seed_file_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/initial_seed_f64.bin",
+      "initial_seed_file_used": true,
+      "local_terminal_c_dot": -8.982660077239478,
+      "mode": "prefix",
+      "objective": null,
+      "objective_is_registered_terminal": false,
+      "peak_rss_bytes": 3823140864,
+      "reference_checkpoints_expected": 193,
+      "reference_checkpoints_matched": 193,
+      "reference_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_cost_001/terminal.checkpoints_f64.bin",
+      "reference_prefix_fnv1a64": "8069441c8529cc4a",
+      "suffix_seed_bitwise_match": true,
+      "warm_endpoint_capture_count": 160,
+      "warm_steps": 160
+    },
+    "terminal_prepare": {
+      "chain": "twin",
+      "cotangent_chain": "fortran_fp32_chain",
+      "dims": [
+        17,
+        17,
+        16,
+        18,
+        18,
+        17
+      ],
+      "dt_seconds": 0.9375,
+      "eta": 0,
+      "expected_steps": 192,
+      "graph_start_step": 161,
+      "initial_seed_file_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/initial_seed_f64.bin",
+      "initial_seed_file_used": true,
+      "input_scales": [
+        1.7794605468479088,
+        0.00010122007244795247,
+        7.79443985679733e-06,
+        3801.50094009332,
+        61.27946198285178,
+        8.001955354370356
+      ],
+      "mode": "prefix",
+      "packed_size": 24531,
+      "replay_role": "not_replay",
+      "steps": 192,
+      "suffix_graph_flags": "retain_graph_for_adjoint=true,imex_slow_in_tangent=true",
+      "terminal": "normalized W physical owners, scale 0.001, FP32 cotangent",
+      "warm_endpoint_capture_target": 160,
+      "warm_graph_flags": "retain_graph_for_adjoint=false,imex_slow_in_tangent=false",
+      "warm_steps": 160
+    },
+    "terminal_result": {
+      "chain": "twin",
+      "control_input64_calls": 192,
+      "cotangent_chain": "fortran_fp32_chain",
+      "directional_local_precast_f64": null,
+      "directional_vjp_f32_chain": null,
+      "endpoint_reference_exact": true,
+      "eta": 0,
+      "expected_steps": 192,
+      "forward_only": false,
+      "gradient_control_step": 160,
+      "gradient_f64_semantics": "local_precast_fp64",
+      "gradient_scope": "local_32_step_window",
+      "graph_start_step": 161,
+      "initial_control_seed_applied": true,
+      "initial_seed_file_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/initial_seed_f64.bin",
+      "initial_seed_file_used": true,
+      "lambda_in_f64_semantics": "actual_fp32_cotangent_promoted_for_audit",
+      "mode": "prefix",
+      "peak_rss_bytes": 4062642176,
+      "pullback_checked_by_fortran": true,
+      "reference_checkpoints_expected": 193,
+      "reference_checkpoints_matched": 193,
+      "replay_role": "not_replay",
+      "suffix_seed_bitwise_match": true,
+      "warm_endpoint_capture_count": 160,
+      "warm_steps": 160,
+      "wrapper_gradient_f32_equals_cast_f64": true
+    },
+    "validation_error": "native completion, telemetry, 3N, history, or admissibility gate failed"
+  },
+  "artifact_manifest_sha256": "7c2918d72f565688ffcd676924b37a6b1a7287f6652b051327e1525c17d4f53d",
+  "binding_sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7",
+  "bound_files": [
+    {
+      "bytes": 196248,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/initial_seed_f64.bin",
+      "role": "initial_control_seed_f64",
+      "sha256": "f859fd7d4a110aae0248667a152e131b29b852ff3f330a6a65cd41e23f1007b7"
+    },
+    {
+      "bytes": 50435736,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_cost_001/terminal.checkpoints_f64.bin",
+      "role": "same_trajectory_reference_f64",
+      "sha256": "9f249c3cf25ceeb70e61677a5c8d5a5bd0558bbdfda2b4317e5152d8f3804071"
+    },
+    {
+      "bytes": 98124,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/incoming_lambda_f32.bin",
+      "role": "incoming_cotangent_f32",
+      "sha256": "83fe8613d589ab0373f8952127cf32f769c6f78e0213ddaae31ebab2437fd13d"
+    }
+  ],
+  "chain": "twin",
+  "code_files": [
+    {
+      "bytes": 30789,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_execute.py",
+      "sha256": "c7dbe9a80fac29fa4a363ce7b14068d5f338c8ab4c76a8b9d4309775dbc8037e"
+    },
+    {
+      "bytes": 36749,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_problem.py",
+      "sha256": "ca82a65cb6b1cc8c1f60cdfff4b58184e887f4a10606826214629bc01d8b8b91"
+    },
+    {
+      "bytes": 23103,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_runner.py",
+      "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+    },
+    {
+      "bytes": 19453,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+      "sha256": "bb7d196c69196bbd503bef77f5cf8b6a68e7c8c5b0dd41cc532999891324be38"
+    },
+    {
+      "bytes": 20450,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+      "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8"
+    },
+    {
+      "bytes": 59367,
+      "path": "/private/tmp/native-idealized-twin-20261022/tools/test_fine_wave_inverse.py",
+      "sha256": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+    },
+    {
+      "bytes": 32029,
+      "path": "/private/tmp/native-idealized-twin-20261022/tools/wave_quadratic_reference.py",
+      "sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431"
+    },
+    {
+      "bytes": 15590,
+      "path": "/private/tmp/native-idealized-twin-20261022/docs/plans/native_idealized_twin_v1.json",
+      "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+    },
+    {
+      "bytes": 8145,
+      "path": "/private/tmp/native-idealized-twin-20261022/docs/evidence/research_forward_setting/research_forward_map.json",
+      "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+    }
+  ],
+  "command": [
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "time.log",
+    "/opt/homebrew/bin/mpirun",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin.exe"
+  ],
+  "created_at": "2026-10-22T18:38:36.532604+09:00",
+  "ended_at": "2026-10-22T18:52:07.154000+09:00",
+  "environment_overrides": {
+    "OMP_NUM_THREADS": "1",
+    "WRF_SDIRK3_NATIVE_TERMINAL_CHAIN": "twin",
+    "WRF_SDIRK3_NATIVE_TERMINAL_ETA": "0",
+    "WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA32_IN": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/incoming_lambda_f32.bin",
+    "WRF_SDIRK3_NATIVE_TERMINAL_MODE": "prefix",
+    "WRF_SDIRK3_NATIVE_TERMINAL_OUT": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/terminal",
+    "WRF_SDIRK3_NATIVE_TERMINAL_REFERENCE": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_cost_001/terminal.checkpoints_f64.bin",
+    "WRF_SDIRK3_NATIVE_TERMINAL_STEPS": "192",
+    "WRF_SDIRK3_NATIVE_TWIN_SEED_F64": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/initial_seed_f64.bin",
+    "WRF_SDIRK3_RHS_COUNT": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0"
+  },
+  "executable": {
+    "bytes": 52799248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin.exe",
+    "sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4"
+  },
+  "expected_implicit_stages": 576,
+  "expected_steps": 192,
+  "h_seconds": 0.9375,
+  "incoming_cotangent_f32_sha256": "83fe8613d589ab0373f8952127cf32f769c6f78e0213ddaae31ebab2437fd13d",
+  "initial_seed_f64_bytes": 196248,
+  "initial_seed_f64_sha256": "f859fd7d4a110aae0248667a152e131b29b852ff3f330a6a65cd41e23f1007b7",
+  "input_pins": {
+    "diagnostics.txt": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+    "namelist.input": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "wrfinput_d01": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "label": "e1_grad_001_192",
+  "mode": "prefix",
+  "namelist_sha256": "ad9f36b0708e8efbd22af072f0673772830971f07a3af8a64aae637041bbd6c7",
+  "new_model_timestep": false,
+  "pid": 50530,
+  "protocol_sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d",
+  "reference_sha256": "9f249c3cf25ceeb70e61677a5c8d5a5bd0558bbdfda2b4317e5152d8f3804071",
+  "schema": "native_idealized_twin_run_receipt_v1",
+  "source_case": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9",
+  "source_files": [
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/Registry/Registry.EM_COMMON",
+      "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+      "sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ],
+  "status": "failed"
+}

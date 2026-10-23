@@ -1,0 +1,259 @@
+{
+  "schema": "native_mpi_finalize_observer_equivalence_v1",
+  "created_at": "2026-10-23T15:43:36.819995+09:00",
+  "scope": "Only saved e1_grad_001_192_mpi_trace artifact may substitute for matching failed192 call; no general executable equivalence or MPI failure normalization.",
+  "base_executable": {
+    "bytes": 52799248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin.exe",
+    "sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4"
+  },
+  "observed_executable": {
+    "bytes": 52799672,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin_mpi_trace_v3.exe",
+    "sha256": "b900620dea06d4604d3f347a1ac1034d5082924e1b47088a074e03b4dc443e68"
+  },
+  "base_source_files": [
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/Registry/Registry.EM_COMMON",
+      "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+      "sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ],
+  "observed_source_files": [
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/Registry/Registry.EM_COMMON",
+      "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+      "sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/mpi_shutdown_trace_v3.c",
+      "sha256": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032"
+    }
+  ],
+  "trace_source": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/mpi_shutdown_trace_v3.c",
+    "sha256": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032"
+  },
+  "trace_object": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/objects/mpi_shutdown_trace_v3.o",
+    "sha256": "b5d2c4d4fed3c9d813c63519bc7db775a912c397d2db69a0fdb95c858492515a"
+  },
+  "base_link_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/link_receipt.json",
+    "bytes": 5099,
+    "sha256": "42a7cdcc5cd2903629519ad5f666fabebbf867a810d148df84cf27b9b0135439"
+  },
+  "observed_link_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/mpi_trace_v3_link_receipt.json",
+    "bytes": 5177,
+    "sha256": "0fd546191a7ddea0116b9ef8efc65df197b20ee277f52b60038c1c8e697eed51"
+  },
+  "base_core_artifacts": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/wrf.o",
+      "bytes": 1736,
+      "sha256": "e57e22fb3b28cd1ce9001ee7afbf11f4b78ad688f41994b84a2729ea37770f15"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/main/module_wrf_top.o",
+      "bytes": 12784,
+      "sha256": "6e8187a1e68499d457713dd96c0278f47546fbee1eea6f58c2064a786b1c27e8"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/green_build/v6_fortran_chain/archives/candidate/libwrflib.a",
+      "bytes": 54890320,
+      "sha256": "4241f06c0f60d1f29f05bb9d8e8c75c5977dabe4d20fcb1b330e1733f4f12833"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/external/fftpack/fftpack5/libfftpack.a",
+      "bytes": 769840,
+      "sha256": "6f002f592afcaa1e75cd9d713454d47839070f984559d7fd2bed5bc161910e42"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/external/io_grib1/libio_grib1.a",
+      "bytes": 387192,
+      "sha256": "c8960715307176e6a342e47e369b5411c282f89bebad50a7c3ba1f0c1d9b5be4"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/external/io_grib_share/libio_grib_share.a",
+      "bytes": 33168,
+      "sha256": "cd0d83be0859ff3f8c6255b7d95ae8a1e5a48b7b1e90c5abec0e3189d2bbaa83"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/external/io_int/libwrfio_int.a",
+      "bytes": 85776,
+      "sha256": "28b03ca1d78123eaff7a8c28683c24d4dafa8aa756d41016f9337aeb1f73bec4"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/external/RSL_LITE/librsl_lite.a",
+      "bytes": 107408,
+      "sha256": "fc5f30747de085c8a81f2a946cdeaf4260b5925e268421409152352f3cc5422b"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/archives/libwrf_sdirk3_libtorch.a",
+      "bytes": 11742056,
+      "sha256": "6170525898997118012d62556d273681b1564d12cb576274de412ade0e8b5899"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/frame/module_internal_header_util.o",
+      "bytes": 16752,
+      "sha256": "d51db7a88a3b077d0220843d2dd67ef57a8e450296926ab51b5180e9c5f8d305"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/accepted-ark-w-stage-20261014/green_build/wrf_link_tree/frame/pack_utils.o",
+      "bytes": 7112,
+      "sha256": "081320d04b23bb9bd2ccc82c38cbefa3b12786e5b4addc534ccfb0f961a2b113"
+    }
+  ],
+  "base_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/mpi_trace_192_diagnostic/base_launch_binding.json",
+    "bytes": 44564,
+    "sha256": "200b20ac72a6f9f753ca9dfd0c1dbe678a944739fce584edbb5837d0404ce0a7"
+  },
+  "observed_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/mpi_trace_192_diagnostic/diagnostic_launch_binding.json",
+    "bytes": 46105,
+    "sha256": "fade692ee2678f2e0f4d21dab54d29262523ac60222a3fab1b24afec9b2437d3"
+  },
+  "protocol": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/protocol.json",
+    "bytes": 5763,
+    "sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+  },
+  "failed_case_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/run_receipt.json",
+    "bytes": 15166,
+    "sha256": "d61aa8d859c89a4839d92717a951b28a9973c0627e598f6d682485ec44cd4c69"
+  },
+  "normal_case_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/run_receipt.json",
+    "bytes": 22281,
+    "sha256": "540661d1fddd9151f10d481b7d0e0a4db59fc47a168ed1aa767d7e07f44cde4b"
+  },
+  "trace_file": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/mpi_finalize.trace",
+    "bytes": 350,
+    "sha256": "b888a7f11ad08bc02a12ff5cefdb01c1a49aa94af0cb0e50d18eee510d3031a2"
+  },
+  "payload_files": [
+    {
+      "name": "terminal.checkpoints_f64.bin",
+      "base_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/terminal.checkpoints_f64.bin",
+      "observed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/terminal.checkpoints_f64.bin",
+      "bytes": 37875864,
+      "sha256": "300b238c21b1b87da0f15d83be039f448622c856c286065636e74a542b4f833c"
+    },
+    {
+      "name": "terminal.gradient_f64.bin",
+      "base_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/terminal.gradient_f64.bin",
+      "observed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/terminal.gradient_f64.bin",
+      "bytes": 196248,
+      "sha256": "10a5faf8ab602bd957efb5a1df0b45df1edf4d0b6456023beb32a3bbbed9ccfa"
+    },
+    {
+      "name": "terminal.gradient_f32.bin",
+      "base_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192/terminal.gradient_f32.bin",
+      "observed_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_001_192_mpi_trace/terminal.gradient_f32.bin",
+      "bytes": 98124,
+      "sha256": "2d5d3a334d47f03c85703f72ea084ce83e46406e8b545246ef7e9f207ad0396c"
+    }
+  ],
+  "call_identity": {
+    "mode": "prefix",
+    "chain": "twin",
+    "expected_steps": 192,
+    "initial_seed_f64_sha256": "f859fd7d4a110aae0248667a152e131b29b852ff3f330a6a65cd41e23f1007b7",
+    "reference_sha256": "9f249c3cf25ceeb70e61677a5c8d5a5bd0558bbdfda2b4317e5152d8f3804071",
+    "incoming_cotangent_f32_sha256": "83fe8613d589ab0373f8952127cf32f769c6f78e0213ddaae31ebab2437fd13d",
+    "protocol_sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d"
+  },
+  "prior_failure_cause_established": false,
+  "remaining_calculations_use_base_executable": true,
+  "unchanged_scientific_protocol": true
+}

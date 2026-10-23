@@ -49,11 +49,11 @@ not permission to reuse a value from a previous experiment.
 | State and equations | \(Z=(U,V,W,\Phi,\Theta',\mu')\); WRF coordinates, EOS, mass coupling and active dry terms | Source contracts exist; the exact selected case must be pinned |
 | Spatial operator \(F_\Delta\) | Staggered positions, transport order, pressure gradients, interpolation, metrics and all boundary/flux rules | Partial source/native comparisons exist; complete stock-WRF/C++ equality is not established |
 | Initial and auxiliary inputs | Initial/base fields, prescribed coefficients/forcing and frozen stage references | Exact case hashes required |
-| Time map | Effective mode 3, tableau, schedule, precision/handoff, nonlinear and transpose residual norms/tolerances; accepted/failure rules | Supported-path contracts exist; chosen integrated window remains open |
+| Time map | Effective mode 3, tableau, schedule, precision/handoff, nonlinear and transpose residual norms/tolerances; accepted/failure rules | Supported-path contracts exist; the selected native two-control 240 s window is completed below, while broader windows remain open |
 | Numerical state | Predictor/cache policy, carry/publication and warm versus state-only cold restart | Must name the policy; state-only equality does not imply warm-trajectory equality |
 | Forward accuracy | Evaluation times/window, owned/physical sampling positions, per-field units, physical weights/scales \(s_X\), and budgets \(\epsilon_X\) | Named dry 240 s forward case selected and accepted below; broader targets remain unselected |
-| Derivative accuracy | Directions/cotangents and norms/scales, dot/Taylor/FD budgets, true transpose residual and replay checks for that same map/window | Existing budgets apply to their fixtures only; integrated-window coverage remains open |
-| Observation/control problem | Observation operator, times, \(R\), control parameterization, any prior and admissible set | Completed rotating case retained; a separate native two-control idealized twin is now selected as a plan below. Real-observation assimilation remains separate |
+| Derivative accuracy | Directions/cotangents and norms/scales, dot/Taylor/FD budgets, true transpose residual and replay checks for that same map/window | Existing budgets apply to their fixtures only; the selected native two-control VJP/FD window is complete, while full-map JVP and broader directions remain open |
+| Observation/control problem | Observation operator, times, \(R\), control parameterization, any prior and admissible set | Completed rotating and native two-control idealized twin cases retained below. Real-observation assimilation remains separate |
 | Efficiency | Same-accuracy comparator, timestep/stability requirement, whole-run cost definition and required improvement | **Optional target not adopted**; if selected, its criterion must be fixed. No equal-accuracy cost win is established |
 
 The selected case record and this definition together form the completion
@@ -396,30 +396,45 @@ budgets. If efficiency is included in its acceptance contract, its same-accuracy
 cost/timestep criterion must also pass. Scope expansion needs an explicit new
 target; it cannot revoke a completed restricted validation instance.
 
-## Selected next validation instance: native idealized twin (plan only)
+## Completed validation instance: native idealized twin (E0–E2)
 
-The [new native idealized-twin plan](plans/native_idealized_twin_v1.md) and its
-[plan JSON](plans/native_idealized_twin_v1.json) define a separate two-control
-initial-state restoration case on the accepted dry 240 s native map. It uses
-model-generated FP64 truth and noiseless point samples of U, V and dry total
-theta at accepted steps 128/256 (120/240 s), with 384 observations, fixed
-research R, a rotational wind mode and a smooth theta mode. No background
-penalty is selected for its mandatory experiment. Real observations are not a
-prerequisite for this explicitly selected twin case.
+The [frozen native idealized-twin plan](plans/native_idealized_twin_v1.md) and
+[plan JSON](plans/native_idealized_twin_v1.json) defined the separate two-control
+initial-state restoration case on the accepted dry 240 s native map. It is now
+**executed and complete within its declared E0–E2 scope**; see the
+[execution report](<(202610231710)_native_idealized_twin_e0_e1_e2_complete.md>) and
+[portable state/cotangent evidence and recomputation](evidence/native_idealized_twin_execution/README.md).
+The historical plan and its hash remain unchanged; its planning-time readiness
+flag is not the current execution status.
 
-E0 zero innovation/update, E1 identifiable two-control recovery and withheld
-60/180 s state improvement, and E2 deliberate-error detection are its mandatory
-completion gates. All are **planned, not executed**. Concrete control/observation
-artifacts, minimizer/line-search and replay caps, source/truth bindings and the
-metric/negative-test implementation must be frozen before any acceptance run.
-The JSON is a plan schema, not an existing solver runtime configuration.
+The case uses model-generated FP64 truth and 384 noiseless native point samples
+of U, V and dry total theta at accepted steps 128/256 (120/240 s), fixed research
+R, a rotational wind mode and a smooth theta mode. The control starts after WRF
+initialization/CQ; no background penalty or initialization-map derivative is used.
+E0 cost/gradient/update are zero. Both FD widths identify the two controls
+(singular-value ratio about 0.449); 12 full/midpoint/terminal gradient checks have
+maximum relative difference 2.34e-8, and all ten E2 faults are detected.
 
-PR #314's synthetic residual caller and the earlier rotating inverse remain
-closed within their own scopes. This new plan neither repeats those studies nor
-certifies real-atmosphere assimilation, all directions, general physics or MPI.
-Its E0–E2 completion is not contingent on optional noise/prior E3, a 15 s
-candidate, a new timestep ladder or deployment work. Plan registration launched
-no model/build or new same-setup RK3 field/runtime comparison.
+One accepted update reduces the cost ratio to 2.53e-14, with normalized full
+control gradient 7.82e-8 and relative control error 2.74e-7. The six-field
+composite state errors at unused 60/180 s are 2.96e-7 / 3.52e-7 of the background
+errors. Variable-wise physical RMS and unobserved-position scores are preserved.
+Optimizer success, cost, gradient, control recovery and unused-state improvement
+were evaluated independently against the original fixed thresholds.
+
+The computation used 41 native attempts / 6,880 model steps within the original
+caps. Two MPI launcher RC1 records remain failed. Their matching RC0 results
+were bound without normalizing exit status; one exact 192-step checkpoint used a
+post-computation MPI observer build, whose saved state and gradient payloads are
+byte-identical and whose linkage differs by the observer object only. Remaining
+calculations used the original executable. The historical MPI failure cause is
+unknown; this case does not certify MPI deployment reliability.
+
+PR #314's residual caller and the rotating inverse stay closed independently.
+This result does not certify real-atmosphere assimilation, arbitrary initial
+fields, all directions, an exact global FP64 adjoint or future forecast skill.
+Optional noise/prior E3, a 15 s candidate, new timesteps or deployment work are
+not prerequisites and are not added as new completion gates.
 
 ## Next action and validation of this definition
 
@@ -429,10 +444,9 @@ are complete within their one-direction, FP32-chained scopes. The
 [synthetic two-diagnostic squared-residual caller](<(202610211456)_native_residual_objective.md>)
 also passes the declared full-cost and derived midpoint-increment checks with
 fresh residual-dependent cotangents. Its fixed synthetic targets and weights
-do not define a physical observation problem. The user has now selected the
-separate idealized twin above to validate native control restoration without
-real observations. Proceed through that plan's pre-execution freeze gates,
-then E0–E2; do not interpret plan registration as an executed recovery result.
+do not define a physical observation problem. The separately selected idealized twin above has now completed native control
+restoration without real observations. Preserve its completed E0–E2 status; no
+additional experiment is mandatory for that restricted instance.
 These earlier probes do not certify a full-map JVP or all directions.
 Do not reopen the completed reference screen or require
 the 15 s candidate to pass first. Declare the observation/control problem and

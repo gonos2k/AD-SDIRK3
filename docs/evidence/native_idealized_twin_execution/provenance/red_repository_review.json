@@ -1,0 +1,303 @@
+{
+  "schema": "native_idealized_twin_repository_closure_review_v1",
+  "reviewed_at_local": "2026-10-23T17:29:31.477965+09:00",
+  "status": "PASS_FINAL_DOCS_AND_CI_PROVENANCE_CLOSURE",
+  "worktree": "/private/tmp/native-idealized-twin-20261022",
+  "content_review": {
+    "claims_match_portable_recompute": true,
+    "summary_sha256_matches_provenance_manifest": true,
+    "reported_attempt_accounting": {
+      "accepted_labels": [
+        "e0_forward",
+        "e0_gradient_032",
+        "e0_gradient_064",
+        "e0_gradient_096",
+        "e0_gradient_128",
+        "e0_gradient_160",
+        "e0_gradient_192",
+        "e0_gradient_224",
+        "e0_gradient_256",
+        "e1_cost_000",
+        "e1_cost_001",
+        "e1_grad_000_032",
+        "e1_grad_000_064",
+        "e1_grad_000_096_recovery1",
+        "e1_grad_000_128",
+        "e1_grad_000_160",
+        "e1_grad_000_192",
+        "e1_grad_000_224",
+        "e1_grad_000_256",
+        "e1_grad_001_032",
+        "e1_grad_001_064",
+        "e1_grad_001_096",
+        "e1_grad_001_128",
+        "e1_grad_001_160",
+        "e1_grad_001_192_mpi_trace",
+        "e1_grad_001_224",
+        "e1_grad_001_256",
+        "fd_a0_01_minus",
+        "fd_a0_01_plus",
+        "fd_a0_03_minus",
+        "fd_a0_03_plus",
+        "fd_a1_01_minus",
+        "fd_a1_01_plus",
+        "fd_a1_03_minus",
+        "fd_a1_03_plus",
+        "preflight_terminal_032",
+        "preflight_terminal_064",
+        "preflight_terminal_096",
+        "preflight_terminal_128"
+      ],
+      "actual_model_steps": 6880,
+      "actual_native_attempts": 41,
+      "completed_rc0_attempts": 39,
+      "failed_attempts_excluded_from_accepted_chains": true,
+      "preserved_failed_labels": [
+        "e1_grad_000_096",
+        "e1_grad_001_192"
+      ],
+      "preserved_failed_rc1_attempts": 2
+    },
+    "reported_optimizer_metrics": {
+      "accepted_updates": 1,
+      "calls": [
+        {
+          "J": 10.319248794826839,
+          "accepted": true,
+          "control": [
+            0.0,
+            0.0
+          ],
+          "kind": "cost",
+          "label": "initial"
+        },
+        {
+          "control": [
+            0.0,
+            0.0
+          ],
+          "gradient": [
+            34.35254752272863,
+            -6.924445339778323
+          ],
+          "kind": "gradient",
+          "label": "gradient_initial",
+          "reuses_cost_record": true
+        },
+        {
+          "J": 2.6096924689424757e-13,
+          "accepted": true,
+          "control": [
+            -0.49999999659290667,
+            0.5000001939857451
+          ],
+          "kind": "cost",
+          "label": "trial_u0_b0"
+        },
+        {
+          "control": [
+            -0.49999999659290667,
+            0.5000001939857451
+          ],
+          "gradient": [
+            2.3407969907636702e-07,
+            2.6864879458280385e-06
+          ],
+          "kind": "gradient",
+          "label": "gradient_u1",
+          "reuses_cost_record": true
+        }
+      ],
+      "control": [
+        -0.49999999659290667,
+        0.5000001939857451
+      ],
+      "converged": true,
+      "cost_ratio": 2.528955857960073e-14,
+      "gradient": [
+        2.3407969907636702e-07,
+        2.6864879458280385e-06
+      ],
+      "gradient_call_cap": 13,
+      "gradient_calls": 2,
+      "initial_J": 10.319248794826839,
+      "initial_gradient_inf": 34.35254752272863,
+      "normalized_gradient_inf": 7.820345620803177e-08,
+      "objective_forward_cap": 40,
+      "objective_forwards": 2,
+      "status": "converged",
+      "terminal_J": 2.6096924689424757e-13,
+      "updates": [
+        {
+          "J": 10.319248794826839,
+          "accepted": true,
+          "accepted_J": 2.6096924689424757e-13,
+          "accepted_alpha": 1.0,
+          "accepted_control": [
+            -0.49999999659290667,
+            0.5000001939857451
+          ],
+          "bfgs_update": {
+            "applied": true,
+            "curvature": 20.638498883659476,
+            "threshold": 2.4779487018155993e-13
+          },
+          "control": [
+            0.0,
+            0.0
+          ],
+          "decision": "accepted",
+          "direction": [
+            -0.49999999659290667,
+            0.5000001939857451
+          ],
+          "gradient": [
+            34.35254752272863,
+            -6.924445339778323
+          ],
+          "reset_to_h0": false,
+          "slope": -20.638497657454828,
+          "trials": [
+            {
+              "J": 2.6096924689424757e-13,
+              "alpha": 1.0,
+              "armijo_accepted": true,
+              "armijo_bound": 10.317184945061094,
+              "control": [
+                -0.49999999659290667,
+                0.5000001939857451
+              ],
+              "displacement": [
+                -0.49999999659290667,
+                0.5000001939857451
+              ],
+              "projected_slope": -20.638497657454828,
+              "raw_control": [
+                -0.49999999659290667,
+                0.5000001939857451
+              ]
+            }
+          ],
+          "update": 1
+        }
+      ]
+    },
+    "reported_heldout_metrics": {
+      "64": 2.9583362274687663e-07,
+      "192": 3.520915757497751e-07
+    },
+    "MPI_profile_scope_explicit": true,
+    "RK3_runtime_scope_explicit": true,
+    "historical_plan_unchanged_and_not_represented_as_executed": true,
+    "E0_signed_zero_only_scope_recorded": true,
+    "E1_objective_gradient_control_and_heldout_claims_separate": true,
+    "broad_completion_boundaries_preserved": true,
+    "portable_copy_test_passed": true,
+    "portable_npz_hash_matches_manifest": true,
+    "portable_recompute_tool_hash_matches_record": true,
+    "red_review_provenance_matches_prior_bounded_review": true,
+    "execution_report_and_readme_present": true,
+    "optional_trace_source_exact_copy": true,
+    "optional_trace_source_unlinked_by_default": true
+  },
+  "findings": [
+    {
+      "priority": "P2",
+      "area": "repository packaging",
+      "finding": "The repository ignore rule at .gitignore:108 ignores docs/. The new execution report and portable evidence directory are currently ignored (git status reports !!), so normal git add will omit the deliverable.",
+      "required_before_commit": "Previously required; satisfied by the current staged file set.",
+      "resolution": "Resolved: all intended report/evidence paths, including the later MPI attempt provenance records, are force-added and staged; staged paths were verified."
+    }
+  ],
+  "scope_limits": [
+    "No claim of MPI failure cause: still unknown.",
+    "No general equivalence for the observer executable; one exact saved 192-step case only.",
+    "No new RK3 field comparison, runtime comparison, or speed claim.",
+    "No real observations, all-directions derivative, or global FP64 adjoint claim.",
+    "Standalone CTest/replay results remain separate from the new native experiment; CI for the new commit is pending."
+  ],
+  "code_delta_review": {
+    "production_physics_sources_changed": false,
+    "native_harness_test_support_added": true,
+    "optional_mpi_trace_source_sha256": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032",
+    "optional_observer_registered_in_build_files": false,
+    "worktree_status": "A  docs/(202610231710)_native_idealized_twin_e0_e1_e2_complete.md\nM  docs/PROBLEM_DEFINITION.md\nA  docs/evidence/native_idealized_twin_execution/E0_gate.json\nA  docs/evidence/native_idealized_twin_execution/E2_mutation_validation.json\nA  docs/evidence/native_idealized_twin_execution/README.md\nA  docs/evidence/native_idealized_twin_execution/fd_gradient_checks.csv\nA  docs/evidence/native_idealized_twin_execution/manifest.json\nA  docs/evidence/native_idealized_twin_execution/native_idealized_twin_portable.npz\nA  docs/evidence/native_idealized_twin_execution/objective_by_case.csv\nA  docs/evidence/native_idealized_twin_execution/optimizer_trace.json\nA  docs/evidence/native_idealized_twin_execution/portable_verification.json\nA  docs/evidence/native_idealized_twin_execution/proof_192_equivalence.json\nA  docs/evidence/native_idealized_twin_execution/protocol.json\nA  docs/evidence/native_idealized_twin_execution/provenance/artifact_generation_manifest.json\nA  docs/evidence/native_idealized_twin_execution/provenance/final_evidence_graph.json\nA  docs/evidence/native_idealized_twin_execution/provenance/graph_post_v5.json\nA  docs/evidence/native_idealized_twin_execution/provenance/green_final_review.md\nA  docs/evidence/native_idealized_twin_execution/provenance/launch_binding.json\nA  docs/evidence/native_idealized_twin_execution/provenance/mpi_finalize.trace\nA  docs/evidence/native_idealized_twin_execution/provenance/mpi_trace_build.json\nA  docs/evidence/native_idealized_twin_execution/provenance/mpi_trace_compile.json\nA  docs/evidence/native_idealized_twin_execution/provenance/mpi_trace_link.json\nA  docs/evidence/native_idealized_twin_execution/provenance/native_build.json\nA  docs/evidence/native_idealized_twin_execution/provenance/native_link.json\nA  docs/evidence/native_idealized_twin_execution/provenance/native_source_build.json\nA  docs/evidence/native_idealized_twin_execution/provenance/observations.json\nA  docs/evidence/native_idealized_twin_execution/provenance/portable_isolation_test.json\nA  docs/evidence/native_idealized_twin_execution/provenance/problem_ledger_static_checks.json\nA  docs/evidence/native_idealized_twin_execution/provenance/problem_static_checks.json\nA  docs/evidence/native_idealized_twin_execution/provenance/red_final_review.json\nA  docs/evidence/native_idealized_twin_execution/provenance/red_final_review.md\nA  docs/evidence/native_idealized_twin_execution/provenance/stack.json\nA  docs/evidence/native_idealized_twin_execution/recompute.py\nA  docs/evidence/native_idealized_twin_execution/recomputed.json\nA  external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c\nM  external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp\nA  external/libtorch_wrf/sdirk3/tests/native_twin_execute.py\nA  external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py\nA  external/libtorch_wrf/sdirk3/tests/native_twin_problem.py\nA  external/libtorch_wrf/sdirk3/tests/native_twin_runner.py"
+  },
+  "docs_ignored_status": "A  docs/(202610231710)_native_idealized_twin_e0_e1_e2_complete.md\nA  docs/evidence/native_idealized_twin_execution/E0_gate.json\nA  docs/evidence/native_idealized_twin_execution/E2_mutation_validation.json\nA  docs/evidence/native_idealized_twin_execution/README.md\nA  docs/evidence/native_idealized_twin_execution/fd_gradient_checks.csv\nA  docs/evidence/native_idealized_twin_execution/manifest.json\nA  docs/evidence/native_idealized_twin_execution/native_idealized_twin_portable.npz\nA  docs/evidence/native_idealized_twin_execution/objective_by_case.csv\nA  docs/evidence/native_idealized_twin_execution/optimizer_trace.json\nA  docs/evidence/native_idealized_twin_execution/portable_verification.json\nA  docs/evidence/native_idealized_twin_execution/proof_192_equivalence.json\nA  docs/evidence/native_idealized_twin_execution/protocol.json\nA  docs/evidence/native_idealized_twin_execution/provenance/artifact_generation_manifest.json\nA  docs/evidence/native_idealized_twin_execution/provenance/final_evidence_graph.json\nA  docs/evidence/native_idealized_twin_execution/provenance/graph_post_v5.json\nA  docs/evidence/native_idealized_twin_execution/provenance/green_final_review.md\nA  docs/evidence/native_idealized_twin_execution/provenance/launch_binding.json\nA  docs/evidence/native_idealized_twin_execution/provenance/mpi_finalize.trace\nA  docs/evidence/native_idealized_twin_execution/provenance/mpi_trace_build.json\nA  docs/evidence/native_idealized_twin_execution/provenance/mpi_trace_compile.json\nA  docs/evidence/native_idealized_twin_execution/provenance/mpi_trace_link.json\nA  docs/evidence/native_idealized_twin_execution/provenance/native_build.json\nA  docs/evidence/native_idealized_twin_execution/provenance/native_link.json\nA  docs/evidence/native_idealized_twin_execution/provenance/native_source_build.json\nA  docs/evidence/native_idealized_twin_execution/provenance/observations.json\nA  docs/evidence/native_idealized_twin_execution/provenance/portable_isolation_test.json\nA  docs/evidence/native_idealized_twin_execution/provenance/problem_ledger_static_checks.json\nA  docs/evidence/native_idealized_twin_execution/provenance/problem_static_checks.json\nA  docs/evidence/native_idealized_twin_execution/provenance/red_final_review.json\nA  docs/evidence/native_idealized_twin_execution/provenance/red_final_review.md\nA  docs/evidence/native_idealized_twin_execution/provenance/stack.json\nA  docs/evidence/native_idealized_twin_execution/recompute.py\nA  docs/evidence/native_idealized_twin_execution/recomputed.json",
+  "ignore_rule": "",
+  "portable_artifact_hashes": {
+    "manifest": "4f6524df619e538b72d897c726ed38aff53a014a2e468a21f9e3ac96e3c95d7d",
+    "npz": "810c4b61bb17c934a52b782a56453f88b7c93914fd6ac78c9b2e407a1804342d",
+    "recompute_py": "750170ac83cfcf5d8031e99093778af4c184d3525566b12c17adffbfb2d7835d",
+    "portable_verification": "785ae1d28d0b9d491791d443d5fb15f1cca8fceb7b92e29825fb022632e4d551",
+    "recomputed": "1d6724773468246c55bf968ed9242554a969c856d3de3bb6371ce74b4237c9ce",
+    "summary": "a579c12b1798f42930bd2b460cb869963200df7a860b8e231f102fc31b70321a"
+  },
+  "ci_review": {
+    "checks": {
+      "run_id": 39924066107,
+      "run_url": "https://github.com/gonos2k/AD-SDIRK3/actions/runs/39924066107",
+      "source_commit": "0e57da8e262afec7293d1be744870904fa1e7a02",
+      "status": "completed",
+      "conclusion": "success",
+      "job_conclusions": {
+        "core-linux": "success",
+        "fast-contracts": "success",
+        "DIAGNOSTIC ONLY - fixed fine returned-state accuracy": "skipped",
+        "required": "success"
+      },
+      "required_jobs_success": true,
+      "diagnostic_only_job_skipped": true,
+      "artifact_id": 12488392514,
+      "artifact_sha256": "77cdaa979dde3c5cbe4a3ea631361edb6ce3970fb1b7275bbf117672dec066f5",
+      "local_zip_bytes": 361569,
+      "local_zip_sha256": "77cdaa979dde3c5cbe4a3ea631361edb6ce3970fb1b7275bbf117672dec066f5",
+      "artifact_digest_matches": true,
+      "zip_crc_clean": true,
+      "passed_ctest_names": [
+        "Diagnostic_Observer_Noninterference_Contract",
+        "Fixed_Trajectory_Lifecycle",
+        "Fixed_Trajectory_Derivative",
+        "Full_Tile_Step_Adjoint",
+        "FP64_State_Handoff_Contract"
+      ],
+      "passed_ctest_count": 5,
+      "pullback_components_each": 8480,
+      "pullbacks_direct_fp64_bytes_equal": true,
+      "pullback_sha256": "5039f1dbbde1ff4bc6b1131fb65027e9f8036ca9ba5008898e1dc484c048b2df",
+      "endpoint_parity_claim": "all_16_bitwise_equal",
+      "endpoint_array_bytes_compared": false,
+      "native_twin_dimension_separate": true,
+      "new_model_or_optimizer_runs": false
+    },
+    "source_commit_attestation": {
+      "commit": "0e57da8e262afec7293d1be744870904fa1e7a02",
+      "head_matches": true,
+      "files_independently_rehashed": 23,
+      "mismatches": [],
+      "attestation_sha256": "170b4f7bf7794f87298c9f2b4a029ced89dd6f19b7867cd77c5f60c398cde2d8"
+    },
+    "review_scope": "Read-only verification of archived CI artifact and docs-only staged update; no native model/build/test rerun."
+  },
+  "staging_review": {
+    "staged_file_count": 13,
+    "staged_paths": [
+      "docs/(202610231710)_native_idealized_twin_e0_e1_e2_complete.md",
+      "docs/evidence/native_idealized_twin_execution/README.md",
+      "docs/evidence/native_idealized_twin_execution/provenance/ci_source_0e57/artifact_metadata.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/ci_source_0e57/research-core-diagnostics.zip",
+      "docs/evidence/native_idealized_twin_execution/provenance/ci_source_0e57/run_metadata.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/ci_source_0e57/verification.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/failed_096.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/failed_096_launcher.log",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/failed_192.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/failed_192_launcher.log",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/normal_096_recovery.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/normal_192_profiled.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/numerical_source_commit_attestation.json"
+    ],
+    "all_staged_paths_docs_only": true,
+    "source_commit_head": "0e57da8e262afec7293d1be744870904fa1e7a02",
+    "next_commit_is_docs_only": true
+  }
+}

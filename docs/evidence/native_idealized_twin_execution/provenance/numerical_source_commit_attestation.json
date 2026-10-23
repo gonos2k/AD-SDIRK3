@@ -1,0 +1,214 @@
+{
+  "cached_graphs": {
+    "ast_rebuilt": false,
+    "controller_graph_receipt_sha256": "4091f48545e9d33b82562c2f2aa64bfd9377e9ca2f2369869e555492cb899366",
+    "final_two_file_graph_receipt_sha256": "a6e84ba7eb0a270975a9307df8241295ee61e69f020bde1c239d11bb805a18d3",
+    "graph_artifacts": [
+      {
+        "link_count": 93,
+        "node_count": 29,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/controller_delta_v5_ast/graphify-out/graph.json",
+        "sha256": "67bea477965c099fa39b6d9c02f111a4d23b317c8c9e93e96bd9d1c5bfb35559"
+      },
+      {
+        "link_count": 17,
+        "node_count": 11,
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/final_evidence_delta_ast/graphify-out/graph.json",
+        "sha256": "c035f056ff17c731062f763b06cae128b86d1e932b63e99f3429fdedb4492880"
+      }
+    ],
+    "reason": "All target source pins and cached source snapshots match source commit bytes; reusing the existing Graphify artifacts.",
+    "receipt_copies": [
+      {
+        "matches_commit": true,
+        "path": "docs/evidence/native_idealized_twin_execution/provenance/graph_post_v5.json",
+        "sha256": "4091f48545e9d33b82562c2f2aa64bfd9377e9ca2f2369869e555492cb899366"
+      },
+      {
+        "matches_commit": true,
+        "path": "docs/evidence/native_idealized_twin_execution/provenance/final_evidence_graph.json",
+        "sha256": "a6e84ba7eb0a270975a9307df8241295ee61e69f020bde1c239d11bb805a18d3"
+      }
+    ],
+    "source_snapshot_checks": [
+      {
+        "matches": true,
+        "sha256": "750170ac83cfcf5d8031e99093778af4c184d3525566b12c17adffbfb2d7835d",
+        "snapshot_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/final_evidence_delta_ast/source/recompute.py",
+        "source_path": "/private/tmp/native-idealized-twin-20261022/docs/evidence/native_idealized_twin_execution/recompute.py"
+      },
+      {
+        "matches": true,
+        "sha256": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032",
+        "snapshot_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/final_evidence_delta_ast/source/native_mpi_finalize_trace.c",
+        "source_path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c"
+      }
+    ]
+  },
+  "captured_at_local": "2026-10-23T17:22:27+09:00",
+  "schema": "native_idealized_twin_numerical_source_commit_attestation_v1",
+  "scope_limits": [
+    "Attestation binds exact source bytes and cached Graphify artifacts to commit 0e57da8e262afec7293d1be744870904fa1e7a02.",
+    "Later documentation-only or CI commits are not represented by this numerical source commit identifier.",
+    "No model, build, test, or source edit was performed for this attestation."
+  ],
+  "source_commit": {
+    "branch": "codex/native-idealized-twin-20261022",
+    "clean": true,
+    "head_at_attestation": "0e57da8e262afec7293d1be744870904fa1e7a02",
+    "sha": "0e57da8e262afec7293d1be744870904fa1e7a02",
+    "target_worktree": "/private/tmp/native-idealized-twin-20261022",
+    "tree": "663dce624d973a133542c4870b8881fa16a7c2dd",
+    "worktree_status": []
+  },
+  "source_pins": {
+    "all_current_and_commit_hashes_match": true,
+    "commit_blob_verified_count": 23,
+    "files": [
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "Registry/Registry.EM_COMMON",
+        "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "docs/evidence/native_idealized_twin_execution/recompute.py",
+        "sha256": "750170ac83cfcf5d8031e99093778af4c184d3525566b12c17adffbfb2d7835d"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "docs/evidence/research_forward_setting/research_forward_map.json",
+        "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "docs/plans/native_idealized_twin_v1.json",
+        "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "dyn_em/module_implicit_sdirk3.F",
+        "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "dyn_em/solve_em.F",
+        "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c",
+        "sha256": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+        "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+        "sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+        "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_twin_execute.py",
+        "sha256": "4c0e30d8b25142e3696bea9f465aaaf844b1012538886313f2686fba01a277dc"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+        "sha256": "bb7d196c69196bbd503bef77f5cf8b6a68e7c8c5b0dd41cc532999891324be38"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_twin_problem.py",
+        "sha256": "ca82a65cb6b1cc8c1f60cdfff4b58184e887f4a10606826214629bc01d8b8b91"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_twin_runner.py",
+        "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+        "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+        "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+        "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+        "sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+        "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+        "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+        "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "tools/test_fine_wave_inverse.py",
+        "sha256": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+      },
+      {
+        "commit_matches": true,
+        "current_matches": true,
+        "path": "tools/wave_quadratic_reference.py",
+        "sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431"
+      }
+    ],
+    "requested_anchors": {
+      "native_mpi_finalize_trace.c": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032",
+      "native_terminal_adjoint_test.cpp": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7",
+      "native_twin_execute.py": "4c0e30d8b25142e3696bea9f465aaaf844b1012538886313f2686fba01a277dc",
+      "recompute.py": "750170ac83cfcf5d8031e99093778af4c184d3525566b12c17adffbfb2d7835d"
+    }
+  }
+}
