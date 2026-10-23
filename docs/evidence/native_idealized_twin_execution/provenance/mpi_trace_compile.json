@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "/usr/bin/cc",
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-I/opt/homebrew/opt/open-mpi/include",
+    "-c",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/mpi_shutdown_trace_v3.c",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/objects/mpi_shutdown_trace_v3.o"
+  ],
+  "compiler_version": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+  "object": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/objects/mpi_shutdown_trace_v3.o",
+  "object_bytes": 3160,
+  "object_sha256": "b5d2c4d4fed3c9d813c63519bc7db775a912c397d2db69a0fdb95c858492515a",
+  "openmpi_version": "mpirun (Open MPI) 5.0.9",
+  "return_code": 0,
+  "schema": "native_idealized_twin_mpi_trace_v3_compile_receipt_v1",
+  "source": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/mpi_shutdown_trace_v3.c",
+  "source_sha256": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032",
+  "trace_env_var": "NATIVE_MPI_FINALIZE_TRACE",
+  "v2_env_migration": "Does not start with WRF_SDIRK3_; native runner preserves it."
+}

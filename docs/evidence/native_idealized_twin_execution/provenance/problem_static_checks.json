@@ -1,0 +1,36 @@
+{
+  "static_checks": "pass",
+  "checks": [
+    "joint U/V normalization and theta normalization",
+    "Q alias/wall extensions",
+    "inactive control blocks zero",
+    "truth-control recovery",
+    "truth observation cost and cotangents zero",
+    "packed H/HT dot identity",
+    "solver-entry mass/theta/geopotential admissibility"
+  ],
+  "truth_control_recovery_max_abs": 1.1102230246251565e-16,
+  "baseline_metrics": {
+    "finite": true,
+    "min_total_column_mass_pa": 89091.7890625,
+    "min_potential_temperature_k": 302.2530517578125,
+    "min_geopotential_height_difference": 9247.4697265625,
+    "geopotential_monotone_with_level": true,
+    "max_abs_U_m_s": 4.898538112640381,
+    "max_abs_V_m_s": 0.0
+  },
+  "solver_entry_input_crosscheck": {
+    "truth_source": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+    "truth_sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50",
+    "wrfinput_path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/wrfinput_d01",
+    "wrfinput_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "packed_physical_owner_comparison": {
+      "U": "bitwise_equal",
+      "V": "bitwise_equal",
+      "PH": "bitwise_equal",
+      "MU": "bitwise_equal",
+      "T": "not_bitwise_equal; max_abs_difference=1.52587890625e-05 K (about one float32 ulp at observed magnitudes)"
+    },
+    "scope": "initial-state/layout consistency check only; truth state remains the exact pinned FP64 ledger row"
+  }
+}

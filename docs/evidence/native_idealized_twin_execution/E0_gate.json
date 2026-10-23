@@ -1,0 +1,49 @@
+{
+  "status": "converged_zero_innovation",
+  "converged": false,
+  "control": [
+    0.0,
+    0.0
+  ],
+  "initial_J": 0.0,
+  "terminal_J": 0.0,
+  "gradient": [
+    0.0,
+    0.0
+  ],
+  "cost_ratio": null,
+  "normalized_gradient_inf": null,
+  "objective_forwards": 1,
+  "objective_forward_cap": 1,
+  "gradient_calls": 1,
+  "gradient_call_cap": 1,
+  "accepted_updates": 0,
+  "calls": [
+    {
+      "label": "initial",
+      "kind": "cost",
+      "control": [
+        0.0,
+        0.0
+      ],
+      "J": 0.0,
+      "accepted": true
+    },
+    {
+      "label": "gradient_initial",
+      "kind": "gradient",
+      "control": [
+        0.0,
+        0.0
+      ],
+      "gradient": [
+        0.0,
+        0.0
+      ],
+      "reuses_cost_record": true
+    }
+  ],
+  "updates": [],
+  "initial_gradient_inf": 0.0,
+  "e0_gate_passed": true
+}

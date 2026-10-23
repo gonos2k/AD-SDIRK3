@@ -1,0 +1,124 @@
+{
+  "status": "converged",
+  "converged": true,
+  "control": [
+    -0.49999999659290667,
+    0.5000001939857451
+  ],
+  "initial_J": 10.319248794826839,
+  "terminal_J": 2.6096924689424757e-13,
+  "gradient": [
+    2.3407969907636702e-07,
+    2.6864879458280385e-06
+  ],
+  "cost_ratio": 2.528955857960073e-14,
+  "normalized_gradient_inf": 7.820345620803177e-08,
+  "objective_forwards": 2,
+  "objective_forward_cap": 40,
+  "gradient_calls": 2,
+  "gradient_call_cap": 13,
+  "accepted_updates": 1,
+  "calls": [
+    {
+      "label": "initial",
+      "kind": "cost",
+      "control": [
+        0.0,
+        0.0
+      ],
+      "J": 10.319248794826839,
+      "accepted": true
+    },
+    {
+      "label": "gradient_initial",
+      "kind": "gradient",
+      "control": [
+        0.0,
+        0.0
+      ],
+      "gradient": [
+        34.35254752272863,
+        -6.924445339778323
+      ],
+      "reuses_cost_record": true
+    },
+    {
+      "label": "trial_u0_b0",
+      "kind": "cost",
+      "control": [
+        -0.49999999659290667,
+        0.5000001939857451
+      ],
+      "J": 2.6096924689424757e-13,
+      "accepted": true
+    },
+    {
+      "label": "gradient_u1",
+      "kind": "gradient",
+      "control": [
+        -0.49999999659290667,
+        0.5000001939857451
+      ],
+      "gradient": [
+        2.3407969907636702e-07,
+        2.6864879458280385e-06
+      ],
+      "reuses_cost_record": true
+    }
+  ],
+  "updates": [
+    {
+      "update": 1,
+      "control": [
+        0.0,
+        0.0
+      ],
+      "J": 10.319248794826839,
+      "gradient": [
+        34.35254752272863,
+        -6.924445339778323
+      ],
+      "direction": [
+        -0.49999999659290667,
+        0.5000001939857451
+      ],
+      "slope": -20.638497657454828,
+      "reset_to_h0": false,
+      "trials": [
+        {
+          "alpha": 1.0,
+          "raw_control": [
+            -0.49999999659290667,
+            0.5000001939857451
+          ],
+          "control": [
+            -0.49999999659290667,
+            0.5000001939857451
+          ],
+          "displacement": [
+            -0.49999999659290667,
+            0.5000001939857451
+          ],
+          "projected_slope": -20.638497657454828,
+          "J": 2.6096924689424757e-13,
+          "armijo_bound": 10.317184945061094,
+          "armijo_accepted": true
+        }
+      ],
+      "accepted": true,
+      "accepted_alpha": 1.0,
+      "decision": "accepted",
+      "accepted_control": [
+        -0.49999999659290667,
+        0.5000001939857451
+      ],
+      "accepted_J": 2.6096924689424757e-13,
+      "bfgs_update": {
+        "applied": true,
+        "curvature": 20.638498883659476,
+        "threshold": 2.4779487018155993e-13
+      }
+    }
+  ],
+  "initial_gradient_inf": 34.35254752272863
+}

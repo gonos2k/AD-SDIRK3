@@ -1,0 +1,15 @@
+{
+  "all_detected": true,
+  "mutations": {
+    "nonfinite": true,
+    "sigma_zero": true,
+    "sigma_negative": true,
+    "duplicate_id": true,
+    "wrong_grid": true,
+    "wrong_slot": true,
+    "omitted_midpoint": true,
+    "wrong_step": true,
+    "duplicate_injection": true,
+    "sigma_instead_of_sigma_squared": true
+  }
+}

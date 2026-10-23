@@ -1,0 +1,180 @@
+{
+  "schema": "native_idealized_twin_artifact_manifest_v1",
+  "status": "generated_problem_setup_no_model_run",
+  "base_source_commit": "e111d2bea3a2c3fa34eb117b131cb03cf89eda5f",
+  "plan": "docs/plans/native_idealized_twin_v1.json",
+  "plan_source": {
+    "path": "/private/tmp/native-idealized-twin-20261022/docs/plans/native_idealized_twin_v1.json",
+    "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+  },
+  "truth_source": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-terminal-adjoint-20261020/runs_v5/baseline/terminal.checkpoints_f64.bin",
+    "sha256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50",
+    "bytes": 50435736,
+    "dtype": "<f8",
+    "shape": [
+      257,
+      24531
+    ]
+  },
+  "wrfinput_source": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/wrfinput_d01",
+    "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+    "bytes": 976675,
+    "DX_m": 100000.0,
+    "DY_m": 100000.0,
+    "dimensions": [
+      16,
+      16,
+      16
+    ]
+  },
+  "tile_bounds_source": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/rsl.out.0000",
+    "sha256": "fc2ee93ad9753fcca767edb2969fa369246e86eb0c223b47f78fe976354d8cd7",
+    "physical_domain_bounds_fortran_1based": [
+      1,
+      17,
+      1,
+      17,
+      1,
+      17
+    ],
+    "registered_tile_count": 1,
+    "tile_origin_global_indices_fortran_1based": {
+      "i": 1,
+      "j": 1,
+      "k": 1
+    },
+    "derivation": "single tile spans the domain; its=ids=1, jts=jds=1, kts=kds=1",
+    "matched_log_lines": {
+      "domain": "ids,ide,jds,jde            1          17           1          17",
+      "single_tile": "set_tiles3: NUMBER OF TILES =   1",
+      "vertical_tile": "SDIRK3 DEBUG: kds/kde/kms/kme/kts/kte =     1   17    1   17    1   16",
+      "x_tile": "SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   17   -4   22    1   17",
+      "north_tile_edge": "SDIRK3 INIT DEBUG: jte=   17, jde=   17, jte==jde=T"
+    }
+  },
+  "source_graph_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/pre_edit_binding.json",
+    "sha256": "e0c3438d218b9d1cd6178a9e96d89db7d058f29d82c8eaf9df67c28786bf8b79"
+  },
+  "source_files": {
+    "external/libtorch_wrf/sdirk3/tests/native_twin_problem.py": "ca82a65cb6b1cc8c1f60cdfff4b58184e887f4a10606826214629bc01d8b8b91",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b",
+    "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a",
+    "external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp@e111d2bea3a2c3fa34eb117b131cb03cf89eda5f": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+  },
+  "packed_layout": {
+    "order": [
+      "U",
+      "V",
+      "W",
+      "PH",
+      "T",
+      "MU"
+    ],
+    "offsets": [
+      0,
+      4896,
+      9792,
+      14705,
+      19618,
+      24242
+    ],
+    "shapes": [
+      [
+        17,
+        16,
+        18
+      ],
+      [
+        18,
+        16,
+        17
+      ],
+      [
+        17,
+        17,
+        17
+      ],
+      [
+        17,
+        17,
+        17
+      ],
+      [
+        17,
+        16,
+        17
+      ],
+      [
+        17,
+        17
+      ]
+    ],
+    "packed_size": 24531
+  },
+  "template": {
+    "dtype": "float64",
+    "control_order": [
+      "wind",
+      "theta"
+    ],
+    "wind_common_owner_max_abs": 0.1,
+    "theta_owner_max_abs": 0.01,
+    "background_coefficients": [
+      0.5,
+      -0.5
+    ],
+    "truth_control": [
+      -0.5,
+      0.5
+    ],
+    "wind_owner_max_abs_actual": 0.1,
+    "theta_owner_max_abs_actual": 0.01,
+    "boundary_policy": "U/T periodic x alias and north copy; V periodic x alias, zero physical walls, antisymmetric north ghost; W/PH/MU P entries zero"
+  },
+  "objective": {
+    "steps": [
+      128,
+      256
+    ],
+    "times_seconds": [
+      120.0,
+      240.0
+    ],
+    "sigma_by_field": {
+      "U": 0.05,
+      "V": 0.05,
+      "theta": 0.01
+    },
+    "cost": "0.5 * sum((H(z)-y)^2 / sigma^2)",
+    "state_dependent_residual_recomputed": true
+  },
+  "claims": {
+    "model_run_performed": false,
+    "native_control_application_verified": false,
+    "global_exact_fp64_gradient_claimed": false
+  },
+  "problem_npz": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/artifacts/problem.npz",
+    "sha256": "e5a0c9cdc01b7aab07a6a1671284df06edacb7e28ac379ef72a40738a6f3fb6b",
+    "bytes": 866690
+  },
+  "background_seed_f64": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/artifacts/initial_state_a0_f64.bin",
+    "sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+    "bytes": 196248,
+    "dtype": "<f8",
+    "shape": [
+      24531
+    ]
+  },
+  "observations_json": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/artifacts/observations.json",
+    "sha256": "95faba0ff419e77e589917eaef5383f3d40babf833a050c2ac13fe77079dec96",
+    "bytes": 387608
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "schema": "native_idealized_twin_execution_protocol_v1",
+  "status": "frozen_ready",
+  "frozen_at_jst": "2026-10-22T10:04:04.283995+09:00",
+  "base_commit": "e111d2bea3a2c3fa34eb117b131cb03cf89eda5f",
+  "case_id": "dry_em_b_wave_native_two_control_twin_240s_v1",
+  "plan": {
+    "path": "/private/tmp/native-idealized-twin-20261022/docs/plans/native_idealized_twin_v1.json",
+    "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+  },
+  "target": {
+    "total_steps": 256,
+    "h_seconds": 0.9375,
+    "window_steps": 32,
+    "packed_dimension": 24531,
+    "ranks": 1,
+    "omp": 1,
+    "rss_cap_bytes": 19327352832,
+    "wall_cap_seconds": 7200
+  },
+  "precision": {
+    "state": "F64 initial seed, Q32 host publication, exact initial F64 override and continuous F64 carry",
+    "cotangent": "Q32 terminal and once-rounded128 injection; actual F32 handoffs at8windows; fullP F64projection",
+    "cost_forward": "mode5; noVJP; existingfinal32tape retained solelyforacceptedF64endpoint extraction; suffixrearm+seedrecorded intentionally"
+  },
+  "truth_reuse": {
+    "original_CP_SHA256": "b69b1fdb992e497c5df6daa1b1807a7f8426d827ea00cef660641c9efaab2d50",
+    "E0_primal_must_match_all257": true,
+    "on_mismatch": "stop anddiagnose, do not silentlyreplace truth",
+    "new_truth_runs_authorized_this_execution": 0,
+    "initial_comparison": "CP0 finite numeric values exact; record signed-zero-only bit differences. Accepted CP1..CP256 byte-exact against pinned truth."
+  },
+  "execution_order": [
+    "E0 nativeforward+8checkedprefixpullbacks+same minimizer zero-update decision",
+    "E1backgroundcost",
+    "FD8 costforwards andbothwidthA/SVD",
+    "backgroundactualfull8prefixgradient; componentterminal4lowerprefix reuseupper128",
+    "bothaxisbothwidth total/mid/terminal FD+E2cachedmutations",
+    "bounded E1 minimize; scoreindependentcontrols/withheldtimes"
+  ],
+  "optimizer": {
+    "family": "existing safe inverseBFGS updater tools/test_fine_wave_inverse.py with cost-only projectedArmijo pattern fromtools/test_y_wave_inverse.py",
+    "H0": "inverse(A_eta0.01.T @ A_eta0.01) afterrank signalresolved; no oracle",
+    "armijo_rho": 0.0001,
+    "initial_alpha": 1.0,
+    "shrink": 0.5,
+    "max_trials_per_update": 4,
+    "actual_displacement": "clip(a+alpha*p,[-1,1])-a; requireg dotdisplacement<0",
+    "non_descent": "one reset HtoH0 thenstopifnotdescent",
+    "cost_callbacks": "one nativeforward pernewcontroltrial; exactpoint cachedbackgroundreused; actualforwardbudgetcountsinitial/alltrials",
+    "gradient_callbacks": "reuseacceptedcosttrajectory; ONLY8prefix replaycalls, no hiddenextraobjectiveforward; rejectedtrialsnoVJP",
+    "max_accepted_updates": 12,
+    "max_E1_objective_forwards": 40,
+    "max_E1_gradient_calls": 13,
+    "stop": "bothJratio1e-4 andfullgnorm/max(1,g0inf)1e-4; no a_truth inupdates/stopping"
+  },
+  "budgets": {
+    "E0_objective_forwards": 1,
+    "E0_gradient_calls": 1,
+    "E0_prefix_calls": 8,
+    "E0_prefix_steps": 1152,
+    "FD_objective_forwards": 8,
+    "FD_forward_steps": 2048,
+    "component_terminal_extra_prefix_calls": 4,
+    "component_terminal_extra_prefix_steps": 320,
+    "E1_objective_forwards": 40,
+    "E1_gradient_calls": 13,
+    "E1_prefix_calls": 104,
+    "E1_prefix_steps": 14976,
+    "max_actual_native_invocations": 165,
+    "max_actual_model_steps": 28992,
+    "all_prefix_and_actual_modelcalls_logged": true,
+    "no_automatic_retry_or_cap_increase": true
+  },
+  "FD": {
+    "directions": [
+      [
+        1,
+        0
+      ],
+      [
+        0,
+        1
+      ]
+    ],
+    "widths": [
+      0.01,
+      0.03
+    ],
+    "control_precision": "F64 exactseedfiles; actualseedCP0bytechecked",
+    "rank_point": [
+      0,
+      0
+    ],
+    "min_singular_ratio": 0.001,
+    "both_widths_required": true,
+    "signal": "finite nonzeroCPperturbations; costdifference>100eps64 max(absJplus,absJminus,absJ0); exactsameinputprefixCPparitychecks solverrepeatability",
+    "rank_resolution": "smin(A.01)>norm2(A.01-A.03); two-widthdifference isresolutiondiagnostic, not aformaltrueJacerrorbound",
+    "gradient_error_max": 0.01,
+    "components": [
+      "actualfull",
+      "derivedmidpointfullminusactualterminalafterF64promotion",
+      "terminalnewupperlambda128 +4newlowerpullbacks"
+    ]
+  },
+  "E2": "localcachedschemaandactualinjectionvalidatorfaults; no longFD/nativecases fornegative tests",
+  "concurrency": {
+    "max_native_processes": 2,
+    "only_FD_forwards_parallel": true,
+    "each_process_MPI1_OMP1": true,
+    "on_FD_failure": "cancelqueuedcalls; activeindependentcallsfinishandarelogged; no subsequentstage"
+  },
+  "independent_acceptance": {
+    "E0J": 1e-12,
+    "E0g_inf": 1e-08,
+    "E0update_inf": 1e-08,
+    "control_relative_L2_error": 0.01,
+    "withheld_each60_180_final_over_bg": 0.5,
+    "physical": "finitepositive totaltheta/columnmass/layerthickness andfixedBC; normalstages"
+  },
+  "not_claimed": [
+    "realobservations",
+    "all directions",
+    "initializationmapderivative",
+    "independentglobalF64adjoint",
+    "beyondwindowforecastskill",
+    "efficiencywin"
+  ],
+  "state_error_scale_source": {
+    "path": "/private/tmp/native-idealized-twin-20261022/docs/evidence/research_forward_setting/research_forward_map.json",
+    "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7",
+    "epsilon": {
+      "MU": 0.014590900457561187,
+      "PH": 0.010249750539744869,
+      "T": 3.619571391542998e-05,
+      "U": 0.0007744417040064484,
+      "V": 0.00010122007244795247,
+      "W": 7.79443985679733e-06
+    },
+    "background_signal_floor": "perfield RMS(100eps64*max(1,abs(candidate),abs(truth))) normalizedbyfrozenepsilon, sixfieldRMS; requirebackgroundcomposite>floor; notstateerrorbound"
+  }
+}

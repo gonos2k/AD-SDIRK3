@@ -1,0 +1,77 @@
+{
+  "schema": "native_twin_problem_static_validation_v3",
+  "status": "pass",
+  "valid_artifact_load": "pass",
+  "mutation_rejections": {
+    "nonfinite_y": true,
+    "sigma_zero": true,
+    "sigma_negative": true,
+    "duplicate_id": true,
+    "layout_id": true,
+    "packed_slot": true,
+    "npz_slot": true,
+    "global_index": true,
+    "local_index": true,
+    "tile_origin": true,
+    "row_value": true,
+    "npz_value": true,
+    "reordered": true
+  },
+  "global_index_mapping": {
+    "owner_ordinal_1based": [
+      2,
+      2,
+      2
+    ],
+    "packed_local_index_0based": [
+      1,
+      1,
+      1
+    ],
+    "tile_origin_global_fortran_1based": {
+      "i": 1,
+      "j": 1,
+      "k": 1
+    },
+    "global_indices_fortran_1based": [
+      2,
+      2,
+      2
+    ],
+    "first_row_packed_slot": 307
+  },
+  "tile_origin_source": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9/rsl.out.0000",
+    "sha256": "fc2ee93ad9753fcca767edb2969fa369246e86eb0c223b47f78fe976354d8cd7",
+    "physical_domain_bounds_fortran_1based": [
+      1,
+      17,
+      1,
+      17,
+      1,
+      17
+    ],
+    "registered_tile_count": 1,
+    "tile_origin_global_indices_fortran_1based": {
+      "i": 1,
+      "j": 1,
+      "k": 1
+    },
+    "derivation": "single tile spans the domain; its=ids=1, jts=jds=1, kts=kds=1",
+    "matched_log_lines": {
+      "domain": "ids,ide,jds,jde            1          17           1          17",
+      "single_tile": "set_tiles3: NUMBER OF TILES =   1",
+      "vertical_tile": "SDIRK3 DEBUG: kds/kde/kms/kme/kts/kte =     1   17    1   17    1   16",
+      "x_tile": "SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   17   -4   22    1   17",
+      "north_tile_edge": "SDIRK3 INIT DEBUG: jte=   17, jde=   17, jte==jde=T"
+    }
+  },
+  "Fortran_wrapper_source_sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c",
+  "owned_box_source_sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a",
+  "positive_layer_thickness_min": 9247.4697265625,
+  "model_run_performed": false,
+  "module_sha256": "ca82a65cb6b1cc8c1f60cdfff4b58184e887f4a10606826214629bc01d8b8b91",
+  "manifest_sha256": "7c2918d72f565688ffcd676924b37a6b1a7287f6652b051327e1525c17d4f53d",
+  "base_cpp_commit": "e111d2bea3a2c3fa34eb117b131cb03cf89eda5f",
+  "base_cpp_sha256": "7a2b921f44a9356fd7e73efa7ca82499b7c816ab43822fae28dd23933eb72a86"
+}

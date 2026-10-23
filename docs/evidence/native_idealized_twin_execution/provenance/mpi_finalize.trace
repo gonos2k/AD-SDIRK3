@@ -1,0 +1,5 @@
+pid=76833 constructor initialized_rc=0 initialized=0 finalized_rc=0 finalized=0
+pid=76833 enter initialized_rc=0 initialized=1 finalized_rc=0 finalized=0
+pid=76833 forward ierr_ptr=present
+pid=76833 return ierr=0 initialized_rc=0 initialized=1 finalized_rc=0 finalized=1
+pid=76833 destructor initialized_rc=0 initialized=1 finalized_rc=0 finalized=1
