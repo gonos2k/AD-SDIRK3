@@ -429,6 +429,8 @@ post-computation MPI observer build, whose saved state and gradient payloads are
 byte-identical and whose linkage differs by the observer object only. Remaining
 calculations used the original executable. The historical MPI failure cause is
 unknown; this case does not certify MPI deployment reliability.
+The separate [bounded MPI exit audit]((202610240127)_mpi_exit_bounded_investigation.md) preserves that unresolved status
+and leaves this completed numerical case unchanged.
 
 PR #314's residual caller and the rotating inverse stay closed independently.
 This result does not certify real-atmosphere assimilation, arbitrary initial

@@ -1,0 +1,11 @@
+{
+  "checked_at_local": "2026-10-24T01:30:49.105734+09:00",
+  "archive_sha256": "cc164b77ffe6dcefc526c0c071e3c080b16828e9590467a91206ea3f3df48c68",
+  "archive_bytes": 332551,
+  "archive_entry_sha_checks": 176,
+  "CRC_passed": true,
+  "all_entry_hashes_match": true,
+  "manifest_entry": "ARCHIVE_MANIFEST.json",
+  "Green_review_sha256": "348a072bff6d520512c2fb9da54a226d50ca9ee1da66cfbcb78959b47289e58b",
+  "Red_review_sha256": "9dbbeacbcac14810767121a9ac72a29bf1ef45bb90d3422504cc3ed45e4851bf"
+}
