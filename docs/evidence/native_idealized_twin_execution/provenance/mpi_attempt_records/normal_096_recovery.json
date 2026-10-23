@@ -1,0 +1,488 @@
+{
+  "actual": {
+    "all_fields_finite": true,
+    "checkpoint_bytes": 19036056,
+    "checkpoint_zero_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+    "elapsed_seconds": 685.5126396669075,
+    "gradient_f32_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/terminal.gradient_f32.bin",
+    "native_rss_monitor_has_samples": true,
+    "netcdf_files": [
+      {
+        "bytes": 1043945,
+        "path": "wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "28e3f2623adc7d252efeadb943faca47e38a04f5284422836dcb6b587e03ceec",
+        "times": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:00:15"
+        ]
+      },
+      {
+        "bytes": 1083579,
+        "path": "wrfout_d01_0001-01-01_00:00:30",
+        "sha256": "e2373f6659b0075c4888066995e2c478a3b70adbe952d8d883f7cd7516805180",
+        "times": [
+          "0001-01-01_00:00:30",
+          "0001-01-01_00:00:45"
+        ]
+      },
+      {
+        "bytes": 1086247,
+        "path": "wrfout_d01_0001-01-01_00:01:00",
+        "sha256": "58ce8b0729a7e6d1b3f30dd649525919012e727ec265e1e3268b302e214fb087",
+        "times": [
+          "0001-01-01_00:01:00",
+          "0001-01-01_00:01:15"
+        ]
+      },
+      {
+        "bytes": 986457,
+        "path": "wrfout_d01_0001-01-01_00:01:30",
+        "sha256": "678874cfc5f0e34953bd6d6a8f8e506194cc0a878e1b6f4e8e75cf2e561d1ea8",
+        "times": [
+          "0001-01-01_00:01:30"
+        ]
+      }
+    ],
+    "netcdf_times": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:00:15",
+      "0001-01-01_00:00:30",
+      "0001-01-01_00:00:45",
+      "0001-01-01_00:01:00",
+      "0001-01-01_00:01:15",
+      "0001-01-01_00:01:30"
+    ],
+    "newton_convergence_record_count": 288,
+    "output_hashes": {
+      "diagnostics.txt": {
+        "bytes": 84,
+        "sha256": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224"
+      },
+      "incoming_lambda_f32.bin": {
+        "bytes": 98124,
+        "sha256": "5e3355215c48d3867990c3f3a3a652ca14b354532bab5a86a012d1ec7077c534"
+      },
+      "initial_seed_f64.bin": {
+        "bytes": 196248,
+        "sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197"
+      },
+      "namelist.diff": {
+        "bytes": 79,
+        "sha256": "503bedc93b59d9531839897cf7179c307ccd7b417f6211ef90d5e27d5fd78838"
+      },
+      "namelist.input": {
+        "bytes": 6355,
+        "sha256": "f58b587954801259b5c7a0f3bf3384566014cb0390d6e94b53dc03b5287bebd5"
+      },
+      "namelist.output": {
+        "bytes": 93292,
+        "sha256": "4ee2d70b66cfcc5000a21e18426942ef01a4712402e83306052a5a3ea8319211"
+      },
+      "rsl.error.0000": {
+        "bytes": 30028710,
+        "sha256": "07290e9c141434566b72584660b984fd83c0ac721e73b313706750c6bd8eda0a"
+      },
+      "rsl.out.0000": {
+        "bytes": 636575,
+        "sha256": "e3d54ceeb73d98ec4cfb55653d31ea89adda9ef6a2498ebcc422a39aa0e6823c"
+      },
+      "run.log": {
+        "bytes": 49,
+        "sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df"
+      },
+      "terminal.checkpoints_f64.bin": {
+        "bytes": 19036056,
+        "sha256": "f984ff84c28f1ac26e0f448021fb15efdbe4194475d49b0e477b8fbd588b5050"
+      },
+      "terminal.direction_f32.bin": {
+        "bytes": 98124,
+        "sha256": "ee4699af7d105308e70355befa268c6916d39ef4dcb345c80f6b6f54334c8347"
+      },
+      "terminal.endpoint.json": {
+        "bytes": 1010,
+        "sha256": "561672c119fa561a2caa8f0a36572cc29411abf69b55f916f6d1d2c7379cd318"
+      },
+      "terminal.gradient32.bin": {
+        "bytes": 98124,
+        "sha256": "7ac96db9c1c4c254ab354b069714e45ca6c82915780d43bf1e187935d4c77147"
+      },
+      "terminal.gradient64.bin": {
+        "bytes": 196248,
+        "sha256": "5a542df007f847badb2b495115a626c3d27d84daf7567c0cc79d4619fb9a0b7b"
+      },
+      "terminal.gradient_f32.bin": {
+        "bytes": 98124,
+        "sha256": "7ac96db9c1c4c254ab354b069714e45ca6c82915780d43bf1e187935d4c77147"
+      },
+      "terminal.gradient_f64.bin": {
+        "bytes": 196248,
+        "sha256": "5a542df007f847badb2b495115a626c3d27d84daf7567c0cc79d4619fb9a0b7b"
+      },
+      "terminal.lambda_in_f32.bin": {
+        "bytes": 98124,
+        "sha256": "5e3355215c48d3867990c3f3a3a652ca14b354532bab5a86a012d1ec7077c534"
+      },
+      "terminal.lambda_in_f64.bin": {
+        "bytes": 196248,
+        "sha256": "d095254a0a0b0dd1bcf9fc79aa87a4f152ff4663da8d6cf358ffd3d07747eb5d"
+      },
+      "terminal.lambda_out_f32.bin": {
+        "bytes": 98124,
+        "sha256": "7ac96db9c1c4c254ab354b069714e45ca6c82915780d43bf1e187935d4c77147"
+      },
+      "terminal.lambda_out_f64.bin": {
+        "bytes": 196248,
+        "sha256": "5a542df007f847badb2b495115a626c3d27d84daf7567c0cc79d4619fb9a0b7b"
+      },
+      "terminal.omega_sign.bin": {
+        "bytes": 2249728,
+        "sha256": "6df6bf231209655f8ae31e402771e5761da566815f277c2088fd0c24f66ee858"
+      },
+      "terminal.omega_sign.csv": {
+        "bytes": 36457,
+        "sha256": "3bd4077723a7eff9719274d08417f9d07ce4c5e9e2215d4fb3ba8d09fe325824"
+      },
+      "terminal.prepare.json": {
+        "bytes": 899,
+        "sha256": "d5d4846281522cdf5a0eb2ad5db14dfa5f41741b6511d196461f87db67a5d03a"
+      },
+      "terminal.result.json": {
+        "bytes": 1065,
+        "sha256": "168d9f47c0275181c9f0ab16c299353777413ba5b78bb969157fc4a36becc2cd"
+      },
+      "terminal.suffix_seed_f64.bin": {
+        "bytes": 196248,
+        "sha256": "26db343980f76b7d708e0d80e28ffc6a4cd4cc8e816c047a8447900e843467e2"
+      },
+      "terminal.terminal_f32.bin": {
+        "bytes": 98124,
+        "sha256": "c7acf9288f6fc2b563b62bb38aec52a31ac720c39ca7924a3c2cff93ec66ea90"
+      },
+      "terminal.terminal_state_f64.bin": {
+        "bytes": 196248,
+        "sha256": "8f0d5fd7361be54bd6188bdb203460bdce9171f7afabc8bc4a0f4c4aef7a7c59"
+      },
+      "terminal.terminal_state_published_f32.bin": {
+        "bytes": 98124,
+        "sha256": "34743684b0d93a8f3c8d4e03e8dc2c4744b3c8a2e46039ceacda4034ea40dab5"
+      },
+      "terminal.window_96.json": {
+        "bytes": 480,
+        "sha256": "70a74f9980bbeabf2b420a67d35ad6d6d40b44303a23bf3d39711bae7b04591b"
+      },
+      "terminal.wrapper_gradient_f64.bin": {
+        "bytes": 196248,
+        "sha256": "5a542df007f847badb2b495115a626c3d27d84daf7567c0cc79d4619fb9a0b7b"
+      },
+      "terminal.x0_internal_f64.bin": {
+        "bytes": 196248,
+        "sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197"
+      },
+      "terminal.x0_published_f32.bin": {
+        "bytes": 98124,
+        "sha256": "1d081b365544dc88da1bb7dab133b67ac30f9e38f772c20882f303a99a634ea9"
+      },
+      "time.log": {
+        "bytes": 777,
+        "sha256": "766dfb25692396ddbf4252ca0860f7ddb712909eb34b8d444739a571ae45705d"
+      },
+      "wrfinput_d01": {
+        "bytes": 976675,
+        "sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+      },
+      "wrfout_d01_0001-01-01_00:00:00": {
+        "bytes": 1043945,
+        "sha256": "28e3f2623adc7d252efeadb943faca47e38a04f5284422836dcb6b587e03ceec"
+      },
+      "wrfout_d01_0001-01-01_00:00:30": {
+        "bytes": 1083579,
+        "sha256": "e2373f6659b0075c4888066995e2c478a3b70adbe952d8d883f7cd7516805180"
+      },
+      "wrfout_d01_0001-01-01_00:01:00": {
+        "bytes": 1086247,
+        "sha256": "58ce8b0729a7e6d1b3f30dd649525919012e727ec265e1e3268b302e214fb087"
+      },
+      "wrfout_d01_0001-01-01_00:01:30": {
+        "bytes": 986457,
+        "sha256": "678874cfc5f0e34953bd6d6a8f8e506194cc0a878e1b6f4e8e75cf2e561d1ea8"
+      }
+    },
+    "peak_sampled_native_rss_bytes": 4053909504,
+    "physical_minima": {
+      "column_mass_Pa": 89091.40457582474,
+      "layer_dph": 9247.421875,
+      "theta_K": 302.25211358070374
+    },
+    "prefix_reference_byte_equal": true,
+    "return_code": 0,
+    "runner_stop_reason": null,
+    "stage_csv_count": 0,
+    "step_telemetry_count": 96,
+    "success_marker": true,
+    "terminal_endpoint": {
+      "actual_prefix_fnv1a64": "3294731dbf68b48e",
+      "chain": "twin",
+      "control_input64_calls": 96,
+      "endpoint_count_including_seed": 97,
+      "endpoint_reference_exact": true,
+      "eta": 0,
+      "expected_steps": 96,
+      "graph_start_step": 65,
+      "host_steps": 96,
+      "initial_control_seed_applied": true,
+      "initial_seed_file_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/initial_seed_f64.bin",
+      "initial_seed_file_used": true,
+      "local_terminal_c_dot": 43.128780265388556,
+      "mode": "prefix",
+      "objective": null,
+      "objective_is_registered_terminal": false,
+      "peak_rss_bytes": 3784556544,
+      "reference_checkpoints_expected": 97,
+      "reference_checkpoints_matched": 97,
+      "reference_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_cost_000/terminal.checkpoints_f64.bin",
+      "reference_prefix_fnv1a64": "3294731dbf68b48e",
+      "suffix_seed_bitwise_match": true,
+      "warm_endpoint_capture_count": 64,
+      "warm_steps": 64
+    },
+    "terminal_prepare": {
+      "chain": "twin",
+      "cotangent_chain": "fortran_fp32_chain",
+      "dims": [
+        17,
+        17,
+        16,
+        18,
+        18,
+        17
+      ],
+      "dt_seconds": 0.9375,
+      "eta": 0,
+      "expected_steps": 96,
+      "graph_start_step": 65,
+      "initial_seed_file_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/initial_seed_f64.bin",
+      "initial_seed_file_used": true,
+      "input_scales": [
+        1.7794605468479088,
+        0.00010122007244795247,
+        7.79443985679733e-06,
+        3801.50094009332,
+        61.27946198285178,
+        8.001955354370356
+      ],
+      "mode": "prefix",
+      "packed_size": 24531,
+      "replay_role": "not_replay",
+      "steps": 96,
+      "suffix_graph_flags": "retain_graph_for_adjoint=true,imex_slow_in_tangent=true",
+      "terminal": "normalized W physical owners, scale 0.001, FP32 cotangent",
+      "warm_endpoint_capture_target": 64,
+      "warm_graph_flags": "retain_graph_for_adjoint=false,imex_slow_in_tangent=false",
+      "warm_steps": 64
+    },
+    "terminal_result": {
+      "chain": "twin",
+      "control_input64_calls": 96,
+      "cotangent_chain": "fortran_fp32_chain",
+      "directional_local_precast_f64": null,
+      "directional_vjp_f32_chain": null,
+      "endpoint_reference_exact": true,
+      "eta": 0,
+      "expected_steps": 96,
+      "forward_only": false,
+      "gradient_control_step": 64,
+      "gradient_f64_semantics": "local_precast_fp64",
+      "gradient_scope": "local_32_step_window",
+      "graph_start_step": 65,
+      "initial_control_seed_applied": true,
+      "initial_seed_file_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/initial_seed_f64.bin",
+      "initial_seed_file_used": true,
+      "lambda_in_f64_semantics": "actual_fp32_cotangent_promoted_for_audit",
+      "mode": "prefix",
+      "peak_rss_bytes": 4053958656,
+      "pullback_checked_by_fortran": true,
+      "reference_checkpoints_expected": 97,
+      "reference_checkpoints_matched": 97,
+      "replay_role": "not_replay",
+      "suffix_seed_bitwise_match": true,
+      "warm_endpoint_capture_count": 64,
+      "warm_steps": 64,
+      "wrapper_gradient_f32_equals_cast_f64": true
+    },
+    "validation_error": null
+  },
+  "artifact_manifest_sha256": "7c2918d72f565688ffcd676924b37a6b1a7287f6652b051327e1525c17d4f53d",
+  "binding_sha256": "048a9986afc4d0b2dcc00aa3ded5048a35251b621bc035f641963e0f34524516",
+  "bound_files": [
+    {
+      "bytes": 196248,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/initial_seed_f64.bin",
+      "role": "initial_control_seed_f64",
+      "sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197"
+    },
+    {
+      "bytes": 50435736,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_cost_000/terminal.checkpoints_f64.bin",
+      "role": "same_trajectory_reference_f64",
+      "sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7"
+    },
+    {
+      "bytes": 98124,
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/incoming_lambda_f32.bin",
+      "role": "incoming_cotangent_f32",
+      "sha256": "5e3355215c48d3867990c3f3a3a652ca14b354532bab5a86a012d1ec7077c534"
+    }
+  ],
+  "chain": "twin",
+  "code_files": [
+    {
+      "bytes": 23742,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_execute.py",
+      "sha256": "61c4b14dc93aee0dc4dbb809a79fdfb1134b0c5e6b9c100df1ac9266230f6150"
+    },
+    {
+      "bytes": 36749,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_problem.py",
+      "sha256": "ca82a65cb6b1cc8c1f60cdfff4b58184e887f4a10606826214629bc01d8b8b91"
+    },
+    {
+      "bytes": 23103,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_runner.py",
+      "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+    },
+    {
+      "bytes": 19453,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_twin_minimize.py",
+      "sha256": "bb7d196c69196bbd503bef77f5cf8b6a68e7c8c5b0dd41cc532999891324be38"
+    },
+    {
+      "bytes": 20450,
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_two_time_prefix.py",
+      "sha256": "b11948b406c323616c0f00179533dbb8c889ba07ba5f9ac2c4ef8f844eaaa9d8"
+    },
+    {
+      "bytes": 59367,
+      "path": "/private/tmp/native-idealized-twin-20261022/tools/test_fine_wave_inverse.py",
+      "sha256": "8d8fe4d56d1ffab0530e0942753234990b893a617a5a569510c03f7357ebd7ed"
+    },
+    {
+      "bytes": 32029,
+      "path": "/private/tmp/native-idealized-twin-20261022/tools/wave_quadratic_reference.py",
+      "sha256": "f16ab33d137b333ffeb0939f6b6ed2bc7f28091f1a246255e3eeaa3aab063431"
+    },
+    {
+      "bytes": 15590,
+      "path": "/private/tmp/native-idealized-twin-20261022/docs/plans/native_idealized_twin_v1.json",
+      "sha256": "c6542cd28987e616c8c11b012f24608f2c76a18aaf7b41b4aa9df6a2ca2450fc"
+    },
+    {
+      "bytes": 8145,
+      "path": "/private/tmp/native-idealized-twin-20261022/docs/evidence/research_forward_setting/research_forward_map.json",
+      "sha256": "47af2279d2a233310112bf326f97782872d6c33c7bd8733a6d327f5bbb437bc7"
+    }
+  ],
+  "command": [
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "time.log",
+    "/opt/homebrew/bin/mpirun",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin.exe"
+  ],
+  "created_at": "2026-10-22T16:41:45.507307+09:00",
+  "ended_at": "2026-10-22T16:53:11.473830+09:00",
+  "environment_overrides": {
+    "OMP_NUM_THREADS": "1",
+    "WRF_SDIRK3_NATIVE_TERMINAL_CHAIN": "twin",
+    "WRF_SDIRK3_NATIVE_TERMINAL_ETA": "0",
+    "WRF_SDIRK3_NATIVE_TERMINAL_LAMBDA32_IN": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/incoming_lambda_f32.bin",
+    "WRF_SDIRK3_NATIVE_TERMINAL_MODE": "prefix",
+    "WRF_SDIRK3_NATIVE_TERMINAL_OUT": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/terminal",
+    "WRF_SDIRK3_NATIVE_TERMINAL_REFERENCE": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_cost_000/terminal.checkpoints_f64.bin",
+    "WRF_SDIRK3_NATIVE_TERMINAL_STEPS": "96",
+    "WRF_SDIRK3_NATIVE_TWIN_SEED_F64": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/runs/e1_grad_000_096_recovery1/initial_seed_f64.bin",
+    "WRF_SDIRK3_RHS_COUNT": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0"
+  },
+  "executable": {
+    "bytes": 52799248,
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/build/wrf_native_terminal_twin.exe",
+    "sha256": "7fdb04fd124ea1d25250081b16d0ce35f1b23ce849fd615ff156bfff092ab6c4"
+  },
+  "expected_implicit_stages": 288,
+  "expected_steps": 96,
+  "h_seconds": 0.9375,
+  "incoming_cotangent_f32_sha256": "5e3355215c48d3867990c3f3a3a652ca14b354532bab5a86a012d1ec7077c534",
+  "initial_seed_f64_bytes": 196248,
+  "initial_seed_f64_sha256": "a56eead3edce75766363545c78ecc12706cecfe2d1f0f8a9517b6f69bf2fb197",
+  "input_pins": {
+    "diagnostics.txt": "bc5c198d7f033fa8cd5d5b9bcbe2a46a2eae7d69ea8dd414d18f0cc5dc62b224",
+    "namelist.input": "a6ea8f8ab62a74d72840ea46de4ac39a20d5d4247db77ebced0b84a1433dbdc5",
+    "wrfinput_d01": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9"
+  },
+  "input_sha256": "e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9",
+  "label": "e1_grad_000_096_recovery1",
+  "mode": "prefix",
+  "namelist_sha256": "f58b587954801259b5c7a0f3bf3384566014cb0390d6e94b53dc03b5287bebd5",
+  "new_model_timestep": false,
+  "pid": 30079,
+  "protocol_sha256": "ee21ce1734542a2b558903a4bf45c6d6f41a6ff923991b41c0336732321e546d",
+  "reference_sha256": "e36cb8ddd457a38a7439d42b00dfc712d72cbef630d7a99da4cc5cc55a1aaeb7",
+  "schema": "native_idealized_twin_run_receipt_v1",
+  "source_case": "/Users/yhlee/AD-SDIRK3-review-evidence/strict-reference-240s-20261020/green_execution/h0p9375_0_240s_newton_tol1e-9",
+  "source_files": [
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/solve_em.F",
+      "sha256": "dd62fdeda5bb8e782e35a3c64e5c6a643bcfe264b8358da508933e2bc07202bc"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/dyn_em/module_implicit_sdirk3.F",
+      "sha256": "d8441b60b77e8b46d1e3a6ae06ae3fb75678f0c9dd898a10f27d599a1cedb87a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/Registry/Registry.EM_COMMON",
+      "sha256": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_interface_zerocopy.cpp",
+      "sha256": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "sha256": "1c9213d3a78640d6f1f933b811d313e57a78355f2cfd1efc4676ed234702c1b4"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h",
+      "sha256": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h",
+      "sha256": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/wrf_sdirk3_owned_box.h",
+      "sha256": "c876dbac4c358e35f412d2e1d935e77d2769be6dc5abda06df6c08d267473c2a"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.F",
+      "sha256": "158b5f659dbeb73764b73a072c51d729d63265e35cf0e6e1b40d5f1ea9dca13c"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.cpp",
+      "sha256": "9e119bf0aaba288a25493a38547ff48e690ee2a6e20ea30dcfdaeb6a790345e7"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/native_terminal_adjoint_test.h",
+      "sha256": "0d248b89e098af1e91f299f5e012a54c168e9ba90126b2ff07790b0ae0b42b53"
+    },
+    {
+      "path": "/private/tmp/native-idealized-twin-20261022/external/libtorch_wrf/sdirk3/tests/test_fixed_trajectory_lifecycle.cpp",
+      "sha256": "990119d199cce9e0ef1f429b4c91e649cbcee7d3e472432eb739a9a803575ea2"
+    }
+  ],
+  "status": "completed"
+}

@@ -1,7 +1,7 @@
 {
   "schema": "native_idealized_twin_repository_closure_review_v1",
-  "reviewed_at_local": "2026-10-23T17:19:10.871430+09:00",
-  "status": "PASS_WITH_P2_EVIDENCE_STAGING_NOTE",
+  "reviewed_at_local": "2026-10-23T17:29:31.477965+09:00",
+  "status": "PASS_FINAL_DOCS_AND_CI_PROVENANCE_CLOSURE",
   "worktree": "/private/tmp/native-idealized-twin-20261022",
   "content_review": {
     "claims_match_portable_recompute": true,
@@ -205,7 +205,8 @@
       "priority": "P2",
       "area": "repository packaging",
       "finding": "The repository ignore rule at .gitignore:108 ignores docs/. The new execution report and portable evidence directory are currently ignored (git status reports !!), so normal git add will omit the deliverable.",
-      "required_before_commit": "Force-add the intended report and evidence files (or add a narrow reviewed .gitignore exception) and verify staged paths."
+      "required_before_commit": "Previously required; satisfied by the current staged file set.",
+      "resolution": "Resolved: all intended report/evidence paths, including the later MPI attempt provenance records, are force-added and staged; staged paths were verified."
     }
   ],
   "scope_limits": [
@@ -231,5 +232,72 @@
     "portable_verification": "785ae1d28d0b9d491791d443d5fb15f1cca8fceb7b92e29825fb022632e4d551",
     "recomputed": "1d6724773468246c55bf968ed9242554a969c856d3de3bb6371ce74b4237c9ce",
     "summary": "a579c12b1798f42930bd2b460cb869963200df7a860b8e231f102fc31b70321a"
+  },
+  "ci_review": {
+    "checks": {
+      "run_id": 39924066107,
+      "run_url": "https://github.com/gonos2k/AD-SDIRK3/actions/runs/39924066107",
+      "source_commit": "0e57da8e262afec7293d1be744870904fa1e7a02",
+      "status": "completed",
+      "conclusion": "success",
+      "job_conclusions": {
+        "core-linux": "success",
+        "fast-contracts": "success",
+        "DIAGNOSTIC ONLY - fixed fine returned-state accuracy": "skipped",
+        "required": "success"
+      },
+      "required_jobs_success": true,
+      "diagnostic_only_job_skipped": true,
+      "artifact_id": 12488392514,
+      "artifact_sha256": "77cdaa979dde3c5cbe4a3ea631361edb6ce3970fb1b7275bbf117672dec066f5",
+      "local_zip_bytes": 361569,
+      "local_zip_sha256": "77cdaa979dde3c5cbe4a3ea631361edb6ce3970fb1b7275bbf117672dec066f5",
+      "artifact_digest_matches": true,
+      "zip_crc_clean": true,
+      "passed_ctest_names": [
+        "Diagnostic_Observer_Noninterference_Contract",
+        "Fixed_Trajectory_Lifecycle",
+        "Fixed_Trajectory_Derivative",
+        "Full_Tile_Step_Adjoint",
+        "FP64_State_Handoff_Contract"
+      ],
+      "passed_ctest_count": 5,
+      "pullback_components_each": 8480,
+      "pullbacks_direct_fp64_bytes_equal": true,
+      "pullback_sha256": "5039f1dbbde1ff4bc6b1131fb65027e9f8036ca9ba5008898e1dc484c048b2df",
+      "endpoint_parity_claim": "all_16_bitwise_equal",
+      "endpoint_array_bytes_compared": false,
+      "native_twin_dimension_separate": true,
+      "new_model_or_optimizer_runs": false
+    },
+    "source_commit_attestation": {
+      "commit": "0e57da8e262afec7293d1be744870904fa1e7a02",
+      "head_matches": true,
+      "files_independently_rehashed": 23,
+      "mismatches": [],
+      "attestation_sha256": "170b4f7bf7794f87298c9f2b4a029ced89dd6f19b7867cd77c5f60c398cde2d8"
+    },
+    "review_scope": "Read-only verification of archived CI artifact and docs-only staged update; no native model/build/test rerun."
+  },
+  "staging_review": {
+    "staged_file_count": 13,
+    "staged_paths": [
+      "docs/(202610231710)_native_idealized_twin_e0_e1_e2_complete.md",
+      "docs/evidence/native_idealized_twin_execution/README.md",
+      "docs/evidence/native_idealized_twin_execution/provenance/ci_source_0e57/artifact_metadata.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/ci_source_0e57/research-core-diagnostics.zip",
+      "docs/evidence/native_idealized_twin_execution/provenance/ci_source_0e57/run_metadata.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/ci_source_0e57/verification.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/failed_096.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/failed_096_launcher.log",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/failed_192.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/failed_192_launcher.log",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/normal_096_recovery.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/mpi_attempt_records/normal_192_profiled.json",
+      "docs/evidence/native_idealized_twin_execution/provenance/numerical_source_commit_attestation.json"
+    ],
+    "all_staged_paths_docs_only": true,
+    "source_commit_head": "0e57da8e262afec7293d1be744870904fa1e7a02",
+    "next_commit_is_docs_only": true
   }
 }

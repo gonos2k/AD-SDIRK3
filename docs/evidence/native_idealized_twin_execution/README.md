@@ -58,7 +58,8 @@ adjusted after the results.
 
 ## MPI failures and the saved 192-step artifact
 
-Both original MPI launcher return-code-1 records remain failed and count toward
+The [original failed-launch logs and paired run receipts](provenance/mpi_attempt_records/)
+are preserved. Both original MPI launcher return-code-1 records remain failed and count toward
 the attempted-work budget. They are never normalized to success. One matching
 096-step base-executable recovery completed RC0 with identical payloads. The
 second matching 192-step diagnostic used a separate, post-computation MPI
@@ -103,3 +104,24 @@ is context only: different filtering prevents treating it as accuracy truth,
 and its timings do not support a speed ratio for this inverse instrumentation.
 Existing standalone CTest/replay CI results are reported separately and do not
 replace this native recovery experiment.
+
+## Source-pinned standalone CI
+
+Numerical source commit `0e57da8e262afec7293d1be744870904fa1e7a02` passed
+[SDIRK3 CI run 39924066107](https://github.com/gonos2k/AD-SDIRK3/actions/runs/39924066107).
+The [preserved ZIP and verification](provenance/ci_source_0e57/) bind the GitHub
+artifact digest/CRC, five passed selected CTests and the direct FP64 byte
+comparison of the two 8,480-component retained/replay initial pullbacks.
+Sixteen endpoint arrays are reported equal by CI metadata; their array bytes
+are not independently supplied/compared in that ZIP. This standalone fixture
+is distinct from the 24,531-component native twin.
+
+The [source-commit attestation](provenance/numerical_source_commit_attestation.json)
+checks the committed numerical/helper bytes against the frozen execution and
+cached Graphify records. Subsequent CI-record-only documentation changes do not
+change that numerical source revision or require another native experiment.
+
+The repository review's documentation-ignore packaging note was resolved by
+explicitly staging the report and complete evidence bundle in numerical-source
+commit `0e57da8e`; the data files are tracked even though `docs/` is globally
+ignored for unselected investigation output.

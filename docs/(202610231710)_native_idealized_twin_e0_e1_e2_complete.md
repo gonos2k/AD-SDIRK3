@@ -112,3 +112,15 @@ stock RK3와 native ARK는 필터 정책이 달라 그 거리를 정확도 참�
 
 최종 Green/Red 독립 검토와 기존 standalone CI 기록은 실행 근거 README에 구분해 기록한다.
 기존 CTest/replay 통과를 이번 native 상태 복원 실행의 대체 근거로 사용하지 않는다.
+
+## 커밋된 수치 소스의 별도 CI 확인
+
+- 확인 시각: 2026-10-23T17:27:03.668660+09:00 (JST)
+- 수치 소스 커밋: `0e57da8e262afec7293d1be744870904fa1e7a02`
+- [CI 39924066107](https://github.com/gonos2k/AD-SDIRK3/actions/runs/39924066107): fast-contracts, core-linux, required 통과.
+- 원시 CTest 로그 5개 통과, GitHub artifact SHA-256·ZIP CRC 확인.
+- 두 초기 수반 8,480성분의 FP64 바이트를 직접 대조하여 일치 확인.
+- CI의 16개 끝값 일치는 메타데이터 기록이며 이 ZIP에서 끝값 배열 전체를 직접 대조한 것은 아니다.
+
+[CI 원자료·검증 기록](evidence/native_idealized_twin_execution/provenance/ci_source_0e57/)은
+native 복원 실험과 구분한다. 이 CI 확인을 위해 새 WRF/RK3 적분을 하지 않았다.
