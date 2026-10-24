@@ -365,6 +365,52 @@ class BenchmarkToolTests(unittest.TestCase):
         self.assertAlmostEqual(result["coherence"], 1.0)
         self.assertIn("no spatial alignment", result["phase_convention"])
 
+    def test_wave_mode1_true_matches_default_mapping_and_false_disables(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            grid = {"nx": 4, "ny": 3, "nz": 2}
+            runs = [
+                write_run(root, "rk3_600", grid, [0, 240], growth=0.02,
+                          h_seconds=600.0),
+                write_run(root, "rk3_300", grid, [0, 240], growth=0.01,
+                          h_seconds=300.0),
+            ]
+            share_input(runs)
+            base_options = {
+                "expected_grid": grid,
+                "duration_seconds": 240,
+                "output_interval_seconds": 240,
+                "start_timestamp": timestamp(0),
+                "require_shared_initial_state": True,
+                "dry_case_no_qv": True,
+                "use_theta_m": 1,
+                "include_total_pressure": True,
+                "include_mass_theta_budgets": True,
+                "comparison_pairs": [{
+                    "name": "rk3_600_vs_300", "left": "rk3_600", "right": "rk3_300"}],
+            }
+            true_plan = write_plan(root, runs, **base_options, wave_mode1=True)
+            true_report = benchmark.analyze(
+                true_plan, "rk3_600", root / "true-wave.json", "rk3_300")
+            mapping_plan = write_plan(
+                root, runs, **base_options, wave_mode1={"fields": ["T", "W", "P"]})
+            mapping_report = benchmark.analyze(
+                mapping_plan, "rk3_600", root / "mapping-wave.json", "rk3_300")
+            self.assertEqual(true_report, mapping_report)
+            self.assertEqual(
+                set(true_report["wave_mode1_diagnostics"]["rk3_600"][timestamp(240)]),
+                {"T", "W", "P"})
+            self.assertIn("rk3_600_vs_300", true_report["wave_pairwise_diagnostics"])
+
+            false_plan = write_plan(root, runs, **base_options, wave_mode1=False)
+            false_report = benchmark.analyze(
+                false_plan, "rk3_600", root / "false-wave.json", "rk3_300")
+            self.assertEqual(false_report["wave_mode1_diagnostics"], {})
+            self.assertEqual(false_report["wave_pairwise_diagnostics"], {})
+            self.assertEqual(false_report["comparisons"], true_report["comparisons"])
+            self.assertEqual(false_report["comparison_pair_sensitivities"],
+                             true_report["comparison_pair_sensitivities"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

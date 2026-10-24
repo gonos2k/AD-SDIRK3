@@ -1,0 +1,12 @@
+{
+  "archive": "evidence.zip",
+  "bytes": 12493970,
+  "sha256": "83ccc32a98c1443b035fff98c144cacbb70b6e9b5eabcf15615ad0a6cdeee38d",
+  "items": 157,
+  "all_payload_sha256_and_crc_verified": true,
+  "native_netcdf_files": 6,
+  "not_included": [
+    "native executables, objects, static archives; exact hashes and build receipts retained",
+    "shared wrfinput and unchanged prior quiet/RK3 evidence; referenced by hash"
+  ]
+}
