@@ -1,0 +1,45 @@
+{
+  "updated_at_local": "2026-10-24T23:33:21.599841+09:00",
+  "base": "2ca1704630475b28877b68d9f38ae2e34dc27a5b",
+  "branch": "codex/jvp-fixed-work-20261024",
+  "checklist": [
+    {
+      "item": "PR320twoP2/MGScandidate",
+      "status": "closed_preserved",
+      "evidence": "PR320merged+CIgreen; MGSrejectionnotreopened"
+    },
+    {
+      "item": "JVPnestedcost",
+      "status": "complete_bounded_sample_analysis",
+      "evidence": "6664JVPsamples; fixedarange/remainder4selfsamples, currentstate gather334descendants; notprecisewalltimeorproofdominantstmt"
+    },
+    {
+      "item": "onefixedpermutationcandidate",
+      "status": "accepted_for_declared_cpu_one_step_scope",
+      "evidence": "4focusedtests passed; allfrozenABBAgates pass; newhelper/headeronly, noarithmeticreassoc/statefreeze."
+    },
+    {
+      "item": "nativeABBA",
+      "status": "complete_four_no_retries",
+      "evidence": "A0B0B1A1allRC0, exactpublicnumeric/wholefiles andreportedresidual/work; RSLmedianreduction17.7902%, JVPpercall18.8131%. Singleblocktelemetryon; notquiet6h/5day/sameaccuracy speedup."
+    },
+    {
+      "item": "ARK600continuous5day",
+      "status": "pending_resource_choice",
+      "evidence": "Priorcase6hrealwallcap; estimated10h+ for5day; pending18h/shortonlyquestionnotapproval"
+    },
+    {
+      "item": "ARK300/150+physicalaccuracy/equalaccuracycost",
+      "status": "open_separate_goal",
+      "evidence": "RK3refsreused; noadoptednewphysaccuracybudgetorcostwininferred"
+    }
+  ],
+  "new_native_attempts": 4,
+  "all_prior_tiny_forward_derivative_twin_and_six_hour_statuses": "preserved, not rerun",
+  "new_native_exit_codes": [
+    0,
+    0,
+    0,
+    0
+  ]
+}

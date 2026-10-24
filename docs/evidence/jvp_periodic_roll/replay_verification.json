@@ -1,0 +1,26 @@
+{
+  "archive_sha256": "d6b54b9ff27b48873122b428dead1e1fef9ffba2142b862f2cbac8605f18ce33",
+  "extraction_directory": "/private/tmp/jvp-periodic-final-replay-1hthp2gi",
+  "all_aliases_and_numerical_cost_gates_reproduced": true,
+  "no_model_launch": true,
+  "commands": [
+    {
+      "command": [
+        "/opt/homebrew/opt/pytorch/libexec/bin/python",
+        "/private/tmp/jvp-periodic-final-replay-1hthp2gi/execution/materialize_native_frames.py"
+      ],
+      "return_code": 0,
+      "stdout": "All native frame aliases materialized and SHA-256 verified.\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/opt/homebrew/opt/pytorch/libexec/bin/python",
+        "/private/tmp/jvp-periodic-final-replay-1hthp2gi/execution/analyze_native_abba.py"
+      ],
+      "return_code": 0,
+      "stdout": "{\n  \"paired_results\": [\n    {\n      \"baseline\": \"A0\",\n      \"candidate\": \"B0\",\n      \"rsl_reduction_fraction\": 0.14333256613740697\n    },\n    {\n      \"baseline\": \"A1\",\n      \"candidate\": \"B1\",\n      \"rsl_reduction_fraction\": 0.21255877929871791\n    }\n  ],\n  \"median_rsl_reduction_fraction\": 0.177901991430078,\n  \"median_jvp_per_call_reduction_fraction\": 0.18813093573286122,\n  \"gates\": {\n    \"exact_public_output\": true,\n    \"exact_reported_residuals_and_fixed_work\": true,\n    \"configured_residuals_met\": true,\n    \"median_rsl_reduction_ge_3pct\": true,\n    \"both_paired_rsl_reductions_ge_1pct\": true,\n    \"median_jvp_per_call_reduction_ge_5pct\": true\n  },\n  \"all_gates_pass\": true\n}\n",
+      "stderr": ""
+    }
+  ]
+}

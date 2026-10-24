@@ -11,10 +11,8 @@ struct Result { torch::Tensor x; torch::Tensor y; };
 inline void require(bool ok, const std::string& msg) { TORCH_CHECK(ok, "PH horizontal: ", msg); }
 
 inline torch::Tensor periodic_select(const torch::Tensor& q, int dim, int offset) {
-    const auto n = q.size(dim);
-    auto io = torch::TensorOptions().dtype(torch::kLong).device(q.device());
-    auto idx = torch::remainder(torch::arange(n, io) + offset, n);
-    return q.index_select(dim, idx);
+    // out[i] = q[(i + offset) % n]; preserve the current primal and tangent.
+    return torch::roll(q, {-static_cast<int64_t>(offset)}, {dim});
 }
 inline torch::Tensor reflected_select(const torch::Tensor& q, int offset, int length) {
     // share/module_bc.f: scalar symmetric_ys/ye: q(-j)=q(j-1), q(ny+j)=q(ny-j-1).

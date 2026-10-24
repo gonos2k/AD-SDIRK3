@@ -473,6 +473,8 @@ six-hour cost observations, with no new accuracy acceptance or five-day claim.
 
 The [bounded cost investigation](<(202610242213)_forward_cost_profile_and_rejected_candidate.md>) fixes two comparison-tool/test-inventory issues and samples one standard-grid ARK600 step. A CPU MGS fusion candidate passed focused solver checks but failed its predeclared exact-public-output parity gate and showed no native timing gain in a matched diagnostic one-step pair. It was not promoted; production Newton arithmetic is unchanged. The rejected patch, outputs and receipts are preserved. Actual forward cost improvement, continuous five-day ARK runs and the physical accuracy/cost acceptance remain open. This work adds no DA or MPI-reliability claim.
 
+The subsequent [periodic-selection optimization](<(202610242336)_jvp_periodic_permutation_cost.md>) replaces only the PH periodic index gather with the same current-value/current-tangent roll permutation. Four preregistered A-B-B-A standard-grid h600 first-step runs completed with identical public outputs and reported residual/work records. In this telemetry-on block the median RSL step cost fell 17.79% and median measured JVP cost per call fell 18.81%; both mirrored pairs passed the frozen criteria. The candidate timings varied more than baseline, so this is a narrow first-step cost result, not a quiet six-hour/five-day or same-accuracy speedup. The MGS candidate remains rejected. Continuous five-day comparison, timestep sensitivity and physical accuracy/cost acceptance remain open.
+
 For the selected dry 240 s forward instance, the native terminal and
 [one-midpoint linear VJP/FD probes](<(202610210936)_native_two_time_adjoint.md>)
 are complete within their one-direction, FP32-chained scopes. The
