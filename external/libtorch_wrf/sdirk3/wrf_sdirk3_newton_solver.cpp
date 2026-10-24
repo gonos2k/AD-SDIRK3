@@ -2478,23 +2478,26 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // v20.14 r50: Always report UNSCALED rel_error to Newton/trust-region.
         rel_error_final = static_cast<float>(wrf::sdirk3::krylov_relative_norm(
             stats_cpu[1].item<double>(), bnorm_val));
-        // Always print GMRES completion summary (single line)
+        // Successful solves are quiet unless diagnostics were requested.
         bool gmres_converged = (rel_error_final < tol);
-        std::ostringstream summary;
-        summary << "[GMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
-                << std::fixed << std::setprecision(4)
-                << ": ||x||=" << x_norm
-                << ", ||r_true||=" << r_true_final
-                << ", ||b||=" << bnorm_val
-                << ", rel_error=" << rel_error_final
-                << ", tol=" << tol
-                << std::scientific << std::setprecision(9)
-                << ", rhs_norm_raw=" << bnorm_val
-                << ", residual_norm_raw=" << stats_cpu[1].item<double>()
-                << ", restarts=" << actual_restarts
-                << ", arnoldi=" << total_arnoldi_iters
-                << (block_scaled ? " (block-scaled)" : "");
-        std::cerr << summary.str() << std::endl;
+        if (wrf::sdirk3::g_sdirk3_config.solver_telemetry ||
+            wrf::sdirk3::g_sdirk3_config.debug_level >= 1 || !gmres_converged) {
+            std::ostringstream summary;
+            summary << "[GMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
+                    << std::fixed << std::setprecision(4)
+                    << ": ||x||=" << x_norm
+                    << ", ||r_true||=" << r_true_final
+                    << ", ||b||=" << bnorm_val
+                    << ", rel_error=" << rel_error_final
+                    << ", tol=" << tol
+                    << std::scientific << std::setprecision(9)
+                    << ", rhs_norm_raw=" << bnorm_val
+                    << ", residual_norm_raw=" << stats_cpu[1].item<double>()
+                    << ", restarts=" << actual_restarts
+                    << ", arnoldi=" << total_arnoldi_iters
+                    << (block_scaled ? " (block-scaled)" : "");
+            std::cerr << summary.str() << std::endl;
+        }
     }
 
     bool gmres_converged = (rel_error_final < tol);
@@ -4120,23 +4123,26 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // v20.14 r50: Always report UNSCALED rel_error to Newton/trust-region.
         rel_error_final = static_cast<float>(wrf::sdirk3::krylov_relative_norm(
             stats_cpu[1].item<double>(), bnorm_val));
-        // Always print GMRES completion summary (single line)
+        // Successful solves are quiet unless diagnostics were requested.
         bool gmres_converged = (rel_error_final < tol);
-        std::ostringstream summary;
-        summary << "[FGMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
-                << std::fixed << std::setprecision(4)
-                << ": ||x||=" << x_norm
-                << ", ||r_true||=" << r_true_final
-                << ", ||b||=" << bnorm_val
-                << ", rel_error=" << rel_error_final
-                << ", tol=" << tol
-                << std::scientific << std::setprecision(9)
-                << ", rhs_norm_raw=" << bnorm_val
-                << ", residual_norm_raw=" << stats_cpu[1].item<double>()
-                << ", restarts=" << actual_restarts
-                << ", arnoldi=" << total_arnoldi_iters
-                << (block_scaled ? " (block-scaled)" : "");
-        std::cerr << summary.str() << std::endl;
+        if (wrf::sdirk3::g_sdirk3_config.solver_telemetry ||
+            wrf::sdirk3::g_sdirk3_config.debug_level >= 1 || !gmres_converged) {
+            std::ostringstream summary;
+            summary << "[FGMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
+                    << std::fixed << std::setprecision(4)
+                    << ": ||x||=" << x_norm
+                    << ", ||r_true||=" << r_true_final
+                    << ", ||b||=" << bnorm_val
+                    << ", rel_error=" << rel_error_final
+                    << ", tol=" << tol
+                    << std::scientific << std::setprecision(9)
+                    << ", rhs_norm_raw=" << bnorm_val
+                    << ", residual_norm_raw=" << stats_cpu[1].item<double>()
+                    << ", restarts=" << actual_restarts
+                    << ", arnoldi=" << total_arnoldi_iters
+                    << (block_scaled ? " (block-scaled)" : "");
+            std::cerr << summary.str() << std::endl;
+        }
     }
 
     bool gmres_converged = (rel_error_final < tol);
@@ -6825,8 +6831,9 @@ public:
                     stats_.final_residual_measured = true;
                 }
                 
-                // Always print convergence (scaled norm is the convergence criterion)
-                {
+                // Convergence decisions/stats are independent of optional output.
+                if (wrf::sdirk3::g_sdirk3_config.solver_telemetry ||
+                    wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     torch::NoGradGuard no_grad;
                     float unscaled_val = res_norm_unscaled_tensor.to(torch::kCPU).item<float>();
                     std::cerr << "[Newton] CONVERGED stage=" << stage
@@ -6844,7 +6851,7 @@ public:
                 result.K = K;
                 result.converged = true;
                 result.iterations = stats_.newton_iterations;
-                result.final_residual = res_norm_for_stats;
+                result.final_residual = stats_.final_residual;
                 result.message = "Newton solver converged successfully";
                 if (options_.retain_graph_for_adjoint && U_n.requires_grad()) {
                     TORCH_CHECK(wrf::sdirk3::g_sdirk3_config.use_autograd,
@@ -6895,6 +6902,8 @@ public:
             // Snapshot hot-path JVP config once per Newton iteration.
             // This avoids repeated global config reads inside apply_jacobian().
             const int debug_level_local = wrf::sdirk3::g_sdirk3_config.debug_level;
+            const bool collect_jvp_stats =
+                wrf::sdirk3::g_sdirk3_config.solver_telemetry || debug_level_local >= 1;
             const bool use_autograd_jvp = wrf::sdirk3::g_sdirk3_config.use_autograd;
             const bool jvp_use_forward_diff_cfg = wrf::sdirk3::g_sdirk3_config.jvp_use_forward_diff;
             const int jvp_mixed_fd_switch_cfg = wrf::sdirk3::g_sdirk3_config.jvp_mixed_fd_newton_switch;
@@ -6926,7 +6935,10 @@ public:
             // where J is Jacobian of F
             auto apply_jacobian = [&](const torch::Tensor& dK) -> torch::Tensor {
                 jvp_call_count++;
-                auto jvp_start = std::chrono::high_resolution_clock::now();
+                std::chrono::high_resolution_clock::time_point jvp_start;
+                if (collect_jvp_stats) {
+                    jvp_start = std::chrono::high_resolution_clock::now();
+                }
 
                 // JVP: J(U_eval) * (dt*gamma*dK)
                 auto v = dt * gamma * dK;
@@ -6946,7 +6958,11 @@ public:
                 // ========================================
                 if (use_autograd_jvp) {
                     jvp_ad_calls++;
-                    auto grad_start = std::chrono::high_resolution_clock::now();
+                    const bool log_forward_jvp = debug_level_local >= 1 && jvp_call_count <= 3;
+                    std::chrono::high_resolution_clock::time_point grad_start;
+                    if (log_forward_jvp) {
+                        grad_start = std::chrono::high_resolution_clock::now();
+                    }
 
                     // Use forward-mode AD for true JVP (J·v)
                     jvp_result = compute_jvp_forward_mode(
@@ -6955,10 +6971,9 @@ public:
                         /*v=*/v
                     );
 
-                    auto grad_end = std::chrono::high_resolution_clock::now();
-                    auto grad_duration = std::chrono::duration_cast<std::chrono::milliseconds>(grad_end - grad_start);
-
-                    if (debug_level_local >= 1 && jvp_call_count <= 3) {
+                    if (log_forward_jvp) {
+                        const auto grad_end = std::chrono::high_resolution_clock::now();
+                        const auto grad_duration = std::chrono::duration_cast<std::chrono::milliseconds>(grad_end - grad_start);
                         std::cerr << "[JVP FORWARD] Call #" << jvp_call_count
                                   << ": forward-mode AD took " << grad_duration.count() << " ms" << std::endl;
                     }
@@ -7153,7 +7168,7 @@ public:
                             F_plus = rhs_func(U_eval + v_scaled);
                             jvp_result = (F_plus - F) * inv_eps;
 
-                            if (jvp_call_count <= 3) {
+                            if (debug_level_local >= 2 && jvp_call_count <= 3) {
                                 float F_n = F.norm().to(torch::kCPU).item<float>();
                                 float Fp_n = F_plus.norm().to(torch::kCPU).item<float>();
                                 float diff_n = (F_plus - F).norm().to(torch::kCPU).item<float>();
@@ -7253,10 +7268,12 @@ public:
                 //   2. use_autograd=false: Finite difference (L1728-1780)
                 // The legacy path was a remnant from when jvp_graph_prepared existed.
 
-                // Record JVP timing (outside if/else for correct scope)
-                auto jvp_end = std::chrono::high_resolution_clock::now();
-                double jvp_ms = std::chrono::duration_cast<std::chrono::microseconds>(jvp_end - jvp_start).count() / 1000.0;
-                total_jvp_time_ms += jvp_ms;
+                // Timing is diagnostic-only; the ordinary matvec does not read the clock.
+                if (collect_jvp_stats) {
+                    const auto jvp_end = std::chrono::high_resolution_clock::now();
+                    const double jvp_ms = std::chrono::duration_cast<std::chrono::microseconds>(jvp_end - jvp_start).count() / 1000.0;
+                    total_jvp_time_ms += jvp_ms;
+                }
 
                 // CRITICAL FIX: Correct Newton equation formulation
                 // We're solving (I - dt*gamma*J)dK = -R
@@ -7273,7 +7290,7 @@ public:
                 }
 
                 // DIAG 2026-01-27: JVP diagnostic for first 3 calls
-                if (jvp_call_count <= 3) {
+                if (debug_level_local >= 2 && jvp_call_count <= 3) {
                     torch::NoGradGuard no_grad;
                     float dK_n = dK.norm().to(torch::kCPU).item<float>();
                     float v_n = v.norm().to(torch::kCPU).item<float>();
@@ -9550,15 +9567,19 @@ public:
                     wrf::sdirk3::NewtonTerminationReason::Exception);
                 // JVP call summary even on GMRES failure (for diagnosis)
                 std::cerr << "[Newton] JVP calls before exception: " << jvp_call_count
-                          << ", total JVP time: " << total_jvp_time_ms << " ms" << std::endl;
+                          << (collect_jvp_stats ? ", total JVP time: " : ", timing disabled");
+                if (collect_jvp_stats) {
+                    std::cerr << total_jvp_time_ms << " ms";
+                }
+                std::cerr << std::endl;
                 update_stage_predictor_cache(false, result.K);
                 return result;
             }
             
             // Krylov counter updated inside try block above (gmres_result scoped there).
             int gmres_iters = stats_.total_krylov_iterations - gmres_start_iter;
-            // Always print GMRES+Newton update summary
-            {
+            // Keep failures visible; successful updates need no diagnostic reductions.
+            if (collect_jvp_stats || !gmres_success) {
                 torch::NoGradGuard no_grad;
                 float dK_n = dK.norm().to(torch::kCPU).item<float>();
                 std::cerr << "[Newton] GMRES: " << gmres_iters << " krylov iters, ||dK||=" << dK_n
@@ -9566,11 +9587,12 @@ public:
                          << (gmres_success ? " (OK)" : " (FAIL)")
                          << std::endl;
             }
-            // JVP call summary for this Newton iteration
-            std::cerr << "[Newton] JVP calls: " << jvp_call_count
-                      << ", total JVP time: " << total_jvp_time_ms << " ms"
-                      << ", avg: " << (jvp_call_count > 0 ? total_jvp_time_ms / jvp_call_count : 0.0)
-                      << " ms/call" << std::endl;
+            if (collect_jvp_stats) {
+                std::cerr << "[Newton] JVP calls: " << jvp_call_count
+                          << ", total JVP time: " << total_jvp_time_ms << " ms"
+                          << ", avg: " << (jvp_call_count > 0 ? total_jvp_time_ms / jvp_call_count : 0.0)
+                          << " ms/call" << std::endl;
+            }
             if (variable_pc_event_this_newton &&
                 wrf::sdirk3::g_sdirk3_config.variable_pc_event_log) {
                 std::cerr << "[VARIABLE-PC EVENT] stage=" << stage

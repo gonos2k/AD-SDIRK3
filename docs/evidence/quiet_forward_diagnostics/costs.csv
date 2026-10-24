@@ -1,0 +1,3 @@
+method,model_seconds,h_seconds,outer_steps,return_code,elapsed_monotonic_seconds,elapsed_wall_clock_seconds,rsl_main_seconds,sampled_tree_peak_RSS_bytes,quiet_marker_types,quiet_marker_rows
+ARK,21600,600,36,0,2027.693201707676,2025.785838,2024.4391799999999,2153660416,40,0
+RK3,21600,600,36,0,6.656076000072062,6.655853,4.56676,515932160,40,0

@@ -307,6 +307,24 @@ native THM의 차수 3만 hard upwind sign을 사용하며 전역 smoothing과
 궤적을 요청하거나 기록 중이면 변경할 수 없습니다. hard sign의 미분 검증은
 플럭스 부호를 유지하는 방향에 한정되며 영 플럭스의 일반 미분을 보증하지 않습니다.
 
+### Forward diagnostics and recording
+
+Ordinary forward runs use `sdirk3_debug_level=0` and
+`sdirk3_solver_telemetry=.false.`. Newton still computes the required JVPs, but
+does not time individual JVPs, compute diagnostic JVP/FD/FWAD norms, or print
+successful Newton/Krylov solve summaries. Required halo checks and repairs remain
+active; anomaly reports and nonfinite-state errors remain visible. Standard WRF
+forecast output and completion statistics keep their existing controls.
+Set `sdirk3_solver_telemetry=.true.` explicitly for aggregate solver/JVP records;
+`sdirk3_debug_level=2` additionally enables verbose tangent/norm diagnostics.
+These controls can change between solves; they do not change the operator.
+
+Diagnostic output is separate from data-assimilation recording. `use_autograd`
+enables the Newton JVP, not trajectory storage. Keep `save_trajectory` and
+`retain_graph_for_adjoint` off for ordinary forward runs. Request the supported
+adjoint trajectory explicitly for its required interval and close it afterward,
+as described below; enabling telemetry alone does not retain a trajectory.
+
 ### 4DVAR operation note
 
 `save_trajectory` retains sampled stage-1 states. The legacy replay applies an

@@ -1,0 +1,106 @@
+{
+  "at_local": "2026-10-24T16:47:18.479407+09:00",
+  "parity": {
+    "ARK": {
+      "00:00:00": {
+        "numeric_variables_checked": 174,
+        "numerically_different": [],
+        "byte_different": [],
+        "all_finite": true
+      },
+      "06:00:00": {
+        "numeric_variables_checked": 174,
+        "numerically_different": [],
+        "byte_different": [],
+        "all_finite": true
+      }
+    },
+    "RK3": {
+      "00:00:00": {
+        "numeric_variables_checked": 174,
+        "numerically_different": [],
+        "byte_different": [],
+        "all_finite": true
+      },
+      "06:00:00": {
+        "numeric_variables_checked": 174,
+        "numerically_different": [],
+        "byte_different": [],
+        "all_finite": true
+      }
+    }
+  },
+  "cross_method": {
+    "U": {
+      "rms": 0.00233010566207535,
+      "max_abs": 0.009366989135742188,
+      "mean_bias_ARK_minus_RK3": 6.9886926627305e-06
+    },
+    "V": {
+      "rms": 0.00237689515782227,
+      "max_abs": 0.011500641703605652,
+      "mean_bias_ARK_minus_RK3": -7.11246673319721e-05
+    },
+    "W": {
+      "rms": 0.00011894693963058343,
+      "max_abs": 0.000681472010910511,
+      "mean_bias_ARK_minus_RK3": 5.670902440969525e-07
+    },
+    "PH": {
+      "rms": 0.7623127784895624,
+      "max_abs": 3.89990234375,
+      "mean_bias_ARK_minus_RK3": -0.001167857991758865
+    },
+    "T": {
+      "rms": 0.0019409769235022947,
+      "max_abs": 0.019683837890625,
+      "mean_bias_ARK_minus_RK3": -1.2496113777160644e-06
+    },
+    "MU": {
+      "rms": 1.2462428494696611,
+      "max_abs": 4.009653091430664,
+      "mean_bias_ARK_minus_RK3": -1.2565879660542124e-06
+    },
+    "P_total": {
+      "rms": 0.5624984983329901,
+      "max_abs": 4.279613494873047,
+      "mean_bias_ARK_minus_RK3": 0.0008131792966742068
+    }
+  },
+  "cost": {
+    "ARK": {
+      "elapsed_monotonic_seconds": 2027.693201707676,
+      "elapsed_wall_clock_seconds": 2025.785838,
+      "wall_minus_monotonic_seconds": -1.9073637076760406,
+      "rsl_main_seconds": 2024.4391799999999,
+      "sampled_tree_peak_RSS_bytes": 2153660416,
+      "return_code": 0,
+      "accepted_outer_steps": 36,
+      "expected_implicit_stages": 108,
+      "observed_Newton_stage_count": null,
+      "qualification": "No Newt/JVP per-call telemetry collected; Fortran terminalSteps are wrapper calls.",
+      "quiet_marker_types_checked": 40,
+      "quiet_marker_total_rows": 0
+    },
+    "RK3": {
+      "elapsed_monotonic_seconds": 6.656076000072062,
+      "elapsed_wall_clock_seconds": 6.655853,
+      "wall_minus_monotonic_seconds": -0.00022300007206244032,
+      "rsl_main_seconds": 4.56676,
+      "sampled_tree_peak_RSS_bytes": 515932160,
+      "return_code": 0,
+      "accepted_outer_steps": 36,
+      "expected_implicit_stages": 0,
+      "observed_Newton_stage_count": null,
+      "qualification": "No Newt/JVP per-call telemetry collected; Fortran terminalSteps are wrapper calls.",
+      "quiet_marker_types_checked": 40,
+      "quiet_marker_total_rows": 0
+    }
+  },
+  "cost_ratios": {
+    "ARK_over_RK3_matched_monotonic_elapsed": 304.63792806538316,
+    "ARK_over_RK3_RSL_main": 443.2987895137909,
+    "scope": "Same6h600s/fullpathsinglemeasurements; no accuracybudget orsameaccuracy speedupcertification."
+  },
+  "detailed_variable_checks": "evidence.zip: quiet_forward_diagnostics/analysis/native_validation.json (all per-variable records retained)"
+}

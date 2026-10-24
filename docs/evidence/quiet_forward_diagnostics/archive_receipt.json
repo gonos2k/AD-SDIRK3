@@ -1,0 +1,11 @@
+{
+  "path": "evidence.zip",
+  "sha256": "8eb47ad5f1bb7f262607439a91f18000d95676ac5dfb9dbca1d599adfb2bbca1",
+  "bytes": 1338998,
+  "entries": 139,
+  "crc_verified": true,
+  "indexed_payloads_verified": 138,
+  "native_array_data_dependency": "docs/evidence/standard_ark_six_hour/evidence.zip",
+  "native_array_dependency_sha256": "48af9a6500d8b083252b8f01db575938c144a0313fff7d15705fd84be413a1f3",
+  "no_duplicate_native_arrays": true
+}

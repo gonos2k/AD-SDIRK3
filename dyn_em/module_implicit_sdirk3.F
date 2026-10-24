@@ -596,8 +596,10 @@ CONTAINS
       kde = SIZE(grid%pb, 2) ! Use actual pb array dimension
 
       ! Debug: Print actual kde value
-      WRITE(message, '(A,I0,A,I0)') "SDIRK3 init_implicit: kde from pb array = ", kde, ", kde-1 = ", kde-1
-      CALL wrf_message(message)
+      IF (config_flags%sdirk3_debug_level >= 2) THEN
+         WRITE(message, '(A,I0,A,I0)') "SDIRK3 init_implicit: kde from pb array = ", kde, ", kde-1 = ", kde-1
+         CALL wrf_message(message)
+      END IF
       ims = grid%sm31
       ime = grid%em31
       jms = grid%sm33  ! FIX: j is d33, not d32
@@ -657,7 +659,7 @@ CONTAINS
          kte = kde - 1
          
          ! Debug: Print domain bounds
-         IF (ij == 1) THEN
+         IF (ij == 1 .AND. config_flags%sdirk3_debug_level >= 2) THEN
             WRITE(message, '(A,6I5)') "SDIRK3 DEBUG: kds/kde/kms/kme/kts/kte = ", kds, kde, kms, kme, kts, kte
             CALL wrf_message(message)
          END IF
@@ -669,10 +671,12 @@ CONTAINS
          nz = kte - kts + 1
          
          ! Debug output
-         WRITE(message, '(A,I0,A,I0,A,I0,A,I0,A)') &
-              "SDIRK3 init: WRF-consistent nz=", nz, &
-              " (kde=", kde, ", kte=", kte, ", kts=", kts, ")"
-         CALL wrf_message(message)
+         IF (config_flags%sdirk3_debug_level >= 2) THEN
+            WRITE(message, '(A,I0,A,I0,A,I0,A,I0,A)') &
+                 "SDIRK3 init: WRF-consistent nz=", nz, &
+                 " (kde=", kde, ", kte=", kte, ", kts=", kts, ")"
+            CALL wrf_message(message)
+         END IF
          tile_id = ij
          
          ! Grid spacing
@@ -688,16 +692,20 @@ CONTAINS
          ny_v = ny + 1
 
          ! DEBUG: Print boundary/tile info
-         WRITE(message,'(A,I5,A,I5,A,L1)') 'SDIRK3 INIT DEBUG: jte=', jte, &
-              ', jde=', jde, ', jte==jde=', (jte==jde)
-         CALL wrf_message(message)
+         IF (config_flags%sdirk3_debug_level >= 2) THEN
+            WRITE(message,'(A,I5,A,I5,A,L1)') 'SDIRK3 INIT DEBUG: jte=', jte, &
+                 ', jde=', jde, ', jte==jde=', (jte==jde)
+            CALL wrf_message(message)
+         END IF
 
          ! W-staggered dimension: w, ph, c1f, c2f need one extra level
          nz_w = nz + 1
 
-         WRITE(message,'(A,3I5,A,3I5)') 'SDIRK3 DEBUG: Creating solver with nx/ny/nz=', &
-              nx, ny, nz, ', nx_u/ny_v/nz_w=', nx_u, ny_v, nz_w
-         CALL wrf_message(message)
+         IF (config_flags%sdirk3_debug_level >= 2) THEN
+            WRITE(message,'(A,3I5,A,3I5)') 'SDIRK3 DEBUG: Creating solver with nx/ny/nz=', &
+                 nx, ny, nz, ', nx_u/ny_v/nz_w=', nx_u, ny_v, nz_w
+            CALL wrf_message(message)
+         END IF
          
          ! Create unified solver using zero-copy interface with staggered dimensions
          ! NOTE: Pass rdnw starting at kds (1), not kms (which can be negative)
@@ -1256,7 +1264,7 @@ CONTAINS
          nz = kte - kts + 1
          
          ! Debug output for dimension analysis
-         IF (ij == 1) THEN
+         IF (ij == 1 .AND. config_flags%sdirk3_debug_level >= 2) THEN
             WRITE(message,'(A,L1,A,6I5)') 'SDIRK3 DEBUG: periodic_x=', &
                  config_flags%periodic_x, ', ids/ide/ims/ime/its/ite=', &
                  ids, ide, ims, ime, its, ite
@@ -1275,7 +1283,7 @@ CONTAINS
          END IF
          
          ! DEBUG: Print jte and jde values to diagnose dimension mismatch
-         IF (ij == 1) THEN
+         IF (ij == 1 .AND. config_flags%sdirk3_debug_level >= 2) THEN
             WRITE(message,'(A,I5,A,I5,A,L1)') 'SDIRK3 SOLVE DEBUG: jte=', jte, &
                  ', jde=', jde, ', jte==jde=', (jte==jde)
             CALL wrf_message(message)
@@ -1297,7 +1305,7 @@ CONTAINS
          nz_w = nz + 1
 
          ! Debug staggered dimensions (already calculated)
-         IF (ij == 1) THEN
+         IF (ij == 1 .AND. config_flags%sdirk3_debug_level >= 2) THEN
             WRITE(message,'(A,3I5,A,3I5)') 'SDIRK3 solve_em: Using nx/ny/nz=', &
                  nx, ny, nz, ', nx_u/ny_v/nz_w=', nx_u, ny_v, nz_w
             CALL wrf_message(message)
@@ -1342,24 +1350,25 @@ CONTAINS
          
          CALL wrf_debug(2, 'SDIRK3 Zero-Copy: Calling actual solver')
          
-         ! Debug msfty values - check within tile bounds, not halo region
-         WRITE(message, '(A,5F12.4)') 'SDIRK3: First 5 msfty values from Fortran (tile start): ', &
-              grid%msfty(its,jts), grid%msfty(its+1,jts), grid%msfty(its+2,jts), &
-              grid%msfty(its+3,jts), grid%msfty(its+4,jts)
-         CALL wrf_debug(0, message)
-         
-         ! Check for zeros in msfty
-         nzeros = 0
-         DO j = jts, jte
-            DO i = its, ite
-               IF (grid%msfty(i,j) == 0.0) nzeros = nzeros + 1
+         IF (config_flags%sdirk3_debug_level >= 2) THEN
+            ! Diagnostic sample and scan only; msfty itself remains passed to C++ below.
+            WRITE(message, '(A,5F12.4)') 'SDIRK3: First 5 msfty values from Fortran (tile start): ', &
+                 grid%msfty(its,jts), grid%msfty(its+1,jts), grid%msfty(its+2,jts), &
+                 grid%msfty(its+3,jts), grid%msfty(its+4,jts)
+            CALL wrf_debug(0, message)
+
+            nzeros = 0
+            DO j = jts, jte
+               DO i = its, ite
+                  IF (grid%msfty(i,j) == 0.0) nzeros = nzeros + 1
+               END DO
             END DO
-         END DO
-         WRITE(message, '(A,I8,A,I8)') 'SDIRK3: msfty has ', nzeros, ' zeros out of ', (ite-its+1)*(jte-jts+1)
-         CALL wrf_debug(0, message)
+            WRITE(message, '(A,I8,A,I8)') 'SDIRK3: msfty has ', nzeros, ' zeros out of ', (ite-its+1)*(jte-jts+1)
+            CALL wrf_debug(0, message)
+         END IF
          
          ! Debug output for rdnw and rdn values before passing to C++
-         IF (ij == 1) THEN  ! Only print for first tile
+         IF (ij == 1 .AND. config_flags%sdirk3_debug_level >= 2) THEN  ! Only print for first tile
             WRITE(message,'(A,5(F12.4))') &
                'SDIRK3: First 5 rdnw values from Fortran: ', &
                grid%rdnw(kds), grid%rdnw(kds+1), grid%rdnw(kds+2), grid%rdnw(kds+3), grid%rdnw(kds+4)
@@ -1890,7 +1899,9 @@ CONTAINS
       CALL wrf_sdirk3_set_config_float(config_name, effective_krylov_tol)
 
       ! Preconditioner type configuration
-      WRITE(6,*) '[FORTRAN DEBUG] config_flags%sdirk3_precond_type = ', config_flags%sdirk3_precond_type
+      IF (config_flags%sdirk3_debug_level >= 2) THEN
+         WRITE(6,*) '[FORTRAN DEBUG] config_flags%sdirk3_precond_type = ', config_flags%sdirk3_precond_type
+      END IF
       config_name = "precond_type"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_int(config_name, config_flags%sdirk3_precond_type)
 
@@ -2390,16 +2401,18 @@ CONTAINS
       CALL wrf_message("SDIRK3: Solvers initialized for solve_em")
 
       ! Print JVP method being used
-      SELECT CASE(config_flags%sdirk3_jvp_method)
-      CASE(0)
-         CALL wrf_message("SDIRK3: Using finite difference for JVP computation")
-      CASE(1)
-         CALL wrf_message("SDIRK3: Using automatic differentiation for JVP computation")
-      CASE(2)
-         CALL wrf_message("SDIRK3: Using dual number approach for JVP computation")
-      CASE(3)
-         CALL wrf_message("SDIRK3: Using optimized batched method for JVP computation")
-      END SELECT
+      IF (config_flags%sdirk3_debug_level >= 1) THEN
+         SELECT CASE(config_flags%sdirk3_jvp_method)
+         CASE(0)
+            CALL wrf_message("SDIRK3: Using finite difference for JVP computation")
+         CASE(1)
+            CALL wrf_message("SDIRK3: Using automatic differentiation for JVP computation")
+         CASE(2)
+            CALL wrf_message("SDIRK3: Using dual number approach for JVP computation")
+         CASE(3)
+            CALL wrf_message("SDIRK3: Using optimized batched method for JVP computation")
+         END SELECT
+      END IF
 
       ! FIX 2025-01-25: Config freeze point - MUST be AFTER all config including physics coupling
       ! This ensures no set_config calls happen after mark_workers_started
