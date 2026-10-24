@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -146,6 +147,18 @@ def _expected_grid(plan: dict) -> dict[str, int]:
     return grid
 
 
+def _wave_mode1_fields(plan: dict) -> tuple[bool, tuple[str, ...]]:
+    """Normalize the disabled, boolean, and mapping wave-mode plan forms once."""
+    spec = plan.get("wave_mode1", False)
+    if not spec:
+        return False, ()
+    if spec is True:
+        return True, ("T", "W", "P")
+    if not isinstance(spec, Mapping):
+        raise ValueError("wave_mode1 must be false, true, or a field mapping")
+    return True, tuple(spec.get("fields", ("T", "W", "P")))
+
+
 def _load_run(run: dict, plan_dir: Path, plan: dict | None = None) -> dict:
     plan = plan or {}
     expected_grid = _expected_grid(plan)
@@ -159,8 +172,7 @@ def _load_run(run: dict, plan_dir: Path, plan: dict | None = None) -> dict:
     if dry_no_qv and (type(use_theta_m) is not int or use_theta_m not in (0, 1)):
         raise ValueError("dry_case_no_qv requires explicit use_theta_m=0 or 1")
     include_budgets = bool(plan.get("include_mass_theta_budgets", False))
-    wave_plan = plan.get("wave_mode1", False)
-    wave_fields = tuple(wave_plan.get("fields", ("T", "W", "P"))) if wave_plan else ()
+    _, wave_fields = _wave_mode1_fields(plan)
     if any(name not in ("T", "W", "P") for name in wave_fields):
         raise ValueError("wave_mode1 fields may contain only T, W, and P perturbation")
     required_base = (tuple(dict.fromkeys((*BASE_STATE_FIELDS,
@@ -740,12 +752,9 @@ def _pairwise_sensitivities(runs: dict[str, dict], plan: dict, fields: tuple[str
 
 
 def _wave_diagnostics(runs: dict[str, dict], plan: dict, comparison_pairs: list[dict]) -> tuple[dict, dict]:
-    spec = plan.get("wave_mode1")
-    if not spec:
+    enabled, fields = _wave_mode1_fields(plan)
+    if not enabled:
         return {}, {}
-    if spec is True:
-        spec = {}
-    fields = tuple(spec.get("fields", ("T", "W", "P")))
     field_key = {"P": "P_perturbation"}
     diagnostics = {}
     coeffs: dict[str, dict[str, dict[str, np.ndarray]]] = {}
