@@ -1,0 +1,75 @@
+{
+  "artifact_observation": {
+    "command": "nm -u on the already-existing object (read-only inspection)",
+    "result": "Only PMPI lifecycle imports are _pmpi_init_ and _pmpi_finalize_; no MPI state/thread query imports. The object has a 32-bit MPI_Fint/int static assertion. This is compile/link-symbol evidence only, not a full WRF or MPI runtime validation."
+  },
+  "base_revision": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+  "checks": [
+    {
+      "evidence": "The phase hook calls are guarded by WRF_NATIVE_EXIT_TRACE. test_native_exit_trace.py pins the default-off preprocessed output hashes for all three authoritative Fortran sources against merged PR #317.",
+      "id": "C1",
+      "status": "done"
+    },
+    {
+      "evidence": "C observer records init/finalize entry/return and phase markers; mpi_init_ and mpi_finalize_ each forward once to the matching PMPI symbol using the original ierr pointer and record the PMPI-written value. Static source inspection found no extra MPI lifecycle calls, state queries, or status mutation. Existing fake-PMPI tests reportedly passed.",
+      "id": "C2",
+      "status": "done"
+    },
+    {
+      "evidence": "Recorder uses a new session for its owned direct child, records/waits through that Popen handle, forwards one SIGINT only to the direct child after KeyboardInterrupt, reports direct-child return status, and makes no process-group-emptiness claim. Existing non-MPI child tests reportedly passed.",
+      "id": "C3",
+      "status": "done"
+    },
+    {
+      "evidence": "Guide distinguishes MPI_THREAD_SINGLE from MPI_THREAD_FUNNELED and says the observer does not query/certify thread support. It labels C CLOCK_MONOTONIC and Python monotonic/wall samples as separate domains and limits timestamp claims to sampled request/event times.",
+      "id": "C4",
+      "status": "done"
+    },
+    {
+      "evidence": "Guide requires a separately built and pinned diagnostic executable/object, explains frozen-binding incompatibility, treats launcher RC 0 as launcher-only, and explicitly leaves full WRF rebuild/deployment validation open. Existing extracted-Fortran call-order test reportedly passed.",
+      "id": "C5",
+      "status": "done"
+    }
+  ],
+  "files_reviewed": {
+    "docs/(202610241022)_pr317_exit_review_checklist.md": "4cf75279bc30b8d8ff7c17e6b0cac35ac9f87c09a1cc8d991e5ee370fe9d9797",
+    "docs/evidence/native_exit_trace_preparation/local_test_output.txt": "bb8f383ba5d063b162a40ec2085ba0e0740ca8fbd7a61201f8ce585bc6c81c2c",
+    "docs/evidence/native_exit_trace_preparation/validation.json": "2afc8e104f6b3562b176c4ab26296f02441f902cc225ed79405c056699ba7fe6",
+    "existing_installed_openmpi_header_object": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/native_mpi_finalize_trace.o",
+    "existing_object_sha256": "901a747f7b2ae28bf9b0a183c5f8b4758938c7763d94168279a78392cb78b582",
+    "external/libtorch_wrf/sdirk3/tests/native_exit_trace.md": "22b19282a36eaafb0994ad62e95c92cb9b3ad5a14d0fdfed2f4bce187e7a5ca1",
+    "external/libtorch_wrf/sdirk3/tests/native_exit_trace.py": "f018a362eaa32ca82a2e6d559185bb1062a2614002b3ebd31823020fd139fa14",
+    "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c": "c9f6e4584466b1709319db8d90c54c826839fce073d453202884fa0357a51a20",
+    "external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py": "edfb303cbb9623742b63f2a25ab8a3dda544e56a05b23cdfcbf6d4b9562f3ab0",
+    "frame/wrf_shutdown.F": "b4996f2323cb311486a8d11229fb3531734408c923e932137a283bcc1c38db61",
+    "main/module_wrf_top.F": "b030fe8f7611f0befd154ad5a50e030a8bae90ceb23726c0b18072e6b13fa799",
+    "main/wrf.F": "352ae31b19e74eabad6fccbcb48a36d11a933d81ecf5e75989065190b682ffa1"
+  },
+  "final_delta_review": {
+    "canonical_validation_pins": "validation.json now pins the current C observer, test, recorder, Fortran hooks, and workflow hashes. The raw test log is pinned and records five tests passing (exit 0); actual Open MPI header compile is recorded without external POSIX define and with no MPI runtime invocation.",
+    "current_source_hash": "c9f6e4584466b1709319db8d90c54c826839fce073d453202884fa0357a51a20",
+    "delta": "The guarded _POSIX_C_SOURCE=200809L definition is the first source content, before headers; it does not override an existing definition and contains no logic change.",
+    "historical_checklist": "C1-C5 and C2a are marked done/resolved; R1 remains open for the unknown historical two-launcher-RC1 cause.",
+    "scope": "Static check only; no tests or launches rerun.",
+    "self_contained_test_flags": "Current fake_objects() C11 flags contain no -D_POSIX_C_SOURCE. The observer itself provides the feature-test macro before all headers."
+  },
+  "historical_finding": {
+    "id": "R1",
+    "statement": "Historical two-launcher-RC1 cause remains unknown and is not attributed to the new hooks or trace.",
+    "status": "unresolved"
+  },
+  "limitations": [
+    "All five tests are reported by the root agent as passing; they were not rerun during this final review.",
+    "No WRF rebuild, executable launch, actual MPI finalization under the new observer, deployment run, or scientific validation has been performed for these new hooks.",
+    "The standalone recorder waits for its direct launcher child and does not independently prove that all descendants or ranks have exited; the guide explicitly disclaims that inference.",
+    "Existing native case completion and the historical cause of the two launcher RC1 outcomes remain separate questions.",
+    "The refreshed validation artifacts pin the final C observer and test hashes; five local non-MPI tests and the Open MPI header-only object compile are recorded, but no full WRF build or MPI runtime execution of the new hooks was performed."
+  ],
+  "review_mode": "read_only_static_plus_existing_artifact_inspection; no source edits, tests rerun, or WRF/MPI/PMIx launch",
+  "reviewed_at_local": "2026-10-24T10:34:00+09:00",
+  "schema": "native_exit_trace_green_final_review_v1",
+  "source_and_documentation_findings": [],
+  "verdict": "GREEN_WITH_SCOPE_LIMITS",
+  "worktree": "/private/tmp/native-exit-trace-20261024",
+  "worktree_edits_by_reviewer": []
+}

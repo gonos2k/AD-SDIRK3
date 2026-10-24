@@ -1,0 +1,40 @@
+{
+  "target": "/private/tmp/native-exit-trace-20261024",
+  "base": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+  "source_pins": {
+    "main/wrf.F": "c9d1e1794c1a0a4a51e25e485b9e78d446631c0c25212ef7df4f440d8668bf70",
+    "main/module_wrf_top.F": "3a6645ae7e4c64b8757987924c9fe661344c307c6de447cdc6fd063d09b1683c",
+    "frame/wrf_shutdown.F": "66bbfc5ecef2410d46e9ffe20303c13cfe62e7cf1a68e229fb09c8067852123a",
+    "external/RSL_LITE/module_dm.F": "04292281429ce22b0427e43315fe9b20c993cb8c295beadb56c122e588b3314c",
+    "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032",
+    "external/libtorch_wrf/sdirk3/tests/native_twin_runner.py": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+  },
+  "reused_verified_graphs": [
+    {
+      "edges": 0,
+      "label": "prior_fortran_shutdown_ast",
+      "nodes": 0,
+      "note": "old receipt: four Fortran files, extractor yielded 0 nodes/0 edges",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/mpi_shutdown_ast/graphify-out/graph.json",
+      "sha256": "1d701c38ceb32b99d2f2a0fcbea4ebff375a533fa852989c3f6e87fab3126071"
+    },
+    {
+      "edges": 15,
+      "label": "prior_mpi_trace_c_ast",
+      "nodes": 6,
+      "note": "single-file C tracer graph",
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/mpi_trace_v3_ast/graphify-out/graph.json",
+      "sha256": "fbb7e05e5979514f3de1f4d4de0edd3ae11d8b42f524fb65f810328a1353c4f0"
+    }
+  ],
+  "source_confirmed_edges": [
+    "main/wrf.F -> wrf_finalize",
+    "wrf_finalize -> med_shutdown_io -> WRFU_Finalize -> wrf_shutdown",
+    "wrf_shutdown -> wrf_dm_shutdown -> MPI_FINALIZE",
+    "native_mpi_finalize_trace.c mpi_finalize_ -> pmpi_finalize_ exactly once",
+    "native_twin_runner.py -> Popen and poll/wait (frozen, will not edit)"
+  ],
+  "Fortran_gap": "Existing Fortran extractor produced0nodes; relationships checked against current authoritative source, not inferred from emptygraph.",
+  "extraction_cost_tokens": 0,
+  "claims": "Navigation only; no runtime root-cause or numerical correctness proof."
+}

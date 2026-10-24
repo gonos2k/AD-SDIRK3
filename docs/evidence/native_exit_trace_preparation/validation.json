@@ -1,0 +1,80 @@
+{
+  "recorded_at_local": "2026-10-24T10:33:14.388700+09:00",
+  "base": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+  "source_sha256": {
+    "main/wrf.F": "352ae31b19e74eabad6fccbcb48a36d11a933d81ecf5e75989065190b682ffa1",
+    "main/module_wrf_top.F": "b030fe8f7611f0befd154ad5a50e030a8bae90ceb23726c0b18072e6b13fa799",
+    "frame/wrf_shutdown.F": "b4996f2323cb311486a8d11229fb3531734408c923e932137a283bcc1c38db61",
+    "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c": "c9f6e4584466b1709319db8d90c54c826839fce073d453202884fa0357a51a20",
+    "external/libtorch_wrf/sdirk3/tests/native_exit_trace.py": "f018a362eaa32ca82a2e6d559185bb1062a2614002b3ebd31823020fd139fa14",
+    "external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py": "edfb303cbb9623742b63f2a25ab8a3dda544e56a05b23cdfcbf6d4b9562f3ab0",
+    ".github/workflows/sdirk3-ci.yml": "44de8c742cdcfac96df75dc378b4e8cc80071d25a7eb3986f8805d7274424dbc"
+  },
+  "local_tests": {
+    "command": [
+      "/opt/local/bin/python3",
+      "external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py"
+    ],
+    "exit_code": 0,
+    "methods": 5,
+    "last_observed_duration_seconds": 2.1158638750202954,
+    "scope": [
+      "own child zero/nonzero/zombie wait",
+      "signal return/no directory reuse",
+      "terminal Ctrl-C forwarded once to isolated own child",
+      "fake PMPI pointer/status/one-call contract and no query symbols",
+      "frozen default-off preprocessed regions and extracted Fortran phase order"
+    ],
+    "evidence_kind": "Captured subprocess stdout/stderr in local_test_output.txt",
+    "raw_log_sha256": "bb8f383ba5d063b162a40ec2085ba0e0740ca8fbd7a61201f8ce585bc6c81c2c"
+  },
+  "ruff_F": {
+    "exit_code": 0
+  },
+  "actual_header_compile": {
+    "command": [
+      "/opt/homebrew/bin/mpicc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-pthread",
+      "-c",
+      "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c",
+      "-o",
+      "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/native_mpi_finalize_trace.o"
+    ],
+    "exit_code": 0,
+    "object_sha256": "901a747f7b2ae28bf9b0a183c5f8b4758938c7763d94168279a78392cb78b582",
+    "undefined_symbols": [
+      "___cxa_atexit",
+      "___dso_handle",
+      "___error",
+      "_clock_gettime",
+      "_fclose",
+      "_fflush",
+      "_fopen",
+      "_fprintf",
+      "_fputc",
+      "_getenv",
+      "_getpid",
+      "_pmpi_finalize_",
+      "_pmpi_init_",
+      "_pthread_self",
+      "_vfprintf"
+    ],
+    "MPI_runtime_invoked": false
+  },
+  "toolchain": {
+    "mpicc_version": "mpicc: Open MPI 5.0.9 (Language: C)",
+    "gfortran_version": "GNU Fortran (Homebrew GCC 15.2.0) 15.2.0",
+    "cc_version": "Apple clang version 21.0.0 (clang-2100.3.34.2)"
+  },
+  "setup_corrections": [
+    "Removed an unused Python import reported by Ruff.",
+    "GNU Fortran link initially failed with ld: library System not found; test-only macOS syslibroot resolved installed-SDK lookup."
+  ],
+  "new_WRF_MPI_PMIX_executions": 0,
+  "full_WRF_build_or_RK3_comparison": false,
+  "MPI_cause_established": false
+}

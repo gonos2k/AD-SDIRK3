@@ -54,7 +54,13 @@ PROGRAM wrf
 #endif
 
   ! WRF model clean-up.  This calls MPI_FINALIZE() for DM parallel runs.  
+#ifdef WRF_NATIVE_EXIT_TRACE
+  CALL native_exit_phase(1)
+#endif
   CALL wrf_finalize
+#ifdef WRF_NATIVE_EXIT_TRACE
+  CALL native_exit_phase(8)
+#endif
 
 END PROGRAM wrf
 

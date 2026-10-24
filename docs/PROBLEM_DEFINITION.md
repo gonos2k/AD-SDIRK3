@@ -431,6 +431,8 @@ calculations used the original executable. The historical MPI failure cause is
 unknown; this case does not certify MPI deployment reliability.
 The separate [bounded MPI exit audit]((202610240127)_mpi_exit_bounded_investigation.md) preserves that unresolved status
 and leaves this completed numerical case unchanged.
+The [exit-review checklist]((202610241022)_pr317_exit_review_checklist.md) records
+optional future-run tracing preparation; the historical MPI cause remains unresolved.
 
 PR #314's residual caller and the rotating inverse stay closed independently.
 This result does not certify real-atmosphere assimilation, arbitrary initial

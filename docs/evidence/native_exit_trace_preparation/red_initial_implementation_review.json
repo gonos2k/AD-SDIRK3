@@ -1,0 +1,42 @@
+{
+  "schema": "native_exit_trace_red_impl_review_v1",
+  "scope": {
+    "worktree": "/private/tmp/native-exit-trace-20261024",
+    "base_revision": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+    "review_mode": "read_only_static",
+    "reviewed_files": [
+      "main/wrf.F",
+      "main/module_wrf_top.F",
+      "frame/wrf_shutdown.F",
+      "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c",
+      "external/libtorch_wrf/sdirk3/tests/native_exit_trace.py",
+      "external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py"
+    ],
+    "graphify": "No graphify-out graph was present for this modified snapshot; direct source and source-extracted callers were inspected. No graph was generated because this was a read-only implementation review."
+  },
+  "findings": [
+    {
+      "id": "I1",
+      "severity": "P2",
+      "confidence": "high",
+      "finding": "The recorder and launched process remain in the same terminal foreground process group. A terminal Ctrl-C can therefore deliver SIGINT to both Python and the launcher; the KeyboardInterrupt handler can then forward a second SIGINT to the launcher.",
+      "evidence": "native_exit_trace.py creates Popen(command, env=env) without start_new_session or another signal-isolation mechanism, then catches KeyboardInterrupt around wait() and calls proc.send_signal(SIGINT) when poll() is None.",
+      "minimal_fix": "Start the owned launcher in a new session/process group, then keep forwarding Ctrl-C through proc.send_signal(SIGINT) and wait on the same Popen handle. This makes the recorder the sole terminal recipient and keeps forwarding scoped to the owned child. Confirm that the explicit launcher command does not depend on sharing the controlling terminal before adopting this change.",
+      "failure_mode": "A launcher or MPI runtime that treats repeated SIGINT as a second-stage abort may terminate differently than the intended single forwarded Ctrl-C; receipt status still reflects the eventual launcher wait result, but the observed interruption path is not controlled by the recorder alone."
+    }
+  ],
+  "reviewed_contracts": {
+    "fortran_hooks": "The WRF_NATIVE_EXIT_TRACE calls are preprocessor guarded at model-run return, I/O cleanup boundaries, framework finalization boundaries, wrf_shutdown entry/return, and wrf_finalize return. With the macro disabled, the new call sites preprocess away. The MPI finalize call remains owned by the existing wrf_dm_shutdown path.",
+    "diagnostic_abi": "native_exit_phase_ uses a pointer to C int for the Fortran default INTEGER argument; this matches the stated registered GNU Fortran default-32-bit build. Keep the diagnostic macro/config limited to that ABI unless the binding becomes explicitly kinded. The C observer's mpi_init_/mpi_finalize_ wrappers forward the original ierr pointer once and preserve the PMPI-written status.",
+    "recorder_status": "record_launch waits on and reports the direct Popen child's actual return code, including negative signal status. It does not infer application/rank success from trace text. It creates output exclusively and pins the resolved launcher, native executable, and recorder script. It does not perform PID snapshots or process signaling except forwarding SIGINT through the owned Popen object.",
+    "test_scope": "The new tests use fake PMPI symbols, subprocess children, preprocessing against the base source, and an extracted Fortran shutdown oracle. The test file was inspected but not executed per task scope."
+  },
+  "acceptance_checks_for_root": [
+    "If adding signal isolation, keep the same direct-child Popen.wait return code and do not rewrite it based on trace events.",
+    "Check the SIGINT path with a non-MPI child that records signal count/exit behavior; no MPI launch is needed.",
+    "Preserve default-off preprocessing equivalence and do not add MPI lifecycle calls or alter ierr.",
+    "Keep thread wording evidence-based: the C pthread token only identifies the trace thread consistently within its process; do not equate it with a Fortran MPI_THREAD_SINGLE or MPI_THREAD_FUNNELED guarantee.",
+    "Do not alter frozen NativeRunner, historical RC1 attribution, E0/E1/E2 completion, old baseline gate, or caps."
+  ],
+  "validation_performed": "Static source review only; no tests, MPI/PMIx/WRF launches, or production changes."
+}
