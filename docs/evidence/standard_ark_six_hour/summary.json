@@ -1,0 +1,567 @@
+{
+  "schema": "standard_forward_six_hour_actual_summary_v1",
+  "scope": "One completed ARK324 h=600 six-hour forecast compared with archived RK3 h=600/300/150 first-six-hour prefixes; no five-day ARK claim.",
+  "analyzer_sha256": "9fc8475c33194f146f59ad8dc5e6ff394564599da0ca68fcc85404b0702aa2d4",
+  "analysis_json": "six_hour_rk3_vs_ark_analysis.json",
+  "cross_method_mode1_json": "six_hour_cross_method_mode1_phase.json",
+  "initial_state_gate": {
+    "status": "passed",
+    "comparison_certified": true,
+    "source_kind": "wrfout_t0",
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "start_timestamp": "0001-01-01_00:00:00",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "base_fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "global_attributes_checked": [
+      "CEN_LAT",
+      "CEN_LON",
+      "DX",
+      "DY",
+      "MAP_PROJ",
+      "STAND_LON",
+      "TRUELAT1",
+      "TRUELAT2"
+    ],
+    "signed_zero_equivalent": true,
+    "comparison_method": "numerically exact array equality; byte/log text equality not required"
+  },
+  "ark_run": {
+    "status": "completed",
+    "return_code": 0,
+    "outer_steps": 36,
+    "converged_stages": 108,
+    "wall_seconds": 2318.040734,
+    "rsl_main_seconds": 2316.896,
+    "peak_sampled_tree_rss_bytes": 2269577216,
+    "cost_note": "Recorded as the six-hour ARK run receipt; no end-to-end RK3 six-hour wall measurement exists."
+  },
+  "six_hour_metrics_vs_rk3_h600": {
+    "rk3_h300": {
+      "U": {
+        "rms": 0.0010973055312175218,
+        "max_abs": 0.004924774169921875,
+        "mean_bias": -1.1592495392163116e-05,
+        "max_abs_index": [
+          63,
+          38,
+          27
+        ],
+        "boundary_error_fraction": 0.08272939067878063
+      },
+      "V": {
+        "rms": 0.0011322497653051843,
+        "max_abs": 0.0054461658000946045,
+        "mean_bias": 2.748007984409981e-05,
+        "max_abs_index": [
+          63,
+          30,
+          13
+        ],
+        "boundary_error_fraction": 0.032572495030273624
+      },
+      "W": {
+        "rms": 2.0738691620345488e-05,
+        "max_abs": 0.00014193309471011162,
+        "mean_bias": 1.6368397325191631e-07,
+        "max_abs_index": [
+          63,
+          79,
+          25
+        ],
+        "boundary_error_fraction": 0.07229229479245233
+      },
+      "PH": {
+        "rms": 0.2593762985416863,
+        "max_abs": 1.6591796875,
+        "mean_bias": 0.00011267296215919487,
+        "max_abs_index": [
+          63,
+          0,
+          0
+        ],
+        "boundary_error_fraction": 0.09382937468124454
+      },
+      "T": {
+        "rms": 0.0009075833625087486,
+        "max_abs": 0.009185791015625,
+        "mean_bias": -8.246302604675293e-07,
+        "max_abs_index": [
+          51,
+          37,
+          7
+        ],
+        "boundary_error_fraction": 0.007742567724146599
+      },
+      "MU": {
+        "rms": 0.4007339533457276,
+        "max_abs": 1.613327980041504,
+        "mean_bias": -4.118640208616853e-07,
+        "max_abs_index": [
+          0,
+          0
+        ],
+        "boundary_error_fraction": 0.07517905470277651
+      },
+      "P_total": {
+        "rms": 0.17767268222934138,
+        "max_abs": 1.5914440155029297,
+        "mean_bias": -1.68839527759701e-05,
+        "max_abs_index": [
+          0,
+          0,
+          0
+        ],
+        "boundary_error_fraction": 0.11650763438477646
+      }
+    },
+    "rk3_h150": {
+      "U": {
+        "rms": 0.0033646796787003682,
+        "max_abs": 0.011923789978027344,
+        "mean_bias": -2.9877187580391594e-05,
+        "max_abs_index": [
+          63,
+          79,
+          33
+        ],
+        "boundary_error_fraction": 0.08924714905656567
+      },
+      "V": {
+        "rms": 0.0031397745766080006,
+        "max_abs": 0.010588602162897587,
+        "mean_bias": 0.0001123886352456169,
+        "max_abs_index": [
+          63,
+          73,
+          23
+        ],
+        "boundary_error_fraction": 0.03160776418588923
+      },
+      "W": {
+        "rms": 4.9430582095499975e-05,
+        "max_abs": 0.00038335705175995827,
+        "mean_bias": 4.930116181593265e-08,
+        "max_abs_index": [
+          63,
+          79,
+          23
+        ],
+        "boundary_error_fraction": 0.09781849370402358
+      },
+      "PH": {
+        "rms": 0.46489472563570156,
+        "max_abs": 2.98046875,
+        "mean_bias": 0.00019153442360220652,
+        "max_abs_index": [
+          63,
+          0,
+          38
+        ],
+        "boundary_error_fraction": 0.08095877348111584
+      },
+      "T": {
+        "rms": 0.0013332185041362772,
+        "max_abs": 0.01348876953125,
+        "mean_bias": -1.2370944023132324e-06,
+        "max_abs_index": [
+          51,
+          37,
+          7
+        ],
+        "boundary_error_fraction": 0.008263298589691206
+      },
+      "MU": {
+        "rms": 0.7738120235120064,
+        "max_abs": 2.889969825744629,
+        "mean_bias": -1.9179977243766187e-06,
+        "max_abs_index": [
+          0,
+          38
+        ],
+        "boundary_error_fraction": 0.055828443127093175
+      },
+      "P_total": {
+        "rms": 0.34285447910858696,
+        "max_abs": 2.8312206268310547,
+        "mean_bias": -5.3121836390346286e-05,
+        "max_abs_index": [
+          0,
+          0,
+          39
+        ],
+        "boundary_error_fraction": 0.09814285533324964
+      }
+    },
+    "ark_h600": {
+      "U": {
+        "rms": 0.00233010566207535,
+        "max_abs": 0.009366989135742188,
+        "mean_bias": 6.9886926627305e-06,
+        "max_abs_index": [
+          63,
+          39,
+          3
+        ],
+        "boundary_error_fraction": 0.08413639752183866
+      },
+      "V": {
+        "rms": 0.00237689515782227,
+        "max_abs": 0.011500641703605652,
+        "mean_bias": -7.11246673319721e-05,
+        "max_abs_index": [
+          63,
+          31,
+          33
+        ],
+        "boundary_error_fraction": 0.0343353121746451
+      },
+      "W": {
+        "rms": 0.00011894693963058343,
+        "max_abs": 0.000681472010910511,
+        "mean_bias": 5.670902440969525e-07,
+        "max_abs_index": [
+          47,
+          38,
+          13
+        ],
+        "boundary_error_fraction": 0.04892572141712505
+      },
+      "PH": {
+        "rms": 0.7623127784895624,
+        "max_abs": 3.89990234375,
+        "mean_bias": -0.001167857991758865,
+        "max_abs_index": [
+          63,
+          79,
+          25
+        ],
+        "boundary_error_fraction": 0.07974133838288432
+      },
+      "T": {
+        "rms": 0.0019409769235022947,
+        "max_abs": 0.019683837890625,
+        "mean_bias": -1.2496113777160644e-06,
+        "max_abs_index": [
+          51,
+          37,
+          7
+        ],
+        "boundary_error_fraction": 0.007306097452323
+      },
+      "MU": {
+        "rms": 1.2462428494696611,
+        "max_abs": 4.009653091430664,
+        "mean_bias": -1.2565879660542124e-06,
+        "max_abs_index": [
+          79,
+          25
+        ],
+        "boundary_error_fraction": 0.05120052078095207
+      },
+      "P_total": {
+        "rms": 0.5624984983329901,
+        "max_abs": 4.279613494873047,
+        "mean_bias": 0.0008131792966742068,
+        "max_abs_index": [
+          0,
+          79,
+          25
+        ],
+        "boundary_error_fraction": 0.0998595329083639
+      }
+    }
+  },
+  "rk3_h300_vs_h600_sensitivity": {
+    "U": {
+      "rms": 0.0010973055312175218,
+      "max_abs": 0.004924774169921875,
+      "mean_bias": -1.1592495392163116e-05
+    },
+    "V": {
+      "rms": 0.0011322497653051843,
+      "max_abs": 0.0054461658000946045,
+      "mean_bias": 2.748007984409981e-05
+    },
+    "W": {
+      "rms": 2.0738691620345488e-05,
+      "max_abs": 0.00014193309471011162,
+      "mean_bias": 1.6368397325191631e-07
+    },
+    "PH": {
+      "rms": 0.2593762985416863,
+      "max_abs": 1.6591796875,
+      "mean_bias": 0.00011267296215919487
+    },
+    "T": {
+      "rms": 0.0009075833625087486,
+      "max_abs": 0.009185791015625,
+      "mean_bias": -8.246302604675293e-07
+    },
+    "MU": {
+      "rms": 0.4007339533457276,
+      "max_abs": 1.613327980041504,
+      "mean_bias": -4.118640208616853e-07
+    },
+    "P_total": {
+      "rms": 0.17767268222934138,
+      "max_abs": 1.5914440155029297,
+      "mean_bias": -1.68839527759701e-05
+    }
+  },
+  "budgets_at_six_hours": {
+    "rk3_h600": {
+      "dry_mass_kg": 2.9058563424210496e+17,
+      "mass_weighted_theta_K": 313.64057267262933,
+      "dry_mass_relative_change": 1.404942130296752e-11,
+      "mass_weighted_theta_change_K": -5.984128392810817e-08
+    },
+    "rk3_h300": {
+      "dry_mass_kg": 2.905856342407615e+17,
+      "mass_weighted_theta_K": 313.64057298988877,
+      "dry_mass_relative_change": 9.42604064781947e-12,
+      "mass_weighted_theta_change_K": 2.574181507952744e-07
+    },
+    "rk3_h150": {
+      "dry_mass_kg": 2.905856342358485e+17,
+      "mass_weighted_theta_K": 313.64057294435963,
+      "dry_mass_relative_change": -7.481058056088694e-12,
+      "mass_weighted_theta_change_K": 2.118890165547782e-07
+    },
+    "ark_h600": {
+      "dry_mass_kg": 2.90585634238006e+17,
+      "mass_weighted_theta_K": 313.64057273924516,
+      "dry_mass_relative_change": -5.638269091643965e-14,
+      "mass_weighted_theta_change_K": 6.774541816412238e-09
+    }
+  },
+  "mode1_amplitudes": {
+    "rk3_h600": {
+      "T": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 0.08321347964652573,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top mass levels"
+      },
+      "W": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 0.0012398143503309198,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top_stag; fixed lower interface excluded and top retained"
+      },
+      "P": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 4.475779641632174,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top mass levels"
+      }
+    },
+    "rk3_h300": {
+      "T": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 0.0834075631037936,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top mass levels"
+      },
+      "W": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 0.0012347246879229903,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top_stag; fixed lower interface excluded and top retained"
+      },
+      "P": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 4.4819655063510515,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top mass levels"
+      }
+    },
+    "rk3_h150": {
+      "T": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 0.0834816975119787,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top mass levels"
+      },
+      "W": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 0.00122811712591579,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top_stag; fixed lower interface excluded and top retained"
+      },
+      "P": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 4.346843097849541,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top mass levels"
+      }
+    },
+    "ark_h600": {
+      "T": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 0.0836415930994991,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top mass levels"
+      },
+      "W": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 0.0012449357339747176,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top_stag; fixed lower interface excluded and top retained"
+      },
+      "P": {
+        "mode": 1,
+        "coefficient_rms_amplitude": 4.7489888573361885,
+        "phase_rad": null,
+        "phase_status": "reported_pairwise_as_cross_phase",
+        "wavelength_m": 4000000.0,
+        "coefficient_convention": "FFT(field, zonal axis, mode=1) / nx; no alignment",
+        "native_vertical_indexing": "bottom_top mass levels"
+      }
+    }
+  },
+  "native_solver_telemetry": "see six_hour_native_solver_telemetry.json",
+  "interpretation_limits": [
+    "RK3 h600 is a matched-step comparator, not exact truth; h300/h150 are RK3-only sensitivity comparisons.",
+    "No accuracy acceptance threshold or same-accuracy speedup is claimed.",
+    "T is potential-temperature perturbation; T+300 K is dry potential temperature, not air temperature. MU is perturbation dry column mass.",
+    "RSL main-section timing uses only the matched first six model hours; no five-day wall time is used as six-hour cost.",
+    "A single six-hour run does not establish five-day forecast accuracy, stability, or cost."
+  ],
+  "rk3_pairwise_sensitivities_at_six_hours": {
+    "rk3_600_vs_300": {
+      "U": {
+        "rms": 0.0010973055312175218,
+        "max_abs": 0.004924774169921875,
+        "mean_bias": -1.1592495392163116e-05
+      },
+      "V": {
+        "rms": 0.0011322497653051843,
+        "max_abs": 0.0054461658000946045,
+        "mean_bias": 2.748007984409981e-05
+      },
+      "W": {
+        "rms": 2.0738691620345488e-05,
+        "max_abs": 0.00014193309471011162,
+        "mean_bias": 1.6368397325191631e-07
+      },
+      "PH": {
+        "rms": 0.2593762985416863,
+        "max_abs": 1.6591796875,
+        "mean_bias": 0.00011267296215919487
+      },
+      "T": {
+        "rms": 0.0009075833625087486,
+        "max_abs": 0.009185791015625,
+        "mean_bias": -8.246302604675293e-07
+      },
+      "MU": {
+        "rms": 0.4007339533457276,
+        "max_abs": 1.613327980041504,
+        "mean_bias": -4.118640208616853e-07
+      },
+      "P_total": {
+        "rms": 0.17767268222934138,
+        "max_abs": 1.5914440155029297,
+        "mean_bias": -1.68839527759701e-05
+      }
+    },
+    "rk3_300_vs_150": {
+      "U": {
+        "rms": 0.002380052562022089,
+        "max_abs": 0.008627891540527344,
+        "mean_bias": -1.828469218822848e-05
+      },
+      "V": {
+        "rms": 0.002157760801026809,
+        "max_abs": 0.007839989848434925,
+        "mean_bias": 8.490855540151709e-05
+      },
+      "W": {
+        "rms": 3.2917489308785855e-05,
+        "max_abs": 0.00024928408674895763,
+        "mean_bias": -1.1438281143598366e-07
+      },
+      "PH": {
+        "rms": 0.2924162400827167,
+        "max_abs": 1.791015625,
+        "mean_bias": 7.886146144301165e-05
+      },
+      "T": {
+        "rms": 0.0004320635672953212,
+        "max_abs": 0.004302978515625,
+        "mean_bias": -4.124641418457031e-07
+      },
+      "MU": {
+        "rms": 0.549302062448812,
+        "max_abs": 1.678476333618164,
+        "mean_bias": -1.5061337035149336e-06
+      },
+      "P_total": {
+        "rms": 0.24350790866710856,
+        "max_abs": 1.6450881958007812,
+        "mean_bias": -3.6237883614376186e-05
+      }
+    }
+  }
+}

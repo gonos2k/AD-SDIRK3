@@ -449,10 +449,15 @@ assimilation generalization are subsequent scope decisions.
 
 The [standard-case execution report](<(202610241316)_standard_forward_rk3_baseline_and_ark_pending.md>)
 records three completed five-day RK3 baselines and exact post-initialization
-state/base-field agreement. ARK has only an explicitly stopped, instrumentation-heavy
-partial attempt; its lean five-day runs and RK3–ARK field/cost comparisons remain
-open pending the long-run resource scope. Do not label that setup stop a numerical
-failure. No new physical accuracy tolerance or same-accuracy speedup is certified.
+state/base-field agreement. The subsequent
+[ARK600 six-hour screen](<(202610241427)_standard_ark_six_hour_screen.md>) completed
+36 outer steps and 108 implicit stages with RC0 and admissible saved states.
+Its same-horizon field comparison to archived RK3 is now available; its RSL main-step
+cost is about 485 times the RK3-600 prefix. This is a six-hour full-model-path difference/cost
+screen, not a same-accuracy speedup or five-day stability result. The earlier
+instrumentation-heavy setup stop remains separately preserved. Lean ARK five-day
+runs, ARK internal timestep sensitivity and the full matrix remain open; no new
+long-run authorization or physical accuracy tolerance is inferred from this screen.
 MPI exit root-cause work remains a separate unresolved engineering item.
 
 For the selected dry 240 s forward instance, the native terminal and

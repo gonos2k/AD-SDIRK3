@@ -1,0 +1,49 @@
+{
+  "schema": "ark_h600_six_hour_native_solver_telemetry_v1",
+  "source_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/six_hour_runs/ark_h600/rsl.error.0000",
+  "source_sha256": "f980a25a30496e7429891219b1db65a1bf4fe3782af5de62c368a64763fe86d2",
+  "newton_stage_records": 108,
+  "stage_metric_records": 108,
+  "converged_stage_records": 108,
+  "reported_newton_iteration_checks_total": 324,
+  "reported_checks_per_stage_counts": {
+    "3": 108
+  },
+  "nonlinear_correction_solves_total": 216,
+  "scaled_rms_exit": {
+    "min": 6.287437e-14,
+    "median": 6.316651e-14,
+    "max": 1.267844e-13
+  },
+  "jvp_summary_records": 216,
+  "jvp_calls_total": 8146,
+  "jvp_total_time_ms": 1546371.5500000005,
+  "jvp_total_time_seconds": 1546.3715500000005,
+  "jvp_backend_counters": {
+    "solver_telemetry_records": 216,
+    "ad_calls": 8146,
+    "fd_calls": 0,
+    "jvp_modes": [
+      "unlocked"
+    ],
+    "fd_modes": [
+      "none"
+    ]
+  },
+  "consistency_checks": {
+    "Newton_and_stage_metric_counts_equal": true,
+    "per_record_stage_and_scaled_exit_agree": true,
+    "logged_JVP_calls_equal_AD_plus_FD_counters": true
+  },
+  "rhs_call_count": "not logged; no claim made",
+  "iteration_semantics": "Native wrf_sdirk3_newton_solver.cpp sets newton_iterations=newton_iter+1 and checks convergence before linear solve. Thus 3 reported checks/stage imply 2 nonlinear correction solves/stage (216 total).",
+  "interpretation": "All 108 implicit stages converged. JVP timing and AD/FD counters are native telemetry.",
+  "jvp_total_time_fraction_of_rsl_main": 0.6674324397815009,
+  "newton_iteration_semantics_source": {
+    "path": "/private/tmp/standard-forward-comparison-20261024/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+    "sha256": "f08926f0c5e96d5e5e6f0be2c470dee1fa3ea3f8e3d85b048780a024a59326e9",
+    "iteration_loop_line": 5571,
+    "iteration_counter_assignment_line": 6811,
+    "claim": "newton_iterations=newton_iter+1 with convergence checked before a correction; 3 reported checks correspond to 2 correction solves per converged stage"
+  }
+}

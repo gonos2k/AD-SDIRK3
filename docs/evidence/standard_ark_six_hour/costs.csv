@@ -1,0 +1,5 @@
+label,method,outer_dt_seconds,model_hours,rsl_main_rows,rsl_main_sum_seconds,mean_rsl_main_seconds_per_outer_step,max_rsl_main_seconds_per_outer_step,cost_scope
+rk3_h600,RK3,600.0,6,36,4.77343,0.1325952777777778,0.1841,RSL Timing for main only; matched first six model hours; not end-to-end wall time
+rk3_h300,RK3,300.0,6,72,11.564490000000003,0.1606179166666667,0.45963,RSL Timing for main only; matched first six model hours; not end-to-end wall time
+rk3_h150,RK3,150.0,6,144,18.272280000000006,0.12689083333333337,0.16866,RSL Timing for main only; matched first six model hours; not end-to-end wall time
+ark_h600,ARK324,600.0,6,36,2316.896,64.35822222222222,85.86833,RSL Timing for main only; matched first six model hours; not end-to-end wall time
