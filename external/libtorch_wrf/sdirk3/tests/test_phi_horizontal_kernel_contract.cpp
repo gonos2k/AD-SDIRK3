@@ -1,7 +1,12 @@
 #include "../wrf_sdirk3_phi_horizontal.h"
+#include <torch/csrc/autograd/forward_grad.h>
 #include <torch/torch.h>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
+#include <limits>
+#include <string>
+#include <tuple>
 #include <vector>
 using namespace wrf::sdirk3::phi_horizontal;
 using torch::indexing::Slice;
@@ -36,6 +41,10 @@ static int yghost(int j,int ny) {
 static double val3(const torch::Tensor& q,int a,int b,int c) { auto z=q.contiguous(); return z.accessor<double,3>()[a][b][c]; }
 static double val2(const torch::Tensor& q,int a,int b) { auto z=q.contiguous(); return z.accessor<double,2>()[a][b]; }
 static double val1(const torch::Tensor& q,int a) { auto z=q.contiguous(); return z.accessor<double,1>()[a]; }
+static bool check_periodic(bool condition,const std::string& message) {
+    std::cout << "periodic_select " << (condition?"PASS ":"FAIL ") << message << "\n";
+    return condition;
+}
 static Result oracle(const Fields& f,int order,float rdx,float rdy,float cfn,float cfn1) {
     const int ny=f.ny,nx=f.nx,nz=f.nz,nzw=nz+1; auto o=f.phi.options();
     auto xo=torch::zeros({ny,nzw,nx},o), yo=torch::zeros({ny,nzw,nx},o);
@@ -77,6 +86,112 @@ static Result oracle(const Fields& f,int order,float rdx,float rdy,float cfn,flo
     return {xo,yo};
 }
 static bool close(const torch::Tensor&a,const torch::Tensor&b,double& e) { e=(a-b).abs().max().item<double>(); return e<2e-11; }
+
+// Frozen oracle for the former periodic_select implementation. Keep its
+// arange/remainder/index_select indexing independent of the new torch::roll.
+static torch::Tensor legacy_periodic_select(const torch::Tensor& q,int dim,int offset) {
+    const int64_t axis=dim<0 ? dim+q.dim() : dim;
+    const auto n=q.size(axis);
+    auto io=torch::TensorOptions().dtype(torch::kLong).device(q.device());
+    auto idx=torch::remainder(torch::arange(n,io)+static_cast<int64_t>(offset),n);
+    return q.index_select(axis,idx);
+}
+
+static torch::Tensor periodic_test_tensor(const std::vector<int64_t>& shape,
+                                          torch::ScalarType dtype,bool strided,int seed) {
+    auto options=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+    const int64_t row=shape[2]*(strided?2:1);
+    auto backing=(torch::arange(shape[0]*shape[1]*row,options)+seed*128).reshape({shape[0],shape[1],row});
+    return strided ? backing.slice(2,0,row,2) : backing;
+}
+
+struct DualLevelGuard {
+    int64_t level=torch::autograd::forward_ad::enter_dual_level();
+    ~DualLevelGuard() { torch::autograd::forward_ad::exit_dual_level(level); }
+};
+
+static bool check_periodic_select_case(const std::vector<int64_t>& shape,int dim,
+                                       torch::ScalarType dtype,bool strided) {
+    const int64_t axis=dim<0 ? dim+3 : dim;
+    const int n=static_cast<int>(shape[axis]);
+    const std::vector<int> offsets={-3,-2,-1,0,1,2,3,n+2,-n-3,
+                                    std::numeric_limits<int>::min()};
+    const char* precision=dtype==torch::kFloat32 ? "F32" : "F64";
+    const std::string label=std::string("periodic_select ")+precision+" dim="+
+        std::to_string(dim)+" n="+std::to_string(n)+(strided?" strided":" contiguous");
+
+    // Reuse the same shape/dimension/offsets with distinct q tensors; this
+    // catches accidental reuse of a cached input-dependent result.
+    bool primal_equal=true;
+    for (int seed : {1,7}) {
+        const auto q=periodic_test_tensor(shape,dtype,strided,seed);
+        for (int offset:offsets)
+            primal_equal &= torch::equal(periodic_select(q,dim,offset),
+                                         legacy_periodic_select(q,dim,offset));
+    }
+    bool ok=true;
+    ok &= check_periodic(primal_equal,label+" primal equals legacy index permutation exactly");
+
+    // The dual is repeated with a different direction. Both the primal and
+    // tangent must be the exact same permutation for each offset.
+    bool forward_equal=true;
+    const auto q=periodic_test_tensor(shape,dtype,strided,2);
+    for (int seed : {2,9}) {
+        const auto direction=periodic_test_tensor(shape,dtype,strided,seed+31);
+        DualLevelGuard dual_level;
+        const auto q_dual=torch::_make_dual(q,direction,dual_level.level);
+        std::vector<torch::Tensor> current,legacy;
+        current.reserve(offsets.size()); legacy.reserve(offsets.size());
+        for (int offset:offsets) {
+            current.push_back(periodic_select(q_dual,dim,offset));
+            legacy.push_back(legacy_periodic_select(q_dual,dim,offset));
+        }
+        const auto current_parts=torch::_unpack_dual(torch::stack(current,0),dual_level.level);
+        const auto legacy_parts=torch::_unpack_dual(torch::stack(legacy,0),dual_level.level);
+        forward_equal &= std::get<1>(current_parts).defined() &&
+                         std::get<1>(legacy_parts).defined() &&
+                         torch::equal(std::get<0>(current_parts),std::get<0>(legacy_parts)) &&
+                         torch::equal(std::get<1>(current_parts),std::get<1>(legacy_parts));
+    }
+    ok &= check_periodic(forward_equal,label+" direct forward dual primal/tangent equals legacy exactly for both directions");
+
+    // Sum exact integer cotangents over offset permutations. Each offset is
+    // bijective, so the reverse scatter has no within-offset collisions and
+    // the small integer sums remain exactly representable in FP32 and FP64.
+    auto q_leaf=periodic_test_tensor(shape,dtype,strided,13).detach().set_requires_grad(true);
+    auto options=q_leaf.options();
+    std::vector<torch::Tensor> current,legacy,cotangents;
+    current.reserve(offsets.size()); legacy.reserve(offsets.size()); cotangents.reserve(offsets.size());
+    for (std::size_t k=0;k<offsets.size();++k) {
+        current.push_back(periodic_select(q_leaf,dim,offsets[k]));
+        legacy.push_back(legacy_periodic_select(q_leaf,dim,offsets[k]));
+        cotangents.push_back(torch::arange(q_leaf.numel(),options).reshape(q_leaf.sizes())+
+                             static_cast<double>(1+64*k));
+    }
+    const auto cotangent=torch::stack(cotangents,0);
+    const auto current_loss=(torch::stack(current,0)*cotangent).sum();
+    const auto legacy_loss=(torch::stack(legacy,0)*cotangent).sum();
+    const auto current_grad=torch::autograd::grad({current_loss},{q_leaf})[0];
+    const auto legacy_grad=torch::autograd::grad({legacy_loss},{q_leaf})[0];
+    ok &= check_periodic(torch::equal(current_grad,legacy_grad),
+                         label+" direct reverse VJP equals legacy exactly");
+    return ok;
+}
+
+static bool run_periodic_select_contract() {
+    bool ok=true;
+    for (auto dtype:{torch::kFloat32,torch::kFloat64}) {
+        for (bool strided:{false,true}) {
+            ok &= check_periodic_select_case({4,3,5},0,dtype,strided);
+            ok &= check_periodic_select_case({4,3,5},2,dtype,strided);
+        }
+        // Singleton periodic axes must stay well-defined for all offsets.
+        ok &= check_periodic_select_case({1,3,5},0,dtype,false);
+        ok &= check_periodic_select_case({4,3,1},2,dtype,false);
+    }
+    return ok;
+}
+
 static bool run_ad() {
     auto f=fields(false,true);
     auto phi=f.phi.clone().set_requires_grad(true);
@@ -134,7 +249,7 @@ static bool run_tiny() {
     }
     return ok;
 }
-int main(){ bool ok=true; for(bool packed:{false,true}) for(bool maps:{false,true}) for(int order:{2,4,6}) {
+int main(){ bool ok=true; ok&=run_periodic_select_contract(); for(bool packed:{false,true}) for(bool maps:{false,true}) for(int order:{2,4,6}) {
     auto f=fields(packed,maps); auto r=native_w_phi_horizontal(f.phi,f.mass,f.u,f.v,f.msfux,f.msfvy,f.msfty,f.c1f,f.c2f,order,1.3e-3f,2.1e-3f,1.5f,-.5f,packed);
     auto core=fields(false,maps); auto exp=oracle(core,order,1.3e-3f,2.1e-3f,1.5f,-.5f);
     if(packed){exp.x=extend_packed_scalar(exp.x);exp.y=extend_packed_scalar(exp.y);} double ex,ey; bool a=close(r.x,exp.x,ex),b=close(r.y,exp.y,ey); ok&=a&&b;
