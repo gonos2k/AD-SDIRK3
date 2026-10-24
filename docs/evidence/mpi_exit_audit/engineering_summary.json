@@ -1,0 +1,83 @@
+{
+  "schema": "mpi_exit_bounded_audit_v1",
+  "recorded_at_local": "2026-10-24T01:26:56.740283+09:00",
+  "source_head": "0816c32393c7a0b12081e1d4c4e5f8b0ad46c9b3",
+  "closed_twin_e0_e1_e2": "complete_unchanged",
+  "historical_native_attempts": {
+    "total": 41,
+    "rc0": 39,
+    "rc1": 2,
+    "model_steps": 6880,
+    "cause_established": false
+  },
+  "new_WRF_runs": 0,
+  "new_model_steps": 0,
+  "production_source_changes": false,
+  "phase1": {
+    "all_actual_mpirun_invocations_including_preflight": 32,
+    "claim_limit": "A clean batch does not prove universal MPI finalization reliability or explain the earlier WRF launcher RC=1.",
+    "interpretation": "No nonzero launcher return or timeout was reproduced in the 30 properly built tiny lifecycle launches. Two earlier setup invocations are retained with unknown return codes and are not treated as lifecycle evidence; all 32 invocations are within the launch cap.",
+    "nonzero_or_timeout_labels": [],
+    "nonzero_or_timeout_reproduced_in_valid_smokes": false,
+    "proper_lifecycle_batch_reproduced_nonzero_or_timeout": false,
+    "proper_lifecycle_batch_return_code_counts": {
+      "0": 30
+    },
+    "reproduced_nonzero_or_timeout": false,
+    "return_code_counts": {
+      "0": 30
+    },
+    "successful_rc0_count": 30,
+    "timeouts": 0,
+    "unknown_setup_return_code_count": 2,
+    "valid_lifecycle_smoke_attempt_count": 30,
+    "valid_lifecycle_smoke_return_code_counts": {
+      "0": 30
+    },
+    "valid_lifecycle_smoke_timeout_count": 0
+  },
+  "phase2": {
+    "all_actual_launcher_invocations": 4,
+    "max_invocations": 4,
+    "cumulative_elapsed_seconds": 30.109132084064186,
+    "cumulative_cap_seconds": 75,
+    "strict_driver_status": "baseline_inconclusive_phase2_skipped",
+    "strict_baseline_gate_passed": false,
+    "prior_setup_stops": 3,
+    "setup_stops_before_GO_or_STOP": true,
+    "last_attempt": {
+      "status": "resume_safety_cleanup_terminated_group",
+      "return_code": 0,
+      "return_code_capture_status": "captured",
+      "pmix_init_status": 0,
+      "pmix_finalize_status": 0,
+      "pmix_finalize_elapsed_ns": 1440362000,
+      "app_exit_code_from_marker": 0,
+      "actual_hold_seconds": 1.0285477498546243
+    },
+    "app_exit_marker_is_independent_OS_status": false,
+    "guard_failure_interpretation": "After verified SIGCONT, ps observed owned launcher as zombie with comm <defunct>; driver refused identity match and kept strict baseline inconclusive. OS launcher RC0 and empty final group remain distinct raw observations.",
+    "delayed_hold_executed": false,
+    "historical_cause_established": false,
+    "additional_attempts": 0,
+    "hold_clock_clarification": {
+      "schema": "diagnostic_hold_clock_clarification_v1",
+      "recorded_at_local": "2026-10-24T01:36:12.215249+09:00",
+      "reported_actual_hold_seconds_field_measures": "Post-GO hold loop only; excludes setup/identity queries before SIGCONT",
+      "post_GO_hold_loop_seconds": 1.0285477498546243,
+      "SIGSTOP_to_SIGCONT_request_interval_python_monotonic_seconds": 1.615045209,
+      "SIGSTOP_to_SIGCONT_request_interval_wall_seconds": 1.615055,
+      "no_cross_language_monotonic_subtraction": true,
+      "no_receipt_edits": true
+    }
+  },
+  "raw_evidence_root": "/Users/yhlee/AD-SDIRK3-review-evidence/mpi-exit-20261023",
+  "old_case_preservation": {
+    "checked_at_local": "2026-10-24T01:25:51.483270+09:00",
+    "files_checked": 67,
+    "mismatches": [],
+    "all_unchanged": true,
+    "scope": "67 originally pinned closed-case files; not every file in archive"
+  },
+  "conclusion": "No historical RC1 root cause established. Do not infer missing/double Finalize, timeout or thread violation; no speculative runtime/solver patch. No nonzero launcher auto-acceptance."
+}
