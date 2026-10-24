@@ -60,7 +60,9 @@ jobs:
             tools/probe_retained_memory_smoke.py tools/probe_accepted_analysis_time.py tools/probe_accepted_analysis_forecast.py \
             tools/probe_analysis_restart.py tools/probe_terminal_gradient_accuracy.py \
             tools/wave_y_reference.py tools/test_y_wave_inverse.py tools/test_y_wave_forecast.py \
-            tools/wave_rotating_reference.py tools/test_rotating_wave_inverse.py
+            tools/wave_rotating_reference.py tools/test_rotating_wave_inverse.py \
+            external/libtorch_wrf/sdirk3/tests/native_exit_trace.py \
+            external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py
       - name: CPU setup shell syntax
         run: bash -n .github/ci/setup_torch_env.sh
       - name: actionlint (pinned binary, checksum-verified)
@@ -102,7 +104,9 @@ jobs:
       - name: source-coordinate rotating energy identity
         run: python3 -B tools/test_rotating_energy_metric.py
       - name: native build tools
-        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache mpich libmpich-dev
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache gfortran mpich libmpich-dev
+      - name: native exit records and extracted shutdown contracts (no MPI launch)
+        run: python3 -B external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py
       - name: restore compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:

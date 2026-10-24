@@ -2110,7 +2110,13 @@ ENDIF
      LOGICAL, OPTIONAL, INTENT(IN) :: no_shutdown
 
    ! shut down I/O
+#ifdef WRF_NATIVE_EXIT_TRACE
+   CALL native_exit_phase(2)
+#endif
    CALL med_shutdown_io ( head_grid , config_flags )
+#ifdef WRF_NATIVE_EXIT_TRACE
+   CALL native_exit_phase(3)
+#endif
    CALL       wrf_debug ( 100 , 'wrf: back from med_shutdown_io' )
 
    CALL       wrf_debug (   0 , 'wrf: SUCCESS COMPLETE WRF' )
@@ -2122,7 +2128,13 @@ ENDIF
       IF (coupler_on) THEN 
          CALL cpl_finalize() 
       ELSE
+#ifdef WRF_NATIVE_EXIT_TRACE
+         CALL native_exit_phase(4)
+#endif
          CALL WRFU_Finalize
+#ifdef WRF_NATIVE_EXIT_TRACE
+         CALL native_exit_phase(5)
+#endif
          CALL wrf_shutdown
       ENDIF
    ENDIF

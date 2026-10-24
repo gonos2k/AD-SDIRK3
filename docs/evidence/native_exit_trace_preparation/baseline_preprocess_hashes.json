@@ -1,0 +1,9 @@
+{
+  "base": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+  "algorithm": "SHA256 of newline-joined nonempty rstripped GNU Fortran -E -P output; module_wrf_top only wrf_finalize subroutine",
+  "hashes": {
+    "main/wrf.F": "5abc05435fd0fa6c393bf6f92f95478ba2ef61fe818ceb12636fe6bc268d0ce0",
+    "main/module_wrf_top.F": "a187936d79fcee3cd1d09beac43c70e5542bf7809c236288e071fb9c55672167",
+    "frame/wrf_shutdown.F": "9e19d0332513a8811c2f466436815390dbe51eadc1f67aa97236854c0aab5ca6"
+  }
+}

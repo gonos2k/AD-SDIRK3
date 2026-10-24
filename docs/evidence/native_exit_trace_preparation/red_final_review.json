@@ -1,0 +1,53 @@
+{
+  "schema": "native_exit_trace_red_final_review_v1",
+  "scope": {
+    "worktree": "/private/tmp/native-exit-trace-20261024",
+    "base_revision": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+    "review_mode": "read_only_static_no_launches",
+    "reviewed_files": [
+      "main/wrf.F",
+      "main/module_wrf_top.F",
+      "frame/wrf_shutdown.F",
+      "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c",
+      "external/libtorch_wrf/sdirk3/tests/native_exit_trace.py",
+      "external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py",
+      "external/libtorch_wrf/sdirk3/tests/native_exit_trace.md",
+      ".github/workflows/sdirk3-ci.yml"
+    ]
+  },
+  "findings": [
+    {
+      "id": "I1",
+      "previous_severity": "P2",
+      "status": "closed",
+      "closure_evidence": "Recorder now starts the direct launcher child with start_new_session=True, records launcher_session_isolated, and wraps post-spawn event writes plus wait in the KeyboardInterrupt path. The handler forwards SIGINT only through the still-owned Popen handle and waits for that handle. The new non-MPI test isolates the recorder group, checks the child receives exactly one forwarded SIGINT, and verifies the child's exit code 7 remains the recorded and CLI status.",
+      "residual_limit": "The recorder does not promise cleanup of descendants or process-group emptiness, and docs now limit the path to the noninteractive native case; this is consistent with the owned-direct-child contract."
+    }
+  ],
+  "contract_review": {
+    "interrupt_and_status": "Static review confirms session isolation prevents terminal Ctrl-C from directly reaching the launcher before forwarding. Popen.wait remains the source of launcher_return_code; trace text does not convert a nonzero or signaled exit into success.",
+    "mpi_abi_and_forwarding": "The C adapter now statically requires 32-bit int and MPI_Fint, matching its documented registered GNU Fortran/Open MPI ABI. mpi_init_ and mpi_finalize_ pass the original ierr pointer once to their PMPI counterparts; tracing preserves errno and does not synthesize or rewrite ierr. Root reports compilation against installed Open MPI headers and nm showing only PMPI lifecycle imports; this reviewer did not repeat that compile.",
+    "fortran_instrumentation": "All inserted calls remain behind WRF_NATIVE_EXIT_TRACE. Existing wrf_dm_shutdown remains the MPI_Finalize owner. The test's hash-based preprocessed default-off oracle is shallow-clone friendly; actual shutdown-body oracle tests phase ordering with fake PMPI, without an MPI launch.",
+    "thread_semantics": "Docs distinguish MPI_THREAD_SINGLE from MPI_THREAD_FUNNELED and state that the pthread token does not establish the provided MPI level. Python native thread IDs and C pthread tokens are separate identity domains; monotonic samples are also explicitly documented as separate clock domains.",
+    "ci_scope": "CI adds only the existing non-MPI core job's fake-PMPI/source-oracle test invocation and installs gfortran for the extracted Fortran oracle. No WRF/MPI/PMIx launch is added.",
+    "frozen_artifacts": "The frozen native_twin_runner.py is unchanged in the worktree status; no change to the frozen execution path or source artifact bindings was observed."
+  },
+  "root_cause_and_gates": {
+    "historical_2RC1_cause": "unknown; this implementation does not establish attribution",
+    "E0_E1_E2": "remain complete as previously recorded",
+    "old_baseline_gate": "remains false; no promotion claimed",
+    "caps": "unchanged",
+    "additional_mpi_lifecycle_or_thread_queries": "none added beyond forwarding the existing F77 MPI_Init/MPI_Finalize calls"
+  },
+  "validation": {
+    "this_review": "Read-only source/diff review and git diff --check only; no tests, MPI/PMIx/WRF launches, or production changes.",
+    "reported_by_root_not_independently_repeated": "Five local non-MPI tests passed, including the Fortran source oracle and default-off preprocessing; actual Open MPI header compile and symbol inspection passed."
+  },
+  "conclusion": "The previously reported interrupt-delivery issue is closed by session isolation plus direct-child signal forwarding, with a targeted fake-child regression test. No remaining actionable defect found in the reviewed diagnostic change. Full WRF rebuild/deployment behavior remains unverified, as documented.",
+  "portability_delta_review": {
+    "static_status": "confirmed_valid",
+    "change": "The C observer defines _POSIX_C_SOURCE 200809L before all headers when the caller has not defined it; the fake C test compile no longer supplies the macro on its command line.",
+    "impact": "This makes clock_gettime/POSIX declarations self-contained for the tested C11 compile. No control flow, symbols, lifecycle calls, status handling, or Fortran instrumentation changed in this delta.",
+    "tests": "Root reports all five non-MPI tests and the actual Open MPI header compile were rerun after this delta; not independently rerun in this static review."
+  }
+}

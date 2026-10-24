@@ -11,7 +11,13 @@ SUBROUTINE wrf_shutdown
     EXTERNAL wrf_dm_shutdown
 #endif
 #ifdef DM_PARALLEL
+#ifdef WRF_NATIVE_EXIT_TRACE
+    CALL native_exit_phase(6)
+#endif
     CALL wrf_dm_shutdown
+#ifdef WRF_NATIVE_EXIT_TRACE
+    CALL native_exit_phase(7)
+#endif
 #else
 # ifdef NO_IEEE_MODULE
     STOP

@@ -1,0 +1,10 @@
+test_default_off_preprocessing_and_actual_shutdown_bodies (__main__.NativeExitTrace) ... ok
+test_observer_forwards_ierr_once_and_adds_no_MPI_queries (__main__.NativeExitTrace) ... ok
+test_owned_child_zero_nonzero_and_zombie (__main__.NativeExitTrace) ... ok
+test_signal_status_and_no_directory_reuse (__main__.NativeExitTrace) ... ok
+test_terminal_interrupt_is_forwarded_once (__main__.NativeExitTrace) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 2.054s
+
+OK

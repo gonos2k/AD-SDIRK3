@@ -1,0 +1,15 @@
+{
+  "created_at_local": "2026-10-24T10:21:38.645205+09:00",
+  "worktree": "/private/tmp/native-exit-trace-20261024",
+  "base": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+  "no_new_WRF_MPI_PMIX_runs": true,
+  "frozen_runner_will_not_be_edited": true,
+  "source_pins": {
+    "main/wrf.F": "c9d1e1794c1a0a4a51e25e485b9e78d446631c0c25212ef7df4f440d8668bf70",
+    "main/module_wrf_top.F": "3a6645ae7e4c64b8757987924c9fe661344c307c6de447cdc6fd063d09b1683c",
+    "frame/wrf_shutdown.F": "66bbfc5ecef2410d46e9ffe20303c13cfe62e7cf1a68e229fb09c8067852123a",
+    "external/RSL_LITE/module_dm.F": "04292281429ce22b0427e43315fe9b20c993cb8c295beadb56c122e588b3314c",
+    "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032",
+    "external/libtorch_wrf/sdirk3/tests/native_twin_runner.py": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+  }
+}

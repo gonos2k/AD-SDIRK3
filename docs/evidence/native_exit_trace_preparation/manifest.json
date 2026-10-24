@@ -1,0 +1,29 @@
+{
+  "recorded_at_local": "2026-10-24T10:35:47.600158+09:00",
+  "base": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+  "scope": "Future diagnostic preparation; no new native/WRF/MPI/PMIx execution; historical RC1 cause unresolved.",
+  "sources": {
+    ".github/workflows/sdirk3-ci.yml": "44de8c742cdcfac96df75dc378b4e8cc80071d25a7eb3986f8805d7274424dbc",
+    "main/wrf.F": "352ae31b19e74eabad6fccbcb48a36d11a933d81ecf5e75989065190b682ffa1",
+    "main/module_wrf_top.F": "b030fe8f7611f0befd154ad5a50e030a8bae90ceb23726c0b18072e6b13fa799",
+    "frame/wrf_shutdown.F": "b4996f2323cb311486a8d11229fb3531734408c923e932137a283bcc1c38db61",
+    "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c": "c9f6e4584466b1709319db8d90c54c826839fce073d453202884fa0357a51a20",
+    "external/libtorch_wrf/sdirk3/tests/native_exit_trace.py": "f018a362eaa32ca82a2e6d559185bb1062a2614002b3ebd31823020fd139fa14",
+    "external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py": "edfb303cbb9623742b63f2a25ab8a3dda544e56a05b23cdfcbf6d4b9562f3ab0",
+    "external/libtorch_wrf/sdirk3/tests/native_exit_trace.md": "22b19282a36eaafb0994ad62e95c92cb9b3ad5a14d0fdfed2f4bce187e7a5ca1"
+  },
+  "evidence": {
+    "baseline_preprocess_hashes.json": "af3afd3a6252a6bd716f6c3db8b59cb2b559f9b3942217f28dfc864f38dab027",
+    "closed_case_immutable_pins.json": "377e915c9c2d31edfde17e2ec1e30c7435ecbf3e23873adf579b241bac9a2563",
+    "graph.json": "335cba418e0fd4640b4b42c8de932a17292e4b8f8da1d5d93f748b5e1e0c5661",
+    "graph_post.json": "7eb1030aa1f1d19f6203b4fc5934689a697ad56429e06293c2938ef030fb57d7",
+    "graph_pre_edit.json": "ce5f12685d6ae57b2169c216907b96803500c96a5f3918b914a81d67661f7b7c",
+    "green_final_review.json": "cedb2b82ff39d39cd0441a1f7e81665761193bc3426f91e52ff4783395096cc7",
+    "local_test_output.txt": "bb8f383ba5d063b162a40ec2085ba0e0740ca8fbd7a61201f8ce585bc6c81c2c",
+    "pre_edit_sources.json": "e74b29e371ebb9b0711b18340a607dcf4b4dd51b166bbf20d69e708551303f17",
+    "preservation.json": "98710d950b645adb5c63a36ed7ebd71306995c075cf7dc7a90a840373280e195",
+    "red_final_review.json": "362aec9ccec921e02a328513435f17fe35814932cf07c47f776d40fe697c693e",
+    "red_initial_implementation_review.json": "5be120c21b63dcf962225080bfadc97583627401f0f013eced2fcddd5fcc1773",
+    "validation.json": "2afc8e104f6b3562b176c4ab26296f02441f902cc225ed79405c056699ba7fe6"
+  }
+}

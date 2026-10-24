@@ -1,0 +1,286 @@
+{
+  "captured_at_local": "2026-10-24T10:34:42+09:00",
+  "graphify": {
+    "changed_file_delta": {
+      "reextracted_sources": [
+        "native_mpi_finalize_trace.c",
+        "test_native_exit_trace.py"
+      ],
+      "reused_ast_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/graph_post/graphify-out/.graphify_reused_recorder_ast.json",
+      "reused_ast_sha256": "5ea1309de5c868b30ce8721482af52df94873b0871be9ebd27f404df0161da36",
+      "reused_ast_source": "native_exit_trace.py",
+      "reused_ast_source_sha256": "f018a362eaa32ca82a2e6d559185bb1062a2614002b3ebd31823020fd139fa14",
+      "reused_edges": 16,
+      "reused_nodes": 5
+    },
+    "edges": 35,
+    "fortran_extraction_gap": "Fortran AST prior attempt produced 0 nodes/0 edges. No Fortran rescan was run; current Fortran edges were manually checked against authoritative source.",
+    "graph_path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/graph_post/graphify-out/graph.json",
+    "graph_sha256": "335cba418e0fd4640b4b42c8de932a17292e4b8f8da1d5d93f748b5e1e0c5661",
+    "method": "re-extracted AST only for changed tracer C and its test; reused unchanged native_exit_trace.py AST from cached source hash f018a362\u2026; no semantic extraction",
+    "nodes": 23,
+    "source_dir": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/graph_post/source",
+    "source_snapshots": [
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/graph_post/source/native_mpi_finalize_trace.c",
+        "sha256": "c9f6e4584466b1709319db8d90c54c826839fce073d453202884fa0357a51a20"
+      },
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/graph_post/source/native_exit_trace.py",
+        "sha256": "f018a362eaa32ca82a2e6d559185bb1062a2614002b3ebd31823020fd139fa14"
+      },
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/graph_post/source/test_native_exit_trace.py",
+        "sha256": "edfb303cbb9623742b63f2a25ab8a3dda544e56a05b23cdfcbf6d4b9562f3ab0"
+      }
+    ]
+  },
+  "interpretation_limits": [
+    "Graphify is source navigation, not runtime root-cause or numerical correctness proof.",
+    "The graph refresh did not run tests, compile code, launch MPI/WRF, or run a model.",
+    "The CI workflow entry is source-bound only; no CI result is asserted.",
+    "The old pre-edit C and Fortran graph artifacts remain preserved and are not claimed to describe the modified current source bytes.",
+    "The final portability delta is source-bound only; no test/build was executed during this graph refresh."
+  ],
+  "manually_confirmed_edges": [
+    {
+      "detail": "phase 1 marks model-run return immediately before wrf_finalize; phase 8 marks wrf_finalize return after it completes.",
+      "evidence_class": "manual_source_confirmed",
+      "from": "main/wrf.F:57-62",
+      "relation": "model-return and finalize-return trace brackets",
+      "to": "module_wrf_top::wrf_finalize"
+    },
+    {
+      "detail": "phase 2 before I/O cleanup; phase 3 after I/O cleanup; phase 4/5 around WRFU_Finalize; WRFU finalize precedes wrf_shutdown on the uncoupled shutdown branch. SUCCESS COMPLETE WRF remains an earlier log point, not an MPI-finalize success marker.",
+      "evidence_class": "manual_source_confirmed",
+      "from": "module_wrf_top.F::wrf_finalize:2113-2138",
+      "relation": "instrumented shutdown phases",
+      "to": "med_shutdown_io -> WRFU_Finalize -> wrf_shutdown"
+    },
+    {
+      "detail": "the function recursively closes domain I/O and calls wrf_ioexit before returning; phase 2/3 delimit this interval, with no source-level begin timestamp inside each close.",
+      "evidence_class": "manual_source_confirmed",
+      "from": "share/mediation_wrfmain.F::med_shutdown_io:172-207",
+      "relation": "I/O cleanup interval",
+      "to": "boundary/history cleanup -> wrf_ioexit"
+    },
+    {
+      "detail": "phase 6/7 bracket the DM shutdown call; MPI_FINALIZE is called unless STUBMPI. Serial builds follow STOP instead.",
+      "evidence_class": "manual_source_confirmed",
+      "from": "frame/wrf_shutdown.F:14-20",
+      "relation": "DM shutdown phase bracket",
+      "to": "frame/module_dm.F::wrf_dm_shutdown -> MPI_FINALIZE(ierr)"
+    },
+    {
+      "detail": "codes map to model run return, I/O cleanup enter/return, framework finalize enter/return, WRF shutdown enter/return, and WRF finalize return.",
+      "evidence_class": "manual_cross_language_source_confirmed",
+      "from": "native_exit_phase_(phase) in native_mpi_finalize_trace.c:44-61",
+      "relation": "Fortran-to-C event mapping",
+      "to": "Fortran native_exit_phase(1..8) calls"
+    },
+    {
+      "detail": "each wrapper logs entry/return and forwards the original ierr pointer once; tracef saves/restores errno; no MPI state-query or status normalization is added.",
+      "evidence_class": "AST_plus_source_review",
+      "from": "native_mpi_finalize_trace.c::mpi_init_:63-67 and mpi_finalize_:69-74",
+      "relation": "F77 MPI interposition",
+      "to": "pmpi_init_ and pmpi_finalize_"
+    },
+    {
+      "detail": "pins launcher/native/recorder, sets NATIVE_MPI_FINALIZE_TRACE, starts a new session, records spawn/wait events, waits on its own Popen handle, forwards Ctrl-C only to that child, and records actual launcher return code separately from trace contents.",
+      "evidence_class": "AST_plus_source_review",
+      "from": "native_exit_trace.py::record_launch:26-79",
+      "relation": "owned launcher lifecycle recording",
+      "to": "direct Popen child, launcher wait, and native trace path"
+    },
+    {
+      "detail": "tests use local fake MPI_Fint/PMPI stubs for pointer/once/status checks and compile preprocessed Fortran snippets; they do not launch an MPI job or WRF.",
+      "evidence_class": "manual_test_source_review",
+      "from": "test_native_exit_trace.py::NativeExitTrace tests",
+      "relation": "non-MPI test contracts",
+      "to": "fake PMPI C fixture and temporary Fortran shutdown oracle"
+    },
+    {
+      "detail": "workflow installs compiler tools, then runs the non-MPI source/fixture test step; this receipt did not execute CI or the test.",
+      "evidence_class": "manual_workflow_source_confirmed",
+      "from": ".github/workflows/sdirk3-ci.yml:108-109",
+      "relation": "CI test entry point",
+      "to": "python3 -B test_native_exit_trace.py"
+    },
+    {
+      "detail": "C tracer conditionally defines _POSIX_C_SOURCE=200809L before headers; fake-object test no longer passes this macro on the compiler command line, so the source is self-contained when caller has not already defined it.",
+      "evidence_class": "manual_source_confirmed_latest_portability_delta",
+      "from": "native_mpi_finalize_trace.c:1-3 and test_native_exit_trace.py::fake_objects:149-159",
+      "relation": "self-contained POSIX feature-test macro",
+      "to": "clock_gettime declaration under strict C11 compile"
+    }
+  ],
+  "pre_edit_binding": {
+    "current_pre_edit_pin_comparisons": [
+      {
+        "current_sha256": "352ae31b19e74eabad6fccbcb48a36d11a933d81ecf5e75989065190b682ffa1",
+        "matches": false,
+        "path": "main/wrf.F",
+        "pre_edit_sha256": "c9d1e1794c1a0a4a51e25e485b9e78d446631c0c25212ef7df4f440d8668bf70"
+      },
+      {
+        "current_sha256": "b030fe8f7611f0befd154ad5a50e030a8bae90ceb23726c0b18072e6b13fa799",
+        "matches": false,
+        "path": "main/module_wrf_top.F",
+        "pre_edit_sha256": "3a6645ae7e4c64b8757987924c9fe661344c307c6de447cdc6fd063d09b1683c"
+      },
+      {
+        "current_sha256": "b4996f2323cb311486a8d11229fb3531734408c923e932137a283bcc1c38db61",
+        "matches": false,
+        "path": "frame/wrf_shutdown.F",
+        "pre_edit_sha256": "66bbfc5ecef2410d46e9ffe20303c13cfe62e7cf1a68e229fb09c8067852123a"
+      },
+      {
+        "current_sha256": "04292281429ce22b0427e43315fe9b20c993cb8c295beadb56c122e588b3314c",
+        "matches": true,
+        "path": "external/RSL_LITE/module_dm.F",
+        "pre_edit_sha256": "04292281429ce22b0427e43315fe9b20c993cb8c295beadb56c122e588b3314c"
+      },
+      {
+        "current_sha256": "c9f6e4584466b1709319db8d90c54c826839fce073d453202884fa0357a51a20",
+        "matches": false,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c",
+        "pre_edit_sha256": "d4f54ee5ffd36679ebbde5dc37e9a49283bcbb7cde205a91a0b7694d156ee032"
+      },
+      {
+        "current_sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad",
+        "matches": true,
+        "path": "external/libtorch_wrf/sdirk3/tests/native_twin_runner.py",
+        "pre_edit_sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+      }
+    ],
+    "interpretation": "prior Fortran zero-node AST and tracer AST retained as historical; old tracer AST source pin does not match current C tracer, so it was not reused for post-change C",
+    "old_graph_artifacts": [
+      {
+        "edges": 0,
+        "label": "prior_fortran_shutdown_ast",
+        "nodes": 0,
+        "note": "old receipt: four Fortran files, extractor yielded 0 nodes/0 edges",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/mpi_shutdown_ast/graphify-out/graph.json",
+        "sha256": "1d701c38ceb32b99d2f2a0fcbea4ebff375a533fa852989c3f6e87fab3126071"
+      },
+      {
+        "edges": 15,
+        "label": "prior_mpi_trace_c_ast",
+        "nodes": 6,
+        "note": "single-file C tracer graph",
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-idealized-twin-20261022/green_graph/mpi_trace_v3_ast/graphify-out/graph.json",
+        "sha256": "fbb7e05e5979514f3de1f4d4de0edd3ae11d8b42f524fb65f810328a1353c4f0"
+      }
+    ],
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/graph_pre_edit.json",
+    "recorded_base": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+    "recorded_target": "/private/tmp/native-exit-trace-20261024",
+    "sha256": "ce5f12685d6ae57b2169c216907b96803500c96a5f3918b914a81d67661f7b7c"
+  },
+  "refresh_execution": {
+    "MPI_or_WRF_launches": 0,
+    "W_source_files_edited": false,
+    "builds_run": false,
+    "model_runs": 0,
+    "tests_run": false,
+    "whole_repository_scan": false
+  },
+  "refresh_history": {
+    "changed_ast_sources": [
+      "native_mpi_finalize_trace.c",
+      "test_native_exit_trace.py"
+    ],
+    "previous_binding_sha256": "e3ec00bf116f5bbfc74df98ad33daaf7bd34d5912b8572ecd3af0ac3077a0a6a",
+    "reason": "final POSIX portability delta; C owns its feature-test macro and fake-object test verifies no command-line define",
+    "reused_unchanged_recorder_ast_sha256": "f018a362eaa32ca82a2e6d559185bb1062a2614002b3ebd31823020fd139fa14"
+  },
+  "schema": "native_exit_trace_graph_binding_v1",
+  "source_pins": [
+    {
+      "included_in_ast": true,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c",
+      "sha256": "c9f6e4584466b1709319db8d90c54c826839fce073d453202884fa0357a51a20"
+    },
+    {
+      "included_in_ast": true,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_exit_trace.py",
+      "sha256": "f018a362eaa32ca82a2e6d559185bb1062a2614002b3ebd31823020fd139fa14"
+    },
+    {
+      "included_in_ast": true,
+      "path": "external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py",
+      "sha256": "edfb303cbb9623742b63f2a25ab8a3dda544e56a05b23cdfcbf6d4b9562f3ab0"
+    },
+    {
+      "included_in_ast": false,
+      "path": "main/wrf.F",
+      "sha256": "352ae31b19e74eabad6fccbcb48a36d11a933d81ecf5e75989065190b682ffa1"
+    },
+    {
+      "included_in_ast": false,
+      "path": "main/module_wrf_top.F",
+      "sha256": "b030fe8f7611f0befd154ad5a50e030a8bae90ceb23726c0b18072e6b13fa799"
+    },
+    {
+      "included_in_ast": false,
+      "path": "frame/wrf_shutdown.F",
+      "sha256": "b4996f2323cb311486a8d11229fb3531734408c923e932137a283bcc1c38db61"
+    },
+    {
+      "included_in_ast": false,
+      "path": "frame/module_dm.F",
+      "sha256": "c644d44f6bd9865ae82ef2f3bd234cd8344d2d475cf67b32d27bec1d9b86adb7"
+    },
+    {
+      "included_in_ast": false,
+      "path": "share/mediation_wrfmain.F",
+      "sha256": "91b92d4c21536c3f9df8ac175c2e5410d31e3b7b5af66f7d00b9bd56872dce25"
+    },
+    {
+      "included_in_ast": false,
+      "path": ".github/workflows/sdirk3-ci.yml",
+      "sha256": "44de8c742cdcfac96df75dc378b4e8cc80071d25a7eb3986f8805d7274424dbc"
+    },
+    {
+      "included_in_ast": false,
+      "path": "external/libtorch_wrf/sdirk3/tests/native_twin_runner.py",
+      "sha256": "5809810ace0601f9cae572d41489053c48a9ef7da10573634a17784b41454aad"
+    },
+    {
+      "included_in_ast": false,
+      "path": "external/RSL_LITE/module_dm.F",
+      "sha256": "04292281429ce22b0427e43315fe9b20c993cb8c295beadb56c122e588b3314c"
+    }
+  ],
+  "supporting_pre_edit_receipts": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/pre_edit_sources.json",
+      "sha256": "e74b29e371ebb9b0711b18340a607dcf4b4dd51b166bbf20d69e708551303f17"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/native-exit-trace-20261024/baseline_preprocess_hashes.json",
+      "sha256": "af3afd3a6252a6bd716f6c3db8b59cb2b559f9b3942217f28dfc864f38dab027"
+    }
+  ],
+  "target_worktree": {
+    "base_head": "72512fc09f5f0ca7a28306b9aaad949719ef0b74",
+    "head_tree": "340e8933ea0a747487f2f1ee9b9507cdab6dce0d",
+    "no_graph_refresh_source_edits": true,
+    "parents": [
+      "0816c32393c7a0b12081e1d4c4e5f8b0ad46c9b3",
+      "51b1aa5da42ea3978bd654d01bbe3e76efa6b30e"
+    ],
+    "path": "/private/tmp/native-exit-trace-20261024",
+    "scope": "source tree at supplied base plus listed local source edits",
+    "worktree_status": [
+      " M .github/workflows/sdirk3-ci.yml",
+      " M external/libtorch_wrf/sdirk3/tests/native_mpi_finalize_trace.c",
+      " M frame/wrf_shutdown.F",
+      " M main/module_wrf_top.F",
+      " M main/wrf.F",
+      "?? external/libtorch_wrf/sdirk3/tests/native_exit_trace.md",
+      "?? external/libtorch_wrf/sdirk3/tests/native_exit_trace.py",
+      "?? external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py"
+    ]
+  }
+}
