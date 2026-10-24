@@ -1,0 +1,17 @@
+{
+  "scope": "PublishedCSVlineendingsnormalizedtoLF; archivedoriginalCRLFpreserved; numeric/textcellvaluesunchanged",
+  "rows": [
+    {
+      "file": "costs.csv",
+      "published_lf_sha256": "0692e35d2cff646bad434b64f3c80088965490841ae448b537ec10b432a26c99",
+      "archived_original_sha256": "cf05940b22d8f3705773bdf35e9724dec4f6568efb14701b0685e3bb5c4f2a0c",
+      "all_parsed_rows_identical": true
+    },
+    {
+      "file": "native_field_parity.csv",
+      "published_lf_sha256": "3c3eddb58db1a29b3b042b4dd083e2018864bd2ce78f7ab8415e3dad44b15ebc",
+      "archived_original_sha256": "4e3b706745412e42d0e22bb94dc37c886611ce74062b1edae5b3432c49711140",
+      "all_parsed_rows_identical": true
+    }
+  ]
+}
