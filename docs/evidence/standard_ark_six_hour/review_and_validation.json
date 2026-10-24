@@ -1,0 +1,33 @@
+{
+  "at_local": "2026-10-24T14:34:34.198235+09:00",
+  "source_base": "95ba8a6c331f84741aa2d4b5310b9eb88b139c2e",
+  "model_runs_this_step": {
+    "ARK600_six_model_hours": 1,
+    "RK3": 0,
+    "MPI_reproducer": 0,
+    "five_day": 0
+  },
+  "actual_native_run": {
+    "return_code": 0,
+    "outer_steps": 36,
+    "converged_implicit_stages": 108,
+    "reported_newton_checks": 324,
+    "newton_corrections": 216,
+    "cleanup_remaining_owned": 0
+  },
+  "root_checks": [
+    "Seven raw-array endpoint RMS/max/bias recomputed",
+    "W spatial squared-error distribution recomputed",
+    "JVP count/time and per-correction reset source confirmed",
+    "Portable offline data-only reanalysis matched nine mathematical sections exactly",
+    "ZIP CRC and all 80 indexed payload hashes match",
+    "W comparison plot visually inspected"
+  ],
+  "tests_scope": "Production analyzer/source unchanged; no broad CTest/model regression rerun. New checks are actual native run, exact-source/config pins, independent array comparisons and archive reanalysis.",
+  "green": "PASS: all81ZIPentries CRC OK; all80payload hashes/sizes match,8nativeCDFs, relative data-only plan paths andREADMEcommands valid; allmetrics/wave/mass/JVP matchreport.",
+  "red": "PASS: native/runtime/source/data/cost/scope andaddedmode1,mass,JVPparagraphs match. Editorial namelist count clarified and exact final timestamp refreshed.",
+  "report_sha256": "d1180cdbe2a2e1283511766784916b7a9436c680e766ce500973ecf109520fa7",
+  "archive_sha256": "48af9a6500d8b083252b8f01db575938c144a0313fff7d15705fd84be413a1f3",
+  "readme_sha256": "d6e6e0c27d7c649e7e3c828b9dcdaa0422fb30e96d4fdcb98d796e8c0cf3015f",
+  "staged_diff_check": "passed"
+}

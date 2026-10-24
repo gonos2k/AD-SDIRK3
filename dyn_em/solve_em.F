@@ -328,9 +328,11 @@ SUBROUTINE solve_em ( grid , config_flags  &
        num_3d_s    = PARAM_FIRST_SCALAR - 1
    endif
 
-   WRITE(0,*) '=== FORTRAN DEBUG: About to check USE_SDIRK3 block ==='
-   WRITE(0,*) '=== FORTRAN DEBUG: config_flags%time_integration_scheme =', config_flags%time_integration_scheme
 #ifdef USE_SDIRK3
+   IF (config_flags%sdirk3_debug_level >= 2) THEN
+      WRITE(0,*) '=== FORTRAN DEBUG: About to check USE_SDIRK3 block ==='
+      WRITE(0,*) '=== FORTRAN DEBUG: config_flags%time_integration_scheme =', config_flags%time_integration_scheme
+   END IF
    ! v20.14r27o: Removed duplicate sdirk3_initialize_solvers call.
    ! Single init point is at solve_em.F:618 (itimestep==1, after tile setup).
    ! Previous unconditional call here ran every timestep, wasted by idempotent guard.
@@ -604,11 +606,13 @@ SUBROUTINE solve_em ( grid , config_flags  &
 #ifdef USE_SDIRK3
    ! Check if using SDIRK3 unified implicit time integration
    IF (config_flags%time_integration_scheme == 6) THEN
-      WRITE(0,*) '=== SDIRK3 FORTRAN: Entering main SDIRK3 computation ==='
-      WRITE(0,*) '=== SDIRK3 FORTRAN: itimestep =', grid%itimestep
-      WRITE(0,*) '=== SDIRK3 FORTRAN: num_tiles =', grid%num_tiles
-      WRITE(0,*) '=== SDIRK3 FORTRAN: checking initialization...'
-      CALL FLUSH(0)
+      IF (config_flags%sdirk3_debug_level >= 2) THEN
+         WRITE(0,*) '=== SDIRK3 FORTRAN: Entering main SDIRK3 computation ==='
+         WRITE(0,*) '=== SDIRK3 FORTRAN: itimestep =', grid%itimestep
+         WRITE(0,*) '=== SDIRK3 FORTRAN: num_tiles =', grid%num_tiles
+         WRITE(0,*) '=== SDIRK3 FORTRAN: checking initialization...'
+         CALL FLUSH(0)
+      END IF
       
       ! Initialize SDIRK3 solvers on first timestep
       IF (grid%itimestep == 1 .AND. grid%num_tiles > 0) THEN
@@ -617,20 +621,28 @@ SUBROUTINE solve_em ( grid , config_flags  &
          ! For dry dynamics (mp_physics=0), cqu/cqv/cqw will be set to 1.0 by calc_cq
          ! No special handling needed here - calc_cq handles both moist and dry cases
          
-         WRITE(0,*) '=== BEFORE sdirk3_initialize_solvers ==='
-         CALL FLUSH(0)
+         IF (config_flags%sdirk3_debug_level >= 2) THEN
+            WRITE(0,*) '=== BEFORE sdirk3_initialize_solvers ==='
+            CALL FLUSH(0)
+         END IF
          CALL sdirk3_initialize_solvers(grid, config_flags)
-         WRITE(0,*) '=== AFTER sdirk3_initialize_solvers ==='
-         CALL FLUSH(0)
+         IF (config_flags%sdirk3_debug_level >= 2) THEN
+            WRITE(0,*) '=== AFTER sdirk3_initialize_solvers ==='
+            CALL FLUSH(0)
+         END IF
          
          ! Set base state after it has been computed in start_em
-         WRITE(0,*) '=== BEFORE set_base_state_sdirk3 ==='
-         CALL FLUSH(0)
+         IF (config_flags%sdirk3_debug_level >= 2) THEN
+            WRITE(0,*) '=== BEFORE set_base_state_sdirk3 ==='
+            CALL FLUSH(0)
+         END IF
          CALL set_base_state_sdirk3(grid, config_flags, &
                                    ids, ide, jds, jde, kds, kde, &
                                    ims, ime, jms, jme, kms, kme)
-         WRITE(0,*) '=== AFTER set_base_state_sdirk3 ==='
-         CALL FLUSH(0)
+         IF (config_flags%sdirk3_debug_level >= 2) THEN
+            WRITE(0,*) '=== AFTER set_base_state_sdirk3 ==='
+            CALL FLUSH(0)
+         END IF
       END IF
       
       ! Prepare physics coupling (placeholder for future integration)

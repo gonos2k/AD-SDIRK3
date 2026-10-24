@@ -1,0 +1,4 @@
+label,method,h_seconds,expected_steps,actual_outer_step_count,return_code,wall_seconds_whole_path,ratio_to_rk3_h150_whole_path,peak_sampled_tree_rss_bytes,cost_eligible,accuracy_pass_claim,same_accuracy_speedup_claim,forecast_receipt_path
+rk3_h600,RK3,600,720,720,0,104.982794,0.2688961875518256,516259840,True,False,False,/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/forecast_receipt.json
+rk3_h300,RK3,300,1440,1440,0,203.534168,0.5213193488804725,552173568,True,False,False,/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h300/forecast_receipt.json
+rk3_h150,RK3,150,2880,2880,0,390.421281,1.0,516456448,True,False,False,/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h150/forecast_receipt.json

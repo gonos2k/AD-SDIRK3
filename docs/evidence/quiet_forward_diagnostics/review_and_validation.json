@@ -1,0 +1,23 @@
+{
+  "at_local": "2026-10-24T17:00:23.764298+09:00",
+  "base_commit": "d6d304d99c8163f338b61284e16be88f4a248157",
+  "Green": "PASS independentlyreadallfourpairedCDFs/174numericvars/frame/byteidentity/quiet40markers/sourcepins; archive139entriesCRC+138payloadhashes+oldarraydependencyverified; reportmatches.",
+  "Red": "PASS completeCpp/Fortranmath/safety/optinrecordsourceaudits,prelaunchandfinalruntime/data/prose/costscope; nocorrectnessblocker.",
+  "tests": [
+    "Solver_Diagnostics_Noninterference24/24 onfinalv2archive",
+    "Fixed_Trajectory_Derivativepassed onfinalv2archive",
+    "FGMRES_Contractpassed onunchangedNewton"
+  ],
+  "actual_native_attempts": {
+    "stopped_setup_v1": 1,
+    "final_RK3_six_hour_completed_RC0": 1,
+    "final_ARK_six_hour_completed_RC0": 1
+  },
+  "forecast_parity": "Four0/6hNetCDFs whollybyteidentical topreviouscounterparts;174numericvariableseachfinite",
+  "logging": "40markerclasseszero; no nativeNewton/JVPstatisticsinventedwhenoff",
+  "validation_scope": "Same100kmofficialscale/sixmodelhours/dt600/singleMPIrank; no5days/accuracybudget/sameaccuracyspeedup/R1fixclaim",
+  "report_sha256": "4845a03c8e6e1aebe068723340184083dfff5a26237bd4802f4dee4e61e24319",
+  "evidence_sha256": "8eb47ad5f1bb7f262607439a91f18000d95676ac5dfb9dbca1d599adfb2bbca1",
+  "native_final_executable_sha256": "ad3abbbfdb41a1285fad2894c117b999e5572bc3b08526646ede2a0653a96bab",
+  "local_validation_entry": "Canonicalsource/object/archive/linkreceipts; localtests linkedactualproductioncorearchive,notfullCTest/CIrun"
+}

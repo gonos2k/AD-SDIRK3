@@ -1,0 +1,27 @@
+{
+  "archive_repo_path": "docs/evidence/standard_ark_six_hour/evidence.zip",
+  "archive_sha256": "48af9a6500d8b083252b8f01db575938c144a0313fff7d15705fd84be413a1f3",
+  "reason": "All four new finalCDF files are byte-identical to existing archive payloads; retain originals, avoidduplicatearrays. Actual new files were directly read and compared byRoot/Green/Red.",
+  "frames": {
+    "ARK_00:00:00": {
+      "archive_entry": "data/runs/ark_h600/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "new_output_file_bytes": 1989217
+    },
+    "ARK_06:00:00": {
+      "archive_entry": "data/runs/ark_h600/wrfout_d01_0001-01-01_06:00:00",
+      "sha256": "0b61c0d7fa6129f1f7a9d4f79a72c7e0292c142b85de4d76221b400baa1e4dd9",
+      "new_output_file_bytes": 4636804
+    },
+    "RK3_00:00:00": {
+      "archive_entry": "data/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "new_output_file_bytes": 1989217
+    },
+    "RK3_06:00:00": {
+      "archive_entry": "data/runs/rk3_h600/wrfout_d01_0001-01-01_06:00:00",
+      "sha256": "9c61f7dd3b4ccf5bce7659f787cf16ace4d8b54fb87814ad9ba6aa4057795347",
+      "new_output_file_bytes": 4924493
+    }
+  }
+}

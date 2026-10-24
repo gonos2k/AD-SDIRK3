@@ -6155,9 +6155,11 @@ vertical_coefficients:
                     "FP64 state carry requires the dry fixed-grid forward ARK path");
         const auto timestep = wrf::sdirk3::mpi_safety::currentHostTimestep();
         TORCH_CHECK(timestep > 0, "FP64 state carry requires a host timestep token");
-        std::cerr << "[FP64 STATE CARRY] timestep=" << timestep
-                  << " input=" << (fp64_carry_state_.defined() ? "internal" : "host")
-                  << std::endl;
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+            std::cerr << "[FP64 STATE CARRY] timestep=" << timestep
+                      << " input=" << (fp64_carry_state_.defined() ? "internal" : "host")
+                      << std::endl;
+        }
         if (fp64_carry_state_.defined()) {
             TORCH_CHECK(timestep == fp64_carry_timestep_ + 1 && dt == fp64_carry_dt_ &&
                         fp64_carry_state_.is_cpu() &&
@@ -13081,8 +13083,10 @@ vertical_coefficients:
             fp64_carry_fingerprint_ = fixedTrajectoryInputFingerprint();
             fp64_carry_timestep_ = wrf::sdirk3::mpi_safety::currentHostTimestep();
             fp64_carry_dt_ = dt;
-            std::cerr << "[FP64 STATE CARRY] published timestep="
-                      << fp64_carry_timestep_ << std::endl;
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                std::cerr << "[FP64 STATE CARRY] published timestep="
+                          << fp64_carry_timestep_ << std::endl;
+            }
         } else {
             clearInternalFp64Carry();
         }
@@ -21696,7 +21700,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                 // v18 DIAG: Forward-mode AD tangent propagation check for W-PGF
                 // Only prints when forward-mode AD is active (mu has tangent from _make_dual)
-                {
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                     static bool fwad_diag_printed = false;
                     // Check if we're in a forward-mode AD evaluation by testing mu for tangent
                     bool in_fwad = false;
@@ -22244,7 +22248,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 rw_tend = rw_tend + w_pgf_buoy_all;
 
                 // v18 DIAG: Check tangent after PGF addition (only during forward-mode AD)
-                {
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                     static bool fwad_post_pgf_printed = false;
                     bool in_fwad_post = false;
                     try {
@@ -26069,7 +26073,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     }
 
     // v18 DIAG: Check tangent after coupled-to-velocity conversion (only during forward-mode AD)
-    {
+    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
         static bool fwad_conv_printed = false;
         bool in_fwad_conv = false;
         try {
@@ -34516,8 +34520,6 @@ boundary_tensors_done:
         auto u_east_max_cpu = u_east_halo_cpu.abs().max();
         float u_west_max = u_west_max_cpu.item<float>();
         float u_east_max = u_east_max_cpu.item<float>();
-        std::cerr << "[SDIRK3] U west halo max: " << u_west_max
-                  << ", east halo max: " << u_east_max << std::endl;
 
         // Check V halo values
         auto v_west_halo_cpu = v_contig.slice(2, 0, halo_width).detach().to(torch::kCPU);
@@ -34527,11 +34529,17 @@ boundary_tensors_done:
         auto v_east_max_cpu = v_east_halo_cpu.abs().max();
         float v_west_max = v_west_max_cpu.item<float>();
         float v_east_max = v_east_max_cpu.item<float>();
-        std::cerr << "[SDIRK3] V west halo max: " << v_west_max
-                  << ", east halo max: " << v_east_max << std::endl;
+        const bool repair_halos = u_west_max > 1e6 || u_east_max > 1e6 ||
+                                  v_west_max > 1e6 || v_east_max > 1e6;
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 || repair_halos) {
+            std::cerr << "[SDIRK3] U west halo max: " << u_west_max
+                      << ", east halo max: " << u_east_max << std::endl;
+            std::cerr << "[SDIRK3] V west halo max: " << v_west_max
+                      << ", east halo max: " << v_east_max << std::endl;
+        }
 
         // If halos contain extreme values, apply periodic boundaries NOW
-        if (u_west_max > 1e6 || u_east_max > 1e6 || v_west_max > 1e6 || v_east_max > 1e6) {
+        if (repair_halos) {
             
             // Apply periodic boundaries for U (requires halo exchange object)
             if (config_flags_periodic_x_) {

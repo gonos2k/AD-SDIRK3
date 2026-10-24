@@ -1,0 +1,24 @@
+{
+  "at_local": "2026-10-24T13:17:26.644945+09:00",
+  "green": "PASS: scientific prose and correct U/V verified; 96 ZIP entries CRC checked; all 95 manifest-indexed payload hashes/sizes match; source/test pins match worktree.",
+  "red": "Final prose review passes: no truth/order/ARK-failure/full-matrix/speedup overclaim.",
+  "local_tests": {
+    "synthetic_NetCDF_tests": 9,
+    "passed": true,
+    "ruff": "passed",
+    "diff_check": "passed"
+  },
+  "source_sha256": {
+    "docs/(202610241316)_standard_forward_rk3_baseline_and_ark_pending.md": "378095d1acf3757ecdd61d707f0c61b1dee376a9ae420c8d38eedc3126ec8bca",
+    "tools/benchmark_wrf_accuracy_cost.py": "9fc8475c33194f146f59ad8dc5e6ff394564599da0ca68fcc85404b0702aa2d4",
+    "tools/test_benchmark_wrf_accuracy_cost.py": "f666b313afbed083cc2626b64f2931bcd7a383df0bb819194b9aa41eee713f99"
+  },
+  "no_production_source_edit": true,
+  "lean_ARK_launched": false,
+  "presentation_csv": "Repository-facing CSV copies use LF; original CRLF bytes and hashes remain unchanged inside evidence.zip.",
+  "presentation_sha256": {
+    "costs.csv": "f331baa2ba8b3ea08254f9f098f2c593094f215be764c79b6ca02457f8b87791",
+    "timestep_sensitivity.csv": "b4bc3b9f77dd33be83d12ce87af411cf2b21fb3de36d499ae17dd07b6207bb99",
+    "summary.json": "39630b5cba55e4ab8cf7aa68774d12a092f3fb569a175413f7733c9753a74d58"
+  }
+}

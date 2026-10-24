@@ -1,0 +1,21 @@
+{
+  "archive": "evidence.zip",
+  "bytes": 22141042,
+  "sha256": "48af9a6500d8b083252b8f01db575938c144a0313fff7d15705fd84be413a1f3",
+  "entries": 81,
+  "crc_verified": true,
+  "indexed_payloads_verified": 80,
+  "actual_native_history_frames": 8,
+  "offline_reanalysis_exact_sections": [
+    "expected_grid",
+    "endpoint_seconds",
+    "owned_point_counts",
+    "comparisons",
+    "reference_step_sensitivity",
+    "comparison_pair_sensitivities",
+    "wave_mode1_diagnostics",
+    "wave_pairwise_diagnostics",
+    "budgets"
+  ],
+  "binary_included": false
+}

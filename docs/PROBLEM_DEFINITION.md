@@ -442,6 +442,35 @@ not prerequisites and are not added as new completion gates.
 
 ## Next action and validation of this definition
 
+The highest open forward-validation task is now the **official-scale dry
+`em_b_wave` comparison against genuine WRF split-explicit RK3**, using the
+v4.7.0 spatial/physical setup, 600/300/150 s outer steps and a continuous five-day
+window. Preserve the closed 240 s derivative/twin cases; their completion does
+not certify practical 600 s forward performance. Full-map derivative and
+assimilation generalization are subsequent scope decisions.
+
+The [standard-case execution report](<(202610241316)_standard_forward_rk3_baseline_and_ark_pending.md>)
+records three completed five-day RK3 baselines and exact post-initialization
+state/base-field agreement. The subsequent
+[ARK600 six-hour screen](<(202610241427)_standard_ark_six_hour_screen.md>) completed
+36 outer steps and 108 implicit stages with RC0 and admissible saved states.
+Its same-horizon field comparison to archived RK3 is now available; its RSL main-step
+cost is about 485 times the RK3-600 prefix. This is a six-hour full-model-path difference/cost
+screen, not a same-accuracy speedup or five-day stability result. The earlier
+instrumentation-heavy setup stop remains separately preserved. Lean ARK five-day
+runs, ARK internal timestep sensitivity and the full matrix remain open; no new
+long-run authorization or physical accuracy tolerance is inferred from this screen.
+MPI exit root-cause work remains a separate unresolved engineering item.
+
+The subsequent [quiet-forward validation](<(202610241655)_quiet_forward_diagnostics_native_validation.md>)
+gates optional JVP timers, norm diagnostics, and solver/Fortran debug output behind
+existing controls. Explicit DA graph/trajectory requests remain separate from the
+Newton JVP. Two new quiet six-hour runs completed normally; their t=0 and six-hour
+NetCDF files are byte-identical to each method's previous outputs. The matched
+quiet measurements are about 304.64 times RK3 in launcher elapsed time and 443.30
+times RK3 in RSL main-step time for ARK600. These are single same-timestep,
+six-hour cost observations, with no new accuracy acceptance or five-day claim.
+
 For the selected dry 240 s forward instance, the native terminal and
 [one-midpoint linear VJP/FD probes](<(202610210936)_native_two_time_adjoint.md>)
 are complete within their one-direction, FP32-chained scopes. The

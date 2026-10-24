@@ -1,0 +1,1014 @@
+{
+  "schema": "rk3_actual_postprocess_summary_v1",
+  "analysis_json": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/analysis_rk3/rk3_analysis.json",
+  "model_run_scope": "Three actual RK3 WRF runs; this turn performed postprocessing only.",
+  "reference_label": "rk3_h150",
+  "reference_check_label": "rk3_h300",
+  "interpretation": "h150 is the finest completed RK3 comparator, not exact truth. No accuracy threshold or same-accuracy speedup claim is applied. Absolute maxima are now reported per field with native units; no cross-variable “largest error” ranking is made.",
+  "shared_initial_state_gate": {
+    "status": "passed",
+    "comparison_certified": true,
+    "source_kind": "wrfout_t0",
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "start_timestamp": "0001-01-01_00:00:00",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "base_fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "global_attributes_checked": [
+      "CEN_LAT",
+      "CEN_LON",
+      "DX",
+      "DY",
+      "MAP_PROJ",
+      "STAND_LON",
+      "TRUELAT1",
+      "TRUELAT2"
+    ],
+    "signed_zero_equivalent": true,
+    "comparison_method": "numerically exact array equality; byte/log text equality not required"
+  },
+  "grid": {
+    "nx": 40,
+    "ny": 80,
+    "nz": 64
+  },
+  "time": {
+    "start": "0001-01-01_00:00:00",
+    "end": "0001-01-06_00:00:00",
+    "duration_seconds": 432000,
+    "history_states": 21
+  },
+  "run_receipts": {
+    "rk3_h600": {
+      "status": "completed",
+      "return_code": 0,
+      "expected_steps": 720,
+      "actual_outer_step_count": 720,
+      "wall_seconds": 104.982794,
+      "peak_sampled_tree_rss_bytes": 516259840,
+      "cost_eligible": true,
+      "accuracy_pass_claim": false,
+      "same_accuracy_speedup_claim": false
+    },
+    "rk3_h300": {
+      "status": "completed",
+      "return_code": 0,
+      "expected_steps": 1440,
+      "actual_outer_step_count": 1440,
+      "wall_seconds": 203.534168,
+      "peak_sampled_tree_rss_bytes": 552173568,
+      "cost_eligible": true,
+      "accuracy_pass_claim": false,
+      "same_accuracy_speedup_claim": false
+    },
+    "rk3_h150": {
+      "status": "completed",
+      "return_code": 0,
+      "expected_steps": 2880,
+      "actual_outer_step_count": 2880,
+      "wall_seconds": 390.421281,
+      "peak_sampled_tree_rss_bytes": 516456448,
+      "cost_eligible": true,
+      "accuracy_pass_claim": false,
+      "same_accuracy_speedup_claim": false
+    }
+  },
+  "whole_path_wall_ratios_to_rk3_h150": {
+    "rk3_h600": 0.2688961875518256,
+    "rk3_h300": 0.5213193488804725,
+    "rk3_h150": 1.0
+  },
+  "candidate_peak_errors_vs_h150": {
+    "rk3_h600": {
+      "per_field_peak_relative_rms": {
+        "U": {
+          "value": 0.03208863024337173,
+          "timestamp": "0001-01-02_06:00:00"
+        },
+        "V": {
+          "value": 0.02043801032516126,
+          "timestamp": "0001-01-02_06:00:00"
+        },
+        "W": {
+          "value": 0.06290742683935922,
+          "timestamp": "0001-01-02_18:00:00"
+        },
+        "PH": {
+          "value": 0.06968193708660046,
+          "timestamp": "0001-01-03_06:00:00"
+        },
+        "T": {
+          "value": 0.005879868704810497,
+          "timestamp": "0001-01-01_12:00:00"
+        },
+        "MU": {
+          "value": 0.14867416434729602,
+          "timestamp": "0001-01-01_18:00:00"
+        },
+        "P_total": {
+          "value": 0.14880024002117623,
+          "timestamp": "0001-01-01_18:00:00"
+        }
+      },
+      "per_field_peak_absolute_error": {
+        "U": {
+          "value": 0.5402705669403076,
+          "timestamp": "0001-01-05_18:00:00",
+          "index": [
+            0,
+            43,
+            23
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "m s-1"
+        },
+        "V": {
+          "value": 0.8124675750732422,
+          "timestamp": "0001-01-06_00:00:00",
+          "index": [
+            0,
+            40,
+            27
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "m s-1"
+        },
+        "W": {
+          "value": 0.0016511045396327972,
+          "timestamp": "0001-01-05_12:00:00",
+          "index": [
+            31,
+            44,
+            15
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "m s-1"
+        },
+        "PH": {
+          "value": 19.64501953125,
+          "timestamp": "0001-01-02_12:00:00",
+          "index": [
+            63,
+            79,
+            32
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "m2 s-2"
+        },
+        "T": {
+          "value": 0.198486328125,
+          "timestamp": "0001-01-06_00:00:00",
+          "index": [
+            0,
+            24,
+            36
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "K"
+        },
+        "MU": {
+          "value": 24.19775390625,
+          "timestamp": "0001-01-05_12:00:00",
+          "index": [
+            45,
+            7
+          ],
+          "axes": [
+            "y",
+            "x"
+          ],
+          "units": "Pa"
+        },
+        "P_total": {
+          "value": 23.913330078125,
+          "timestamp": "0001-01-05_12:00:00",
+          "index": [
+            0,
+            45,
+            7
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "Pa"
+        }
+      },
+      "day5_metrics": {
+        "U": {
+          "rms": 0.027693791783512705,
+          "max_abs": 0.4922471046447754,
+          "mean_bias": -0.001082369886679302,
+          "mean_absolute_error": 0.019357379721893338,
+          "relative_rms_to_reference_signal": 0.0035798968431494118,
+          "max_abs_index": [
+            0,
+            43,
+            27
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "V": {
+          "rms": 0.03346674902815411,
+          "max_abs": 0.8124675750732422,
+          "mean_bias": 0.0016201101039767616,
+          "mean_absolute_error": 0.019296011488276657,
+          "relative_rms_to_reference_signal": 0.003862776205547319,
+          "max_abs_index": [
+            0,
+            40,
+            27
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "W": {
+          "rms": 0.00018517286546725106,
+          "max_abs": 0.0015248559357132763,
+          "mean_bias": 5.126370145359743e-07,
+          "mean_absolute_error": 0.00012300661332692212,
+          "relative_rms_to_reference_signal": 0.013764538344873917,
+          "max_abs_index": [
+            63,
+            44,
+            26
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "PH": {
+          "rms": 2.1686541591957753,
+          "max_abs": 13.94677734375,
+          "mean_bias": 0.02273910014744615,
+          "mean_absolute_error": 1.5568329138538683,
+          "relative_rms_to_reference_signal": 0.0038305599260436063,
+          "max_abs_index": [
+            63,
+            0,
+            28
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "T": {
+          "rms": 0.009603177523797695,
+          "max_abs": 0.198486328125,
+          "mean_bias": 0.000342898815870285,
+          "mean_absolute_error": 0.004394660145044327,
+          "relative_rms_to_reference_signal": 0.0020763714792238017,
+          "max_abs_index": [
+            0,
+            24,
+            36
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "MU": {
+          "rms": 4.397046289452553,
+          "max_abs": 22.10302734375,
+          "mean_bias": -8.462537080049515e-06,
+          "mean_absolute_error": 3.372220810893923,
+          "relative_rms_to_reference_signal": 0.0032128267670554008,
+          "max_abs_index": [
+            45,
+            12
+          ],
+          "max_abs_index_axes": [
+            "y",
+            "x"
+          ]
+        },
+        "P_total": {
+          "rms": 1.9487097570142735,
+          "max_abs": 21.809326171875,
+          "mean_bias": 0.0004396451683714986,
+          "mean_absolute_error": 1.1586661582253874,
+          "relative_rms_to_reference_signal": 0.0032138154829471333,
+          "max_abs_index": [
+            0,
+            45,
+            12
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        }
+      }
+    },
+    "rk3_h300": {
+      "per_field_peak_relative_rms": {
+        "U": {
+          "value": 0.02318613892353188,
+          "timestamp": "0001-01-02_06:00:00"
+        },
+        "V": {
+          "value": 0.014454945876390065,
+          "timestamp": "0001-01-02_06:00:00"
+        },
+        "W": {
+          "value": 0.04404201251547568,
+          "timestamp": "0001-01-03_00:00:00"
+        },
+        "PH": {
+          "value": 0.04732400778627976,
+          "timestamp": "0001-01-03_06:00:00"
+        },
+        "T": {
+          "value": 0.0019591799298589083,
+          "timestamp": "0001-01-01_12:00:00"
+        },
+        "MU": {
+          "value": 0.1107447855750081,
+          "timestamp": "0001-01-01_18:00:00"
+        },
+        "P_total": {
+          "value": 0.11084952193400084,
+          "timestamp": "0001-01-01_18:00:00"
+        }
+      },
+      "per_field_peak_absolute_error": {
+        "U": {
+          "value": 0.22608327865600586,
+          "timestamp": "0001-01-05_18:00:00",
+          "index": [
+            0,
+            43,
+            23
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "m s-1"
+        },
+        "V": {
+          "value": 0.33794593811035156,
+          "timestamp": "0001-01-06_00:00:00",
+          "index": [
+            0,
+            40,
+            27
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "m s-1"
+        },
+        "W": {
+          "value": 0.0007658757967874408,
+          "timestamp": "0001-01-03_00:00:00",
+          "index": [
+            63,
+            78,
+            19
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "m s-1"
+        },
+        "PH": {
+          "value": 13.56591796875,
+          "timestamp": "0001-01-02_12:00:00",
+          "index": [
+            63,
+            79,
+            32
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "m2 s-2"
+        },
+        "T": {
+          "value": 0.085693359375,
+          "timestamp": "0001-01-06_00:00:00",
+          "index": [
+            0,
+            24,
+            36
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "K"
+        },
+        "MU": {
+          "value": 13.614057540893555,
+          "timestamp": "0001-01-02_12:00:00",
+          "index": [
+            79,
+            32
+          ],
+          "axes": [
+            "y",
+            "x"
+          ],
+          "units": "Pa"
+        },
+        "P_total": {
+          "value": 13.39912223815918,
+          "timestamp": "0001-01-02_12:00:00",
+          "index": [
+            0,
+            79,
+            32
+          ],
+          "axes": [
+            "z",
+            "y",
+            "x"
+          ],
+          "units": "Pa"
+        }
+      },
+      "day5_metrics": {
+        "U": {
+          "rms": 0.014614566105477834,
+          "max_abs": 0.21344423294067383,
+          "mean_bias": -0.0005756504011862385,
+          "mean_absolute_error": 0.011071547229995376,
+          "relative_rms_to_reference_signal": 0.0018891829430214033,
+          "max_abs_index": [
+            0,
+            43,
+            27
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "V": {
+          "rms": 0.015026889005358748,
+          "max_abs": 0.33794593811035156,
+          "mean_bias": 0.0010978117015523127,
+          "mean_absolute_error": 0.009502235641780307,
+          "relative_rms_to_reference_signal": 0.0017344233001080939,
+          "max_abs_index": [
+            0,
+            40,
+            27
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "W": {
+          "rms": 0.00010676604087553141,
+          "max_abs": 0.0006262829410843551,
+          "mean_bias": 1.2322912680541967e-06,
+          "mean_absolute_error": 7.358501148472953e-05,
+          "relative_rms_to_reference_signal": 0.007936288396539034,
+          "max_abs_index": [
+            63,
+            45,
+            26
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "PH": {
+          "rms": 1.3021811707390647,
+          "max_abs": 9.22412109375,
+          "mean_bias": 0.008952602025237866,
+          "mean_absolute_error": 0.8954735984571743,
+          "relative_rms_to_reference_signal": 0.0023000822827976366,
+          "max_abs_index": [
+            63,
+            0,
+            27
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "T": {
+          "rms": 0.00436942743354917,
+          "max_abs": 0.085693359375,
+          "mean_bias": 0.00013708487153053285,
+          "mean_absolute_error": 0.002056073397397995,
+          "relative_rms_to_reference_signal": 0.0009447450576725042,
+          "max_abs_index": [
+            0,
+            24,
+            36
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        },
+        "MU": {
+          "rms": 2.6587591852801076,
+          "max_abs": 9.610107421875,
+          "mean_bias": 1.2332219630479813e-05,
+          "mean_absolute_error": 2.0824299941770734,
+          "relative_rms_to_reference_signal": 0.0019426979193084327,
+          "max_abs_index": [
+            45,
+            12
+          ],
+          "max_abs_index_axes": [
+            "y",
+            "x"
+          ]
+        },
+        "P_total": {
+          "rms": 1.177564359076324,
+          "max_abs": 9.381591796875,
+          "mean_bias": 0.00016370470984838903,
+          "mean_absolute_error": 0.7152247381152119,
+          "relative_rms_to_reference_signal": 0.0019420411663379834,
+          "max_abs_index": [
+            0,
+            45,
+            12
+          ],
+          "max_abs_index_axes": [
+            "z",
+            "y",
+            "x"
+          ]
+        }
+      }
+    }
+  },
+  "within_method_timestep_sensitivity": {
+    "rk3_600_vs_300": {
+      "left_label": "rk3_h600",
+      "right_label": "rk3_h300",
+      "h_seconds": {
+        "rk3_h600": 600.0,
+        "rk3_h300": 300.0
+      },
+      "peak_relative_rms": {
+        "value": 0.0382554137170639,
+        "field": "MU",
+        "timestamp": "0001-01-02_12:00:00"
+      },
+      "day5_metrics": {
+        "U": {
+          "rms": 0.013927219035524872,
+          "max_abs": 0.27880287170410156,
+          "relative_rms_to_reference_signal": 0.0017995657636519899
+        },
+        "V": {
+          "rms": 0.018710627526902692,
+          "max_abs": 0.4752340316772461,
+          "relative_rms_to_reference_signal": 0.0021584588571811943
+        },
+        "W": {
+          "rms": 9.337479871399302e-05,
+          "max_abs": 0.00098997273016721,
+          "relative_rms_to_reference_signal": 0.006929596713675424
+        },
+        "PH": {
+          "rms": 0.9356698565371743,
+          "max_abs": 5.501708984375,
+          "relative_rms_to_reference_signal": 0.0016505254697209708
+        },
+        "T": {
+          "rms": 0.005472313211904309,
+          "max_abs": 0.11279296875,
+          "relative_rms_to_reference_signal": 0.001182027070746504
+        },
+        "MU": {
+          "rms": 1.8519392769623262,
+          "max_abs": 12.492919921875,
+          "relative_rms_to_reference_signal": 0.0013521191757373014
+        },
+        "P_total": {
+          "rms": 0.8221149010474147,
+          "max_abs": 12.427734375,
+          "relative_rms_to_reference_signal": 0.0013547783899370083
+        }
+      },
+      "peak_relative_rms_per_field": {
+        "U": {
+          "value": 0.009058443765445174,
+          "timestamp": "0001-01-02_06:00:00"
+        },
+        "V": {
+          "value": 0.006320423162950313,
+          "timestamp": "0001-01-02_06:00:00"
+        },
+        "W": {
+          "value": 0.02274430304009123,
+          "timestamp": "0001-01-02_18:00:00"
+        },
+        "PH": {
+          "value": 0.022595667911984658,
+          "timestamp": "0001-01-03_06:00:00"
+        },
+        "T": {
+          "value": 0.0039792891946556,
+          "timestamp": "0001-01-01_12:00:00"
+        },
+        "MU": {
+          "value": 0.0382554137170639,
+          "timestamp": "0001-01-02_12:00:00"
+        },
+        "P_total": {
+          "value": 0.038253545525598474,
+          "timestamp": "0001-01-02_12:00:00"
+        }
+      }
+    },
+    "rk3_300_vs_150": {
+      "left_label": "rk3_h300",
+      "right_label": "rk3_h150",
+      "h_seconds": {
+        "rk3_h300": 300.0,
+        "rk3_h150": 150.0
+      },
+      "peak_relative_rms": {
+        "value": 0.10534728479109427,
+        "field": "P_total",
+        "timestamp": "0001-01-01_18:00:00"
+      },
+      "day5_metrics": {
+        "U": {
+          "rms": 0.014614566105477834,
+          "max_abs": 0.21344423294067383,
+          "relative_rms_to_reference_signal": 0.00188888140156924
+        },
+        "V": {
+          "rms": 0.015026889005358748,
+          "max_abs": 0.33794593811035156,
+          "relative_rms_to_reference_signal": 0.0017340497723097393
+        },
+        "W": {
+          "rms": 0.00010676604087553141,
+          "max_abs": 0.0006262829410843551,
+          "relative_rms_to_reference_signal": 0.007929090411283408
+        },
+        "PH": {
+          "rms": 1.3021811707390647,
+          "max_abs": 9.22412109375,
+          "relative_rms_to_reference_signal": 0.00229872662082013
+        },
+        "T": {
+          "rms": 0.00436942743354917,
+          "max_abs": 0.085693359375,
+          "relative_rms_to_reference_signal": 0.0009443644808200359
+        },
+        "MU": {
+          "rms": 2.6587591852801076,
+          "max_abs": 9.610107421875,
+          "relative_rms_to_reference_signal": 0.0019419811334461645
+        },
+        "P_total": {
+          "rms": 1.177564359076324,
+          "max_abs": 9.381591796875,
+          "relative_rms_to_reference_signal": 0.0019413240464562955
+        }
+      },
+      "peak_relative_rms_per_field": {
+        "U": {
+          "value": 0.023070358305621184,
+          "timestamp": "0001-01-02_06:00:00"
+        },
+        "V": {
+          "value": 0.014471339198776762,
+          "timestamp": "0001-01-02_06:00:00"
+        },
+        "W": {
+          "value": 0.04399880739632187,
+          "timestamp": "0001-01-03_00:00:00"
+        },
+        "PH": {
+          "value": 0.04718125514726742,
+          "timestamp": "0001-01-03_06:00:00"
+        },
+        "T": {
+          "value": 0.001958589588003226,
+          "timestamp": "0001-01-01_12:00:00"
+        },
+        "MU": {
+          "value": 0.10525329118938712,
+          "timestamp": "0001-01-01_18:00:00"
+        },
+        "P_total": {
+          "value": 0.10534728479109427,
+          "timestamp": "0001-01-01_18:00:00"
+        }
+      }
+    }
+  },
+  "mode1_wave_amplitude_growth": {
+    "rk3_h600": {
+      "T": {
+        "t0_amplitude": 0.13220643888449107,
+        "day5_amplitude": 2.280144664954207,
+        "growth_ratio": 17.24685033643764,
+        "growth_ratio_status": "defined"
+      },
+      "W": {
+        "t0_amplitude": 0.0,
+        "day5_amplitude": 0.008078429162499828,
+        "growth_ratio": null,
+        "growth_ratio_status": "undefined_zero_initial_mode"
+      },
+      "P": {
+        "t0_amplitude": 0.0004016239561734729,
+        "day5_amplitude": 354.09254974748706,
+        "growth_ratio": 881651.9639942602,
+        "growth_ratio_status": "defined"
+      }
+    },
+    "rk3_h300": {
+      "T": {
+        "t0_amplitude": 0.13220643888449107,
+        "day5_amplitude": 2.2792103794342027,
+        "growth_ratio": 17.239783467925882,
+        "growth_ratio_status": "defined"
+      },
+      "W": {
+        "t0_amplitude": 0.0,
+        "day5_amplitude": 0.008072732408283366,
+        "growth_ratio": null,
+        "growth_ratio_status": "undefined_zero_initial_mode"
+      },
+      "P": {
+        "t0_amplitude": 0.0004016239561734729,
+        "day5_amplitude": 353.9933266628946,
+        "growth_ratio": 881404.9092977779,
+        "growth_ratio_status": "defined"
+      }
+    },
+    "rk3_h150": {
+      "T": {
+        "t0_amplitude": 0.13220643888449107,
+        "day5_amplitude": 2.2785925150624893,
+        "growth_ratio": 17.235109986233713,
+        "growth_ratio_status": "defined"
+      },
+      "W": {
+        "t0_amplitude": 0.0,
+        "day5_amplitude": 0.008064518707030233,
+        "growth_ratio": null,
+        "growth_ratio_status": "undefined_zero_initial_mode"
+      },
+      "P": {
+        "t0_amplitude": 0.0004016239561734729,
+        "day5_amplitude": 353.864271247942,
+        "growth_ratio": 881083.5753410533,
+        "growth_ratio_status": "defined"
+      }
+    }
+  },
+  "mode1_crossphase_coherence_day5": {
+    "rk3_600_vs_300": {
+      "T": {
+        "left_coefficient_rms_amplitude": 2.280144664954207,
+        "right_coefficient_rms_amplitude": 2.2792103794342027,
+        "right_to_left_amplitude_ratio": 0.9995902516474658,
+        "cross_phase_right_minus_left_rad": -0.00039743702956376945,
+        "coherence": 0.9999996957428479,
+        "phase_status": "defined"
+      },
+      "W": {
+        "left_coefficient_rms_amplitude": 0.008078429162499828,
+        "right_coefficient_rms_amplitude": 0.008072732408283366,
+        "right_to_left_amplitude_ratio": 0.9992948190666936,
+        "cross_phase_right_minus_left_rad": -0.0004562479442589242,
+        "coherence": 0.9999843490833144,
+        "phase_status": "defined"
+      },
+      "P": {
+        "left_coefficient_rms_amplitude": 354.09254974748706,
+        "right_coefficient_rms_amplitude": 353.9933266628946,
+        "right_to_left_amplitude_ratio": 0.9997197820607545,
+        "cross_phase_right_minus_left_rad": -0.0009305977107896353,
+        "coherence": 0.9999994649754045,
+        "phase_status": "defined"
+      }
+    },
+    "rk3_300_vs_150": {
+      "T": {
+        "left_coefficient_rms_amplitude": 2.2792103794342027,
+        "right_coefficient_rms_amplitude": 2.2785925150624893,
+        "right_to_left_amplitude_ratio": 0.9997289129703477,
+        "cross_phase_right_minus_left_rad": -0.000628438003755024,
+        "coherence": 0.9999998831718064,
+        "phase_status": "defined"
+      },
+      "W": {
+        "left_coefficient_rms_amplitude": 0.008072732408283366,
+        "right_coefficient_rms_amplitude": 0.008064518707030233,
+        "right_to_left_amplitude_ratio": 0.9989825376542018,
+        "cross_phase_right_minus_left_rad": -0.0018155847564617644,
+        "coherence": 0.9999640217607172,
+        "phase_status": "defined"
+      },
+      "P": {
+        "left_coefficient_rms_amplitude": 353.9933266628946,
+        "right_coefficient_rms_amplitude": 353.864271247942,
+        "right_to_left_amplitude_ratio": 0.9996354298083265,
+        "cross_phase_right_minus_left_rad": -0.0010111867924052483,
+        "coherence": 0.9999980562457221,
+        "phase_status": "defined"
+      }
+    }
+  },
+  "dry_mass_theta_drift_day5": {
+    "rk3_h600": {
+      "day5_dry_mass_relative_change": -1.1259403131126605e-10,
+      "day5_mass_weighted_theta_change_K": 5.103435682940471e-07,
+      "mass_weighted_theta_t0_K": 313.6405727324706,
+      "mass_weighted_theta_day5_K": 313.6405732428142
+    },
+    "rk3_h300": {
+      "day5_dry_mass_relative_change": 1.208382378987042e-10,
+      "day5_mass_weighted_theta_change_K": 6.122309059719555e-08,
+      "mass_weighted_theta_t0_K": 313.6405727324706,
+      "mass_weighted_theta_day5_K": 313.6405727936937
+    },
+    "rk3_h150": {
+      "day5_dry_mass_relative_change": -1.7597566422748155e-11,
+      "day5_mass_weighted_theta_change_K": 1.1606832117649901e-06,
+      "mass_weighted_theta_t0_K": 313.6405727324706,
+      "mass_weighted_theta_day5_K": 313.6405738931538
+    }
+  },
+  "undefined_relative_rms": {
+    "count": 14,
+    "records": [
+      {
+        "candidate": "rk3_h600",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "U"
+      },
+      {
+        "candidate": "rk3_h600",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "V"
+      },
+      {
+        "candidate": "rk3_h600",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "W"
+      },
+      {
+        "candidate": "rk3_h600",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "PH"
+      },
+      {
+        "candidate": "rk3_h600",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "T"
+      },
+      {
+        "candidate": "rk3_h600",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "MU"
+      },
+      {
+        "candidate": "rk3_h600",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "P_total"
+      },
+      {
+        "candidate": "rk3_h300",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "U"
+      },
+      {
+        "candidate": "rk3_h300",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "V"
+      },
+      {
+        "candidate": "rk3_h300",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "W"
+      },
+      {
+        "candidate": "rk3_h300",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "PH"
+      },
+      {
+        "candidate": "rk3_h300",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "T"
+      },
+      {
+        "candidate": "rk3_h300",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "MU"
+      },
+      {
+        "candidate": "rk3_h300",
+        "timestamp": "0001-01-01_00:00:00",
+        "field": "P_total"
+      }
+    ]
+  },
+  "ark_full_run_status": {
+    "ark_h600_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/ark_h600/forecast_receipt.json",
+    "status": "failed_or_incomplete",
+    "return_code": 1,
+    "outer_steps": 4,
+    "expected_steps": 720,
+    "wall_seconds": 290.51284,
+    "cost_eligible": false,
+    "interpretation": "partial ARK attempt is not a forecast accuracy or cost point; no complete ARK h300/h150 receipts available."
+  },
+  "limitations": [
+    "six-hourly output supplies 21 points; no sub-six-hour wave evolution is measured.",
+    "RK3 timestep sensitivities are numerical discretization differences, not exact-solution error estimates.",
+    "Mode-1 cross-phase/coherence uses native fields with no spatial alignment; zero amplitude has undefined phase.",
+    "Dry mass/theta quantities are diagnostics, not accuracy or conservation acceptance thresholds."
+  ],
+  "reference_ratio_caveat": "The largest per-field relative RMS is normalized by that field/reference anomaly norm at each time, not a truth/error budget. P_total peaks at 18h against a 9.713881632 Pa reference-signal RMS (1.445427918 Pa absolute RMS for h600; 1.076779135 Pa for h300); do not treat this as a physical accuracy fail.",
+  "resolution_sensitivity_caveat": "Day-5 W difference RMS is 9.33748e-5 for h600-vs-h300 and 1.06766e-4 for h300-vs-h150; this is nonmonotone and supports no observed-order claim.",
+  "mode1_amplitude_caveat": "Mode-1 P coefficient starts at 4.01624e-4 while day-5 amplitudes are about 354 Pa. Preserve raw amplitudes; the very large ratio to this near-zero initial coefficient is ill-conditioned and is not an accuracy gate. W starts exactly zero, so its growth ratio and initial phase are undefined."
+}

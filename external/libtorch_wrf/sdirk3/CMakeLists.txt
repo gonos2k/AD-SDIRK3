@@ -697,6 +697,10 @@ add_test(NAME Full_Tile_Horizontal_PGF COMMAND test_full_tile_step --horizontal-
 add_test(NAME Full_Tile_Symmetric_Walls COMMAND test_full_tile_step --symmetric-walls)
 add_test(NAME Full_Tile_RHS_Debug_Invariance COMMAND test_full_tile_step --rhs-debug-invariance)
 
+add_executable(test_solver_diagnostics tests/test_solver_diagnostics.cpp)
+target_link_libraries(test_solver_diagnostics PRIVATE wrf_sdirk3::core)
+add_test(NAME Solver_Diagnostics_Noninterference COMMAND test_solver_diagnostics)
+
 # R9 P0-A/B: a Krylov metric's coordinate system is part of the metric.
 add_executable(test_krylov_metric_coordinate_contract test_krylov_metric_coordinate_contract.cpp)
 target_include_directories(test_krylov_metric_coordinate_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
