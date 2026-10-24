@@ -24,11 +24,16 @@
 // No RNG anywhere: matrices are fixed, so failures are reproducible.
 
 #include "wrf_sdirk3_newton_solver.h"
+#include "wrf_sdirk3_config.h"
 
 #include <torch/torch.h>
 
+#include <cmath>
 #include <cstdio>
 #include <functional>
+#include <iostream>
+#include <sstream>
+#include <string>
 
 namespace {
 
@@ -59,11 +64,142 @@ float true_rel_residual(const torch::Tensor& A, const torch::Tensor& b,
     return (r.norm() / b.norm()).item<float>();
 }
 
+double true_rel_residual_fp64(const torch::Tensor& A, const torch::Tensor& b,
+                              const torch::Tensor& x) {
+    const auto A64 = A.to(torch::kFloat64);
+    const auto b64 = b.to(torch::kFloat64);
+    const auto x64 = x.to(torch::kFloat64);
+    return (b64 - torch::matmul(A64, x64)).norm().item<double>() /
+           b64.norm().item<double>();
+}
+
+torch::Tensor make_near_dependent_A(const torch::TensorOptions& options) {
+    constexpr int n = 4;
+    constexpr float coupling = 0.125f;
+    auto A = torch::eye(n, options);
+    for (int i = 0; i + 1 < n; ++i) A[i + 1][i] = coupling;
+    return A;
+}
+
+struct StderrCapture {
+    std::ostringstream stream;
+    std::streambuf* previous = std::cerr.rdbuf(stream.rdbuf());
+    ~StderrCapture() { std::cerr.rdbuf(previous); }
+};
+
+struct DebugLevelGuard {
+    int saved = wrf::sdirk3::g_sdirk3_config.debug_level;
+    ~DebugLevelGuard() { wrf::sdirk3::g_sdirk3_config.debug_level = saved; }
+};
+
 }  // namespace
 
 int main() {
     using wrf::sdirk3::krylov_methods::solve_gmres;
     using wrf::sdirk3::krylov_methods::solve_fgmres;
+
+    // A = I + 1/8 times a nilpotent lower shift makes the first Arnoldi
+    // operator image nearly parallel to v0. With b=e0, each exact Krylov
+    // direction remains representable; DGK reorthogonalization should run
+    // without mirroring the production MGS implementation in this test.
+    for (const auto dtype : {torch::kFloat32, torch::kFloat64}) {
+        const bool is_fp32 = dtype == torch::kFloat32;
+        const char* precision = is_fp32 ? "FP32" : "FP64";
+        const float tol = is_fp32 ? 1e-5f : 1e-12f;
+        const double true_residual_bound = is_fp32 ? 2e-5 : 2e-12;
+        const auto options = torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+        const auto A_near = make_near_dependent_A(options);
+        const auto b_near = torch::tensor({1.0, 0.0, 0.0, 0.0}, options);
+        const auto x0_near = torch::zeros_like(b_near);
+        const auto A_near_op = [&A_near](const torch::Tensor& v) {
+            return torch::matmul(A_near, v);
+        };
+        std::function<torch::Tensor(const torch::Tensor&)> no_pc;
+
+        for (const bool flexible : {false, true}) {
+            DebugLevelGuard restore_debug;
+            wrf::sdirk3::g_sdirk3_config.debug_level = 1;
+            int identity_pc_calls = 0;
+            std::function<torch::Tensor(const torch::Tensor&)> identity_pc =
+                [&identity_pc_calls](const torch::Tensor& v) {
+                    ++identity_pc_calls;
+                    return v.clone();
+                };
+            const auto& pc = flexible ? identity_pc : no_pc;
+            wrf::sdirk3::WRFNewtonKrylovSolver::GMRESResult result;
+            std::string diagnostics;
+            {
+                StderrCapture capture;
+                result = flexible
+                    ? solve_fgmres(A_near_op, b_near, x0_near, 0, 0.0f,
+                                   /*restart=*/4, tol, /*max_restarts=*/1,
+                                   pc, nullptr, nullptr, false, false)
+                    : solve_gmres(A_near_op, b_near, x0_near, 0, 0.0f,
+                                  /*restart=*/4, tol, /*max_restarts=*/1,
+                                  pc, nullptr, nullptr, false, false);
+                diagnostics = capture.stream.str();
+            }
+            const double rho = true_rel_residual_fp64(A_near, b_near, result.x);
+            const std::string prefix = std::string(precision) +
+                (flexible ? " FGMRES" : " GMRES");
+            expect(diagnostics.find("[GMRES REORTH] j=0") != std::string::npos,
+                   (prefix + ": near-dependent first Krylov column reaches DGK reorth").c_str());
+            expect(result.success && result.iterations > 1 && result.iterations <= 4 &&
+                       result.arnoldi_allowed == 4 && std::isfinite(rho) &&
+                       rho <= true_residual_bound,
+                   (prefix + ": near-dependent solve meets tolerance by independent FP64 residual").c_str());
+            expect(!flexible || identity_pc_calls == result.iterations,
+                   (prefix + ": non-null identity PC is applied once per Arnoldi vector").c_str());
+        }
+
+        // A=0 cannot reduce a nonzero RHS. One Arnoldi breakdown must remain a
+        // max-budget failure, judged by the independently computed true residual.
+        const auto A_zero = torch::zeros({4, 4}, options);
+        const auto b_zero = torch::tensor({1.0, 0.0, 0.0, 0.0}, options);
+        const auto x0_zero_case = torch::zeros_like(b_zero);
+        const auto A_zero_op = [](const torch::Tensor& v) {
+            return torch::zeros_like(v);
+        };
+        for (const bool flexible : {false, true}) {
+            DebugLevelGuard restore_debug;
+            wrf::sdirk3::g_sdirk3_config.debug_level = 1;
+            int identity_pc_calls = 0;
+            std::function<torch::Tensor(const torch::Tensor&)> identity_pc =
+                [&identity_pc_calls](const torch::Tensor& v) {
+                    ++identity_pc_calls;
+                    return v.clone();
+                };
+            const auto& pc = flexible ? identity_pc : no_pc;
+            wrf::sdirk3::WRFNewtonKrylovSolver::GMRESResult result;
+            std::string diagnostics;
+            {
+                StderrCapture capture;
+                result = flexible
+                    ? solve_fgmres(A_zero_op, b_zero, x0_zero_case, 0, 0.0f,
+                                   /*restart=*/2, tol, /*max_restarts=*/1,
+                                   pc, nullptr, nullptr, false, false)
+                    : solve_gmres(A_zero_op, b_zero, x0_zero_case, 0, 0.0f,
+                                  /*restart=*/2, tol, /*max_restarts=*/1,
+                                  pc, nullptr, nullptr, false, false);
+                diagnostics = capture.stream.str();
+            }
+            const double rho = true_rel_residual_fp64(A_zero, b_zero, result.x);
+            const std::string prefix = std::string(precision) +
+                (flexible ? " FGMRES" : " GMRES");
+            expect(diagnostics.find("[ARNOLDI] BREAKDOWN at j=0") != std::string::npos,
+                   (prefix + ": zero operator reaches first-column Arnoldi breakdown").c_str());
+            expect(!result.success &&
+                       result.termination_reason ==
+                           wrf::sdirk3::WRFNewtonKrylovSolver::KrylovTerminationReason::MaxBudget &&
+                       result.iterations == 1 && result.restarts == 1 &&
+                       result.arnoldi_spent == 1 && result.arnoldi_allowed == 2 &&
+                       std::isfinite(rho) && std::abs(rho - 1.0) <= 1e-12 &&
+                       std::abs(result.rel_error - 1.0f) <= 1e-6f,
+                   (prefix + ": zero-operator breakdown is a one-vector max-budget failure with true residual 1").c_str());
+            expect(!flexible || identity_pc_calls == 1,
+                   (prefix + ": non-null identity PC enters FGMRES for the breakdown column").c_str());
+        }
+    }
 
     const auto A_mat = make_A();
     auto A_op = [&A_mat](const torch::Tensor& v) -> torch::Tensor {

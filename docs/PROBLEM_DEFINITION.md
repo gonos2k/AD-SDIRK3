@@ -471,6 +471,8 @@ quiet measurements are about 304.64 times RK3 in launcher elapsed time and 443.3
 times RK3 in RSL main-step time for ARK600. These are single same-timestep,
 six-hour cost observations, with no new accuracy acceptance or five-day claim.
 
+The [bounded cost investigation](<(202610242213)_forward_cost_profile_and_rejected_candidate.md>) fixes two comparison-tool/test-inventory issues and samples one standard-grid ARK600 step. A CPU MGS fusion candidate passed focused solver checks but failed its predeclared exact-public-output parity gate and showed no native timing gain in a matched diagnostic one-step pair. It was not promoted; production Newton arithmetic is unchanged. The rejected patch, outputs and receipts are preserved. Actual forward cost improvement, continuous five-day ARK runs and the physical accuracy/cost acceptance remain open. This work adds no DA or MPI-reliability claim.
+
 For the selected dry 240 s forward instance, the native terminal and
 [one-midpoint linear VJP/FD probes](<(202610210936)_native_two_time_adjoint.md>)
 are complete within their one-direction, FP32-chained scopes. The
