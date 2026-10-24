@@ -1,0 +1,48 @@
+{
+  "at_local": "2026-10-24T23:07:37.439190+09:00",
+  "status": "prospective_before_source_edit",
+  "base": "2ca1704630475b28877b68d9f38ae2e34dc27a5b",
+  "source_sha256": "da4f49716e5213cc31bbad7ff9735cec76e73bdcb6bf18ac4e9d9be2f9ca8730",
+  "one_candidate": "phi_horizontal::periodic_select arange+remainder+index_select -> roll(-int64(offset),dim), current q on each call, no cache/state freeze/arith reassociation",
+  "graph": "graph_pre/binding.json plus source-verified Tilecaller19445",
+  "kept": [
+    "operator/physics/filter/boundaries",
+    "Newton/Krylovtols",
+    "AD JVPmode/noFDsubstitution",
+    "defaultquietdiagnostics/noDAretainedgraph",
+    "allpriorcompletionboundaries"
+  ],
+  "numeric_gates": [
+    "exact helperprimal/JVP/reverse parity F32/F64 strided/contiguous, n1,dim0/2, signed/wrappedoffsets inclINTMIN",
+    "existingPhiKernel/Coordinate/diagnostics/fixedtrajectory focused regressions",
+    "native t0/t600 numeric/publicoutputexact versusmatchedold; trueKrylov/Newtonresidualandworkcounts unchanged; allnativeRC0 andadmissible outputs"
+  ],
+  "cost_trial": {
+    "order": [
+      "A0",
+      "B0",
+      "B1",
+      "A1"
+    ],
+    "A": "archivedad3quietbinary",
+    "B": "oneheadercandidate rebuiltTile only, distinctbinary",
+    "h_seconds": 600,
+    "model_duration_seconds_each": 600,
+    "max_cases": 4,
+    "max_case_wall_seconds": 600,
+    "max_total_wall_seconds": 2400,
+    "no_retries": true,
+    "telemetry": true,
+    "debug": 0,
+    "rhs_count": false,
+    "host_sample": false,
+    "serial": true,
+    "cost_acceptance": [
+      "medianRSL_A/medianRSL_B >=1/0.97 (>=3%reduction)",
+      "RSL_B0<=0.99*RSL_A0 andRSL_B1<=0.99*RSL_A1",
+      "medianJVPpercall_B<=0.95*medianJVPpercall_A",
+      "No general5day/sameaccuracyclaim; reportbothpairedratios/spread andmonotonictime separately"
+    ]
+  },
+  "stop": "Onfocusedsafetyfailure no native trial; onnativefailure/costgatefailpreserve and do not addtrials untilpass. PriorMGSnotrevived. Long5dayresourcecapunchanged/pendinguserchoice."
+}

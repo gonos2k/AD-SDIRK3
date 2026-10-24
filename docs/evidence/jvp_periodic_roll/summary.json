@@ -1,0 +1,55 @@
+{
+  "created_at_local": "2026-10-24T23:33:21.600394+09:00",
+  "scope": "Exactly one preregistered A-B-B-A block, telemetry-on first-step standard h600. Not quiet6h/five-day/same-accuracy performance. No reruns until pass.",
+  "source_base": "2ca1704630475b28877b68d9f38ae2e34dc27a5b",
+  "candidate_header_sha256": "b8a658b161bf792eb1b6e64026050b093b6ff9caf7ea6aa4f58a7258421bd433",
+  "baseline_binary_sha256": "ad3abbbfdb41a1285fad2894c117b999e5572bc3b08526646ede2a0653a96bab",
+  "candidate_binary_sha256": "30b0ac22f264c3597790d21e05b98d1b4803683cc12c02640e0f767520bd40bc",
+  "gates": {
+    "exact_public_output": true,
+    "exact_reported_residuals_and_fixed_work": true,
+    "configured_residuals_met": true,
+    "median_rsl_reduction_ge_3pct": true,
+    "both_paired_rsl_reductions_ge_1pct": true,
+    "median_jvp_per_call_reduction_ge_5pct": true
+  },
+  "all_gates_pass": true,
+  "rsl_reduction_median_fraction": 0.177901991430078,
+  "jvp_per_call_reduction_median_fraction": 0.18813093573286122,
+  "paired_results": [
+    {
+      "baseline": "A0",
+      "candidate": "B0",
+      "rsl_reduction_fraction": 0.14333256613740697
+    },
+    {
+      "baseline": "A1",
+      "candidate": "B1",
+      "rsl_reduction_fraction": 0.21255877929871791
+    }
+  ],
+  "normal_exit_codes": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "model_steps_per_case": 1,
+  "implicit_stages_per_case": 3,
+  "reported_selected_AD_FD_counters": [
+    240,
+    0
+  ],
+  "counter_scope": "ExistingAD/explicitFDbranch telemetry counts; internal FWAD-to-FD fallback counter not independently exported in this trial. Implementation/modeunchanged and newhelperdirectFWADparity tested.",
+  "exact_numeric_comparisons": 1044,
+  "newton_source_unchanged_sha256": "507d1ef403948b44c4727ab5297f4012d8b985e997eb4bcaad9aa80d7071d769",
+  "five_day_run": false,
+  "new_rk3_run": false,
+  "new_six_hour_run": false,
+  "same_accuracy_speedup_claim": false,
+  "accepted_code_change": "periodic_select roll permutation only; previousMGSremains rejected",
+  "protocol_sha256": "bf0d23aad7417d13bd342559aa96bb3aae5753b844cb0dc06e03f76b9d6e1bbe",
+  "full_analysis_sha256": "7d16173768124a260b55e9eeaae3c00252438dd78410c2ac5ef809280f5123d9",
+  "final_test_source_sha256": "f55eee7ebc8b47a724826ff76cd4ad117947ac676c4b75d3b0d53a6efc873141",
+  "post_trial_test_only_strengthening": "Same primal with two directions, onlyPhiKernelrebuild/rerunpass; nativeheader/binary/protocol/dataunchanged."
+}

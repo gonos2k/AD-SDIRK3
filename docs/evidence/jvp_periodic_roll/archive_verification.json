@@ -1,0 +1,10 @@
+{
+  "archive": "evidence.zip",
+  "sha256": "d6b54b9ff27b48873122b428dead1e1fef9ffba2142b862f2cbac8605f18ce33",
+  "bytes": 4349575,
+  "items": 153,
+  "native_frame_aliases": 8,
+  "unique_native_netcdf_payloads": 2,
+  "all_sha256_crc_and_alias_hashes_verified": true,
+  "omitted": "Executable/object/archive binaries and unchanged common input; exact build/source/input hashes and commands retained."
+}
