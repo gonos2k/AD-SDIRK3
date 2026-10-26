@@ -1,0 +1,18 @@
+{
+  "only_array_file": "arrays/36h_W.npz",
+  "command": "python recompute_partial_metrics.py --hours 36 --field W",
+  "passed": true,
+  "rows": [
+    {
+      "model_hours": "36",
+      "field": "W",
+      "rms": "0.002464239035649263",
+      "max_abs": "0.011000058089848608",
+      "mean_bias": "3.750444459363193e-07",
+      "reference_change_rms": "0.0020242260172558062",
+      "relative_rms_to_reference_change": "1.217373462569151",
+      "owned_points": "204800"
+    }
+  ],
+  "no_model_run": true
+}

@@ -1,0 +1,122 @@
+{
+  "24": {
+    "saved_frames": 5,
+    "physical_minima_over_saved_frames": {
+      "total_theta_K": 258.8382568359375,
+      "total_mu_Pa": 88982.60245513916,
+      "layer_depth_m_from_PH_plus_PHB_over_g": 214.96843343845563,
+      "g_m_s2": 9.81
+    },
+    "physical_minimum_total_pressure_Pa": 11079.802364110947,
+    "shared_initial_gate": {
+      "status": "passed",
+      "comparison_certified": true,
+      "source_kind": "wrfout_t0",
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "start_timestamp": "0001-01-01_00:00:00",
+      "grid": {
+        "nx": 40,
+        "ny": 80,
+        "nz": 64,
+        "dx_m": 100000.0,
+        "dy_m": 100000.0
+      },
+      "base_fields_checked": [
+        "DN",
+        "DNW",
+        "F",
+        "MAPFAC_M",
+        "MAPFAC_MX",
+        "MAPFAC_MY",
+        "MAPFAC_U",
+        "MAPFAC_V",
+        "MU",
+        "MUB",
+        "P",
+        "PB",
+        "PH",
+        "PHB",
+        "QVAPOR",
+        "T",
+        "U",
+        "V",
+        "W",
+        "ZNU",
+        "ZNW"
+      ],
+      "global_attributes_checked": [
+        "CEN_LAT",
+        "CEN_LON",
+        "DX",
+        "DY",
+        "MAP_PROJ",
+        "STAND_LON",
+        "TRUELAT1",
+        "TRUELAT2"
+      ],
+      "signed_zero_equivalent": true,
+      "comparison_method": "numerically exact array equality; byte/log text equality not required"
+    },
+    "comparison_source_sha256": "50c3ea2f3b6c7293ca11f8c9fa1302fb82662cf583998af1e0ccbdeae5678baf"
+  },
+  "36": {
+    "saved_frames": 7,
+    "physical_minima_over_saved_frames": {
+      "total_theta_K": 258.83709716796875,
+      "total_mu_Pa": 88939.26098632812,
+      "layer_depth_m_from_PH_plus_PHB_over_g": 214.96843343845563,
+      "g_m_s2": 9.81
+    },
+    "physical_minimum_total_pressure_Pa": 11079.638451337814,
+    "shared_initial_gate": {
+      "status": "passed",
+      "comparison_certified": true,
+      "source_kind": "wrfout_t0",
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "start_timestamp": "0001-01-01_00:00:00",
+      "grid": {
+        "nx": 40,
+        "ny": 80,
+        "nz": 64,
+        "dx_m": 100000.0,
+        "dy_m": 100000.0
+      },
+      "base_fields_checked": [
+        "DN",
+        "DNW",
+        "F",
+        "MAPFAC_M",
+        "MAPFAC_MX",
+        "MAPFAC_MY",
+        "MAPFAC_U",
+        "MAPFAC_V",
+        "MU",
+        "MUB",
+        "P",
+        "PB",
+        "PH",
+        "PHB",
+        "QVAPOR",
+        "T",
+        "U",
+        "V",
+        "W",
+        "ZNU",
+        "ZNW"
+      ],
+      "global_attributes_checked": [
+        "CEN_LAT",
+        "CEN_LON",
+        "DX",
+        "DY",
+        "MAP_PROJ",
+        "STAND_LON",
+        "TRUELAT1",
+        "TRUELAT2"
+      ],
+      "signed_zero_equivalent": true,
+      "comparison_method": "numerically exact array equality; byte/log text equality not required"
+    },
+    "comparison_source_sha256": "794408bb6a4c17cade5f9013900bb2aba31782725df964285cbbfacfe4af88fa"
+  }
+}

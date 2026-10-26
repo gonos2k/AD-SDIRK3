@@ -1,0 +1,14 @@
+{
+  "at_local": "2026-10-26T10:07:17.439763+09:00",
+  "command": [
+    "python3",
+    "-B",
+    "tools/test_run_standard_wrf.py"
+  ],
+  "return_code": 0,
+  "tests": 21,
+  "controller_sha256": "3e8b401b215edef1b2c2f59abd644b2595f4f42df75e536f985f8c18558913d8",
+  "test_sha256": "6c9c6537d7080bba8e163e6eb7265209b1f2217745c2d79788e5c925175e2c69",
+  "observer_sha256": "db2c7681c57464423a5a853c4fdd76d249866a4d4166db18b75136052587309e",
+  "scope": "StdlibfakePopen/time/snapshots, no WRF/MPI/solver engine/compiledbackend runs."
+}
