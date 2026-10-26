@@ -1,0 +1,40 @@
+{
+  "observed_at_local": "2026-10-26T10:13:41.287325+09:00",
+  "forecast_status": "failed_or_incomplete",
+  "return_code": 1,
+  "stop_reason": "TimeoutExpired(['/bin/ps', '-axo', 'pid=,ppid=,rss=,stat=,lstart='], 3)",
+  "completed_outer_step_log_records": 251,
+  "target_steps": 720,
+  "model_seconds_from_completed_step_logs": 150600,
+  "stopped_at_local_from_receipt": "2026-10-25T16:50:09.377558+09:00",
+  "wall_seconds": 30584.036694,
+  "monotonic_elapsed_seconds": 17304.618597166147,
+  "clock_discrepancy_seconds": 13279.418096833851,
+  "elapsed_cap_seconds": 64800,
+  "cap_exhausted": false,
+  "cleanup": {
+    "signals": [
+      "launcher_TERM"
+    ],
+    "errors": [],
+    "remaining_owned": {}
+  },
+  "aborted_markers": 0,
+  "success_marker": false,
+  "cost_eligible": false,
+  "accuracy_pass_claim": false,
+  "five_day_complete": false,
+  "automatic_model_retry": false,
+  "saved_history_frames": 7,
+  "validated_saved_prefix_hours": 36,
+  "scope": "Interruption was controllerpsTimeout->finallylauncherTERM, not establishednumericaldivergence. 0\u201336h savedframeanalysis doesnotcertifyunsavedstates or5daywindow.",
+  "model_source_base": "fe03ba54522ce8e3ba27596a3ccd8095d4c0c47c",
+  "executable_sha256": "30b0ac22f264c3597790d21e05b98d1b4803683cc12c02640e0f767520bd40bc",
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "namelist_sha256": "c74e4da2670c9c4cd20a4c0359df76638bd73c1cf72e5dd1607f93e2852f3ff0",
+  "manifest_sha256": "dd6472e686a63ddff1fc101696689ef47b84246932ee44283fcbd574eafc6ae6",
+  "executed_controller_sha256": "1b616268d9c3dad293383f71881e587e069af8ed65bbf8209242a2a089828b40",
+  "forecast_receipt_sha256": "42b9be36a5035bfefc091b80a2fe6dcc6083614177eac5e5fc25986d66213cde",
+  "future_controller_tests": "21stdlibmocktests, no WRF/MPI runs afterfix",
+  "future_model_run_authorized_by_this_PR": false
+}

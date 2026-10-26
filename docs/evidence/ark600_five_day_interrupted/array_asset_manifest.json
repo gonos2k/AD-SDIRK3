@@ -1,0 +1,397 @@
+{
+  "assets": [
+    {
+      "file": "arrays/24h_U.npz",
+      "model_hours": 24,
+      "field": "U",
+      "sha256": "09493fdf2b553f8127e38e44c56da2f8e22c5641007db8d01841b1f30558813d",
+      "bytes": 1407358,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 24,
+        "fields": [
+          "U"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "current_sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "rk3_comparator_sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/24h_V.npz",
+      "model_hours": 24,
+      "field": "V",
+      "sha256": "2522228cc6fe3afac42f58465038756d88e1909bdb689b45bfe42ec6062bbd57",
+      "bytes": 1648978,
+      "shape": [
+        64,
+        81,
+        40
+      ],
+      "source": {
+        "model_hours": 24,
+        "fields": [
+          "V"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "current_sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "rk3_comparator_sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/24h_W.npz",
+      "model_hours": 24,
+      "field": "W",
+      "sha256": "f7c92344b4c1eb34a6e65a7106e1c171e9c1096b8772a4d1a584ca5093bad1f7",
+      "bytes": 1730327,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 24,
+        "fields": [
+          "W"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "current_sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "rk3_comparator_sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/24h_PH.npz",
+      "model_hours": 24,
+      "field": "PH",
+      "sha256": "aee17a49bb24d797f4ed88e8e715c7f698d84ecd9ade1ee85c32bb4f1ea5da38",
+      "bytes": 1240527,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 24,
+        "fields": [
+          "PH"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "current_sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "rk3_comparator_sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/24h_T.npz",
+      "model_hours": 24,
+      "field": "T",
+      "sha256": "94da8742599e2ce4e52711b80efe9c9b5f04c53a700fad0204024a3487c53d55",
+      "bytes": 889583,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 24,
+        "fields": [
+          "T"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "current_sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "rk3_comparator_sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/24h_MU.npz",
+      "model_hours": 24,
+      "field": "MU",
+      "sha256": "c27e4c41a79572fe8738db64826ee17df5c9f65a37d03a0e3e562afaeb617e10",
+      "bytes": 28924,
+      "shape": [
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 24,
+        "fields": [
+          "MU"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "current_sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "rk3_comparator_sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/24h_P_total.npz",
+      "model_hours": 24,
+      "field": "P_total",
+      "sha256": "c01f5c1d9e7d024b349db764691ddc4a81559c6b0c799e332fecb50a2ca10418",
+      "bytes": 1147266,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 24,
+        "fields": [
+          "P_total"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "current_sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "rk3_comparator_sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/36h_U.npz",
+      "model_hours": 36,
+      "field": "U",
+      "sha256": "adfc75a7438d5ef76597bd6ea15f7ca235ec120a57a0afbbec417ad6e3e06c6e",
+      "bytes": 1418328,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 36,
+        "fields": [
+          "U"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "current_sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "rk3_comparator_sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/36h_V.npz",
+      "model_hours": 36,
+      "field": "V",
+      "sha256": "ba5ea44324a64ad5e9c51fdcc36270ca6d62467b4f708367949f736ad5afbde5",
+      "bytes": 1689651,
+      "shape": [
+        64,
+        81,
+        40
+      ],
+      "source": {
+        "model_hours": 36,
+        "fields": [
+          "V"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "current_sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "rk3_comparator_sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/36h_W.npz",
+      "model_hours": 36,
+      "field": "W",
+      "sha256": "06b9187bebe15edefe9907ca6808c415af914184d137203cbac9066ac2a4d181",
+      "bytes": 1783858,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 36,
+        "fields": [
+          "W"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "current_sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "rk3_comparator_sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/36h_PH.npz",
+      "model_hours": 36,
+      "field": "PH",
+      "sha256": "f396854ea8a042a76ba44980041b9bebf6f539d52307c40395af9bdfb8dddbba",
+      "bytes": 1266941,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 36,
+        "fields": [
+          "PH"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "current_sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "rk3_comparator_sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/36h_T.npz",
+      "model_hours": 36,
+      "field": "T",
+      "sha256": "0aa3b829a7c5ec49b9f2b3bac903e97ff4f46de4d07c4e55157ca481f37cc579",
+      "bytes": 958354,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 36,
+        "fields": [
+          "T"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "current_sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "rk3_comparator_sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/36h_MU.npz",
+      "model_hours": 36,
+      "field": "MU",
+      "sha256": "5e7383c2a3d86381ee148559cf39558702b14852fa85a9fe1630795062bdd972",
+      "bytes": 29145,
+      "shape": [
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 36,
+        "fields": [
+          "MU"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "current_sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "rk3_comparator_sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    },
+    {
+      "file": "arrays/36h_P_total.npz",
+      "model_hours": 36,
+      "field": "P_total",
+      "sha256": "ba2d72d69888e9caa2d1d829591705cf177a1fdfb55ee137bf90edb8ffff37be",
+      "bytes": 1258076,
+      "shape": [
+        64,
+        80,
+        40
+      ],
+      "source": {
+        "model_hours": 36,
+        "fields": [
+          "P_total"
+        ],
+        "axes": "z,y,x exceptMU y,x",
+        "mask": "Frozenhelper823ed95d _owned; Uperiodicduplicateexcluded, W/PHfixedbottomexcluded,dynamictopincluded",
+        "source_output_dtype": "FP32 nativeNetCDF promotedtoFP64 BEFOREsubtraction; notinternalFP64trajectory",
+        "current_file": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "current_sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+        "rk3_comparator_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "rk3_comparator_sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+        "rk3_initial_file": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "rk3_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "interpretation": "MethoddistanceagainstRK3h600; no exacttruth oraccuracyacceptance"
+      }
+    }
+  ],
+  "frozen_helper_sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+  "description": "Per-fieldnative-ownedpointdifferences+RK3change, notrawstates/internaltrajectory; splittoallowboundeddownloads.",
+  "no_model_run": true
+}

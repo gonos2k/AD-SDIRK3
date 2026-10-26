@@ -65,6 +65,8 @@ jobs:
             external/libtorch_wrf/sdirk3/tests/test_native_exit_trace.py
       - name: CPU setup shell syntax
         run: bash -n .github/ci/setup_torch_env.sh
+      - name: forecast controller faults (stdlib only, no MPI or WRF)
+        run: python3 -B tools/test_run_standard_wrf.py
       - name: actionlint (pinned binary, checksum-verified)
         run: |
           set -euo pipefail

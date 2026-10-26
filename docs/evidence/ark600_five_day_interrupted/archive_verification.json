@@ -1,0 +1,10 @@
+{
+  "archive": "evidence.zip",
+  "sha256": "e954620e4a0d44a6eac3fbcbf9c7207a04f33d16d6023f6d66b1fdf4d46349e8",
+  "bytes": 408586,
+  "items": 86,
+  "all_payload_sha256_and_crc_verified": true,
+  "separate_derived_array_assets": 14,
+  "all_array_asset_hashes_verified": true,
+  "original_input_executable_archives_and_raw_netcdf_not_duplicated": true
+}
