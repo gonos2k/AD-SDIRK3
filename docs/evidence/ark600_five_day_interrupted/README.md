@@ -21,6 +21,8 @@ Recompute all fourteen metric rows with NumPy, without WRF or libtorch:
 python recompute_partial_metrics.py
 ```
 
+The loader verifies each selected NPZ against the manifest SHA-256 and byte size, then checks both `diff` and `reference_change` for the declared shape, FP64 dtype and finite values. A mismatch stops with a nonzero exit code; the archived inputs are never rewritten. Run the focused checks with `python test_recompute_partial_metrics.py`.
+
 For a bounded download, fetch this script, the small array manifest and just [the 36h W asset](arrays/36h_W.npz), then use:
 
 ```sh
@@ -38,6 +40,8 @@ The checked-in [run_standard_wrf.py](../../../tools/run_standard_wrf.py) version
 1. A missing process-tree sample from `TimeoutExpired` is recorded separately. One/two misses may recover; three consecutive misses stop as `monitoring_unavailable`. Cap/disk checks remain before/after sampling, use the same maximum of monotonic and wall elapsed time, and take precedence over the grace counter. Other query/parse errors fail closed. Authoritative Popen exit is checked before declaring monitoring loss.
 2. Cumulative wrapper rows are accepted only when nondecreasing, every failed count is zero and the final row is exactly `3*N/0`. Periodic `300/0`, `600/0` rows do not replace or invalidate the required final `2160/0`. These are wrapper calls, not independently counted Newton stages.
 3. The [next case-side observer](execution/next_observer.py) publishes terminal progress from the controller receipt rather than leaving a stale “running” snapshot. It recognizes the actual controller script in the launch record and reads the selected cap from the manifest. It cannot launch, stop or retry a forecast.
+
+Preflight also rejects existing `wrfout_d01*`, `wrfoutReady_d01*` and `wrfrst_d01*` paths, even when no receipt or RSL remains. It preserves those files and refuses to launch; an input/namelist-only directory remains eligible.
 
 Owned-launcher reaping continues even if cleanup sampling fails. Descendants are signaled only after fresh birth/session/exact-executable checks; recycled or unverified PIDs are not signaled. The tool still verifies manifest/executable/input/namelist/helper hashes, actual t0 fields, quiet/error/output gates, resource limits and fresh output paths. It requires explicit `--manifest`, `--manifest-sha256`, `--case`, `--go` and recorded resource authorization. It refuses to overwrite the failed attempt. It does not silently repeat a model or perform a cold restart.
 

@@ -78,7 +78,8 @@ class WrapperTests(unittest.TestCase):
 
 
 class ControllerTests(unittest.TestCase):
-    def scenario(self, outcomes, *, cap=100, disk_ok=True, authorized=True):
+    def scenario(self, outcomes, *, cap=100, disk_ok=True, authorized=True,
+                 preexisting_output=None):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             case = root / 'runs' / 'ark_h600'
@@ -88,6 +89,8 @@ class ControllerTests(unittest.TestCase):
             exe.write_bytes(b'NOT AN EXECUTABLE')
             (case / 'wrfinput_d01').write_bytes(b'input')
             (case / 'namelist.input').write_bytes(b'quiet')
+            if preexisting_output is not None:
+                (case / preexisting_output).write_bytes(b'preserve this existing output')
             manifest = {
                 'resource_authorized': authorized,
                 'no_retries_or_cold_restart': True,
@@ -170,6 +173,13 @@ class ControllerTests(unittest.TestCase):
                         runtime.main(argv)
                     self.assertFalse(launched)
                     return None
+                if preexisting_output is not None:
+                    with self.assertRaisesRegex(FileExistsError, preexisting_output):
+                        runtime.main(argv)
+                    self.assertFalse(launched)
+                    self.assertEqual((case / preexisting_output).read_bytes(),
+                                     b'preserve this existing output')
+                    return {'blocked': preexisting_output}
                 code = runtime.main(argv)
             receipt = json.loads((case / 'forecast_receipt.json').read_text())
             return code, receipt, sampler_calls, cleanups
@@ -252,6 +262,21 @@ class ControllerTests(unittest.TestCase):
 
     def test_missing_resource_authorization_never_spawns(self):
         self.scenario([], authorized=False)
+
+    def test_existing_wrf_history_and_restart_outputs_block_without_deletion(self):
+        for name in ('wrfout_d01_0001-01-01_00:00:00',
+                     'wrfoutReady_d01_0001-01-01_00:00:00',
+                     'wrfrst_d01_0001-01-01_00:00:00'):
+            with self.subTest(name=name):
+                self.assertEqual(self.scenario([], preexisting_output=name),
+                                 {'blocked': name})
+
+    def test_input_only_case_passes_preflight_and_launches(self):
+        code, receipt, calls, cleanups = self.scenario(['done'])
+        self.assertEqual(code, 0)
+        self.assertEqual(receipt['status'], 'completed')
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(cleanups, [False])
 
     def test_cleanup_snapshot_error_still_reaps_owned_popen(self):
         proc = FakeProcess()

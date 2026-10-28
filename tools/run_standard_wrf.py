@@ -305,6 +305,10 @@ def main(argv=None):
                  'launcher_pid.json','launcher.stdout.log','launcher.stderr.log',
                  'monitor_samples.jsonl','rsl.out.0000','rsl.error.0000','namelist.output')
     collisions = [name for name in protected if (cwd/name).exists()]
+    collisions += sorted({path.name for pattern in
+                          ('wrfout_d01*','wrfoutReady_d01*','wrfrst_d01*')
+                          for path in cwd.glob(pattern)
+                          if path.exists() or path.is_symlink()})
     if collisions:
         raise FileExistsError(f'refusing to overwrite case outputs: {collisions}')
     trace_path = case.get('environment_overrides', {}).get('NATIVE_MPI_FINALIZE_TRACE')

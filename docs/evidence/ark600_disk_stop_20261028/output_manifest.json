@@ -1,0 +1,93 @@
+{
+  "files": [
+    {
+      "file": "wrfout_d01_0001-01-01_00:00:00",
+      "bytes": 1989217,
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_00:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-01_03:00:00",
+      "bytes": 4572295,
+      "sha256": "ca99084d5686456ec31d72e91798b2afe1dae8a0dd2c426bab0392269727edba",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_03:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-01_06:00:00",
+      "bytes": 4636804,
+      "sha256": "0b61c0d7fa6129f1f7a9d4f79a72c7e0292c142b85de4d76221b400baa1e4dd9",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_06:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-01_09:00:00",
+      "bytes": 4712857,
+      "sha256": "6ae07287b042c17d86dc0a380e8b3a187a9afb4c7c30a379c457f9086d6556ec",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_09:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-01_12:00:00",
+      "bytes": 4732884,
+      "sha256": "a854a9e39108e1f9474aaa76fc9bc6e59aff0a34f560580651441e28de184c4c",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_12:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-01_15:00:00",
+      "bytes": 4743699,
+      "sha256": "e89333406629b67321089ee05dca7f385b6e39280603a09cf27165a7905ab865",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_15:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-01_18:00:00",
+      "bytes": 4770864,
+      "sha256": "7c4cf3a88b1313e2d7be5838862b2c60d5c8a573bb6b4ae056ad2e02079ba519",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_18:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-01_21:00:00",
+      "bytes": 4771751,
+      "sha256": "b5f2c73a5f74dd76a9bfb2c9bc32ec542ff04ef9f15b1c4f84a5a5526f4dfe09",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_21:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-02_00:00:00",
+      "bytes": 4787480,
+      "sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00"
+    },
+    {
+      "file": "wrfout_d01_0001-01-02_03:00:00",
+      "bytes": 4792889,
+      "sha256": "590d72c5633a0fd2faace8f0a1a48e3d75ec32b667d2855fb5fc4192143bfdd6",
+      "retained_original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-02_03:00:00"
+    }
+  ],
+  "public_full_arrays_included": false,
+  "common_prior_outputs": [
+    {
+      "timestamp": "wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "matches_prior": true
+    },
+    {
+      "timestamp": "wrfout_d01_0001-01-01_06:00:00",
+      "sha256": "0b61c0d7fa6129f1f7a9d4f79a72c7e0292c142b85de4d76221b400baa1e4dd9",
+      "matches_prior": true
+    },
+    {
+      "timestamp": "wrfout_d01_0001-01-01_12:00:00",
+      "sha256": "a854a9e39108e1f9474aaa76fc9bc6e59aff0a34f560580651441e28de184c4c",
+      "matches_prior": true
+    },
+    {
+      "timestamp": "wrfout_d01_0001-01-01_18:00:00",
+      "sha256": "7c4cf3a88b1313e2d7be5838862b2c60d5c8a573bb6b4ae056ad2e02079ba519",
+      "matches_prior": true
+    },
+    {
+      "timestamp": "wrfout_d01_0001-01-02_00:00:00",
+      "sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+      "matches_prior": true
+    }
+  ],
+  "qualification": "All10originalNetCDFretainedlocally; 0/6/12/18/24hbyteidenticaltopriorinterruptedARK. Existingpublished24hderivedarraysapplyunchanged."
+}
