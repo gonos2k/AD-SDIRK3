@@ -158,7 +158,7 @@
     "supported": [
       "The forecast stopped on the controller disk_resource_cap, before the 18h limit.",
       "Current storage pressure includes about 10 GiB active swap and 325 unique open-unlinked file inodes with about 3.91 GB aggregate logical size; current values are not historical run samples.",
-      "The VM swap files predate the run by at least 12 days based on observed mtimes.",
+      "The VM swap files predate the run by more than 11 days based on observed mtimes.",
       "OS asset-reclamation attempts around the run reported zero reclaimed bytes."
     ],
     "unknown": [
