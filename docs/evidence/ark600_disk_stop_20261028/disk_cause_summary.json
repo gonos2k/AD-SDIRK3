@@ -1,0 +1,19 @@
+{
+  "at_local": "2026-10-28T20:22:11.889968+09:00",
+  "direct_cause": "Authorized5GiB whole-volume free-space guard -> controller TERM -> launcher RC1",
+  "run_artifact_bytes": 52663587,
+  "history_bytes": 44510740,
+  "free_000340_bytes": 7935913984,
+  "floor_bytes": 5368709120,
+  "minimum_decline_to_cross_floor_bytes": 2567204864,
+  "free_092205_bytes": 714207232,
+  "sampled_decline_bytes": 7221706752,
+  "sampled_decline_includes_hours_after_run": true,
+  "allocation_source": "unresolved",
+  "OS_reclamation_records": 131,
+  "all_reported_reclaimed_bytes": 0,
+  "current_VM_volume_bytes": 11813888000,
+  "current_unlinked_logical_bytes": 3905935945,
+  "new_model_run": false,
+  "deletion_or_signals_during_analysis": false
+}

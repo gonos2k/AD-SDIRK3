@@ -1,0 +1,15 @@
+{
+  "at_local": "2026-10-28T20:14:30.594375+09:00",
+  "base_revision": "739638f0edeb52ab6105450754275f7aa87cdc78",
+  "controller_tests": 23,
+  "asset_guard_tests": 8,
+  "status": "passed",
+  "full_native_rerun_during_publication": false,
+  "model_numerical_sources_changed": false,
+  "source_sha256": {
+    "tools/run_standard_wrf.py": "39b04a3ab74d7d693ccbd446057d6a1a23bda0def85ef4eb5aea3f12e892351d",
+    "tools/test_run_standard_wrf.py": "9839f4d7fbb804a95b0cc79a28f9cbe4fa3eb13f2b48eb7e11cdcb0862244773",
+    "docs/evidence/ark600_five_day_interrupted/recompute_partial_metrics.py": "031dc932496dae56eb9676d358c2c2bb70567aa3b656ad3307eca1fb869a9031",
+    "docs/evidence/ark600_five_day_interrupted/test_recompute_partial_metrics.py": "6c612f4df47146bd5e26f986bb7e66af12275ee85722db04c559e02eab2232be"
+  }
+}

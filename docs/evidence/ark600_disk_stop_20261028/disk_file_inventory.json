@@ -1,0 +1,19 @@
+{
+  "schema": "bounded_metadata_inventory_public_v1",
+  "actions_runner_allocated_KiB": 7147860,
+  "actions_runner_regular_files_scanned": 126782,
+  "actions_runner_current_mtime_or_ctime_matches_window": 0,
+  "sessions_2026_logical_bytes": 4724476903,
+  "session_files_matching_window": 3,
+  "matched_session_logical_bytes_approx": 12750000,
+  "cache_allocated_KiB": 54097848,
+  "cache_uv_allocated_KiB": 31209696,
+  "cache_huggingface_allocated_KiB": 17414980,
+  "cache_codex_runtimes_allocated_KiB": 3641756,
+  "tmp_allocated_KiB": 3999444,
+  "window_local": [
+    "2026-10-27T22:30:00+09:00",
+    "2026-10-28T03:20:00+09:00"
+  ],
+  "limits": "Current sizes/final timestamps are not historical allocation deltas. Files changed again or deleted after the window may be absent from matches. Cache root timestamps do not prove child growth. No contents read, no deletion, no historical writer attributed."
+}

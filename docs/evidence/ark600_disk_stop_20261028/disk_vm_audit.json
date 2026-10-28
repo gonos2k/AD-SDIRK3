@@ -1,0 +1,170 @@
+{
+  "schema": "read_only_disk_pressure_audit_v1",
+  "observed_at_local": "2026-10-28T20:17:23.535207+09:00",
+  "scope": {
+    "read_only": true,
+    "privileged_commands_used": false,
+    "deletes_or_process_signals": false,
+    "historical_logs": "bounded unified-log queries over 2026-10-27 23:50 through 2026-10-28 03:25 JST; process/message predicates limited to storage, cache-delete, snapshots, and swap",
+    "no_raw_unfiltered_logs_saved": true
+  },
+  "forecast_stop": {
+    "start_local": "2026-10-28T00:00:25.466+09:00",
+    "stop_local_approx": "2026-10-28T03:19:03+09:00",
+    "controller_status": "failed_or_incomplete",
+    "stop_reason": "disk_resource_cap",
+    "return_code": 1,
+    "elapsed_wall_seconds": 11917.729044,
+    "configured_case_and_total_cap_seconds": 64800,
+    "interpretation": "the 5 GiB volume-free-space guard stopped the run; elapsed time was about 3h18m38s, below the 18h cap",
+    "numeric_divergence_established": false
+  },
+  "run_artifact_scope": {
+    "completed_outer_step_logs": 175,
+    "model_seconds_from_step_logs": 105000,
+    "last_saved_history_model_seconds": 97200,
+    "history_frames": 10,
+    "history_logical_bytes": 44510740,
+    "run_root_regular_file_logical_bytes": 52663587,
+    "note": "saved artifact sizes are far smaller than the multi-GB volume-free-space change; no attribution of unrelated volume consumption to the run"
+  },
+  "volume_samples": {
+    "start_status_sample": {
+      "at_local": "2026-10-28T00:03:40.246+09:00",
+      "free_bytes": 7935913984
+    },
+    "low_free_status_sample": {
+      "at_local": "2026-10-28T09:22:05.978+09:00",
+      "free_bytes": 714207232
+    },
+    "sampled_delta_bytes": 7221706752,
+    "sampled_delta_scope_note": "difference between two status samples; not an isolated model-run accounting interval",
+    "current_sample": {
+      "at_local": "2026-10-28T20:13:17+09:00",
+      "apfs_container_free_bytes": 2687209472,
+      "df_data_volume_available_rounded": "2.5 GiB",
+      "vm_volume_used_bytes": 11813888000
+    },
+    "current_vs_low_status_free_increase_bytes": 1973002240
+  },
+  "swap_observation": {
+    "sysctl_sample_local": "2026-10-28T20:13+09:00",
+    "total_MiB": 11264.0,
+    "used_MiB": 10085.19,
+    "free_MiB": 1178.81,
+    "swap_files": [
+      {
+        "name": "swapfile0",
+        "bytes": 1073741824,
+        "mtime_local": "2026-09-25T21:59:22+09:00"
+      },
+      {
+        "name": "swapfile1",
+        "bytes": 1073741824,
+        "mtime_local": "2026-09-25T21:59:27+09:00"
+      },
+      {
+        "name": "swapfile3",
+        "bytes": 1073741824,
+        "mtime_local": "2026-09-25T22:00:40+09:00"
+      },
+      {
+        "name": "swapfile4",
+        "bytes": 1073741824,
+        "mtime_local": "2026-10-04T11:36:59+09:00"
+      },
+      {
+        "name": "swapfile5",
+        "bytes": 1073741824,
+        "mtime_local": "2026-10-12T17:32:32+09:00"
+      },
+      {
+        "name": "swapfile6",
+        "bytes": 1073741824,
+        "mtime_local": "2026-10-16T05:00:58+09:00"
+      },
+      {
+        "name": "swapfile7",
+        "bytes": 1073741824,
+        "mtime_local": "2026-10-04T21:34:34+09:00"
+      },
+      {
+        "name": "swapfile8",
+        "bytes": 1073741824,
+        "mtime_local": "2026-10-04T12:09:13+09:00"
+      },
+      {
+        "name": "swapfile9",
+        "bytes": 1073741824,
+        "mtime_local": "2026-10-04T12:09:17+09:00"
+      },
+      {
+        "name": "swapfile21",
+        "bytes": 1073741824,
+        "mtime_local": "2026-10-16T10:57:22+09:00"
+      },
+      {
+        "name": "swapfile22",
+        "bytes": 1073741824,
+        "mtime_local": "2026-10-06T13:24:30+09:00"
+      }
+    ],
+    "interpretation": "all 11 one-GiB swap files have mtimes before the Oct 28 run; current swap use does not establish that swap grew during the run; no historical per-run swap sample was found",
+    "other_vm_file": {
+      "path": "/private/var/vm/sleepimage",
+      "bytes": 2147483648,
+      "mtime_local": "2026-10-06T20:06:47+09:00",
+      "volume_scope": "Data, not VM volume"
+    }
+  },
+  "snapshots": {
+    "data_volume_apfs_snapshots": 0,
+    "time_machine_local_snapshots": 0,
+    "system_volume_os_update_snapshots": 3,
+    "snapshot_note": "one system update snapshot is marked non-purgeable and as limiting minimum APFS container size; snapshot-pinned bytes and relevance to the historical free-space change are unknown"
+  },
+  "deleted_open_files_current_sample": {
+    "sample_local_approx": "2026-10-28T20:14+09:00",
+    "unique_unlinked_inodes": 325,
+    "sum_logical_size_bytes": 3905935945,
+    "largest": {
+      "process": "QuickTime Player",
+      "pid": 83641,
+      "logical_size_bytes": 1211768474,
+      "process_started_local": "2026-10-28T02:53:05+09:00",
+      "name_scope": "user Trash video; basename omitted"
+    },
+    "interpretation": "open-unlinked files can keep storage allocated until the final descriptor closes; lsof SIZE/OFF is logical size, not a measured APFS block allocation; unlink times are unavailable, so this current sample cannot account for the historical multi-GB delta"
+  },
+  "historical_unified_log": {
+    "query_process": "mobileassetd CacheDelete milestones, plus bounded APFS/disk-management/backup/swap process queries",
+    "mobileassetd_milestone_count": 131,
+    "window_local": [
+      "2026-10-27T23:53:02+09:00",
+      "2026-10-28T03:21:01+09:00"
+    ],
+    "targeted_reclamation_bytes_approx_range": [
+      1020000000,
+      2210000000
+    ],
+    "reclaimed_bytes_all_milestones": 0,
+    "metadata_blocked_bytes_approx_range": [
+      3911793773,
+      3919187600
+    ],
+    "interpretation": "Data-volume automatic asset reclamation repeatedly attempted about 1\u20132 GiB before/during/after the run and reported zero reclaimed with about 3.91 GB metadata-blocked. This supports contemporaneous low-reclaimability pressure, but does not identify the writer(s) or explain the exact free-space delta. The bounded APFS and swap queries returned no event identifying a new swapfile or specific disk consumer."
+  },
+  "conclusion": {
+    "supported": [
+      "The forecast stopped on the controller disk_resource_cap, before the 18h limit.",
+      "Current storage pressure includes about 10 GiB active swap and 325 unique open-unlinked file inodes with about 3.91 GB aggregate logical size; current values are not historical run samples.",
+      "The VM swap files predate the run by at least 12 days based on observed mtimes.",
+      "OS asset-reclamation attempts around the run reported zero reclaimed bytes."
+    ],
+    "unknown": [
+      "The exact source and time of the multi-GB APFS free-space reduction.",
+      "Whether swap usage, open-unlinked files, APFS snapshot retention, other processes, or a combination caused the run-time threshold crossing.",
+      "Physical APFS block allocation for lsof-reported unlinked files and historical swap usage during the run."
+    ]
+  }
+}

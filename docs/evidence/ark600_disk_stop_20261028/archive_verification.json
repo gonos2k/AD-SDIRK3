@@ -1,0 +1,154 @@
+{
+  "archive": "evidence.zip",
+  "bytes": 658544,
+  "sha256": "883b3fe6699954ec7740f7f85932544498c5decd5cfb8d12a2831e3db7276b02",
+  "crc": "pass",
+  "payload_count": 29,
+  "files": [
+    {
+      "file": "manifest.json",
+      "bytes": 4300,
+      "sha256": "bb6e6a4c609af98075abfc09960a82c0fb4170210a21bacd7cc5a2f574f50833"
+    },
+    {
+      "file": "prelaunch_binding.json",
+      "bytes": 1073,
+      "sha256": "245776eca4a40d9974c749bc67447d1456613a0022b41c86103ac07545e00d65"
+    },
+    {
+      "file": "launch_receipt.json",
+      "bytes": 739,
+      "sha256": "47b7d25e9b74325790c39c64b836435d7066fecf9924370411e907b43392eeb6"
+    },
+    {
+      "file": "observer_start.json",
+      "bytes": 220,
+      "sha256": "89c58a9c512a6031f6e22e7ca096dfb6da51997bcb49c1ec73753a8ced4b132f"
+    },
+    {
+      "file": "checkpoint_observer_launch.json",
+      "bytes": 324,
+      "sha256": "111b3893e93d9672bc026afd0e05c1e8b0a6829ffa4e5f05fd57d00819fe756a"
+    },
+    {
+      "file": "checkpoint_observer_receipt.json",
+      "bytes": 1098,
+      "sha256": "dfa4da8199ae0cf851f5cff515d9ed6dc9672c755228f28b6b7ae7247c1ae6ae"
+    },
+    {
+      "file": "checkpoint_results.json",
+      "bytes": 839,
+      "sha256": "93d504b801df51f5769ede118fd71b4df11b196ff01039935dd6b5a1d2d3ace1"
+    },
+    {
+      "file": "progress.json",
+      "bytes": 1380,
+      "sha256": "4d265c956421e656b13575de6c3e315af37a5421870cf801d3e4f1c8c9018f4b"
+    },
+    {
+      "file": "observer_view_check.json",
+      "bytes": 233,
+      "sha256": "7b48c450cc6b5f6f3a52d5e9a38a4abe9dd97e0283aac426b7041f102f78cd27"
+    },
+    {
+      "file": "effective_config_comparison.json",
+      "bytes": 2869,
+      "sha256": "d325498fbd2f17457f6690e6473df9929085ed3c25f26e41f2ff4e9112b04671"
+    },
+    {
+      "file": "start_status_receipt.json",
+      "bytes": 633,
+      "sha256": "6f15cb6ebd7e79b688397d9d2dc8df27775bf3a5bfc68862fedcb6e96116c6b5"
+    },
+    {
+      "file": "execution/run_standard_wrf.py",
+      "bytes": 26304,
+      "sha256": "39b04a3ab74d7d693ccbd446057d6a1a23bda0def85ef4eb5aea3f12e892351d"
+    },
+    {
+      "file": "execution/benchmark_wrf_accuracy_cost.py",
+      "bytes": 55688,
+      "sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3"
+    },
+    {
+      "file": "execution/observe_checkpoints.py",
+      "bytes": 9504,
+      "sha256": "6ea5e1d6718aa9ff9660c2951b139d374ba15e4618882c842a4bfe2b589082bf"
+    },
+    {
+      "file": "runs/ark_h600/forecast_receipt.json",
+      "bytes": 2611433,
+      "sha256": "74edbcbcfbc6e402c8758d865fc64cb15feadb9821f379bf785ae65c7ac40069"
+    },
+    {
+      "file": "runs/ark_h600/monitor_samples.jsonl",
+      "bytes": 2098380,
+      "sha256": "6606edafac688fa82300a4820d3c192be5fac6564a0c4edfc4ef3f34551a75c9"
+    },
+    {
+      "file": "runs/ark_h600/forecast_intent.json",
+      "bytes": 1564,
+      "sha256": "87a031fc4234e56f80082987dcbaaaaa1f04daef85d7385d192def73a10e46ec"
+    },
+    {
+      "file": "runs/ark_h600/initial_gate.json",
+      "bytes": 946,
+      "sha256": "9286e78460b92ad3343d8d30f04ddac5d494422b8b53ccf2813e8cd6539afd15"
+    },
+    {
+      "file": "runs/ark_h600/launcher_pid.json",
+      "bytes": 188,
+      "sha256": "0fb13a3425aceae1978999d12856125d5f1f5da534f1bdc538800e8e969d4f8e"
+    },
+    {
+      "file": "runs/ark_h600/namelist.input",
+      "bytes": 6015,
+      "sha256": "3d608b5fb7486132844f604cd7bc7d31fdeae79f6b91c57e1ce943d2729456ea"
+    },
+    {
+      "file": "runs/ark_h600/namelist.output",
+      "bytes": 92987,
+      "sha256": "76dc4c38efa7083ed82de205146fc2e79778b3c72fd57209e82eef847abdaaca"
+    },
+    {
+      "file": "runs/ark_h600/rsl.out.0000",
+      "bytes": 17686,
+      "sha256": "56fd464626c63e00a3993c4b572965e3e8f56dfbf76616c1785f4d3c9ffa30c9"
+    },
+    {
+      "file": "runs/ark_h600/rsl.error.0000",
+      "bytes": 26093,
+      "sha256": "e7421e2ee1da94cd3a275d97346e3b2eeb72770b9d26439e03fce11dacbfbb82"
+    },
+    {
+      "file": "runs/ark_h600/native_mpi_finalize_trace.log",
+      "bytes": 284,
+      "sha256": "d899010555697bfc5b17974b47abdca0331b4ca0a47f4ef3849d40e6c946951a"
+    },
+    {
+      "file": "analysis/21600/comparison.json",
+      "bytes": 377675,
+      "sha256": "30403b9549c38e906e92b0e88d88ef41a5aebaffb975f0f93f5b0309bd46ce5a"
+    },
+    {
+      "file": "analysis/21600/vs_prior_ark.json",
+      "bytes": 166717,
+      "sha256": "17cd319fe561662784e2d90b2abe877e072db140c66b8e57efbba55c72a8ea16"
+    },
+    {
+      "file": "analysis/86400/comparison.json",
+      "bytes": 510369,
+      "sha256": "ba05a5026dc7c75c1764e5f95906f1b138db2e882588634ce0ce51d6a5261768"
+    },
+    {
+      "file": "source_graph/binding.json",
+      "bytes": 676,
+      "sha256": "6232bea507f164de33f367b03d0c77c2be39bc34423611680e48e0d4f9e6d275"
+    },
+    {
+      "file": "source_graph/extract.json",
+      "bytes": 55625,
+      "sha256": "458e912fa7fd42c291bfb200a5ac02af3d359705925bab9a1935b5556d899959"
+    }
+  ]
+}
