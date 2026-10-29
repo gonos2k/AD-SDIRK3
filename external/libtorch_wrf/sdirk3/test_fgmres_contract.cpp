@@ -415,6 +415,126 @@ int main() {
         }
     }
 
+    // Early estimate probes must be confirmed with b-Ax, and a failed probe
+    // must not turn every remaining Arnoldi iteration into an extra A call.
+    // The shift matrix has an independently predictable, slowly extending
+    // Krylov basis, without a breakdown in the 16-vector budget.
+    {
+        auto& cfg = wrf::sdirk3::g_sdirk3_config;
+        const bool saved_probe = cfg.gmres_estimate_probe;
+        const int saved_start = cfg.gmres_true_residual_start_j;
+        const int saved_period = cfg.gmres_true_residual_period;
+        cfg.gmres_true_residual_start_j = 12;
+        cfg.gmres_true_residual_period = 8;
+        const auto opts = torch::TensorOptions().dtype(torch::kFloat64);
+        auto matrix = torch::eye(64, opts);
+        for (int i = 0; i < 63; ++i) matrix[i + 1][i] = 0.1;
+        auto rhs = torch::zeros({64}, opts);
+        rhs[0] = 1.0;
+        const auto initial = torch::zeros_like(rhs);
+        constexpr float eta = 0.02f;
+
+        for (const bool flexible : {false, true}) {
+            const std::string label = flexible ? "FGMRES" : "GMRES";
+            auto run = [&](bool enabled, bool optimistic, int& applies, int& pc_calls) {
+                cfg.gmres_estimate_probe = enabled;
+                applies = pc_calls = 0;
+                std::function<torch::Tensor(const torch::Tensor&)> op =
+                    [&](const torch::Tensor& v) {
+                        ++applies;
+                        auto result = matrix.matmul(v);
+                        // Arnoldi basis vectors are single-coordinate vectors;
+                        // trial corrections have multiple significant entries.
+                        // This deliberately non-linear mock exposes an optimistic
+                        // Hessenberg estimate and tests the true-residual gate.
+                        if (optimistic && (v.abs() > 1e-7).sum().item<int>() > 1)
+                            result = 2.0 * result;
+                        return result;
+                    };
+                std::function<torch::Tensor(const torch::Tensor&)> pc;
+                if (flexible) pc = [&](const torch::Tensor& v) {
+                    ++pc_calls;
+                    return (pc_calls % 2 == 0) ? 2.0 * v : v.clone();
+                };
+                return flexible
+                    ? solve_fgmres(op, rhs, initial, 0, 0.0f, 16, eta, 1,
+                                   pc, nullptr, nullptr, false, false)
+                    : solve_gmres(op, rhs, initial, 0, 0.0f, 16, eta, 1,
+                                  pc, nullptr, nullptr, false, false);
+            };
+            int calls_off, calls_on, pc_off, pc_on;
+            const auto off = run(false, false, calls_off, pc_off);
+            const auto on = run(true, false, calls_on, pc_on);
+            const double rho = true_rel_residual_fp64(matrix, rhs, on.x);
+            expect(off.success && off.iterations == 13 && calls_off == 14,
+                   (label + ": disabled probe retains first scheduled check and call count").c_str());
+            expect(on.success && on.iterations < off.iterations && calls_on < calls_off && rho < eta,
+                   (label + ": enabled probe saves work and independently meets tolerance").c_str());
+            expect(!flexible || (pc_on == on.iterations && pc_off == off.iterations),
+                   (label + ": variable preconditioner uses stored directions for trial").c_str());
+
+            const auto failed_off = run(false, true, calls_off, pc_off);
+            const auto failed_on = run(true, true, calls_on, pc_on);
+            const double actual = (rhs - 2.0 * matrix.matmul(failed_on.x)).norm().item<double>()
+                                  / rhs.norm().item<double>();
+            expect(!failed_on.success && actual > eta && failed_on.iterations == 16,
+                   (label + ": optimistic estimate cannot cause false success").c_str());
+            expect(!failed_off.success && failed_off.iterations == 16 &&
+                       calls_on == calls_off + 1,
+                   (label + ": failed early probe is capped and scheduled checks remain").c_str());
+            expect(!flexible || pc_on == failed_on.iterations,
+                   (label + ": failed trial does not reapply variable preconditioner").c_str());
+        }
+
+        // The small block is solved almost immediately, while the large block
+        // needs another direction. Block weighting makes the first candidate
+        // pass its own norm before it passes the reported unweighted norm.
+        const int saved_block_scale = cfg.gmres_block_scale;
+        const bool saved_autograd = cfg.use_autograd;
+        cfg.gmres_block_scale = 1;
+        cfg.use_autograd = true;
+        cfg.gmres_estimate_probe = true;
+        wrf::sdirk3::StateLayout layout;
+        layout.blocks = {{"ru", 0, 32}, {"rv", 32, 32}, {"rw", 64, 0},
+                         {"ph", 64, 0}, {"t", 64, 0}, {"mu", 64, 0}};
+        layout.total_size = 64;
+        layout.is_exact = true;
+        expect(layout.is_valid(), "weighted probe fixture has an authoritative six-block layout");
+        auto weighted_matrix = torch::eye(64, opts);
+        for (int i = 0; i < 31; ++i) weighted_matrix[i + 1][i] = 0.2;
+        auto weighted_rhs = torch::zeros({64}, opts);
+        weighted_rhs[0] = 1000.0;
+        weighted_rhs[32] = 1.0;
+        for (const bool flexible : {false, true}) {
+            int operator_calls = 0;
+            const auto weighted_op = [&](const torch::Tensor& v) {
+                ++operator_calls;
+                return weighted_matrix.matmul(v);
+            };
+            int pc_calls = 0;
+            std::function<torch::Tensor(const torch::Tensor&)> identity_pc =
+                [&](const torch::Tensor& v) { ++pc_calls; return v.clone(); };
+            const auto result = flexible
+                ? solve_fgmres(weighted_op, weighted_rhs, initial, 0, 0.0f, 16, 0.03f, 1,
+                               identity_pc, &layout, nullptr, false, false)
+                : solve_gmres(weighted_op, weighted_rhs, initial, 0, 0.0f, 16, 0.03f, 1,
+                              nullptr, &layout, nullptr, false, false);
+            expect(result.success && result.iterations == 13 &&
+                       true_rel_residual_fp64(weighted_matrix, weighted_rhs, result.x) < 0.03,
+                   flexible ? "FGMRES: weighted-only early candidate cannot stop the solve"
+                            : "GMRES: weighted-only early candidate cannot stop the solve");
+            expect(!flexible || pc_calls == result.iterations,
+                   "weighted FGMRES applies its preconditioner once per Arnoldi vector");
+            expect(operator_calls == result.iterations + 2,
+                   "weighted solve performs an early trial and its scheduled check");
+        }
+        cfg.gmres_block_scale = saved_block_scale;
+        cfg.use_autograd = saved_autograd;
+        cfg.gmres_estimate_probe = saved_probe;
+        cfg.gmres_true_residual_start_j = saved_start;
+        cfg.gmres_true_residual_period = saved_period;
+    }
+
     if (g_failures == 0) {
         std::printf("ALL fgmres_contract assertions PASSED\n");
         return 0;

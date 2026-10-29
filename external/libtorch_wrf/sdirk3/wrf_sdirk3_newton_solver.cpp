@@ -54,6 +54,7 @@
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection
 #include "wrf_sdirk3_autograd_utils.h"
+#include "wrf_sdirk3_krylov_residual_probe.h"
 #include "wrf_sdirk3_krylov_metrics.h"  // relative_residual / shares / E^-1 S
 #include "wrf_sdirk3_stage_krylov_policy.h"  // pure stage budget/tolerance resolution
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
@@ -1362,6 +1363,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     float diag_stag_ratio = -1.0f;
     int diag_stag_count = 0;
 
+    const bool estimate_probe_enabled = wrf::sdirk3::g_sdirk3_config.gmres_estimate_probe;
     for (int iter = 0; iter < max_iter; ++iter) {
         actual_restarts = iter + 1;  // Track current restart number
         // TIMING INSTRUMENTATION: Start GMRES iteration timer
@@ -1469,6 +1471,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         bool breakdown_occurred = false;
         // FIX 2026-01-31: Save converged residual from j-loop to skip redundant JVP at line 915
         torch::Tensor saved_r_true_converged;
+        torch::Tensor estimate_converged_x;
+        wrf::sdirk3::KrylovResidualProbe estimate_probe(estimate_probe_enabled);
 
         // v20.14r48: Arnoldi-level stagnation tracking for early termination.
         // If true_err improves by less than (1 - stag_ratio) for stag_window consecutive
@@ -1819,7 +1823,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             // Cheap convergence estimate from Givens rotation (no JVP needed)
             // GR v9 G1: Gate behind debug_level to avoid GPU sync in production
             float hess_estimate = -1.0f;  // sentinel for non-debug path
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 || estimate_probe.pending()) {
                 hess_estimate = guarded_item<float>(torch::abs(s[j + 1]) / bnorm_safe);
             }
 
@@ -1843,10 +1847,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             // without consuming the full restart budget.
             const bool mid_budget_probe =
                 aggressive_budget_stag_gate && (j == std::max(2, restart / 2));
-            bool near_convergence = (j == restart - 1) ||
+            const bool scheduled_true_check = (j == restart - 1) ||
                                     mid_budget_probe ||
                                     (!skip_periodic_true_check &&
                                      j >= start_j && (j - start_j) % period == 0);
+            const bool estimate_true_check = estimate_probe.request(
+                scheduled_true_check, hess_estimate, tol);
+            const bool near_convergence = scheduled_true_check || estimate_true_check;
 
             if (near_convergence) {
                 // Solve H*y_trial = s for the current Krylov subspace [0...j]
@@ -1884,6 +1891,26 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 auto r_true_norm = gmres_residual_norm(r_for_norm, halo_width, periodic_x, periodic_y);
                 auto error_true = r_true_norm / bnorm_safe;
                 gmres_converged = guarded_item<bool>((error_true < tol).all());
+                if (estimate_true_check && gmres_converged) {
+                    // The old final backsolve regularizes tiny diagonals whereas
+                    // its trial solve zeros them. Do not add an early exit in
+                    // that exceptional case; the scheduled path stays intact.
+                    auto active_diag = H.diagonal().slice(0, 0, j + 1);
+                    gmres_converged = guarded_item<bool>(
+                        (torch::isfinite(active_diag) & (active_diag.abs() > 1e-10f)).all());
+                }
+                if (estimate_true_check && gmres_converged) {
+                    // The estimate and internal gate use D^-1 coordinates. An
+                    // added early exit must also satisfy the final unweighted
+                    // success criterion, using this same explicit b-A(x_trial).
+                    auto raw_inner = r_true_trial.clone();
+                    zero_halo_regions(raw_inner, halo_width, periodic_x, periodic_y);
+                    const float raw_relative = static_cast<float>(wrf::sdirk3::krylov_relative_norm(
+                        guarded_item<double>(safe_tensor_norm_fp64(raw_inner)),
+                        guarded_item<double>(bnorm_unscaled)));
+                    gmres_converged = std::isfinite(raw_relative) && raw_relative < tol;
+                    if (gmres_converged) estimate_converged_x = x_trial;
+                }
 
                 // Budgeted ru-dominant stage guard:
                 // If a forced mid-budget probe is still far from tolerance, terminate
@@ -1914,7 +1941,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 // v20.14r48: Arnoldi stagnation tracking.
                 // Track true_err improvement across consecutive checks.
                 bool arnoldi_stagnated = false;
-                if (!gmres_converged && !no_early_stop) {
+                if (scheduled_true_check && !gmres_converged && !no_early_stop) {
                     float err_val_stag = guarded_item<float>(error_true);
                     float ratio = (prev_true_err > 1e-30f) ? err_val_stag / prev_true_err : 0.0f;
                     if (ratio > stag_ratio) {
@@ -2140,7 +2167,9 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
 
         // RIGHT-PRECONDITIONING: x = x + M^{-1}(sum(y[i]*V[i]))
         // FIX 2026-01-27: Apply M_inv to correction for right preconditioning.
-        {
+        if (estimate_converged_x.defined()) {
+            x = estimate_converged_x;
+        } else {
             torch::Tensor z_update = torch::zeros_like(x);
             for (int i = 0; i < j; ++i) {
                 z_update = z_update + y[i] * V[i];
@@ -2905,6 +2934,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     float diag_stag_ratio = -1.0f;
     int diag_stag_count = 0;
 
+    const bool estimate_probe_enabled = wrf::sdirk3::g_sdirk3_config.gmres_estimate_probe;
     for (int iter = 0; iter < max_iter; ++iter) {
         actual_restarts = iter + 1;  // Track current restart number
         // TIMING INSTRUMENTATION: Start GMRES iteration timer
@@ -3034,6 +3064,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         bool breakdown_occurred = false;
         // FIX 2026-01-31: Save converged residual from j-loop to skip redundant JVP at line 915
         torch::Tensor saved_r_true_converged;
+        torch::Tensor estimate_converged_x;
+        wrf::sdirk3::KrylovResidualProbe estimate_probe(estimate_probe_enabled);
 
         // v20.14r48: Arnoldi-level stagnation tracking for early termination.
         // If true_err improves by less than (1 - stag_ratio) for stag_window consecutive
@@ -3588,7 +3620,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // Cheap convergence estimate from Givens rotation (no JVP needed)
             // GR v9 G1: Gate behind debug_level to avoid GPU sync in production
             float hess_estimate = -1.0f;  // sentinel for non-debug path
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 || estimate_probe.pending()) {
                 hess_estimate = guarded_item<float>(torch::abs(s[j + 1]) / bnorm_safe);
             }
 
@@ -3612,10 +3644,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // without consuming the full restart budget.
             const bool mid_budget_probe =
                 aggressive_budget_stag_gate && (j == std::max(2, restart / 2));
-            bool near_convergence = (j == restart - 1) ||
+            const bool scheduled_true_check = (j == restart - 1) ||
                                     mid_budget_probe ||
                                     (!skip_periodic_true_check &&
                                      j >= start_j && (j - start_j) % period == 0);
+            const bool estimate_true_check = estimate_probe.request(
+                scheduled_true_check, hess_estimate, tol);
+            const bool near_convergence = scheduled_true_check || estimate_true_check;
 
             if (near_convergence) {
                 // Solve H*y_trial = s for the current Krylov subspace [0...j]
@@ -3653,6 +3688,26 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 auto r_true_norm = gmres_residual_norm(r_for_norm, halo_width, periodic_x, periodic_y);
                 auto error_true = r_true_norm / bnorm_safe;
                 gmres_converged = guarded_item<bool>((error_true < tol).all());
+                if (estimate_true_check && gmres_converged) {
+                    // The old final backsolve regularizes tiny diagonals whereas
+                    // its trial solve zeros them. Do not add an early exit in
+                    // that exceptional case; the scheduled path stays intact.
+                    auto active_diag = H.diagonal().slice(0, 0, j + 1);
+                    gmres_converged = guarded_item<bool>(
+                        (torch::isfinite(active_diag) & (active_diag.abs() > 1e-10f)).all());
+                }
+                if (estimate_true_check && gmres_converged) {
+                    // The estimate and internal gate use D^-1 coordinates. An
+                    // added early exit must also satisfy the final unweighted
+                    // success criterion, using this same explicit b-A(x_trial).
+                    auto raw_inner = r_true_trial.clone();
+                    zero_halo_regions(raw_inner, halo_width, periodic_x, periodic_y);
+                    const float raw_relative = static_cast<float>(wrf::sdirk3::krylov_relative_norm(
+                        guarded_item<double>(safe_tensor_norm_fp64(raw_inner)),
+                        guarded_item<double>(bnorm_unscaled)));
+                    gmres_converged = std::isfinite(raw_relative) && raw_relative < tol;
+                    if (gmres_converged) estimate_converged_x = x_trial;
+                }
 
                 // Budgeted ru-dominant stage guard:
                 // If a forced mid-budget probe is still far from tolerance, terminate
@@ -3683,7 +3738,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 // v20.14r48: Arnoldi stagnation tracking.
                 // Track true_err improvement across consecutive checks.
                 bool arnoldi_stagnated = false;
-                if (!gmres_converged && !no_early_stop) {
+                if (scheduled_true_check && !gmres_converged && !no_early_stop) {
                     float err_val_stag = guarded_item<float>(error_true);
                     float ratio = (prev_true_err > 1e-30f) ? err_val_stag / prev_true_err : 0.0f;
                     if (ratio > stag_ratio) {
@@ -3910,7 +3965,9 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // FGMRES: x = x + sum_i y[i] * Z[i] — the final correction likewise comes
         // ONLY from the stored preconditioned basis. Zero M_inv calls outside the
         // Arnoldi loop, by construction. (M_inv == nullptr => Z empty, use V.)
-        {
+        if (estimate_converged_x.defined()) {
+            x = estimate_converged_x;
+        } else {
             torch::Tensor z_update = torch::zeros_like(x);
             const std::vector<torch::Tensor>& basis_final = M_inv ? Z : V;
             for (int i = 0; i < j; ++i) {

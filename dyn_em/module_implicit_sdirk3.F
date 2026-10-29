@@ -2199,6 +2199,9 @@ CONTAINS
       config_name = "variable_pc_event_log"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_variable_pc_event_log))
 
+      config_name = "gmres_estimate_probe"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_gmres_estimate_probe))
+
       config_name = "gmres_warmstart"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_gmres_warmstart))
 

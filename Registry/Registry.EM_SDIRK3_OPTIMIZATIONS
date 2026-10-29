@@ -103,6 +103,7 @@ rconfig   logical sdirk3_progress_invariant_enable     namelist,dynamics  1  .fa
 rconfig   real    sdirk3_progress_invariant_min_ratio  namelist,dynamics  1  0.0      rh   "sdirk3_progress_invariant_min_ratio"  "Low-progress threshold A=||dU||/(||dt*k1||+eps), <=0 off"   ""
 rconfig   integer sdirk3_progress_invariant_streak_limit namelist,dynamics 1  0        rh   "sdirk3_progress_invariant_streak_limit" "Consecutive low-progress steps to flag (0=off)"   ""
 rconfig   logical sdirk3_variable_pc_event_log         namelist,dynamics  1  .false.  rh   "sdirk3_variable_pc_event_log"         "Log variable-preconditioner events during GMRES"   ""
+rconfig   logical sdirk3_gmres_estimate_probe          namelist,dynamics  1  .false.  rh   "sdirk3_gmres_estimate_probe"          "Enable bounded estimate-triggered true residual probe"   ""
 rconfig   logical sdirk3_gmres_warmstart               namelist,dynamics  1  .false.  rh   "sdirk3_gmres_warmstart"               "Enable stage-local GMRES x0 warm-start cache"   ""
 rconfig   real    sdirk3_gmres_warmstart_quality_gate  namelist,dynamics  1  0.6      rh   "sdirk3_gmres_warmstart_quality_gate"  "Warm-start allowed only if previous GMRES rel_error <= gate"   ""
 rconfig   logical sdirk3_inn_warmstart_enable          namelist,dynamics  1  .false.  rh   "sdirk3_inn_warmstart_enable"          "Enable INN-assisted GMRES x0 correction (default off)"   ""
