@@ -1,0 +1,60 @@
+{
+  "source_analysis_sha256": "e4fd854966e5a824c13ff725a54cef4eccf35dcaa15a5a3ee0b6fd3807b273f1",
+  "new_case": "A0 probe OFF, EW enabled",
+  "reference": "Retained PR325 B0 EW output; receipt matches committed archive pin",
+  "old_receipt_sha256": "4f15df7451b0332d9076e32db4d2bbceb304472888b3e3a1a81b55334e88f50a",
+  "frames": [
+    {
+      "name": "wrfout_d01_0001-01-01_00:00:00",
+      "prior_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "new_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "numeric_arrays": 174,
+      "failures": []
+    },
+    {
+      "name": "wrfout_d01_0001-01-01_00:10:00",
+      "prior_sha256": "925e71f266ee51aa30bd8053bdd5b58159e0bb56a21f8b2a36accbd456977837",
+      "new_sha256": "925e71f266ee51aa30bd8053bdd5b58159e0bb56a21f8b2a36accbd456977837",
+      "numeric_arrays": 174,
+      "failures": []
+    },
+    {
+      "name": "wrfout_d01_0001-01-01_00:20:00",
+      "prior_sha256": "316d10280e971fbb471e12fdc0b572ffae83be9383ec225da060b66fd1cf9840",
+      "new_sha256": "316d10280e971fbb471e12fdc0b572ffae83be9383ec225da060b66fd1cf9840",
+      "numeric_arrays": 174,
+      "failures": []
+    },
+    {
+      "name": "wrfout_d01_0001-01-01_00:30:00",
+      "prior_sha256": "db429bd9d4284fd26318d5b7b207f8574932805d25ce914a0d1bbb359ce436f2",
+      "new_sha256": "db429bd9d4284fd26318d5b7b207f8574932805d25ce914a0d1bbb359ce436f2",
+      "numeric_arrays": 174,
+      "failures": []
+    },
+    {
+      "name": "wrfout_d01_0001-01-01_00:40:00",
+      "prior_sha256": "1b2354257123cc5aa63f1a758c216f9b435b5b222bcbfdc636f9544b9b706d3e",
+      "new_sha256": "1b2354257123cc5aa63f1a758c216f9b435b5b222bcbfdc636f9544b9b706d3e",
+      "numeric_arrays": 174,
+      "failures": []
+    },
+    {
+      "name": "wrfout_d01_0001-01-01_00:50:00",
+      "prior_sha256": "f0cb7a0c8d0151fcd02df16dbb8d8c42dbab291b83a0c77ba60ecbd799693ada",
+      "new_sha256": "f0cb7a0c8d0151fcd02df16dbb8d8c42dbab291b83a0c77ba60ecbd799693ada",
+      "numeric_arrays": 174,
+      "failures": []
+    },
+    {
+      "name": "wrfout_d01_0001-01-01_01:00:00",
+      "prior_sha256": "66b67b8af1ff1b66f651ce0a516609dc3351f2a4072665b47ca6b04b0d8e8f69",
+      "new_sha256": "66b67b8af1ff1b66f651ce0a516609dc3351f2a4072665b47ca6b04b0d8e8f69",
+      "numeric_arrays": 174,
+      "failures": []
+    }
+  ],
+  "all_numeric_array_bytes_match": true,
+  "all_file_bytes_match": true,
+  "scope": "Regression parity only; not physical accuracy or timing comparison."
+}

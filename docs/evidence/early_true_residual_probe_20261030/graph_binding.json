@@ -1,0 +1,18 @@
+{
+  "worktree": "/private/tmp/ark600-noise-ew-pr-20261029",
+  "base_head": "e3d4f98f8964845822b9fc4f57460b6d102c8d49",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "acb9dd7a67b1951296ef03b3ede7ab0c1fbb7171c1308b320ba97a06265d1564",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_krylov_residual_probe.h": "878c0e2ac78b48828064e36100bed9d67a5c6cedec59443e0e243a8a06cc7291",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": "8d1a69407c1e3798b4b273858ca66a2c249e1fb8a72d7ba8741126e8b909e367",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp": "7b9cb1a7c3cbf8c0c1480b05dd357d5ab247d95b8fcc7e37c60e55dc2b027987",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "c8027a2725191dcd13248e728a5284a84674b350c526a3908c6960f6f95fb61e",
+    "external/libtorch_wrf/sdirk3/test_fgmres_contract.cpp": "0a019f75fab0adaeb2807e8bc36cee133da2bb148a9d520da0d04c2880ff9599",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_krylov_metrics.h": "948a872743205df05adeea2a52d3eae7666dd0ecad3437b752316191668d199e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_stage_krylov_policy.h": "ac9ad39bbb223e4be4adec14a50a0b03e603a64b47d40b1d882bc6bd0e057b77"
+  },
+  "nodes": 252,
+  "edges": 616,
+  "scope": "Affected C++ solver/configuration/test corpus; Registry and Fortran setters manually checked. AST relationships are navigation aids, not numerical proof; incoming solver dispatch manually confirmed in Newton solve.",
+  "source_commit": "d07db8c5ba911a900259c0e4ad5b109b8d39db25"
+}

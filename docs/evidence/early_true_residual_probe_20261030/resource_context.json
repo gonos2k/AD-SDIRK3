@@ -1,0 +1,10 @@
+{
+  "observed_local": "2026-10-30T01:35:04.449849+09:00",
+  "disk_usage_bytes": {
+    "total": 1995218165760,
+    "used": 1972001927168,
+    "free": 23216238592
+  },
+  "swapusage": "vm.swapusage: total = 15360.00M  used = 13785.12M  free = 1574.88M  (encrypted)",
+  "qualification": "Post-stop point-in-time observation; no causal attribution of free-space drop, and no model retry."
+}

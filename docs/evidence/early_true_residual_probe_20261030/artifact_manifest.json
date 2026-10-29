@@ -1,0 +1,82 @@
+[
+  {
+    "file": "README.md",
+    "bytes": 2316,
+    "sha256": "5055775fb886723f426b892783cd47b7f088385ac923b868dfc2cde9094552d0"
+  },
+  {
+    "file": "actual_available_rk3_ark_1h.png",
+    "bytes": 115140,
+    "sha256": "f0182f8d9fee082430d0bb5845d145cbc3873512fafb459982abc55265f6d795"
+  },
+  {
+    "file": "available_plot_metrics.json",
+    "bytes": 3552,
+    "sha256": "58065bac57c60ede4a1661c41b80654e27f860ae0810d7378b56be7ba2aefb09"
+  },
+  {
+    "file": "available_w_band_1h.png",
+    "bytes": 91103,
+    "sha256": "16ab58b9a6b1e86ad252691ef2303dc8dcdc3837a8fa82d5f4e257f52732911c"
+  },
+  {
+    "file": "available_w_planes.npz",
+    "bytes": 28236,
+    "sha256": "4776bf033c07c2372ea58bc5264401f11f48a743788ec569d4ae3bc17fc73265"
+  },
+  {
+    "file": "block_receipt.json",
+    "bytes": 1552,
+    "sha256": "905943d7cd7835d4198c95c6408d534cdf0c3370b3f0cdf2258a1af01c061dbc"
+  },
+  {
+    "file": "execution_evidence.zip",
+    "bytes": 1529161,
+    "sha256": "ed7cba202042421c9e8c2577e6bed864bc059813d4898d0aaa0619c5fb9a282f"
+  },
+  {
+    "file": "execution_evidence_manifest.json",
+    "bytes": 11782,
+    "sha256": "139a24321ddb33eb54811546e9214cf7a190ecc732c5358dda61b556dde9478c"
+  },
+  {
+    "file": "graph_binding.json",
+    "bytes": 1520,
+    "sha256": "5bb80d3f915ee246d719682e3f1a46bd1fb079c01658fbe65d25449358725fdf"
+  },
+  {
+    "file": "manifest.json",
+    "bytes": 9147,
+    "sha256": "8bf6ab4b61211cd632a74b20b24c8968d902dcbea2d39db30d166b66f581fae1"
+  },
+  {
+    "file": "native_build_receipt.json",
+    "bytes": 3092,
+    "sha256": "c5320705eadd17aa5631d61215c5de12269f63bcb1497daa3390211d90e25504"
+  },
+  {
+    "file": "off_parity.json",
+    "bytes": 2514,
+    "sha256": "89551c7f37417d9f5e0eb03ade3bf3684d0302cded5ed72b1932b56fa6ac60e0"
+  },
+  {
+    "file": "partial_summary.json",
+    "bytes": 2735,
+    "sha256": "d07cfaa26b9239c538d07dd3677ffec6da2c4ad2518247372ccfcd1f70890846"
+  },
+  {
+    "file": "protocol.json",
+    "bytes": 2418,
+    "sha256": "e588cc70869dcd731452fb776d31b93ebf6c9ef3b1016c683a1a17cd22e75f84"
+  },
+  {
+    "file": "resource_context.json",
+    "bytes": 386,
+    "sha256": "f255f6d85b3e11780f7ced950b2f587f129ecd78cf3531473832bb8e02d53927"
+  },
+  {
+    "file": "rk3_archive_verification.json",
+    "bytes": 2431,
+    "sha256": "729cf8ba4c7ec7a9c6d8192c398a1c6d17a9238ff3609d654806ce7908f44fdc"
+  }
+]

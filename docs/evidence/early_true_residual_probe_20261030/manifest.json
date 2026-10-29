@@ -1,0 +1,189 @@
+{
+  "schema": "early_residual_probe_abba_v1",
+  "created_at_local": "2026-10-30T00:43:06.887645+09:00",
+  "resource_authorized": true,
+  "resource_authorization": {
+    "basis": "User requests short6\u201312continuousstandard-stepperformancecomparison with fixedh600/Newtonaccuracy; four six-step cases predefinedABBA",
+    "scope": "one ABBA block; no retries,coldrestart,longrunoradaptiveparametersearch"
+  },
+  "no_retries_or_cold_restart": true,
+  "limits": {
+    "case_wall_seconds": 900,
+    "total_wall_seconds": 3600,
+    "rss_bytes": 4294967296,
+    "reserve_disk_bytes": 5368709120,
+    "study_disk_bytes": 5368709120
+  },
+  "runtime_policy": {
+    "ranks": 1,
+    "argv": [
+      "/opt/homebrew/bin/mpirun",
+      "-np",
+      "1",
+      "--bind-to",
+      "none",
+      "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/source/main/wrf.exe"
+    ],
+    "one_model_job_at_a_time": true
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/source/main/wrf.exe",
+    "sha256": "bd9b64fa2e615247dc23ebaf9c9056c4e99cd5e67e7d8978f9c7cc64434d02af"
+  },
+  "common_input": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfinput_d01",
+    "sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912"
+  },
+  "analysis_helper": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/execution/benchmark_wrf_accuracy_cost.py",
+    "sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3"
+  },
+  "common_environment": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+    "WRF_SDIRK3_EW_ETA_INITIAL": "0.1"
+  },
+  "cases": {
+    "A0": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0",
+      "method": "ARK324",
+      "scheme": 6,
+      "h_seconds": 600,
+      "expected_steps": 6,
+      "expected_duration_seconds": 3600,
+      "expected_fortran_wrapper_calls": 18,
+      "expected_output_frames": 7,
+      "namelist_sha256": "fc540e255b063d8da2925439cbf3f77a6abd70646123976ca7707232d6a487eb",
+      "reference_t0": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "ready_path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfoutReady_d01_0001-01-01_00:00:00",
+        "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "environment_overrides": {
+        "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0",
+        "NATIVE_MPI_FINALIZE_TRACE": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0/native_mpi_finalize_trace.log"
+      }
+    },
+    "B0": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/B0",
+      "method": "ARK324",
+      "scheme": 6,
+      "h_seconds": 600,
+      "expected_steps": 6,
+      "expected_duration_seconds": 3600,
+      "expected_fortran_wrapper_calls": 18,
+      "expected_output_frames": 7,
+      "namelist_sha256": "fc540e255b063d8da2925439cbf3f77a6abd70646123976ca7707232d6a487eb",
+      "reference_t0": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "ready_path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfoutReady_d01_0001-01-01_00:00:00",
+        "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "environment_overrides": {
+        "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "1",
+        "NATIVE_MPI_FINALIZE_TRACE": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/B0/native_mpi_finalize_trace.log"
+      }
+    },
+    "B1": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/B1",
+      "method": "ARK324",
+      "scheme": 6,
+      "h_seconds": 600,
+      "expected_steps": 6,
+      "expected_duration_seconds": 3600,
+      "expected_fortran_wrapper_calls": 18,
+      "expected_output_frames": 7,
+      "namelist_sha256": "fc540e255b063d8da2925439cbf3f77a6abd70646123976ca7707232d6a487eb",
+      "reference_t0": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "ready_path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfoutReady_d01_0001-01-01_00:00:00",
+        "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "environment_overrides": {
+        "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "1",
+        "NATIVE_MPI_FINALIZE_TRACE": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/B1/native_mpi_finalize_trace.log"
+      }
+    },
+    "A1": {
+      "directory": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A1",
+      "method": "ARK324",
+      "scheme": 6,
+      "h_seconds": 600,
+      "expected_steps": 6,
+      "expected_duration_seconds": 3600,
+      "expected_fortran_wrapper_calls": 18,
+      "expected_output_frames": 7,
+      "namelist_sha256": "fc540e255b063d8da2925439cbf3f77a6abd70646123976ca7707232d6a487eb",
+      "reference_t0": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "ready_path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfoutReady_d01_0001-01-01_00:00:00",
+        "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "environment_overrides": {
+        "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0",
+        "NATIVE_MPI_FINALIZE_TRACE": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A1/native_mpi_finalize_trace.log"
+      }
+    }
+  },
+  "analysis_contract": {
+    "duration_seconds": 3600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 7,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "model_source_revision": "d07db8c5ba911a900259c0e4ad5b109b8d39db25",
+  "controller_source_revision": "Derived from ew-forcing-abba-20261028/execution/run_case_remaining.py; modified for this study: corrected aggregate whitelist, block wall and study disk monitors; exact source pinned by controller_sha256.",
+  "controller_sha256": "0c03117d628b668e1d50c71ffa5510051035a3b5575957363018f87b8d3bb03c",
+  "numerical_source_changes_since_accepted_model": [
+    "estimate-triggered true residual probe"
+  ],
+  "checkpoint_model_seconds": [
+    3600
+  ],
+  "cost_scope": "Matched aggregate-telemetryON six-stepABBA, not quiet-general/same-accuracyRK3speedup",
+  "accuracy_pass_claim": false,
+  "fresh_initial_state_no_restart": true,
+  "comparison_output_interval_seconds": 600,
+  "case_order": [
+    "A0",
+    "B0",
+    "B1",
+    "A1"
+  ],
+  "execution_note": "EW enabled in both arms; only estimate probe changes, aggregate telemetry on; no run performed",
+  "study_source_pins": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/execution/run_block.py": "71ef1b2163420a7b2e32e47d3a7c45865df30b1355586333807f3d1deffbe3e7",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/execution/run_case.py": "0c03117d628b668e1d50c71ffa5510051035a3b5575957363018f87b8d3bb03c",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/execution/analyze_block.py": "0338a657db3b2a1dd4cebb6996d060c0b83b5186b6cf91c4fe2ba40fe41da464",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/execution/bind_executable.py": "373813ad46a9e196cf08afe6a516f97a1c32d2782c6bb28d8803dc6a89c295ed",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/execution/benchmark_wrf_accuracy_cost.py": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3"
+  },
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/native_build_receipt.json",
+    "sha256": "c5320705eadd17aa5631d61215c5de12269f63bcb1497daa3390211d90e25504"
+  }
+}
