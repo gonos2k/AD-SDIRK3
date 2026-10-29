@@ -1,0 +1,55 @@
+{
+  "at_local": "2026-10-28T21:58:04.196277+09:00",
+  "order": [
+    "A0",
+    "B0",
+    "B1",
+    "A1"
+  ],
+  "steps_each": 6,
+  "case_cap_seconds": 900,
+  "block_cap_seconds": 3600,
+  "candidate": {
+    "nk_adaptive_tol": true,
+    "eta_initial": "explicit existingprocessenvironment0.1 (baselineEWoffinert)",
+    "stage2_ew_eta_min": 1e-07,
+    "stage2_ew_eta_max": 0.1,
+    "stage3_ew_eta_min": 1e-07,
+    "stage3_ew_eta_max": 0.1
+  },
+  "fixed": {
+    "Newton_abs": 1e-09,
+    "Newton_rel": 0,
+    "h": 600,
+    "gmres_restart": 30,
+    "effective_max_restarts": 50,
+    "stage_Krylov_overrides": 0,
+    "JVP_AD_selector": 1,
+    "threads": 1,
+    "physics_filters_boundary": "sameacceptedofficialem_b_wave"
+  },
+  "required": {
+    "all_attempts_exit0_and6steps": true,
+    "all18stages_converged_and_residual_le1e-9_each": true,
+    "no_aborted_update_retry_coldrestart": true,
+    "candidate_total_JVP_median_less_than_baseline": true,
+    "candidate_RSL_time_median_at_least10pct_lower": true,
+    "each_outer_time_pair_not_slower": true,
+    "public_output_agreement": "perownedcomponent abs(B-A) <= 8*float32eps*max(abs(A),abs(B),1 in native field units); numerical-roundoff screen, not physicalaccuracybudget"
+  },
+  "not_claimed": [
+    "5dayacceptance",
+    "sameaccuracyRK3speedup",
+    "globaladjointretification"
+  ],
+  "no_parameter_tuning_after_results": true,
+  "manifest_sha256": "65b32c1a05227f1504f8b874702fa8cd73b79fc5e31e4ad0e58f1baec4cae25e",
+  "comparison_note": "TelemetryONdebug0 perNewton/stagesummary only, no perJVPdetailCSV; not generalquietcost",
+  "additional_RK3_reference": {
+    "root": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference",
+    "case_wall_seconds": 120,
+    "steps": 6,
+    "manifest_sha256": "5662f0febe1eb39e1b123f3ffbaca1574d941c2386c41ead0fc61f63807ef778",
+    "purpose": "ExistingarchivedRK3code/executable; 1hleadnotavailablein6harchive; actualfieldsforARK/RK3sidebyside"
+  }
+}

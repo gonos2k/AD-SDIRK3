@@ -1,0 +1,130 @@
+{
+  "file": "selected_w_planes.npz",
+  "bytes": 325273,
+  "sha256": "e56378f63108af29a6cdebc71ef2d9d10686401efc3c8299ce85b3792583107c",
+  "arrays": {
+    "x_mass_km": {
+      "shape": [
+        40
+      ],
+      "dtype": "float64"
+    },
+    "y_mass_km": {
+      "shape": [
+        80
+      ],
+      "dtype": "float64"
+    },
+    "ark_w_yz_24h": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "ark_height_yz_24h": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "ark_w_yz_36h": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "ark_height_yz_36h": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "ark_w_xy_36h": {
+      "shape": [
+        80,
+        40
+      ],
+      "dtype": "float64"
+    },
+    "ark_height_xy_36h": {
+      "shape": [
+        80,
+        40
+      ],
+      "dtype": "float64"
+    },
+    "rk3_w_yz_24h": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "rk3_height_yz_24h": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "rk3_w_yz_36h": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "rk3_height_yz_36h": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "rk3_w_xy_36h": {
+      "shape": [
+        80,
+        40
+      ],
+      "dtype": "float64"
+    },
+    "rk3_height_xy_36h": {
+      "shape": [
+        80,
+        40
+      ],
+      "dtype": "float64"
+    }
+  },
+  "sources": [
+    {
+      "method": "ark",
+      "model_hours": 24,
+      "file": "wrfout_d01_0001-01-02_00:00:00",
+      "sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d"
+    },
+    {
+      "method": "ark",
+      "model_hours": 36,
+      "file": "wrfout_d01_0001-01-02_12:00:00",
+      "sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d"
+    },
+    {
+      "method": "rk3",
+      "model_hours": 24,
+      "file": "wrfout_d01_0001-01-02_00:00:00",
+      "sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064"
+    },
+    {
+      "method": "rk3",
+      "model_hours": 36,
+      "file": "wrfout_d01_0001-01-02_12:00:00",
+      "sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0"
+    }
+  ],
+  "scope": "Selected raw W plane and x-mean W/height only. FP32 source promoted before averaging. Not full3Dtrajectory; cannot recompute the full3Dband RMS from these selected planes. XY is Python Windex41/Fortranface42; YZ excludes bottomface0 and keeps dynamictop."
+}

@@ -1,0 +1,102 @@
+[
+  {
+    "file": "README.md",
+    "bytes": 2485,
+    "sha256": "60e3abe8a339efaef7e0a5e97553d548bfed7af2b96da853c84cea66eed17a38"
+  },
+  {
+    "file": "a0_caller_qualification.json",
+    "bytes": 611,
+    "sha256": "272ea070a98edba317867b8c254a711409c6f55ec00f39680e86248f2acbe953"
+  },
+  {
+    "file": "actual_rk3_ark_ew_1h.png",
+    "bytes": 205624,
+    "sha256": "11163d7a62cf8d48a42c0d1308b6fa48acd9d3add161d26903e4d41b87392474"
+  },
+  {
+    "file": "actual_w_xy_36h.png",
+    "bytes": 173945,
+    "sha256": "54be3e3028fe5cdd1639dc3e224699835946f5cd54310a5bd62fe6786eac50fb"
+  },
+  {
+    "file": "actual_w_yz_24_36h.png",
+    "bytes": 232868,
+    "sha256": "8c171003ce94b7eb3da51bd0bfe64e939dc03989fbbed5fb40e6824d5ffc8719"
+  },
+  {
+    "file": "ew_analysis.json",
+    "bytes": 250000,
+    "sha256": "e4fd854966e5a824c13ff725a54cef4eccf35dcaa15a5a3ee0b6fd3807b273f1"
+  },
+  {
+    "file": "ew_protocol.json",
+    "bytes": 1966,
+    "sha256": "73fcef0c7bb6b1e3011613790ec424fbc922cfea262be4e9c2e4455269071816"
+  },
+  {
+    "file": "execution_evidence.zip",
+    "bytes": 313753,
+    "sha256": "49d6b34dbf2363a2d1557108ac9a62190d0bbf2e7008310c92c5d52ef536ab41"
+  },
+  {
+    "file": "execution_evidence_manifest.json",
+    "bytes": 12356,
+    "sha256": "a67e2032d6fee65e171cfda6fabaf0b51eb4d6c13a819c38a113787c31099487"
+  },
+  {
+    "file": "exploratory_total_geometry_eos_metrics.json",
+    "bytes": 14463,
+    "sha256": "456883e9ec9d7643398e34ee2396637f374534c7df4c8633c19e0fa62105572a"
+  },
+  {
+    "file": "noise_frame_protocol.json",
+    "bytes": 13004,
+    "sha256": "46cb2ef2f07f13a564e84919278ba36d29b663d139913aaaaa2aa1407185c846"
+  },
+  {
+    "file": "physical_grid_band_growth.png",
+    "bytes": 319428,
+    "sha256": "d1652b5f96588704aa362841a5533f00409087b4020639b82ddf0ee5d056b94a"
+  },
+  {
+    "file": "repeat_output_hashes.json",
+    "bytes": 1935,
+    "sha256": "c63ea60fc5e1b42287de00fa2b91a6264a08110be3fbd450afdfac4a7ebb7e83"
+  },
+  {
+    "file": "saved_force_metrics.json",
+    "bytes": 13095,
+    "sha256": "63770baa277c6b8ce1a2a0fccf803042177193de26a14b60fdc9a4f252fcbf96"
+  },
+  {
+    "file": "saved_pressure_mass_force_36h.png",
+    "bytes": 187176,
+    "sha256": "010093441c27ab97a46bdb15937eb2a63ff5a30398544b4ed3749943e9d06975"
+  },
+  {
+    "file": "selected_w_planes.json",
+    "bytes": 2653,
+    "sha256": "af7eb04c6a1bad9cf8c6c0f6baca277aa972eedb34a50fbf966f35c8d6ee830e"
+  },
+  {
+    "file": "selected_w_planes.npz",
+    "bytes": 325273,
+    "sha256": "e56378f63108af29a6cdebc71ef2d9d10686401efc3c8299ce85b3792583107c"
+  },
+  {
+    "file": "short_same_vs_prior_pressure_eos.json",
+    "bytes": 44373,
+    "sha256": "b467b6b6693ad90f45516c39ca3d39ced9d798a80afc2c827e25b3aea1df9824"
+  },
+  {
+    "file": "validation_scope.json",
+    "bytes": 399,
+    "sha256": "5ad057d743a95e9424de5009c0344d632678b5e5c4beef216d4c7d6cc2e08c7a"
+  },
+  {
+    "file": "xy_plane_protocol.json",
+    "bytes": 2712,
+    "sha256": "43a9b59d2174c532d6d161082e7142b2c6633bc4c00825acd62820de3f74c90d"
+  }
+]
