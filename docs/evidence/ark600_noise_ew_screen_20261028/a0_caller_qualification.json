@@ -1,0 +1,12 @@
+{
+  "at_local": "2026-10-28T22:38:17.110220+09:00",
+  "original_receipt_sha256": "8121e8ff8f7a3ccfa6a860bee1a9aaeb3372b8faa670169f60719ffa2de52cac",
+  "original_status": "failed_or_incomplete",
+  "qualification": "OriginalRC0sixstepspass; onlycallerfalse-rejected18aggregateNewtonCONVERGED summarieswhichwere intendedbytelemetryONprotocol. No numerical/cost gateschanged, originalreceiptpreserved, A0notrerun.",
+  "model_return_code": 0,
+  "converged_stages": 18,
+  "max_final_nonlinear_residual": 1.26784e-13,
+  "output_checked": true,
+  "matched_diagnostic_eligible": true,
+  "cost_eligible_general": false
+}

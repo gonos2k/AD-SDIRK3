@@ -1,0 +1,302 @@
+{
+  "scope": "saved_output_instantaneous_force_diagnostic",
+  "not_claimed": [
+    "not an exact native stage RHS capture",
+    "not an internal-FP64 replay (source fields are FP32, promoted to FP64 for arithmetic)",
+    "not a causal oracle for which term generated the later W mode"
+  ],
+  "formula": {
+    "interior": "Pg=g*RDN[k]*(P[k]-P[k-1])/Mface; Bmu=g*C1F[k]*MU/Mface",
+    "top": "Pg=g*2*RDNW[-1]*(-P[-1])/Mface[-1]; Bmu=g*C1F[-1]*MU/Mface[-1]",
+    "Mface": "C1F[k]*(MU+MUB)+C2F[k]",
+    "dry": "source configuration mp_physics=0; set cq1=1,cq2=0",
+    "physical_conversion": "source coupled tendency g/MSFTY*F multiplied by velocity_mass/alpha_w, then divided by velocity_mass; alpha_w=Mface/MSFTY, so MSFTY cancels, leaving g*F/Mface"
+  },
+  "grid": {
+    "nx": 40,
+    "ny": 80,
+    "nz_mass": 64,
+    "w_owned_faces": "NetCDF C indices 1..64; lower fixed face 0 excluded",
+    "dx_m": 100000.0,
+    "dy_m": 100000.0,
+    "gravity": 9.81,
+    "high_y_transform": "DCT-II even scalar reflection on 80 mass-y points; retain k>=40"
+  },
+  "frames": {
+    "24": {
+      "ARK": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.003753518391770365,
+            "buoy_mu": 0.003747535717034473,
+            "net": 0.00030294650664789184
+          },
+          "cancellation_ratio": 0.04038719122053648,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 0.00019525123489299906,
+            "buoy_mu": 7.313580799500795e-05,
+            "net": 0.0001699581861502705
+          },
+          "cancellation_ratio": 0.6332577918867378,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "mface_min": 88982.60245513916,
+        "mapfac_my_min": 1.0,
+        "mapfac_my_max": 1.0,
+        "conversion_relative_error": 0.0,
+        "actual_W_rms_m_s": 0.002239844575974063
+      },
+      "RK3": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.003544931174424386,
+            "buoy_mu": 0.003541823391430769,
+            "net": 0.00013806643716115466
+          },
+          "cancellation_ratio": 0.019482322391461887,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 5.667308257206027e-05,
+            "buoy_mu": 3.7426036061847746e-05,
+            "net": 4.252983222558724e-05
+          },
+          "cancellation_ratio": 0.45196844394525376,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "mface_min": 88986.23169708252,
+        "mapfac_my_min": 1.0,
+        "mapfac_my_max": 1.0,
+        "conversion_relative_error": 0.0,
+        "actual_W_rms_m_s": 0.002181524042650315
+      },
+      "ARK_minus_RK3_saved_force_difference": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.0004417638356453232,
+            "buoy_mu": 0.0003510898208759682,
+            "net": 0.00028287867053372823
+          },
+          "cancellation_ratio": 0.3567854776313714,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 0.0001964357519409484,
+            "buoy_mu": 6.287516982899682e-05,
+            "net": 0.0001753658117388998
+          },
+          "cancellation_ratio": 0.6762762267856978,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        }
+      },
+      "ARK_minus_RK3_actual_W_rms_m_s": 0.00043763374891786256
+    },
+    "30": {
+      "ARK": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.004775713170404185,
+            "buoy_mu": 0.00475729951562593,
+            "net": 0.0004234671905458174
+          },
+          "cancellation_ratio": 0.04442112944697697,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 0.00040268253682948903,
+            "buoy_mu": 0.00011208109314893464,
+            "net": 0.0003686731555898732
+          },
+          "cancellation_ratio": 0.7161989195027747,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "mface_min": 88944.89289855957,
+        "mapfac_my_min": 1.0,
+        "mapfac_my_max": 1.0,
+        "conversion_relative_error": 0.0,
+        "actual_W_rms_m_s": 0.0027216600912616995
+      },
+      "RK3": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.004637234663342964,
+            "buoy_mu": 0.00463429320924396,
+            "net": 0.00013814752791175834
+          },
+          "cancellation_ratio": 0.014900190110005318,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 5.809139640219013e-05,
+            "buoy_mu": 3.942431786251764e-05,
+            "net": 4.2685517803229814e-05
+          },
+          "cancellation_ratio": 0.4377296328606011,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "mface_min": 88946.2445678711,
+        "mapfac_my_min": 1.0,
+        "mapfac_my_max": 1.0,
+        "conversion_relative_error": 0.0,
+        "actual_W_rms_m_s": 0.002317504232580616
+      },
+      "ARK_minus_RK3_saved_force_difference": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.0005012330636307931,
+            "buoy_mu": 0.0002697055709632771,
+            "net": 0.0004092647096237694
+          },
+          "cancellation_ratio": 0.530865481711477,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 0.0004029439334428947,
+            "buoy_mu": 0.00010508900780209955,
+            "net": 0.00037104839480485305
+          },
+          "cancellation_ratio": 0.7303628656353572,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        }
+      },
+      "ARK_minus_RK3_actual_W_rms_m_s": 0.001371399610429612
+    },
+    "36": {
+      "ARK": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.0048626009281693885,
+            "buoy_mu": 0.004804251944949511,
+            "net": 0.0006888026124537718
+          },
+          "cancellation_ratio": 0.07125407011925873,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 0.0007325174941927333,
+            "buoy_mu": 0.0002604741798222667,
+            "net": 0.0006377442336910038
+          },
+          "cancellation_ratio": 0.6422452981024392,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "mface_min": 88939.26098632812,
+        "mapfac_my_min": 1.0,
+        "mapfac_my_max": 1.0,
+        "conversion_relative_error": 0.0,
+        "actual_W_rms_m_s": 0.0031885109759693525
+      },
+      "RK3": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.004775204550914067,
+            "buoy_mu": 0.0047724431118733234,
+            "net": 0.00013807308915746066
+          },
+          "cancellation_ratio": 0.014461477217640736,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 5.5796230610755344e-05,
+            "buoy_mu": 3.5934953193388205e-05,
+            "net": 4.2715396692042184e-05
+          },
+          "cancellation_ratio": 0.4656584044881007,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "mface_min": 88935.92724609375,
+        "mapfac_my_min": 1.0,
+        "mapfac_my_max": 1.0,
+        "conversion_relative_error": 0.0,
+        "actual_W_rms_m_s": 0.0020242260172558062
+      },
+      "ARK_minus_RK3_saved_force_difference": {
+        "scope": "saved_output_instantaneous_force_diagnostic",
+        "all_y": {
+          "rms_m_s2": {
+            "pg": 0.0008801369204622601,
+            "buoy_mu": 0.0005144463440344666,
+            "net": 0.0006801541543704797
+          },
+          "cancellation_ratio": 0.4877113985846746,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        },
+        "high_y_k40_plus": {
+          "rms_m_s2": {
+            "pg": 0.0007324897544853134,
+            "buoy_mu": 0.00025715787160709476,
+            "net": 0.0006391413182518251
+          },
+          "cancellation_ratio": 0.6458271625178894,
+          "cancellation_ratio_definition": "RMS(Pg-Bmu)/(RMS(Pg)+RMS(Bmu)); 0 means exact cancellation, 1 means no cancellation"
+        }
+      },
+      "ARK_minus_RK3_actual_W_rms_m_s": 0.002464239035649263
+    }
+  },
+  "source_revision": "8dc34517336c901a5ec70bc990c5d0d87995e842",
+  "source_pins": {
+    "dyn_em/module_big_step_utilities_em.F": "aabb885c142ae3f7b183dc7cd4983f98dda5362caf7ee95928e97e57594c49f1",
+    "dyn_em/module_implicit_sdirk3.F": "dc60f0c90513d2d11d878c5ac45710b930d103a4de0801e87129bc28be08c775",
+    "Registry/Registry.EM_COMMON": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "9afe11f0967facefee9082a9f946e128d89395d02982b7be6cf6f86489ccb0b4",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "ad1d1113cfe65fcf353ea0cb5194ef491e022afebbffecd3ea98e5308664f7f8"
+  },
+  "frame_pins": {
+    "ARK_24h": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+      "sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+      "time": "0001-01-02_00:00:00"
+    },
+    "ARK_30h": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_06:00:00",
+      "sha256": "de8801917e71c47170290ee504f96f3a9e671d920d7ed931547080527c571eee",
+      "time": "0001-01-02_06:00:00"
+    },
+    "ARK_36h": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+      "sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+      "time": "0001-01-02_12:00:00"
+    },
+    "RK3_24h": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+      "sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+      "time": "0001-01-02_00:00:00"
+    },
+    "RK3_30h": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_06:00:00",
+      "sha256": "0a82f5027ef36fd1fa4316b2d77380b06ec35485edfde4bbfa5815397836faf7",
+      "time": "0001-01-02_06:00:00"
+    },
+    "RK3_36h": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+      "sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+      "time": "0001-01-02_12:00:00"
+    },
+    "initial_state": {
+      "path_ark": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-01_00:00:00",
+      "path_rk3": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+      "shared_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50"
+    }
+  },
+  "frame_receipt_sha256": "dc8ebd21562863795bc1b704304bbfc905e3bab64cd015e755880d4f062c9a0a",
+  "status": "saved_field_diagnostic_only"
+}

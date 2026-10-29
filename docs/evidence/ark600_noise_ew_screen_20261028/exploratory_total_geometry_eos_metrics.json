@@ -1,0 +1,367 @@
+{
+  "source_revision": "8dc34517336c901a5ec70bc990c5d0d87995e842",
+  "frame_receipt_sha256": "dc8ebd21562863795bc1b704304bbfc905e3bab64cd015e755880d4f062c9a0a",
+  "source_pins": {
+    "dyn_em/module_small_step_em.F": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+    "share/module_model_constants.F": "5b80377fecdc18a5f0ad38d3b6c15cfc86ad5d76701adbbbb08a08698d0f7062",
+    "Registry/Registry.EM_COMMON": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b"
+  },
+  "scope": "offline saved-output thermodynamic consistency; no model/source edits",
+  "grid": {
+    "nx": 40,
+    "ny": 80,
+    "nz": 64,
+    "dx_m": 100000.0,
+    "dy_m": 100000.0,
+    "high_y": "DCT-II mass-y scalar modes k>=40"
+  },
+  "frames": {
+    "ARK": {
+      "0": {
+        "scope": "saved_output_eos_consistency_diagnostic",
+        "constants": {
+          "Rd_J_kgK": 287.0,
+          "Cp_J_kgK": 1004.5,
+          "P0_Pa": 100000.0,
+          "T0_K": 300.0,
+          "g_m_s2": 9.81,
+          "exponent": 1.4
+        },
+        "alpha_definition": "-RDNW[k]*(PH+PHB[k+1]-PH-PHB[k])/(C1H[k]*(MU+MUB)+C2H[k]); RDNW is signed and negative in saved frames",
+        "theta_definition": "T + 300 K; dry QVAPOR must be exactly zero when present",
+        "metrics": {
+          "all_y": {
+            "p_saved_rms_Pa": 48372.68051892322,
+            "p_eos_rms_Pa": 48372.682501735784,
+            "error_rms_Pa": 0.03576187414475569,
+            "error_max_abs_Pa": 0.09075056639267132,
+            "relative_error_rms": 1.356752922128465e-06,
+            "relative_error_max_abs": 3.990740204096709e-06
+          },
+          "high_y_k40_plus": {
+            "p_saved_rms_Pa": 0.007059016074807022,
+            "p_eos_rms_Pa": 0.006754620492060058,
+            "error_rms_Pa": 0.002515689003542785,
+            "error_max_abs_Pa": 0.018327458770122398,
+            "relative_error_rms_to_highpass_saved": 0.3563795544425869,
+            "relative_error_max_abs_to_highpass_saved": 0.36305453481092986
+          },
+          "alpha_range_m3_kg": [
+            0.7517660503522893,
+            6.1890785493087135
+          ],
+          "theta_range_K": [
+            258.83935546875,
+            447.9947814941406
+          ],
+          "saved_pressure_range_Pa": [
+            11079.996079206467,
+            98365.78965187073
+          ],
+          "eos_pressure_range_Pa": [
+            11080.012493904394,
+            98365.78965870097
+          ]
+        },
+        "not_claimed": [
+          "not an exact native stage RHS/EOS capture",
+          "not proof that saved P was or was not consumed by the accepted ARK stage",
+          "not a causal oracle for the high-Y W mode"
+        ],
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "time": "0001-01-01_00:00:00",
+        "qv_present": true,
+        "qv_max_abs": 0.0
+      },
+      "24": {
+        "scope": "saved_output_eos_consistency_diagnostic",
+        "constants": {
+          "Rd_J_kgK": 287.0,
+          "Cp_J_kgK": 1004.5,
+          "P0_Pa": 100000.0,
+          "T0_K": 300.0,
+          "g_m_s2": 9.81,
+          "exponent": 1.4
+        },
+        "alpha_definition": "-RDNW[k]*(PH+PHB[k+1]-PH-PHB[k])/(C1H[k]*(MU+MUB)+C2H[k]); RDNW is signed and negative in saved frames",
+        "theta_definition": "T + 300 K; dry QVAPOR must be exactly zero when present",
+        "metrics": {
+          "all_y": {
+            "p_saved_rms_Pa": 48372.454473062964,
+            "p_eos_rms_Pa": 48372.45633214373,
+            "error_rms_Pa": 0.035808612355818996,
+            "error_max_abs_Pa": 0.09148217158508487,
+            "relative_error_rms": 1.3564553833093653e-06,
+            "relative_error_max_abs": 3.970053162329412e-06
+          },
+          "high_y_k40_plus": {
+            "p_saved_rms_Pa": 0.37065775227517045,
+            "p_eos_rms_Pa": 0.3706498299794079,
+            "error_rms_Pa": 0.0025003679088315875,
+            "error_max_abs_Pa": 0.017651533506505612,
+            "relative_error_rms_to_highpass_saved": 0.006745759109269497,
+            "relative_error_max_abs_to_highpass_saved": 0.007558449839677938
+          },
+          "alpha_range_m3_kg": [
+            0.7515892588828649,
+            6.1892940365953875
+          ],
+          "theta_range_K": [
+            258.8382568359375,
+            448.0109558105469
+          ],
+          "saved_pressure_range_Pa": [
+            11079.802364110947,
+            98449.60570526123
+          ],
+          "eos_pressure_range_Pa": [
+            11079.820972284399,
+            98449.61942441296
+          ]
+        },
+        "not_claimed": [
+          "not an exact native stage RHS/EOS capture",
+          "not proof that saved P was or was not consumed by the accepted ARK stage",
+          "not a causal oracle for the high-Y W mode"
+        ],
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d",
+        "time": "0001-01-02_00:00:00",
+        "qv_present": true,
+        "qv_max_abs": 0.0
+      },
+      "36": {
+        "scope": "saved_output_eos_consistency_diagnostic",
+        "constants": {
+          "Rd_J_kgK": 287.0,
+          "Cp_J_kgK": 1004.5,
+          "P0_Pa": 100000.0,
+          "T0_K": 300.0,
+          "g_m_s2": 9.81,
+          "exponent": 1.4
+        },
+        "alpha_definition": "-RDNW[k]*(PH+PHB[k+1]-PH-PHB[k])/(C1H[k]*(MU+MUB)+C2H[k]); RDNW is signed and negative in saved frames",
+        "theta_definition": "T + 300 K; dry QVAPOR must be exactly zero when present",
+        "metrics": {
+          "all_y": {
+            "p_saved_rms_Pa": 48372.45608541662,
+            "p_eos_rms_Pa": 48372.45793602778,
+            "error_rms_Pa": 0.03581530394086943,
+            "error_max_abs_Pa": 0.09134491412260104,
+            "relative_error_rms": 1.35652222722635e-06,
+            "relative_error_max_abs": 3.982400794339496e-06
+          },
+          "high_y_k40_plus": {
+            "p_saved_rms_Pa": 1.388537550252727,
+            "p_eos_rms_Pa": 1.388526224290418,
+            "error_rms_Pa": 0.0024908043250466386,
+            "error_max_abs_Pa": 0.023936353941866027,
+            "relative_error_rms_to_highpass_saved": 0.0017938328888500628,
+            "relative_error_max_abs_to_highpass_saved": 0.0030231402675291773
+          },
+          "alpha_range_m3_kg": [
+            0.7516497506008272,
+            6.189142125462011
+          ],
+          "theta_range_K": [
+            258.83709716796875,
+            447.9963073730469
+          ],
+          "saved_pressure_range_Pa": [
+            11079.638451337814,
+            98490.98324584961
+          ],
+          "eos_pressure_range_Pa": [
+            11079.656800159528,
+            98490.96117963348
+          ]
+        },
+        "not_claimed": [
+          "not an exact native stage RHS/EOS capture",
+          "not proof that saved P was or was not consumed by the accepted ARK stage",
+          "not a causal oracle for the high-Y W mode"
+        ],
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d",
+        "time": "0001-01-02_12:00:00",
+        "qv_present": true,
+        "qv_max_abs": 0.0
+      }
+    },
+    "RK3": {
+      "0": {
+        "scope": "saved_output_eos_consistency_diagnostic",
+        "constants": {
+          "Rd_J_kgK": 287.0,
+          "Cp_J_kgK": 1004.5,
+          "P0_Pa": 100000.0,
+          "T0_K": 300.0,
+          "g_m_s2": 9.81,
+          "exponent": 1.4
+        },
+        "alpha_definition": "-RDNW[k]*(PH+PHB[k+1]-PH-PHB[k])/(C1H[k]*(MU+MUB)+C2H[k]); RDNW is signed and negative in saved frames",
+        "theta_definition": "T + 300 K; dry QVAPOR must be exactly zero when present",
+        "metrics": {
+          "all_y": {
+            "p_saved_rms_Pa": 48372.68051892322,
+            "p_eos_rms_Pa": 48372.682501735784,
+            "error_rms_Pa": 0.03576187414475569,
+            "error_max_abs_Pa": 0.09075056639267132,
+            "relative_error_rms": 1.356752922128465e-06,
+            "relative_error_max_abs": 3.990740204096709e-06
+          },
+          "high_y_k40_plus": {
+            "p_saved_rms_Pa": 0.007059016074807022,
+            "p_eos_rms_Pa": 0.006754620492060058,
+            "error_rms_Pa": 0.002515689003542785,
+            "error_max_abs_Pa": 0.018327458770122398,
+            "relative_error_rms_to_highpass_saved": 0.3563795544425869,
+            "relative_error_max_abs_to_highpass_saved": 0.36305453481092986
+          },
+          "alpha_range_m3_kg": [
+            0.7517660503522893,
+            6.1890785493087135
+          ],
+          "theta_range_K": [
+            258.83935546875,
+            447.9947814941406
+          ],
+          "saved_pressure_range_Pa": [
+            11079.996079206467,
+            98365.78965187073
+          ],
+          "eos_pressure_range_Pa": [
+            11080.012493904394,
+            98365.78965870097
+          ]
+        },
+        "not_claimed": [
+          "not an exact native stage RHS/EOS capture",
+          "not proof that saved P was or was not consumed by the accepted ARK stage",
+          "not a causal oracle for the high-Y W mode"
+        ],
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "time": "0001-01-01_00:00:00",
+        "qv_present": true,
+        "qv_max_abs": 0.0
+      },
+      "24": {
+        "scope": "saved_output_eos_consistency_diagnostic",
+        "constants": {
+          "Rd_J_kgK": 287.0,
+          "Cp_J_kgK": 1004.5,
+          "P0_Pa": 100000.0,
+          "T0_K": 300.0,
+          "g_m_s2": 9.81,
+          "exponent": 1.4
+        },
+        "alpha_definition": "-RDNW[k]*(PH+PHB[k+1]-PH-PHB[k])/(C1H[k]*(MU+MUB)+C2H[k]); RDNW is signed and negative in saved frames",
+        "theta_definition": "T + 300 K; dry QVAPOR must be exactly zero when present",
+        "metrics": {
+          "all_y": {
+            "p_saved_rms_Pa": 48372.45291289,
+            "p_eos_rms_Pa": 48372.45476773791,
+            "error_rms_Pa": 0.0358183267889875,
+            "error_max_abs_Pa": 0.09274407778138993,
+            "relative_error_rms": 1.3561921853891241e-06,
+            "relative_error_max_abs": 3.963391116974958e-06
+          },
+          "high_y_k40_plus": {
+            "p_saved_rms_Pa": 0.15072118896670877,
+            "p_eos_rms_Pa": 0.15069890185680326,
+            "error_rms_Pa": 0.0025094233208330144,
+            "error_max_abs_Pa": 0.017741306539637267,
+            "relative_error_rms_to_highpass_saved": 0.016649439524971468,
+            "relative_error_max_abs_to_highpass_saved": 0.008317418463208853
+          },
+          "alpha_range_m3_kg": [
+            0.7516172069321188,
+            6.189286786188667
+          ],
+          "theta_range_K": [
+            258.8382263183594,
+            448.0104064941406
+          ],
+          "saved_pressure_range_Pa": [
+            11079.781502485275,
+            98446.64335632324
+          ],
+          "eos_pressure_range_Pa": [
+            11079.797941785042,
+            98446.64413618966
+          ]
+        },
+        "not_claimed": [
+          "not an exact native stage RHS/EOS capture",
+          "not proof that saved P was or was not consumed by the accepted ARK stage",
+          "not a causal oracle for the high-Y W mode"
+        ],
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064",
+        "time": "0001-01-02_00:00:00",
+        "qv_present": true,
+        "qv_max_abs": 0.0
+      },
+      "36": {
+        "scope": "saved_output_eos_consistency_diagnostic",
+        "constants": {
+          "Rd_J_kgK": 287.0,
+          "Cp_J_kgK": 1004.5,
+          "P0_Pa": 100000.0,
+          "T0_K": 300.0,
+          "g_m_s2": 9.81,
+          "exponent": 1.4
+        },
+        "alpha_definition": "-RDNW[k]*(PH+PHB[k+1]-PH-PHB[k])/(C1H[k]*(MU+MUB)+C2H[k]); RDNW is signed and negative in saved frames",
+        "theta_definition": "T + 300 K; dry QVAPOR must be exactly zero when present",
+        "metrics": {
+          "all_y": {
+            "p_saved_rms_Pa": 48372.45463766825,
+            "p_eos_rms_Pa": 48372.45648443648,
+            "error_rms_Pa": 0.03581971896935897,
+            "error_max_abs_Pa": 0.09161601405503461,
+            "relative_error_rms": 1.3565574074552675e-06,
+            "relative_error_max_abs": 3.963277063012399e-06
+          },
+          "high_y_k40_plus": {
+            "p_saved_rms_Pa": 0.14454282177252406,
+            "p_eos_rms_Pa": 0.14451768565473763,
+            "error_rms_Pa": 0.0025027517318022613,
+            "error_max_abs_Pa": 0.01918480656314099,
+            "relative_error_rms_to_highpass_saved": 0.01731494999966858,
+            "relative_error_max_abs_to_highpass_saved": 0.012067089289030296
+          },
+          "alpha_range_m3_kg": [
+            0.7516636800121033,
+            6.189079219133185
+          ],
+          "theta_range_K": [
+            258.83709716796875,
+            447.99261474609375
+          ],
+          "saved_pressure_range_Pa": [
+            11079.656332731247,
+            98493.41511535645
+          ],
+          "eos_pressure_range_Pa": [
+            11079.674289794604,
+            98493.40685867591
+          ]
+        },
+        "not_claimed": [
+          "not an exact native stage RHS/EOS capture",
+          "not proof that saved P was or was not consumed by the accepted ARK stage",
+          "not a causal oracle for the high-Y W mode"
+        ],
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0",
+        "time": "0001-01-02_12:00:00",
+        "qv_present": true,
+        "qv_max_abs": 0.0
+      }
+    }
+  },
+  "shared_initial_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50"
+}

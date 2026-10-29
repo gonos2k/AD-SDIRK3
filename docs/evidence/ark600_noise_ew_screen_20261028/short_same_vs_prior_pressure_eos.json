@@ -1,0 +1,883 @@
+{
+  "scope": "saved_output_same_time_vs_prior_time_EOS_diagnostic",
+  "interpretation_limit": "same-time vs previous-frame comparison detects gross 600s lag only; saved P is a stage diagnostic, not guaranteed exact final-combined-state P",
+  "constants": {
+    "Rd": 287.0,
+    "Cp": 1004.5,
+    "Cv": 717.5,
+    "P0_Pa": 100000.0,
+    "T0_K": 300.0,
+    "exponent": 1.4,
+    "g": 9.81
+  },
+  "grid": {
+    "nx": 40,
+    "ny": 80,
+    "nz": 64,
+    "dx_m": 100000.0,
+    "dy_m": 100000.0,
+    "high_y": "DCT-II mass-y modes k>=40"
+  },
+  "runs": {
+    "A0": {
+      "status": "failed_or_incomplete",
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "wrfinput_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/A0/wrfinput_d01",
+      "t_init_plus_300_alb_check": {
+        "alb_from_t_init_pb_rms_m3_kg": 2.859741336041336,
+        "alb_input_rms_m3_kg": 2.8597413697589102,
+        "alb_error_rms_m3_kg": 1.689027175837206e-07,
+        "alb_error_max_abs_m3_kg": 5.66758887821095e-07,
+        "alb_relative_error_rms": 5.4949758866496747e-08,
+        "alb_relative_error_max_abs": 1.251144021572539e-07
+      },
+      "executable_sha256": "30b0ac22f264c3597790d21e05b98d1b4803683cc12c02640e0f767520bd40bc",
+      "timestamps": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:10:00",
+        "0001-01-01_00:20:00",
+        "0001-01-01_00:30:00",
+        "0001-01-01_00:40:00",
+        "0001-01-01_00:50:00",
+        "0001-01-01_01:00:00"
+      ]
+    },
+    "B0": {
+      "status": "completed",
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "wrfinput_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/B0/wrfinput_d01",
+      "t_init_plus_300_alb_check": {
+        "alb_from_t_init_pb_rms_m3_kg": 2.859741336041336,
+        "alb_input_rms_m3_kg": 2.8597413697589102,
+        "alb_error_rms_m3_kg": 1.689027175837206e-07,
+        "alb_error_max_abs_m3_kg": 5.66758887821095e-07,
+        "alb_relative_error_rms": 5.4949758866496747e-08,
+        "alb_relative_error_max_abs": 1.251144021572539e-07
+      },
+      "executable_sha256": "30b0ac22f264c3597790d21e05b98d1b4803683cc12c02640e0f767520bd40bc",
+      "timestamps": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:10:00",
+        "0001-01-01_00:20:00",
+        "0001-01-01_00:30:00",
+        "0001-01-01_00:40:00",
+        "0001-01-01_00:50:00",
+        "0001-01-01_01:00:00"
+      ]
+    },
+    "RK3": {
+      "status": "failed_or_incomplete",
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "wrfinput_path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfinput_d01",
+      "t_init_plus_300_alb_check": {
+        "alb_from_t_init_pb_rms_m3_kg": 2.859741336041336,
+        "alb_input_rms_m3_kg": 2.8597413697589102,
+        "alb_error_rms_m3_kg": 1.689027175837206e-07,
+        "alb_error_max_abs_m3_kg": 5.66758887821095e-07,
+        "alb_relative_error_rms": 5.4949758866496747e-08,
+        "alb_relative_error_max_abs": 1.251144021572539e-07
+      },
+      "executable_sha256": "036b86a619a5cbf79e969b3d7d8af9c612125c0d1438258c42fde501142dd497",
+      "timestamps": [
+        "0001-01-01_00:00:00",
+        "0001-01-01_00:10:00",
+        "0001-01-01_00:20:00",
+        "0001-01-01_00:30:00",
+        "0001-01-01_00:40:00",
+        "0001-01-01_00:50:00",
+        "0001-01-01_01:00:00"
+      ]
+    }
+  },
+  "frames": {
+    "A0": {
+      "pressure_formula": "active C++ calc_p_rho_wrf: alb(T_INIT+300,PB), alpert=-(alb*C1H*MU - abs(RDNW)*dPHpert)/(C1H*(MUB+MU)+C2H), alt=alb+alpert, ppert=p0*(Rd*(T+300)/(p0*alt))^(cp/cv)-PB",
+      "t0_calibration": {
+        "same_state_residual_all_y": {
+          "error_rms_pa": 0.005377711503687418,
+          "error_max_abs_pa": 0.032238509302260354,
+          "reference_pressure_rms_pa": 3.6652917652503025,
+          "relative_error_rms": 0.0014671987519989896
+        },
+        "same_state_residual_high_y_k40_plus": {
+          "error_rms_pa": 0.0025156268716629558,
+          "error_max_abs_pa": 0.018327485914914624,
+          "reference_pressure_rms_pa": 0.007059016074809444,
+          "relative_error_rms": 0.35637075266624385
+        },
+        "note": "empirical t0 residual floor includes stored-FP32 quantization and EOS/update discretization; not a certified round-to-nearest bound"
+      },
+      "steps": {
+        "0": {
+          "time_minutes": 0,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/A0/wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005377711503687418,
+            "error_max_abs_pa": 0.032238509302260354,
+            "reference_pressure_rms_pa": 3.6652917652503025,
+            "relative_error_rms": 0.0014671987519989896
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025156268716629558,
+            "error_max_abs_pa": 0.018327485914914624,
+            "reference_pressure_rms_pa": 0.007059016074809444,
+            "relative_error_rms": 0.35637075266624385
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.0,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0
+        },
+        "10": {
+          "time_minutes": 10,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/A0/wrfout_d01_0001-01-01_00:10:00",
+          "sha256": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005516415314559016,
+            "error_max_abs_pa": 0.03202076366869733,
+            "reference_pressure_rms_pa": 3.7733410545749813,
+            "relative_error_rms": 0.001461944529999653
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025350655918705955,
+            "error_max_abs_pa": 0.01788126441289157,
+            "reference_pressure_rms_pa": 0.04417873105088671,
+            "relative_error_rms": 0.05738203727378707
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004780201606827952,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0033776444033148017,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 0.7760386432751188,
+            "error_max_abs_pa": 7.663129899228807,
+            "reference_pressure_rms_pa": 3.7733410545749813,
+            "relative_error_rms": 0.2056635305558219
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.04566128937340792,
+            "error_max_abs_pa": 0.37350300707034745,
+            "reference_pressure_rms_pa": 0.04417873105088671,
+            "relative_error_rms": 1.0335581916287624
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 0.7763366645780075,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.04564357542566079,
+          "eos_state_increment_rms_pa": 0.7763330546257965,
+          "eos_state_increment_high_y_rms_pa": 0.0455967943142204
+        },
+        "20": {
+          "time_minutes": 20,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/A0/wrfout_d01_0001-01-01_00:20:00",
+          "sha256": "e7ba6c96b08ec8ffea729d77e2b5300c437bd4ee8a995abe9ecbb8b21a29bed9",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005439486401471524,
+            "error_max_abs_pa": 0.03384633515088353,
+            "reference_pressure_rms_pa": 4.290655061683225,
+            "relative_error_rms": 0.0012677519687023296
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.002557038839179448,
+            "error_max_abs_pa": 0.0174760890842022,
+            "reference_pressure_rms_pa": 0.022087480270167548,
+            "relative_error_rms": 0.11576869828076823
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.0049496521305459834,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0034990649859175265,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 1.6203616794208353,
+            "error_max_abs_pa": 15.356249648262747,
+            "reference_pressure_rms_pa": 4.290655061683225,
+            "relative_error_rms": 0.37764902005083745
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.03913961017904932,
+            "error_max_abs_pa": 0.20636350193620934,
+            "reference_pressure_rms_pa": 0.022087480270167548,
+            "relative_error_rms": 1.772026944690166
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 1.620352023060976,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.03928418620363267,
+          "eos_state_increment_rms_pa": 1.6203426042550126,
+          "eos_state_increment_high_y_rms_pa": 0.03915976876775762
+        },
+        "30": {
+          "time_minutes": 30,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/A0/wrfout_d01_0001-01-01_00:30:00",
+          "sha256": "ad664a783f0700e434d961d786023b7093edc80b3d3a9680e2ad4111ff543d42",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005437173689852684,
+            "error_max_abs_pa": 0.03542496112640947,
+            "reference_pressure_rms_pa": 5.865782519686533,
+            "relative_error_rms": 0.0009269306646819299
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025408835075824685,
+            "error_max_abs_pa": 0.01965342903916153,
+            "reference_pressure_rms_pa": 0.0392074286519782,
+            "relative_error_rms": 0.06480617563922465
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.00497213827923826,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.003554784592646204,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.4357955053654927,
+            "error_max_abs_pa": 20.95422128205246,
+            "reference_pressure_rms_pa": 5.865782519686533,
+            "relative_error_rms": 0.4152549974688904
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.038598542535989995,
+            "error_max_abs_pa": 0.2603590467772642,
+            "reference_pressure_rms_pa": 0.0392074286519782,
+            "relative_error_rms": 0.984470133928115
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.435789432893677,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.03872005699881061,
+          "eos_state_increment_rms_pa": 2.4357745955161767,
+          "eos_state_increment_high_y_rms_pa": 0.038523143254259797
+        },
+        "40": {
+          "time_minutes": 40,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/A0/wrfout_d01_0001-01-01_00:40:00",
+          "sha256": "2e3c180405d66a474e3e7cbb6ff62571a1773af5f756b059a635a6603408afd1",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005416260441761494,
+            "error_max_abs_pa": 0.034399193405988626,
+            "reference_pressure_rms_pa": 8.309259332587114,
+            "relative_error_rms": 0.000651834324212279
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025525609070128404,
+            "error_max_abs_pa": 0.018545880596340963,
+            "reference_pressure_rms_pa": 0.029175223109035475,
+            "relative_error_rms": 0.08749070735374498
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004984861446746607,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0035228471420923066,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.942042401747965,
+            "error_max_abs_pa": 24.268381431742455,
+            "reference_pressure_rms_pa": 8.309259332587114,
+            "relative_error_rms": 0.35406794805523906
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.01854518000035667,
+            "error_max_abs_pa": 0.16862132012904,
+            "reference_pressure_rms_pa": 0.029175223109035475,
+            "relative_error_rms": 0.6356482667175658
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.942039559592075,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.01860626681148199,
+          "eos_state_increment_rms_pa": 2.942032188562137,
+          "eos_state_increment_high_y_rms_pa": 0.018430893057806295
+        },
+        "50": {
+          "time_minutes": 50,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/A0/wrfout_d01_0001-01-01_00:50:00",
+          "sha256": "8e802b27d7bfe8fcbb64b6f4ce6af118212d40d2641124d882cdee26cb5c44c1",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.0054015907529204555,
+            "error_max_abs_pa": 0.03259600132878404,
+            "reference_pressure_rms_pa": 11.102263142707482,
+            "relative_error_rms": 0.0004865306004270389
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.002498908836931889,
+            "error_max_abs_pa": 0.01773805837239517,
+            "reference_pressure_rms_pa": 0.02546502323560543,
+            "relative_error_rms": 0.09813102520314576
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004984991353134381,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.003503386367669907,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 3.1159543126780926,
+            "error_max_abs_pa": 24.761231799202505,
+            "reference_pressure_rms_pa": 11.102263142707482,
+            "relative_error_rms": 0.2806593820220165
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.01651092057390259,
+            "error_max_abs_pa": 0.0816326787361397,
+            "reference_pressure_rms_pa": 0.02546502323560543,
+            "relative_error_rms": 0.6483764189469448
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 3.1159536351319197,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.016687077487838535,
+          "eos_state_increment_rms_pa": 3.115938386264767,
+          "eos_state_increment_high_y_rms_pa": 0.01629212742945165
+        },
+        "60": {
+          "time_minutes": 60,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/A0/wrfout_d01_0001-01-01_01:00:00",
+          "sha256": "efe8460a1fdcf989f1d10923fdd4ac1623a8cdd300942430ac343641a5867cea",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005433327133318887,
+            "error_max_abs_pa": 0.033170395297929645,
+            "reference_pressure_rms_pa": 13.7986078520556,
+            "relative_error_rms": 0.00039375908001541447
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025155772815926795,
+            "error_max_abs_pa": 0.020847581534662644,
+            "reference_pressure_rms_pa": 0.02612056708009964,
+            "relative_error_rms": 0.09630638086372983
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.0049857950739587795,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0035340276664269617,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.9909058710133154,
+            "error_max_abs_pa": 22.338394210586557,
+            "reference_pressure_rms_pa": 13.7986078520556,
+            "relative_error_rms": 0.21675417571691882
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.027483180610725175,
+            "error_max_abs_pa": 0.13984631765757893,
+            "reference_pressure_rms_pa": 0.02612056708009964,
+            "relative_error_rms": 1.052166307356461
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.9909024275533826,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.027528598858527546,
+          "eos_state_increment_rms_pa": 2.990896177719294,
+          "eos_state_increment_high_y_rms_pa": 0.027340135198099986
+        }
+      }
+    },
+    "B0": {
+      "pressure_formula": "active C++ calc_p_rho_wrf: alb(T_INIT+300,PB), alpert=-(alb*C1H*MU - abs(RDNW)*dPHpert)/(C1H*(MUB+MU)+C2H), alt=alb+alpert, ppert=p0*(Rd*(T+300)/(p0*alt))^(cp/cv)-PB",
+      "t0_calibration": {
+        "same_state_residual_all_y": {
+          "error_rms_pa": 0.005377711503687418,
+          "error_max_abs_pa": 0.032238509302260354,
+          "reference_pressure_rms_pa": 3.6652917652503025,
+          "relative_error_rms": 0.0014671987519989896
+        },
+        "same_state_residual_high_y_k40_plus": {
+          "error_rms_pa": 0.0025156268716629558,
+          "error_max_abs_pa": 0.018327485914914624,
+          "reference_pressure_rms_pa": 0.007059016074809444,
+          "relative_error_rms": 0.35637075266624385
+        },
+        "note": "empirical t0 residual floor includes stored-FP32 quantization and EOS/update discretization; not a certified round-to-nearest bound"
+      },
+      "steps": {
+        "0": {
+          "time_minutes": 0,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/B0/wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005377711503687418,
+            "error_max_abs_pa": 0.032238509302260354,
+            "reference_pressure_rms_pa": 3.6652917652503025,
+            "relative_error_rms": 0.0014671987519989896
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025156268716629558,
+            "error_max_abs_pa": 0.018327485914914624,
+            "reference_pressure_rms_pa": 0.007059016074809444,
+            "relative_error_rms": 0.35637075266624385
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.0,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0
+        },
+        "10": {
+          "time_minutes": 10,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/B0/wrfout_d01_0001-01-01_00:10:00",
+          "sha256": "925e71f266ee51aa30bd8053bdd5b58159e0bb56a21f8b2a36accbd456977837",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.0055157467112334916,
+            "error_max_abs_pa": 0.03202076366869733,
+            "reference_pressure_rms_pa": 3.7733411939623753,
+            "relative_error_rms": 0.0014617672846704384
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.002534662246350317,
+            "error_max_abs_pa": 0.01788256039401743,
+            "reference_pressure_rms_pa": 0.04417807310143444,
+            "relative_error_rms": 0.057373761877994124
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004779686206202279,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0033771000759444717,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 0.7760387469772563,
+            "error_max_abs_pa": 7.663129899228807,
+            "reference_pressure_rms_pa": 3.7733411939623753,
+            "relative_error_rms": 0.20566355044144313
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.04566064773685195,
+            "error_max_abs_pa": 0.37350300707034745,
+            "reference_pressure_rms_pa": 0.04417807310143444,
+            "relative_error_rms": 1.033559060668252
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 0.7763367701598224,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.04564291728890348,
+          "eos_state_increment_rms_pa": 0.7763333838719996,
+          "eos_state_increment_high_y_rms_pa": 0.04559674919140285
+        },
+        "20": {
+          "time_minutes": 20,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/B0/wrfout_d01_0001-01-01_00:20:00",
+          "sha256": "316d10280e971fbb471e12fdc0b572ffae83be9383ec225da060b66fd1cf9840",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005439946961544937,
+            "error_max_abs_pa": 0.03384633515088353,
+            "reference_pressure_rms_pa": 4.290655211749918,
+            "relative_error_rms": 0.00126785926462879
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.002557407993487321,
+            "error_max_abs_pa": 0.017476371083332193,
+            "reference_pressure_rms_pa": 0.02208703396282175,
+            "relative_error_rms": 0.11578775121150749
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.00495077280563586,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0035001143619658457,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 1.6203621075456578,
+            "error_max_abs_pa": 15.356243014743086,
+            "reference_pressure_rms_pa": 4.290655211749918,
+            "relative_error_rms": 0.3776491066232289
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.03913995657843337,
+            "error_max_abs_pa": 0.20636313117092725,
+            "reference_pressure_rms_pa": 0.02208703396282175,
+            "relative_error_rms": 1.772078434991142
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 1.620352452050475,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.039284622035363544,
+          "eos_state_increment_rms_pa": 1.6203425056287004,
+          "eos_state_increment_high_y_rms_pa": 0.039159962232089965
+        },
+        "30": {
+          "time_minutes": 30,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/B0/wrfout_d01_0001-01-01_00:30:00",
+          "sha256": "db429bd9d4284fd26318d5b7b207f8574932805d25ce914a0d1bbb359ce436f2",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005436705407332493,
+            "error_max_abs_pa": 0.035424224042799324,
+            "reference_pressure_rms_pa": 5.865782523294228,
+            "relative_error_rms": 0.0009268508311963867
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025413334105915983,
+            "error_max_abs_pa": 0.019654016775572537,
+            "reference_pressure_rms_pa": 0.03920839938026449,
+            "relative_error_rms": 0.06481604581570284
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.00497322223208954,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.003555477045245455,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.4357953074662513,
+            "error_max_abs_pa": 20.954219918945455,
+            "reference_pressure_rms_pa": 5.865782523294228,
+            "relative_error_rms": 0.41525496347558194
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.03859981385409922,
+            "error_max_abs_pa": 0.26035818947911876,
+            "reference_pressure_rms_pa": 0.03920839938026449,
+            "relative_error_rms": 0.9844781848842419
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.4357892379005075,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.038721358762945524,
+          "eos_state_increment_rms_pa": 2.4357746667504188,
+          "eos_state_increment_high_y_rms_pa": 0.038523397967646304
+        },
+        "40": {
+          "time_minutes": 40,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/B0/wrfout_d01_0001-01-01_00:40:00",
+          "sha256": "1b2354257123cc5aa63f1a758c216f9b435b5b222bcbfdc636f9544b9b706d3e",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005417260987835244,
+            "error_max_abs_pa": 0.034398456336930394,
+            "reference_pressure_rms_pa": 8.309260823462669,
+            "relative_error_rms": 0.000651954620625056
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025528857185791445,
+            "error_max_abs_pa": 0.01855276024827038,
+            "reference_pressure_rms_pa": 0.029174721961680295,
+            "relative_error_rms": 0.08750334354281926
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004985758152336521,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0035232151618567113,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.942043141677956,
+            "error_max_abs_pa": 24.268375535029918,
+            "reference_pressure_rms_pa": 8.309260823462669,
+            "relative_error_rms": 0.3540679735760101
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.01854629309649498,
+            "error_max_abs_pa": 0.1686723652170131,
+            "reference_pressure_rms_pa": 0.029174721961680295,
+            "relative_error_rms": 0.635697338293565
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.9420402994840944,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.018607293153863086,
+          "eos_state_increment_rms_pa": 2.9420321297139123,
+          "eos_state_increment_high_y_rms_pa": 0.018431537354460837
+        },
+        "50": {
+          "time_minutes": 50,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/B0/wrfout_d01_0001-01-01_00:50:00",
+          "sha256": "f0cb7a0c8d0151fcd02df16dbb8d8c42dbab291b83a0c77ba60ecbd799693ada",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.0054025453487013325,
+            "error_max_abs_pa": 0.03259600132878404,
+            "reference_pressure_rms_pa": 11.102263875002976,
+            "relative_error_rms": 0.00048661655041953183
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0024997428533839777,
+            "error_max_abs_pa": 0.01773846260376007,
+            "reference_pressure_rms_pa": 0.02546565533627083,
+            "relative_error_rms": 0.09816134006273086
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004985270390590935,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0035035987623361683,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 3.115954574984896,
+            "error_max_abs_pa": 24.76123497102526,
+            "reference_pressure_rms_pa": 11.102263875002976,
+            "relative_error_rms": 0.2806593871363971
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.016511449675579024,
+            "error_max_abs_pa": 0.08102432479662233,
+            "reference_pressure_rms_pa": 0.02546565533627083,
+            "relative_error_rms": 0.6483811022158029
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 3.1159538961203004,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.016687572217865945,
+          "eos_state_increment_rms_pa": 3.1159388142804416,
+          "eos_state_increment_high_y_rms_pa": 0.016291961369584322
+        },
+        "60": {
+          "time_minutes": 60,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/runs/B0/wrfout_d01_0001-01-01_01:00:00",
+          "sha256": "66b67b8af1ff1b66f651ce0a516609dc3351f2a4072665b47ca6b04b0d8e8f69",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005433490722667092,
+            "error_max_abs_pa": 0.033170395297929645,
+            "reference_pressure_rms_pa": 13.798606861534795,
+            "relative_error_rms": 0.0003937709637784937
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.002515263434422402,
+            "error_max_abs_pa": 0.020848866577120165,
+            "reference_pressure_rms_pa": 0.026119921516858425,
+            "relative_error_rms": 0.09629674548596903
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004985407764016307,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0035333152932619724,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.990903936282428,
+            "error_max_abs_pa": 22.33839738284587,
+            "reference_pressure_rms_pa": 13.798606861534795,
+            "relative_error_rms": 0.21675405106438078
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.027484064561074474,
+            "error_max_abs_pa": 0.13984347352001741,
+            "reference_pressure_rms_pa": 0.026119921516858425,
+            "relative_error_rms": 1.0522261540233036
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.9909004929903853,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.027529489094301175,
+          "eos_state_increment_rms_pa": 2.9908951556952244,
+          "eos_state_increment_high_y_rms_pa": 0.027340295544906704
+        }
+      }
+    },
+    "RK3": {
+      "pressure_formula": "active C++ calc_p_rho_wrf: alb(T_INIT+300,PB), alpert=-(alb*C1H*MU - abs(RDNW)*dPHpert)/(C1H*(MUB+MU)+C2H), alt=alb+alpert, ppert=p0*(Rd*(T+300)/(p0*alt))^(cp/cv)-PB",
+      "t0_calibration": {
+        "same_state_residual_all_y": {
+          "error_rms_pa": 0.005377711503687418,
+          "error_max_abs_pa": 0.032238509302260354,
+          "reference_pressure_rms_pa": 3.6652917652503025,
+          "relative_error_rms": 0.0014671987519989896
+        },
+        "same_state_residual_high_y_k40_plus": {
+          "error_rms_pa": 0.0025156268716629558,
+          "error_max_abs_pa": 0.018327485914914624,
+          "reference_pressure_rms_pa": 0.007059016074809444,
+          "relative_error_rms": 0.35637075266624385
+        },
+        "note": "empirical t0 residual floor includes stored-FP32 quantization and EOS/update discretization; not a certified round-to-nearest bound"
+      },
+      "steps": {
+        "0": {
+          "time_minutes": 0,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:00:00",
+          "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005377711503687418,
+            "error_max_abs_pa": 0.032238509302260354,
+            "reference_pressure_rms_pa": 3.6652917652503025,
+            "relative_error_rms": 0.0014671987519989896
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025156268716629558,
+            "error_max_abs_pa": 0.018327485914914624,
+            "reference_pressure_rms_pa": 0.007059016074809444,
+            "relative_error_rms": 0.35637075266624385
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.0,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0
+        },
+        "10": {
+          "time_minutes": 10,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:10:00",
+          "sha256": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005400967662653489,
+            "error_max_abs_pa": 0.03324245235126,
+            "reference_pressure_rms_pa": 3.814637342826462,
+            "relative_error_rms": 0.0014158535077548507
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.002489455704083873,
+            "error_max_abs_pa": 0.018246708104314554,
+            "reference_pressure_rms_pa": 0.039948466446574876,
+            "relative_error_rms": 0.06231667759795358
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004728148514672282,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0033097068070599787,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 0.9313918584308332,
+            "error_max_abs_pa": 9.963869187558885,
+            "reference_pressure_rms_pa": 3.814637342826462,
+            "relative_error_rms": 0.2441626227411481
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.04157441769638234,
+            "error_max_abs_pa": 0.27614187842451443,
+            "reference_pressure_rms_pa": 0.039948466446574876,
+            "relative_error_rms": 1.040701218205258
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 0.9317346192517247,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.04156715391113222,
+          "eos_state_increment_rms_pa": 0.9317264396697648,
+          "eos_state_increment_high_y_rms_pa": 0.041573995616729774
+        },
+        "20": {
+          "time_minutes": 20,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:20:00",
+          "sha256": "970e3d0576ffe5de398db632bc7b9aa670d686732c82e7dfbba0d77a8b60347e",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005472978244370372,
+            "error_max_abs_pa": 0.03641153078933712,
+            "reference_pressure_rms_pa": 4.406666840684915,
+            "relative_error_rms": 0.001241976859661967
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025064114764308163,
+            "error_max_abs_pa": 0.01809301533750114,
+            "reference_pressure_rms_pa": 0.02453773251513047,
+            "relative_error_rms": 0.10214519515547378
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.0049026475348396365,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0034434965014907295,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 1.73691319971598,
+            "error_max_abs_pa": 16.01149233720207,
+            "reference_pressure_rms_pa": 4.406666840684915,
+            "relative_error_rms": 0.39415577862156165
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.06134383722339697,
+            "error_max_abs_pa": 0.38963031185201136,
+            "reference_pressure_rms_pa": 0.02453773251513047,
+            "relative_error_rms": 2.499979865114721
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 1.7368693248515736,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.061460755370769636,
+          "eos_state_increment_rms_pa": 1.736831772388286,
+          "eos_state_increment_high_y_rms_pa": 0.061326990358431525
+        },
+        "30": {
+          "time_minutes": 30,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:30:00",
+          "sha256": "343c2e7581ee091fe71398ad94d5fa12c5d408df390cf0775363afedb6ec029e",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005431415060563348,
+            "error_max_abs_pa": 0.034215875348309055,
+            "reference_pressure_rms_pa": 6.090610702972848,
+            "relative_error_rms": 0.0008917685475960984
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.002508856615311032,
+            "error_max_abs_pa": 0.01837731498815293,
+            "reference_pressure_rms_pa": 0.014784114830638557,
+            "relative_error_rms": 0.1696994811019517
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004960602544219601,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.003530947094942965,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.5111879187029404,
+            "error_max_abs_pa": 21.20401544943161,
+            "reference_pressure_rms_pa": 6.090610702972848,
+            "relative_error_rms": 0.4123047820930701
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0221393622345185,
+            "error_max_abs_pa": 0.16061164890608612,
+            "reference_pressure_rms_pa": 0.014784114830638557,
+            "relative_error_rms": 1.4975101646692401
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.5111691690007825,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.022190434890319716,
+          "eos_state_increment_rms_pa": 2.5111633466562173,
+          "eos_state_increment_high_y_rms_pa": 0.02198993637206422
+        },
+        "40": {
+          "time_minutes": 40,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:40:00",
+          "sha256": "5a0ddadde7921be90e1932f0285f3fcd5d3243a3b22496b673e65d35cdbf68a0",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.0054165611863177445,
+            "error_max_abs_pa": 0.03464434714987874,
+            "reference_pressure_rms_pa": 8.598176283755512,
+            "relative_error_rms": 0.0006299662867521365
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025090546080452033,
+            "error_max_abs_pa": 0.016309870251380563,
+            "reference_pressure_rms_pa": 0.028269526937468578,
+            "relative_error_rms": 0.08875474335298088
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004989568421983999,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0035117385348284492,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.9706581026639025,
+            "error_max_abs_pa": 24.48535239395278,
+            "reference_pressure_rms_pa": 8.598176283755512,
+            "relative_error_rms": 0.34549862722358354
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.02628827063468497,
+            "error_max_abs_pa": 0.16626368020304397,
+            "reference_pressure_rms_pa": 0.028269526937468578,
+            "relative_error_rms": 0.9299154772852728
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.9706679068162116,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.02645381600700521,
+          "eos_state_increment_rms_pa": 2.9706530821838566,
+          "eos_state_increment_high_y_rms_pa": 0.02623655812139039
+        },
+        "50": {
+          "time_minutes": 50,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:50:00",
+          "sha256": "f8672e71899b47e5482ccaaa095fff739ccaa678834116142baff65ce31d4cc5",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005421402641283931,
+            "error_max_abs_pa": 0.03479062463156879,
+            "reference_pressure_rms_pa": 11.382752955270307,
+            "relative_error_rms": 0.00047628220190562754
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.002514394485080842,
+            "error_max_abs_pa": 0.019850003627732562,
+            "reference_pressure_rms_pa": 0.019982818181312322,
+            "relative_error_rms": 0.12582782179503949
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.004986059025102193,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.003502451423569897,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 3.10077982806131,
+            "error_max_abs_pa": 24.530125454359222,
+            "reference_pressure_rms_pa": 11.382752955270307,
+            "relative_error_rms": 0.2724103598001416
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.03351969854561685,
+            "error_max_abs_pa": 0.25711265084827795,
+            "reference_pressure_rms_pa": 0.019982818181312322,
+            "relative_error_rms": 1.6774259887408698
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 3.100772691358848,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.03351268716699346,
+          "eos_state_increment_rms_pa": 3.1007479915067377,
+          "eos_state_increment_high_y_rms_pa": 0.03340206042222689
+        },
+        "60": {
+          "time_minutes": 60,
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_01:00:00",
+          "sha256": "f80086114114b47df74d474193b1c62ba53800ffb102c3c6fd7d881c94ce5835",
+          "qv_max_abs": 0.0,
+          "same_time_error_all_y": {
+            "error_rms_pa": 0.005449281169390059,
+            "error_max_abs_pa": 0.033870919403852895,
+            "reference_pressure_rms_pa": 14.025981910757416,
+            "relative_error_rms": 0.00038851334644961
+          },
+          "same_time_error_high_y_k40_plus": {
+            "error_rms_pa": 0.0025268049542557826,
+            "error_max_abs_pa": 0.02077523912203018,
+            "reference_pressure_rms_pa": 0.017779899842265252,
+            "relative_error_rms": 0.14211581486242245
+          },
+          "same_vs_t0_residual_delta_rms_pa": 0.005007045354658999,
+          "same_vs_t0_residual_delta_high_y_rms_pa": 0.0035316864273199438,
+          "prior_600s_state_error_all_y": {
+            "error_rms_pa": 2.9416708609256874,
+            "error_max_abs_pa": 21.633759630596614,
+            "reference_pressure_rms_pa": 14.025981910757416,
+            "relative_error_rms": 0.2097301194057247
+          },
+          "prior_600s_state_error_high_y_k40_plus": {
+            "error_rms_pa": 0.024541629900645262,
+            "error_max_abs_pa": 0.18187420753689598,
+            "reference_pressure_rms_pa": 0.017779899842265252,
+            "relative_error_rms": 1.380301920616361
+          },
+          "prior_vs_t0_residual_delta_rms_pa": 2.941667339766253,
+          "prior_vs_t0_residual_delta_high_y_rms_pa": 0.024676327932710622,
+          "eos_state_increment_rms_pa": 2.9416448957315118,
+          "eos_state_increment_high_y_rms_pa": 0.02437745810195356
+        }
+      }
+    }
+  },
+  "source_revision": "8dc34517336c901a5ec70bc990c5d0d87995e842",
+  "source_pins": {
+    "dyn_em/module_small_step_em.F": "037f706dd3b32f61cc2489f46a58cfd63e78795483662d18f66452f9f229d50c",
+    "share/module_model_constants.F": "5b80377fecdc18a5f0ad38d3b6c15cfc86ad5d76701adbbbb08a08698d0f7062",
+    "Registry/Registry.EM_COMMON": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+    "dyn_em/module_implicit_sdirk3.F": "dc60f0c90513d2d11d878c5ac45710b930d103a4de0801e87129bc28be08c775",
+    "dyn_em/solve_em.F": "95e7ccf6a8b09bb491a70f07c0ad56605c1a175f0e62c9ad194c1b33abcab4e6",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "9afe11f0967facefee9082a9f946e128d89395d02982b7be6cf6f86489ccb0b4",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "a3e0df6ffb493142e328b6312ec991bfdee854c6aef33ab45d1dc2358891884e",
+    "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_imex_ark324_coeffs.h": "fb85dd9343c325f66504b31d85f7c9e6c9a44dd27d263c43a6cc2c65bce0ba35",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ark324_composition.h": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907"
+  },
+  "source_sync_trace": {
+    "fortran_passes_grid_p_pointer": "module_implicit_sdirk3.F:1443-1447",
+    "cpp_recomputes_pressure_from_rhs_state": "wrf_sdirk3_tile_unified_impl.cpp:20332-20344; calc_p_rho_wrf in wrf_hydrostatic_pressure.h",
+    "cpp_base_state_alb": "wrf_sdirk3_tile_unified_impl.cpp:20333-20337; set_base_state_checked copies T_INIT and C++ sets th_base_=T_INIT+300 at tile_unified_impl.cpp:31133, then compute_inverse_density(th_base_,PB,rd,cv,cp,p1000mb)",
+    "cpp_writes_last_rhs_p_back": "wrf_sdirk3_tile_unified_impl.cpp:36198-36238",
+    "accepted_prognostic_state_unpack": "wrf_sdirk3_tile_unified_impl.cpp:13073-13077 (u,v,w,ph,t,mu only)",
+    "mode3_final_state": "solve_em.F skips the traditional RK/acoustic loop after the ARK solve; ARK final_state is a weighted sum after stage evaluations. b equals the implicit last row but not the explicit last row, so the last p diagnostic is a current stage value and need not be from the exact final weighted endpoint"
+  }
+}

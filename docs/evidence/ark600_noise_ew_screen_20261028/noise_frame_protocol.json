@@ -1,0 +1,331 @@
+{
+  "protocol_version": "k40-native-reconstruction-v2-all-fields",
+  "source_revision": "8dc34517336c901a5ec70bc990c5d0d87995e842",
+  "transform": {
+    "W": "DCT-II over 80 scalar mass-y points; zero modes k=0..39",
+    "V": "DST-I over 79 interior y points; zero modes k=1..39; inverse transform and pad both zero physical wall values",
+    "theta": "DCT-II over 80 mass-y points; zero modes k=0..39"
+  },
+  "band": "k>=40, lambda=2*L_y/k <= 4*DY = 400 km",
+  "metric": "for each field, reconstruct k>=40 then sqrt(mean(field_hp**2)) over all owned physical z/y/x points; V denominator includes 64x81x40 and both zero wall faces; no retained-coefficient RMS",
+  "ark_timeseries": "3-hour continuous outputs through 27 h plus archived 6-hour frames at 30 and 36 h; common old/new ARK frames match SHA-256 at 0,6,12,18,24 h",
+  "comparison_horizon_hours": 36,
+  "W_policy": "exclude fixed lower W face, keep all owned y/x points",
+  "map_geometry": "x-mean W, Y mass centers (j+0.5)DY, Z=(PH+PHB)/g at W vertical faces; y window 4000..8000km; top is max PH+PHB/g plus 0.25km plot margin",
+  "spacing_m": {
+    "DX": 100000,
+    "DY": 100000
+  },
+  "grid": {
+    "nx": 40,
+    "ny": 80,
+    "nz_owned_w": 64,
+    "nz_mass": 64,
+    "g": 9.81
+  },
+  "frames": {
+    "ark": {
+      "0": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50"
+      },
+      "24": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d"
+      },
+      "30": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_06:00:00",
+        "sha256": "de8801917e71c47170290ee504f96f3a9e671d920d7ed931547080527c571eee"
+      },
+      "36": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d"
+      }
+    },
+    "rk3": {
+      "0": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50"
+      },
+      "6": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_06:00:00",
+        "sha256": "9c61f7dd3b4ccf5bce7659f787cf16ace4d8b54fb87814ad9ba6aa4057795347"
+      },
+      "12": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_12:00:00",
+        "sha256": "fa4e3b040fd2c4aa064b651ba96fbda6b748d051edd037cbf6408778e46f7abf"
+      },
+      "18": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-01_18:00:00",
+        "sha256": "db0cafeddd2f7acaca7645e016609de530223327ecf8048d16e7f5bf0f79e400"
+      },
+      "24": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064"
+      },
+      "30": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_06:00:00",
+        "sha256": "0a82f5027ef36fd1fa4316b2d77380b06ec35485edfde4bbfa5815397836faf7"
+      },
+      "36": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0"
+      }
+    },
+    "ark3h": {
+      "0": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50"
+      },
+      "3": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_03:00:00",
+        "sha256": "ca99084d5686456ec31d72e91798b2afe1dae8a0dd2c426bab0392269727edba"
+      },
+      "6": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_06:00:00",
+        "sha256": "0b61c0d7fa6129f1f7a9d4f79a72c7e0292c142b85de4d76221b400baa1e4dd9"
+      },
+      "9": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_09:00:00",
+        "sha256": "6ae07287b042c17d86dc0a380e8b3a187a9afb4c7c30a379c457f9086d6556ec"
+      },
+      "12": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_12:00:00",
+        "sha256": "a854a9e39108e1f9474aaa76fc9bc6e59aff0a34f560580651441e28de184c4c"
+      },
+      "15": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_15:00:00",
+        "sha256": "e89333406629b67321089ee05dca7f385b6e39280603a09cf27165a7905ab865"
+      },
+      "18": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_18:00:00",
+        "sha256": "7c4cf3a88b1313e2d7be5838862b2c60d5c8a573bb6b4ae056ad2e02079ba519"
+      },
+      "21": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-01_21:00:00",
+        "sha256": "b5f2c73a5f74dd76a9bfb2c9bc32ec542ff04ef9f15b1c4f84a5a5526f4dfe09"
+      },
+      "24": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d"
+      },
+      "27": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-3hour-continuous-20261027/runs/ark_h600/wrfout_d01_0001-01-02_03:00:00",
+        "sha256": "590d72c5633a0fd2faace8f0a1a48e3d75ec32b667d2855fb5fc4192143bfdd6"
+      }
+    }
+  },
+  "series": {
+    "W": {
+      "raw": {
+        "ark": {
+          "0": 0.0,
+          "3": 0.00045364866987461456,
+          "6": 0.0003883793692811183,
+          "9": 0.0003971163604758141,
+          "12": 0.00039250945093015154,
+          "15": 0.0004153046410072376,
+          "18": 0.000491438213555197,
+          "21": 0.0005272223583743915,
+          "24": 0.0005476151812678151,
+          "27": 0.000745355007239851,
+          "30": 0.0013912499135055878,
+          "36": 0.0024798992987009744
+        },
+        "rk3": {
+          "0": 0.0,
+          "6": 0.00038178612232976205,
+          "12": 0.0003768874533094783,
+          "18": 0.00036973246033228494,
+          "24": 0.00036023051418916446,
+          "30": 0.0003321844995721981,
+          "36": 0.00031897048686378504
+        },
+        "ark_minus_rk3": {
+          "0": 0.0,
+          "6": 5.455903111937042e-05,
+          "12": 9.54145634859958e-05,
+          "18": 0.000327635629939964,
+          "24": 0.0004169386211084706,
+          "30": 0.0013624998992029964,
+          "36": 0.002459068061245363
+        }
+      },
+      "change": {
+        "ark": {
+          "0": 0.0,
+          "3": 0.00045364866987461456,
+          "6": 0.0003883793692811183,
+          "9": 0.0003971163604758141,
+          "12": 0.00039250945093015154,
+          "15": 0.0004153046410072376,
+          "18": 0.000491438213555197,
+          "21": 0.0005272223583743915,
+          "24": 0.0005476151812678151,
+          "27": 0.000745355007239851,
+          "30": 0.0013912499135055878,
+          "36": 0.0024798992987009744
+        },
+        "rk3": {
+          "0": 0.0,
+          "6": 0.00038178612232976205,
+          "12": 0.0003768874533094783,
+          "18": 0.00036973246033228494,
+          "24": 0.00036023051418916446,
+          "30": 0.0003321844995721981,
+          "36": 0.00031897048686378504
+        },
+        "ark_minus_rk3": {
+          "0": 0.0,
+          "6": 5.455903111937042e-05,
+          "12": 9.54145634859958e-05,
+          "18": 0.000327635629939964,
+          "24": 0.0004169386211084706,
+          "30": 0.0013624998992029964,
+          "36": 0.002459068061245363
+        }
+      }
+    },
+    "V": {
+      "raw": {
+        "ark": {
+          "0": 0.0,
+          "3": 0.05484032906258154,
+          "6": 0.04393258373323364,
+          "9": 0.04416377439609256,
+          "12": 0.04275308602489783,
+          "15": 0.041452943375289444,
+          "18": 0.040220009695407705,
+          "21": 0.03760393671649007,
+          "24": 0.03708586324763752,
+          "27": 0.03585568283729768,
+          "30": 0.03676141023029137,
+          "36": 0.044157425881449316
+        },
+        "rk3": {
+          "0": 0.0,
+          "6": 0.04393174310705318,
+          "12": 0.04272455291390784,
+          "18": 0.039981086082758355,
+          "24": 0.03665008806796801,
+          "30": 0.03285387581926655,
+          "36": 0.03065602419587934
+        },
+        "ark_minus_rk3": {
+          "0": 0.0,
+          "6": 0.0006242689071027331,
+          "12": 0.0012468033804241923,
+          "18": 0.004219999884691359,
+          "24": 0.005588106264644646,
+          "30": 0.016618005397567873,
+          "36": 0.03174989435916511
+        }
+      },
+      "change": {
+        "ark": {
+          "0": 0.0,
+          "3": 0.05484032906258154,
+          "6": 0.04393258373323364,
+          "9": 0.04416377439609256,
+          "12": 0.04275308602489783,
+          "15": 0.041452943375289444,
+          "18": 0.040220009695407705,
+          "21": 0.03760393671649007,
+          "24": 0.03708586324763752,
+          "27": 0.03585568283729768,
+          "30": 0.03676141023029137,
+          "36": 0.044157425881449316
+        },
+        "rk3": {
+          "0": 0.0,
+          "6": 0.04393174310705318,
+          "12": 0.04272455291390784,
+          "18": 0.039981086082758355,
+          "24": 0.03665008806796801,
+          "30": 0.03285387581926655,
+          "36": 0.03065602419587934
+        },
+        "ark_minus_rk3": {
+          "0": 0.0,
+          "6": 0.0006242689071027331,
+          "12": 0.0012468033804241923,
+          "18": 0.004219999884691359,
+          "24": 0.005588106264644646,
+          "30": 0.016618005397567873,
+          "36": 0.03174989435916511
+        }
+      }
+    },
+    "theta": {
+      "raw": {
+        "ark": {
+          "0": 0.05802619268735715,
+          "3": 0.030942313858995752,
+          "6": 0.033339461368653366,
+          "9": 0.0399821425858933,
+          "12": 0.03880294914101088,
+          "15": 0.03707802129040685,
+          "18": 0.03661796713675021,
+          "21": 0.03671390649322881,
+          "24": 0.033799780368688054,
+          "27": 0.03379336583578013,
+          "30": 0.03445528042259863,
+          "36": 0.03807938187345447
+        },
+        "rk3": {
+          "0": 0.05802619268735715,
+          "6": 0.03338567118770606,
+          "12": 0.03874155228486757,
+          "18": 0.03658234530082199,
+          "24": 0.033362370079624996,
+          "30": 0.033066700042587105,
+          "36": 0.030074412006539385
+        },
+        "ark_minus_rk3": {
+          "0": 0.0,
+          "6": 0.0005909330537534721,
+          "12": 0.0014900072219241533,
+          "18": 0.0018542094179959617,
+          "24": 0.006007890308419405,
+          "30": 0.009536383851031498,
+          "36": 0.023510095218081655
+        }
+      },
+      "change": {
+        "ark": {
+          "0": 0.0,
+          "3": 0.046953334963522976,
+          "6": 0.0632313140806481,
+          "9": 0.04905596552905957,
+          "12": 0.04930103273263612,
+          "15": 0.0537811801872809,
+          "18": 0.051700621094357205,
+          "21": 0.051466024016524434,
+          "24": 0.05183609065319712,
+          "27": 0.05250333345732268,
+          "30": 0.05261389828305298,
+          "36": 0.057669528860495325
+        },
+        "rk3": {
+          "0": 0.0,
+          "6": 0.06316078606616363,
+          "12": 0.04932351302810512,
+          "18": 0.0516372074669878,
+          "24": 0.051517159065489794,
+          "30": 0.05171933061087187,
+          "36": 0.05257738416250324
+        },
+        "ark_minus_rk3": {
+          "0": 0.0,
+          "6": 0.0005909330537534721,
+          "12": 0.0014900072219241533,
+          "18": 0.0018542094179959617,
+          "24": 0.006007890308419405,
+          "30": 0.009536383851031498,
+          "36": 0.023510095218081655
+        }
+      }
+    }
+  },
+  "old_k20_metric_note": "high_y_band_metrics.json high_band_rms is RMS of retained modal coefficient RMS values, not reconstructed physical-space RMS; preserve as exploratory modal metric."
+}

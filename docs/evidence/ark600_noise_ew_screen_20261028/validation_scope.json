@@ -1,0 +1,15 @@
+{
+  "python": "3.10.11",
+  "numpy": "2.2.6",
+  "scipy": "1.15.3",
+  "matplotlib": "3.10.8",
+  "netCDF4": "1.7.4",
+  "source_revision": "8dc34517336c901a5ec70bc990c5d0d87995e842",
+  "model_code_changed": false,
+  "native_model_attempts": 5,
+  "each_target_steps": 6,
+  "archive_RK3_36h_reused": true,
+  "benchmark_general_cost_eligible": false,
+  "green_review": "passed",
+  "red_review": "passed"
+}
