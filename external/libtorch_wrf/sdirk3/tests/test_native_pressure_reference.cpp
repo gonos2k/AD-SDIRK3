@@ -4,17 +4,42 @@
 #include "../wrf_sdirk3_unified_preconditioner.h"
 #include "../wrf_sdirk3_unified_rhs.h"
 #include "../wrf_sdirk3_config.h"
+#include "../wrf_sdirk3_ww_cp.h"
+#include "tile_test_fixture.h"
 #include <cmath>
 #include <iostream>
 
 using namespace wrf::sdirk3;
+namespace {
+struct PolarTag {
+    using type=bool TileSDIRK3UnifiedSolver::*;
+    friend type access(PolarTag);
+};
+template<typename Tag,typename Tag::type Member> struct Accessor {
+    friend typename Tag::type access(Tag) { return Member; }
+};
+template struct Accessor<PolarTag,&TileSDIRK3UnifiedSolver::config_flags_polar_>;
+struct VerticalTag {
+    using type=void (TileSDIRK3UnifiedSolver::*)(const float*,const float*,const float*,const float*);
+    friend type access(VerticalTag);
+};
+template struct Accessor<VerticalTag,&TileSDIRK3UnifiedSolver::setVerticalCoordinateCoefficients>;
+struct BoundaryTag {
+    using type=wrf::sdirk3::WdampRuntimeContract TileSDIRK3UnifiedSolver::*;
+    friend type access(BoundaryTag);
+};
+template struct Accessor<BoundaryTag,&TileSDIRK3UnifiedSolver::wdamp_contract_>;
+}
 int main() {
     constexpr int nx=4,ny=4,nz=2,nw=3,n=nx-1,m=ny-1;
     auto opts=torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU);
     auto grid=std::make_shared<WRFGridInfo>(); auto& g=*grid;
     g.nx=nx;g.ny=ny;g.nz=nz;g.nx_u=nx+1;g.ny_v=ny+1;g.nz_w=nw;
     g.ids=g.its=g.jds=g.jts=1;g.ide=g.ite=nx;g.jde=g.jte=ny;
-    g.periodic_x=true;g.periodic_y=false;g.symmetric_ys=true;g.symmetric_ye=true;
+    // Production synchronizes periodic flags but leaves WRFGridInfo symmetric
+    // flags false; the live tile's captured predicate is authoritative.
+    g.periodic_x=true;g.periodic_y=false;
+    TORCH_CHECK(!g.symmetric_ys && !g.symmetric_ye,"fixture grid symmetry must be stale");
     g.p_base=torch::full({ny,nz,nx},80000.0,opts);g.mu_base=torch::full({ny,nx},80000.0,opts);
     g.c1h=torch::tensor({1.0,0.5},opts);g.c2h=torch::tensor({0.0,40000.0},opts);
     g.c1f=torch::tensor({1.0,0.8,0.5},opts);g.c2f=torch::tensor({0.0,16000.0,40000.0},opts);
@@ -82,6 +107,15 @@ int main() {
     rejected=false;try { (void)derive_native_pressure_profiles(bad,g,layout,a); }
     catch(const c10::Error&) { rejected=true; }
     TORCH_CHECK(rejected,"unverified rank/whole-tile context accepted");
+    bad=e;bad.geometry.packed_periodic_x_symmetric_y=false;
+    rejected=false;try { (void)derive_native_pressure_profiles(bad,g,layout,a); }
+    catch(const c10::Error&) { rejected=true; }
+    TORCH_CHECK(rejected,"false live packed/boundary attestation accepted");
+    g.ite=g.ide-1;
+    rejected=false;try { (void)derive_native_pressure_profiles(e,g,layout,a); }
+    catch(const c10::Error&) { rejected=true; }
+    g.ite=g.ide;
+    TORCH_CHECK(rejected,"inconsistent exact packed tile bound accepted");
     auto& cfg=g_sdirk3_config;
     cfg=SDIRK3Config{}; cfg.imex_split_mode=3;cfg.precond_type=2;cfg.precond_acoustic_4x4=1;
     auto physics=std::make_shared<PhysicsConfig>();
@@ -127,6 +161,33 @@ int main() {
     P.bind_raw_principal_state_or_throw(changed_state,2,"changed reference factory test");
     P.update_time_coefficients(600.0f,0.4358665215f);
     TORCH_CHECK(P.pressure_probe_raw_digest()!=raw_digest,"raw-cache digest missed a changed binding");
+    // Exercise the actual Tile EOS capture predicate, not a fabricated
+    // attestation: the packed gate itself does not exclude the polar flag.
+    {
+        using wrf::sdirk3::test::TileCase;
+        TileCase tile;
+        tile.solver.setWRFIndices(1,wrf::sdirk3::test::nx,1,wrf::sdirk3::test::ny,1,wrf::sdirk3::test::nz,
+                                  1,wrf::sdirk3::test::nx,1,wrf::sdirk3::test::ny,1,wrf::sdirk3::test::nz,
+                                  1,wrf::sdirk3::test::nu,1,wrf::sdirk3::test::nv,1,wrf::sdirk3::test::nw);
+        // Same runtime boundary resolver as stage initialization; no Newton
+        // solve is needed for this direct captured-RHS contract.
+        tile.solver.*access(BoundaryTag{})=wrf::sdirk3::resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,false,false,false,false,false);
+        (tile.solver.*access(VerticalTag{}))(tile.one.data(),tile.zero.data(),tile.one.data(),tile.zero.data());
+        auto& polar=tile.solver.*access(PolarTag{});
+        for (const bool enabled : {false,true}) {
+            polar=enabled;
+            pressure_stage_probe::PressureEosContext captured;
+            {
+                pressure_stage_probe::ScopedEosCapture scope(captured);
+                (void)tile.rhsAt(tile.state(),RhsMode::ImplicitOnly,0.1f);
+            }
+            TORCH_CHECK(captured.captured && !captured.failed && !captured.duplicate &&
+                        captured.geometry.packed_periodic_x_symmetric_y==!enabled,
+                        "live EOS packed attestation ignored polar state");
+        }
+        polar=false;
+    }
     std::cout << "NATIVE_PRESSURE_REFERENCE_PROFILE core=" << n << 'x' << m
               << " levels=" << nz << " q0=" << result.profiles.q[0]
               << " p0=" << result.p_ref[0] << " alias_invariant=1\n";

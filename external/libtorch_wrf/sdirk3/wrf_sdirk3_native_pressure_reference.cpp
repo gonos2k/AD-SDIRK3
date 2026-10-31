@@ -61,10 +61,9 @@ NativePressureProfileReceipt derive_native_pressure_profiles(
     const auto ground_core=ground.narrow(0,0,m).narrow(1,0,n);
     TORCH_CHECK(torch::equal(ground_core,torch::full_like(ground_core,ground_core.flatten()[0].item<double>())),
                 "native pressure reference requires flat captured ground geopotential");
-    TORCH_CHECK(g->periodic_x && !g->periodic_y && g->symmetric_ys && g->symmetric_ye &&
-                !g->open_xs && !g->open_xe && !g->open_ys && !g->open_ye &&
-                !g->specified && !g->nested && !g->polar &&
-                g->its==g->ids && g->ite==g->ide && g->jts==g->jds && g->jte==g->jde &&
+    // Effective boundary flags are attested at the live tile EOS call above;
+    // WRFGridInfo's symmetry flags are not synchronized by the boundary setter.
+    TORCH_CHECK(g->its==g->ids && g->ite==g->ide && g->jts==g->jds && g->jte==g->jde &&
                 nx==g->ide-g->ids+1 && ny==g->jde-g->jds+1,
                 "native pressure reference grid metadata do not identify the packed physical core");
     const auto expected=StateLayout::from_grid_dims(nx,ny,nz,g->nx_u,g->ny_v,g->nz_w);

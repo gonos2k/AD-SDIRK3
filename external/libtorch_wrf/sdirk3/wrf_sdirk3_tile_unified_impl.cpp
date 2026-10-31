@@ -20430,7 +20430,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 geometry.gravity=(grid_info_ && grid_info_->g>0) ? grid_info_->g : g_;
                 geometry.whole_single_rank=nprocx_*nprocy_==1 &&
                     its_<=ids_ && ite_>=ide_-1 && jts_<=jds_ && jte_>=jde_-1;
-                geometry.packed_periodic_x_symmetric_y=isPackedPeriodicDomain();
+                geometry.packed_periodic_x_symmetric_y=isPackedPeriodicDomain() && !config_flags_polar_;
                 wrf::sdirk3::pressure_stage_probe::capture_eos(
                     ph,t,mu,mu_base_,alb_mass,p_base_,c1h_,c2h_,rdnw_tensor,
                     prho.alt,prho.p_pert,rd_,cv_,cp_,p0_,kWrfT0,geometry);
