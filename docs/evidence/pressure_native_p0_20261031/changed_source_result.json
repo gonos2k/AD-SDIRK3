@@ -1,0 +1,250 @@
+{
+  "case": "candidate",
+  "status": "completed",
+  "model_completed": true,
+  "failure_class": null,
+  "failure_reason": null,
+  "executable_sha256": "0e931ed9a4e3e33d2998f176f3fe60c052cadec1b778672fe78c7b4dce0c231d",
+  "thread_count_actual": "not independently measured",
+  "rss_scope": "postrun rank maxrss; excludes launcher",
+  "diagnostic_kind": "geometry_fix_numerical_iteration_only",
+  "original_block_status": "failed_timing_and_previous_candidate_setup",
+  "model_timing_scope": "numerical-only diagnostic; cost ineligible regardless of clocks",
+  "cost_eligible": false,
+  "original_block_timing_eligible": false,
+  "return_code": 0,
+  "command": [
+    "/opt/homebrew/bin/mpirun",
+    "--timeout",
+    "360",
+    "--report-state-on-timeout",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/rank_rusage.log",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/build/wrf.exe"
+  ],
+  "monotonic_elapsed_seconds": 39.60298466682434,
+  "wall_elapsed_seconds": 39.602779150009155,
+  "environment_overrides": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+    "WRF_SDIRK3_EW_ETA_INITIAL": "0.1",
+    "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0"
+  },
+  "steps": 1,
+  "stage_residuals": [
+    "[Newton] CONVERGED stage=2 iters=3 ||S\u207b\u00b9R||_rms=6.296993e-14 [scaled-RMS] (||R||=6.545993e-11 [unscaled-L2])",
+    "[Newton] CONVERGED stage=3 iters=3 ||S\u207b\u00b9R||_rms=6.345785e-14 [scaled-RMS] (||R||=6.596566e-11 [unscaled-L2])",
+    "[Newton] CONVERGED stage=4 iters=3 ||S\u207b\u00b9R||_rms=6.344006e-14 [scaled-RMS] (||R||=6.594741e-11 [unscaled-L2])"
+  ],
+  "wrapper_rows": [
+    [
+      3,
+      0
+    ]
+  ],
+  "rank_peak_rss_bytes": 2031321088,
+  "stage_residual_scaled_rms": {
+    "2": 6.296993e-14,
+    "3": 6.345785e-14,
+    "4": 6.344006e-14
+  },
+  "timing_class": "ineligible_by_design",
+  "output_check": {
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "physical_minima_over_all_frames": {
+      "total_theta_K": 258.83935546875,
+      "total_mu_Pa": 89072.1247472763,
+      "layer_depth_m_from_PH_plus_PHB_over_g": 215.13885902459225,
+      "g_m_s2": 9.81
+    },
+    "physical_minimum_total_pressure_Pa": 11079.84334230423,
+    "timestamps": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:10:00"
+    ],
+    "step_logs": {
+      "rsl_main_step_count": 1,
+      "rsl_main_step_sum_seconds": 38.09292,
+      "rsl_main_step_seconds": [
+        38.09292
+      ],
+      "converged_newton_stage_count": 3,
+      "newton_iterations_sum": 9,
+      "rsl_timing_files": {
+        "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/rsl.out.0000",
+        "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/rsl.error.0000"
+      },
+      "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+    }
+  },
+  "t0_gate": {
+    "status": "passed",
+    "reference_label": "rk3",
+    "labels": [
+      "rk3",
+      "candidate"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "preflight": {
+    "status": "ok",
+    "digest_fnv64": "7bdd17f3a694726e",
+    "state_fnv64": "bfc3393acc9791c0",
+    "F_fnv64": "ff7fe0162403c3c0",
+    "K_fnv64": "5d065c0f7df71aa0",
+    "b_fnv64": "beebab996c9f810b",
+    "x0_fnv64": "fdf60492df066d12",
+    "S_fnv64": "73dac3183f782879",
+    "Sinv_fnv64": "70e824aa5bce8528",
+    "mask_fnv64": "af63bd4c8601b7df",
+    "eos_fnv64": "d53e209fb0d78407",
+    "geometry_fnv64": "9e59543442ce1b6f",
+    "raw_grid_fnv64": "a358e8986d95c6c1",
+    "raw_column_0_0_fnv64": "d9b832053aa30223",
+    "raw_full_fnv64": "d88d4c145bbc2d91",
+    "restart": 30,
+    "max_restarts": 50,
+    "tolerance": 1.0000000116860974e-07,
+    "periodic_x": 1,
+    "periodic_y": 0,
+    "scaling": 1,
+    "mask": 0,
+    "block_scale_requested": 0,
+    "refinement_passes": 1,
+    "apinv_probe": 0,
+    "jvp_probe": 0,
+    "identity_scope": "bounded_captured_inputs_not_all_transitive_state",
+    "preflight_ms": 111.9795
+  },
+  "linear": {
+    "flavor": "reference_p0",
+    "comparison_eligible": true,
+    "preflight_ms": 111.9795,
+    "setup_ms": 10.787084,
+    "linear_with_native_truecheck_ms": 3069.485125,
+    "interval_from_newton_entry_ms": 3260.89975,
+    "iterations": 21,
+    "restarts": 1,
+    "restart_budget": 30,
+    "max_restarts": 50,
+    "tolerance_applied": 1.0000000116860974e-07,
+    "stopping_metric": 1,
+    "stopping_metric_name": "unweighted_scaled_L2",
+    "stopping_relative_norm": 1.2772678470440724e-09,
+    "scaled_relative_norm": 1.2772678470440724e-09,
+    "residual_provenance": "saved_native_checked_raw_not_independent",
+    "saved_native_scaled_residual_norm": 2.573363244729006e-08,
+    "saved_native_physical_residual_norm": 2.8788990210975115e-07,
+    "scaled_rhs_norm": 20.14740542763099,
+    "physical_rhs_norm": 312.3019131227635,
+    "mask_active": false,
+    "refinement_passes": 1,
+    "apinv_probe": false,
+    "jvp_probe": false,
+    "jvp_fd_fallbacks": 0,
+    "success": true,
+    "preconditioner_calls": 21,
+    "guard_events": 0,
+    "reference_calls": 21
+  },
+  "owned_field_comparison": {
+    "U": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "V": {
+      "unit": "m s-1",
+      "owned_points": 207360,
+      "max_abs": 3.725290298461914e-09,
+      "rms": 8.210724610655193e-12,
+      "violations": 0
+    },
+    "W": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 5.820766091346741e-11,
+      "rms": 1.564990747375291e-13,
+      "violations": 0
+    },
+    "PH": {
+      "unit": "m2 s-2",
+      "owned_points": 204800,
+      "max_abs": 3.725290298461914e-09,
+      "rms": 8.23180634978399e-12,
+      "violations": 0
+    },
+    "T": {
+      "unit": "K",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "MU": {
+      "unit": "Pa",
+      "owned_points": 3200,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    }
+  },
+  "baseline_first_linear_iterations": 29,
+  "candidate_first_linear_iterations": 21,
+  "iteration_delta": -8,
+  "gate_b_authorized": false,
+  "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/build/wrf.exe",
+  "disk_free_end": 37267423232,
+  "postrun_disk_floor_met": true
+}

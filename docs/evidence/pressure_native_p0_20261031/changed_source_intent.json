@@ -1,0 +1,81 @@
+{
+  "diagnostic_kind": "geometry_fix_numerical_iteration_only",
+  "source_commit": "e5cb9d5cecadb9a385252c82648ff22bfdff3b93",
+  "registration": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/registration.json",
+    "sha256": "b16361e924b6721658287f1ddbee4fc6458b7291e8049142361cb9456cd7e130"
+  },
+  "candidate_build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/build/build_receipt.json",
+    "sha256": "be8a255c501cebc554413f1c09c63a5487202fcec604645038e943fe0c4e76a8"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/build/wrf.exe",
+    "sha256": "0e931ed9a4e3e33d2998f176f3fe60c052cadec1b778672fe78c7b4dce0c231d"
+  },
+  "original_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/result.json",
+    "sha256": "c995d15e83911d0c5683aeea589e72cfe76fabd2eba860110ee5e8882b6eaa3a",
+    "status": "failed_or_incomplete",
+    "failure_class": "timing_ineligible"
+  },
+  "prior_candidate_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/run/runs/candidate/result.json",
+    "sha256": "ea1880df122345b0c2d40aada2560e7f99830275ff424e12e2d6ce2fc62a57c3",
+    "status": "failed_or_incomplete",
+    "return_code": 134
+  },
+  "baseline_numerical_postcheck": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/baseline_numerical_postcheck.json",
+    "sha256": "8d9025c124ae9f53f2e34134f5b06a78078d062e3d8cba447590c1265ee1287a",
+    "timing_eligible": false
+  },
+  "baseline_run": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline"
+  },
+  "baseline_executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_build/baseline_v2/wrf.exe",
+    "sha256": "ee794dca940563e99dcd3bdbd89132dc2ab1eb7c2abcb85b99cf73646557c3d0"
+  },
+  "expected_preflight_digest_fnv64": "7bdd17f3a694726e",
+  "expected_header": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/build/wrf_sdirk3_pressure_reference_expected.h",
+    "sha256": "91acfb9ec88905e7e5f762bc84211ec9ae57a78c375771aa36995fbd0c64b845"
+  },
+  "reference_rk3_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "new_attempt_limit": 1,
+  "retry": false,
+  "clock_policy": "record clocks separately; cost ineligible always",
+  "gate_b_authorized": false,
+  "case": {
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf"
+  }
+}

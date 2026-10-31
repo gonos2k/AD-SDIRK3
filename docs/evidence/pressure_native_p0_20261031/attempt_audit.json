@@ -1,0 +1,164 @@
+{
+  "scope": "bounded one-step numerical/iteration diagnostic; not cost result, Gate B, forecast quality or complete operator identity proof",
+  "source_commit": "e5cb9d5cecadb9a385252c82648ff22bfdff3b93",
+  "candidate_executable_sha256": "0e931ed9a4e3e33d2998f176f3fe60c052cadec1b778672fe78c7b4dce0c231d",
+  "candidate_build_receipt_sha256": "be8a255c501cebc554413f1c09c63a5487202fcec604645038e943fe0c4e76a8",
+  "prior_performance_block": {
+    "status": "failed_or_incomplete",
+    "model_completed": true,
+    "failure_class": "timing_ineligible",
+    "clock_gap_seconds": 2.0187461473979056
+  },
+  "prior_pre_fix_candidate": {
+    "status": "failed_or_incomplete",
+    "model_completed": false,
+    "return_code": 134,
+    "error": "native pressure reference grid metadata do not identify the packed physical core",
+    "prior_zero_step_output_cleanup_receipt_sha256": "cf34b8e02a1727ea9b857cf1b890793dd58312e8c0785a12035cce7122349e92"
+  },
+  "changed_source_candidate": {
+    "status": "completed",
+    "return_code": 0,
+    "model_completed": true,
+    "steps": 1,
+    "stage_residual_scaled_rms": {
+      "2": 6.296993e-14,
+      "3": 6.345785e-14,
+      "4": 6.344006e-14
+    },
+    "wrapper_rows": [
+      [
+        3,
+        0
+      ]
+    ],
+    "rank_peak_rss_bytes": 2031321088,
+    "rss_scope": "postrun rank maxrss; excludes launcher",
+    "postrun_disk_floor_met": true,
+    "t0_gate": "passed",
+    "owned_field_comparison": {
+      "U": {
+        "unit": "m s-1",
+        "owned_points": 204800,
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "violations": 0
+      },
+      "V": {
+        "unit": "m s-1",
+        "owned_points": 207360,
+        "max_abs": 3.725290298461914e-09,
+        "rms": 8.210724610655193e-12,
+        "violations": 0
+      },
+      "W": {
+        "unit": "m s-1",
+        "owned_points": 204800,
+        "max_abs": 5.820766091346741e-11,
+        "rms": 1.564990747375291e-13,
+        "violations": 0
+      },
+      "PH": {
+        "unit": "m2 s-2",
+        "owned_points": 204800,
+        "max_abs": 3.725290298461914e-09,
+        "rms": 8.23180634978399e-12,
+        "violations": 0
+      },
+      "T": {
+        "unit": "K",
+        "owned_points": 204800,
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "violations": 0
+      },
+      "MU": {
+        "unit": "Pa",
+        "owned_points": 3200,
+        "max_abs": 0.0,
+        "rms": 0.0,
+        "violations": 0
+      }
+    },
+    "cost_eligible": false,
+    "gate_b_authorized": false
+  },
+  "shared_preflight_digest_fnv64": "7bdd17f3a694726e",
+  "preflight_identity_scope": "bounded_captured_inputs_not_all_transitive_state",
+  "first_linear": {
+    "baseline_iterations": 29,
+    "candidate_iterations": 21,
+    "baseline_stopping_relative_norm": 1.6527321733406097e-08,
+    "candidate_stopping_relative_norm": 1.2772678470440724e-09,
+    "tolerance_applied": 1.0000000116860974e-07,
+    "stopping_metric": "unweighted_scaled_L2",
+    "guard_events": 0,
+    "jvp_fd_fallbacks": 0,
+    "reference_calls": 21,
+    "residual_provenance": "saved_native_checked_raw_not_independent"
+  },
+  "logged_work_counts": {
+    "baseline": {
+      "jvp_call_records": [
+        32,
+        48,
+        32,
+        48,
+        32,
+        48
+      ],
+      "jvp_calls_sum": 240,
+      "krylov_iteration_records": [
+        29,
+        43,
+        29,
+        43,
+        29,
+        43
+      ],
+      "krylov_iterations_sum": 216,
+      "count_scope": "sum of six explicitly logged Newton linear solves; not inferred from Arnoldi"
+    },
+    "candidate": {
+      "jvp_call_records": [
+        23,
+        48,
+        32,
+        48,
+        32,
+        48
+      ],
+      "jvp_calls_sum": 231,
+      "krylov_iteration_records": [
+        21,
+        43,
+        29,
+        43,
+        29,
+        43
+      ],
+      "krylov_iterations_sum": 208,
+      "count_scope": "sum of six explicitly logged Newton linear solves; not inferred from Arnoldi"
+    }
+  },
+  "all_diagnostic_pins_verified": true,
+  "artifacts_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/result.json": "c995d15e83911d0c5683aeea589e72cfe76fabd2eba860110ee5e8882b6eaa3a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/attempt.json": "5ab4de4dc7da7763b5d399f7d6d63f16a23cf90cef38cb05b3a87c59e005ea1d",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/rsl.error.0000": "e8565d9fc9a26245b555707e43a82eefaa833cc20f3a1bcb40d1a2405a0e560f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/run/runs/candidate/result.json": "ea1880df122345b0c2d40aada2560e7f99830275ff424e12e2d6ce2fc62a57c3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/run/runs/candidate/attempt.json": "3f077537bf0d893e1a821f22155d6fbdce10ddf8c625ac433770cb8fb3320c59",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/run/runs/candidate/rsl.error.0000": "ae426dea79405b514ae024c246ae4871c3793547e65adbc3ef0951d583597b0f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/result.json": "1b7b15e392c4a59b1543704ed6e2c3b31b5dbe201dfe133d3c82f29fe11116f9",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/attempt.json": "f15332c83ee51585507c3844589ed659008a88717846b190090d258e47508542",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/rsl.error.0000": "2df45575b5c8bc40a6934467f0e53ef4f89257fff5c5753ac05ff188d5bbeea8",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/baseline_numerical_postcheck.json": "8d9025c124ae9f53f2e34134f5b06a78078d062e3d8cba447590c1265ee1287a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/registration.json": "b16361e924b6721658287f1ddbee4fc6458b7291e8049142361cb9456cd7e130",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/build/build_receipt.json": "be8a255c501cebc554413f1c09c63a5487202fcec604645038e943fe0c4e76a8",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/build/native_factory_test_receipt.json": "ecf8df4b4f472bfc2701f0b254e5099237563d032615475685150ef73c2536f8",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/pins.json": "d5ad8267066ef9bf7ac6a588a625a4a9c3dfcdab7f832bdce23491cd012b9edb",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/cleanup_failed_geometry_outputs.json": "cf34b8e02a1727ea9b857cf1b890793dd58312e8c0785a12035cce7122349e92"
+  },
+  "new_model_run": false,
+  "timestamp_local": "2026-10-31T21:01:29+0900"
+}

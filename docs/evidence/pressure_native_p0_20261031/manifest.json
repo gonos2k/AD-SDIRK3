@@ -1,0 +1,186 @@
+{
+  "created_local": "2026-10-31T21:02:20.250136+09:00",
+  "source_commit": "e5cb9d5cecadb9a385252c82648ff22bfdff3b93",
+  "cost_eligible": false,
+  "gate_b_authorized": false,
+  "records": [
+    {
+      "path": "original_cost_preregistration.json",
+      "bytes": 3897,
+      "sha256": "e1b0c232803b920ad9a34c18f7ff695cc025eea55d91a79f3d4d00125cdab70d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_native_preregistration.json",
+      "original_sha256": "e1b0c232803b920ad9a34c18f7ff695cc025eea55d91a79f3d4d00125cdab70d",
+      "normalization": "none"
+    },
+    {
+      "path": "baseline_result.json",
+      "bytes": 1999,
+      "sha256": "c995d15e83911d0c5683aeea589e72cfe76fabd2eba860110ee5e8882b6eaa3a",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/result.json",
+      "original_sha256": "c995d15e83911d0c5683aeea589e72cfe76fabd2eba860110ee5e8882b6eaa3a",
+      "normalization": "none"
+    },
+    {
+      "path": "baseline_numerical_postcheck.json",
+      "bytes": 6364,
+      "sha256": "8d9025c124ae9f53f2e34134f5b06a78078d062e3d8cba447590c1265ee1287a",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/baseline_numerical_postcheck.json",
+      "original_sha256": "8d9025c124ae9f53f2e34134f5b06a78078d062e3d8cba447590c1265ee1287a",
+      "normalization": "none"
+    },
+    {
+      "path": "baseline_build_receipt.json",
+      "bytes": 199648,
+      "sha256": "3f7155eb48b014e3320828c4126778e022f44caae2b46a3e140d8eefbfb74e5d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_build/baseline_v2/build_receipt.json",
+      "original_sha256": "3f7155eb48b014e3320828c4126778e022f44caae2b46a3e140d8eefbfb74e5d",
+      "normalization": "none"
+    },
+    {
+      "path": "first_numerical_registration.json",
+      "bytes": 4443,
+      "sha256": "4de555b35d44129eff55641aebb89adbce287ed2f870e141c4264625d5377b3b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/registration.json",
+      "original_sha256": "4de555b35d44129eff55641aebb89adbce287ed2f870e141c4264625d5377b3b",
+      "normalization": "none"
+    },
+    {
+      "path": "failed_setup_result.json",
+      "bytes": 1641,
+      "sha256": "ea1880df122345b0c2d40aada2560e7f99830275ff424e12e2d6ce2fc62a57c3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/run/runs/candidate/result.json",
+      "original_sha256": "ea1880df122345b0c2d40aada2560e7f99830275ff424e12e2d6ce2fc62a57c3",
+      "normalization": "none"
+    },
+    {
+      "path": "geometry_fix_component_receipt.json",
+      "bytes": 1056,
+      "sha256": "5edd1051f22a9fdb99e478424c976d403fa45a7a904280abac0e2fc46ecfeefc",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/geometry_fix/receipt.json",
+      "original_sha256": "5edd1051f22a9fdb99e478424c976d403fa45a7a904280abac0e2fc46ecfeefc",
+      "normalization": "none"
+    },
+    {
+      "path": "changed_source_registration.json",
+      "bytes": 6518,
+      "sha256": "b16361e924b6721658287f1ddbee4fc6458b7291e8049142361cb9456cd7e130",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/registration.json",
+      "original_sha256": "b16361e924b6721658287f1ddbee4fc6458b7291e8049142361cb9456cd7e130",
+      "normalization": "none"
+    },
+    {
+      "path": "changed_source_build_receipt.json",
+      "bytes": 9061,
+      "sha256": "be8a255c501cebc554413f1c09c63a5487202fcec604645038e943fe0c4e76a8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/build/build_receipt.json",
+      "original_sha256": "be8a255c501cebc554413f1c09c63a5487202fcec604645038e943fe0c4e76a8",
+      "normalization": "none"
+    },
+    {
+      "path": "changed_source_intent.json",
+      "bytes": 3611,
+      "sha256": "07a4d785b24d65272b2b0d2d68a79b5229b10d73d07f3a7682d516009bdc29e3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/intent.json",
+      "original_sha256": "07a4d785b24d65272b2b0d2d68a79b5229b10d73d07f3a7682d516009bdc29e3",
+      "normalization": "none"
+    },
+    {
+      "path": "changed_source_pins.json",
+      "bytes": 31251,
+      "sha256": "d5ad8267066ef9bf7ac6a588a625a4a9c3dfcdab7f832bdce23491cd012b9edb",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/pins.json",
+      "original_sha256": "d5ad8267066ef9bf7ac6a588a625a4a9c3dfcdab7f832bdce23491cd012b9edb",
+      "normalization": "none"
+    },
+    {
+      "path": "changed_source_result.json",
+      "bytes": 7411,
+      "sha256": "1b7b15e392c4a59b1543704ed6e2c3b31b5dbe201dfe133d3c82f29fe11116f9",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/result.json",
+      "original_sha256": "1b7b15e392c4a59b1543704ed6e2c3b31b5dbe201dfe133d3c82f29fe11116f9",
+      "normalization": "none"
+    },
+    {
+      "path": "attempt_audit.json",
+      "bytes": 6961,
+      "sha256": "f107104f2825c0976085c847eaa6d11cce9c36dbbd6caaf58c207d23fe5d3bf3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/attempt_audit.json",
+      "original_sha256": "f107104f2825c0976085c847eaa6d11cce9c36dbbd6caaf58c207d23fe5d3bf3",
+      "normalization": "none"
+    },
+    {
+      "path": "plot_receipt.json",
+      "bytes": 6229,
+      "sha256": "8a75191777399b36e6b8035ba059a8729be6ef1e9fce3edb6f78ced1056f7200",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/geometry_validation_analysis/receipt.json",
+      "original_sha256": "8a75191777399b36e6b8035ba059a8729be6ef1e9fce3edb6f78ced1056f7200",
+      "normalization": "none"
+    },
+    {
+      "path": "w_yz.png",
+      "bytes": 233720,
+      "sha256": "73ee3df928bf98e5640df14d574bc5b37dc133599909fa6c9fcd0299e03af5b8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/geometry_validation_analysis/w_yz.png",
+      "original_sha256": "73ee3df928bf98e5640df14d574bc5b37dc133599909fa6c9fcd0299e03af5b8",
+      "normalization": "none"
+    },
+    {
+      "path": "six_field_differences.csv",
+      "bytes": 1108,
+      "sha256": "3217e1d671fb6bc61cb782108b6976d9fad1f283a9e7386792319897d866dbf1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/geometry_validation_analysis/six_field_differences.csv",
+      "original_sha256": "118f76ad1bee66596403c26e8f4ec775832e70056056049f41ed3b6f6195bd68",
+      "normalization": "LF only"
+    },
+    {
+      "path": "cleanup_receipt.json",
+      "bytes": 1350,
+      "sha256": "cf34b8e02a1727ea9b857cf1b890793dd58312e8c0785a12035cce7122349e92",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/cleanup_failed_geometry_outputs.json",
+      "original_sha256": "cf34b8e02a1727ea9b857cf1b890793dd58312e8c0785a12035cce7122349e92",
+      "normalization": "none"
+    },
+    {
+      "path": "clock_power_window.txt",
+      "bytes": 361,
+      "sha256": "44d7996ccaf148411af1b621b7ac044da0bc989c2179f8a5e589551306afebf3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_clock_power_window.txt",
+      "original_sha256": "65012f145ad49c5519621bc1aafda0dbe83ddd969eae08b4be5c0dce5dd9ad5d",
+      "normalization": "trimmed trailing whitespace in public excerpt only; original SHA retained"
+    },
+    {
+      "path": "baseline_selected_log.txt",
+      "bytes": 2468,
+      "sha256": "06aaba131fe863a5074bea73ce6b7651fd76e135a00e3a02f3bcdbcbed2a0a9d",
+      "derivation": "selected labeled raw records; full logs retained locally"
+    },
+    {
+      "path": "candidate_selected_log.txt",
+      "bytes": 2473,
+      "sha256": "75dd8ada5aada8949d28382ec78a67c8b9f5668434cb901ad24a56b6c033896f",
+      "derivation": "selected labeled raw records; full logs retained locally"
+    },
+    {
+      "path": "failed_setup_selected_log.txt",
+      "bytes": 937,
+      "sha256": "852472703d3c060df5e19363b71bd865636c72b75f4d287a5caa0214d89a1934",
+      "derivation": "selected labeled raw records; full logs retained locally"
+    },
+    {
+      "path": "factory_retest_receipt.json",
+      "bytes": 1636,
+      "sha256": "ecf8df4b4f472bfc2701f0b254e5099237563d032615475685150ef73c2536f8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/build/native_factory_test_receipt.json",
+      "original_sha256": "ecf8df4b4f472bfc2701f0b254e5099237563d032615475685150ef73c2536f8",
+      "normalization": "none"
+    },
+    {
+      "path": "geometry_compare.py",
+      "bytes": 4777,
+      "sha256": "6c2990ef41f717a153c2f7c7a9e75ed4a2ac750a717ebdc6c9cf324f20c7e378",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/geometry_compare.py",
+      "original_sha256": "6c2990ef41f717a153c2f7c7a9e75ed4a2ac750a717ebdc6c9cf324f20c7e378",
+      "normalization": "none"
+    }
+  ]
+}
