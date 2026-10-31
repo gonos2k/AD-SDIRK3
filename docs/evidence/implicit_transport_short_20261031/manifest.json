@@ -1,0 +1,139 @@
+{
+  "source_report": "field_comparison.json",
+  "labels": [
+    "RK3",
+    "mode3 FP64",
+    "mode4 FP64"
+  ],
+  "x_mass_index": 20,
+  "x_km": 2050,
+  "Y_mass_centres_km": {
+    "start": 50,
+    "interval": 100,
+    "count": 80
+  },
+  "scope": "Plotted W slices, bottom fixed interface excluded; not complete model arrays",
+  "arrays": {
+    "run0_W": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "run0_height_km": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "run0_Y_highband": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "run1_W": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "run1_height_km": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "run1_Y_highband": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "run2_W": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "run2_height_km": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    },
+    "run2_Y_highband": {
+      "shape": [
+        64,
+        80
+      ],
+      "dtype": "float64"
+    }
+  },
+  "files": {
+    "field_comparison.json": {
+      "bytes": 7904,
+      "sha256": "ea95f474b70aeba5e3b3b7307094dde2a13c26d6c51949f1be90c681c0319e9f"
+    },
+    "fp32_timeout.json": {
+      "bytes": 799,
+      "sha256": "4f95a50c70f7cf489ea19a7fd38fd8acba2d5e74b6aaf216f84db86cc19ad079"
+    },
+    "full_ladder_timeout_and_rhs_receipt.json": {
+      "bytes": 3544,
+      "sha256": "818da92466ebfd4b97b75e13385e890323a7710e0d74092e9389db13aa6bb63f"
+    },
+    "future_reference_split_audit.md": {
+      "bytes": 8014,
+      "sha256": "7a82b8644d18cb5f4124e86b46f17658c72c4a7c5e409a3f8a5636edafebbacc"
+    },
+    "native_build_receipt.json": {
+      "bytes": 58241,
+      "sha256": "076179e4ce764cd1abd18dbfc083cd2ce75129a219b2d92c61547c193ca3031d"
+    },
+    "native_intent.json": {
+      "bytes": 2469,
+      "sha256": "957ee9ca0f315bf66ea52146de4aee736a25d94692bb82c3bfbdf84402e465de"
+    },
+    "native_summary.json": {
+      "bytes": 6770,
+      "sha256": "0e5b3e844e862b81509c657040d21042ff0edd9fa350b3921551f3b978766077"
+    },
+    "plot_slices.npz": {
+      "bytes": 292739,
+      "sha256": "011cb245819d1f454b37c9e6d8b45137c1c1ebe2bc782d04d2a4edbdee6027f0"
+    },
+    "preconditioner_audit.md": {
+      "bytes": 2516,
+      "sha256": "3b2d195a3209edeeea3b6e0b2f4e08a699b12c3f4da6a30b16298c13adb06b96"
+    },
+    "rhs_contract.log": {
+      "bytes": 4325,
+      "sha256": "9a72cc2bc0b0d920697ce1c27ffe112dc2228420f548db1148e0b34d9a0310df"
+    },
+    "scoped_carry.log": {
+      "bytes": 21043,
+      "sha256": "4afcc834ccb3b761767ef3f2fb3006669eca9b50f6b7e9ce7bc7b90f64a9c7e5"
+    },
+    "scoped_carry_receipt.json": {
+      "bytes": 568,
+      "sha256": "e66c8979584061b41c57ef4699418aa6ff5a09d6b3a7a6ad6fb87baf86a65fa5"
+    },
+    "six_field_differences.csv": {
+      "bytes": 1171,
+      "sha256": "c5fa399c5da71bf9c77c10b8ae60a374070a2b2c6ca7e0435ba751c50b71caa7"
+    },
+    "w_yz.png": {
+      "bytes": 235031,
+      "sha256": "f2007128024ca25d3021b83eb4eb4f784f92ddc2f8572d59f17f8fb942bc9829"
+    }
+  }
+}

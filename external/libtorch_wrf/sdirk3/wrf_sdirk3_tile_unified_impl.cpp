@@ -6137,8 +6137,9 @@ vertical_coefficients:
         TORCH_CHECK(U_n.is_cpu() && nprocx_ * nprocy_ == 1 &&
                     its_ <= ids_ && ite_ >= ide_ - 1 &&
                     jts_ <= jds_ && jte_ >= jde_ - 1 &&
-                    wrf::sdirk3::g_sdirk3_config.imex_split_mode == 3,
-                    "internal_fp64 requires ARK mode 3 on one CPU tile covering the domain");
+                    (wrf::sdirk3::g_sdirk3_config.imex_split_mode == 3 ||
+                     wrf::sdirk3::g_sdirk3_config.imex_split_mode == 4),
+                    "internal_fp64 requires ARK mode 3 or 4 on one CPU tile covering the domain");
     }
     if (carry_fp64) {
         TORCH_CHECK(internal_fp64 && rk_step == 1 &&
@@ -6471,6 +6472,8 @@ vertical_coefficients:
         if (split_mode == 0 && wrf::sdirk3::g_sdirk3_config.imex_enabled) {
             split_mode = 1;  // backward compat: imex_enabled maps to frozen mode
         }
+        TORCH_CHECK(split_mode != 4 || usesImplicitTransport(),
+                    "mode 4 requires forward-only single-rank whole-tile WRFParity without AD halo");
         // FAIL-CLOSE invariant (external review round 3): the split-explicit branch lives
         // inside split_mode==3, so split_explicit=1 with any other effective mode would be
         // SILENTLY inert (the knob accepted, the feature and its supported-config guard both
@@ -7587,7 +7590,7 @@ vertical_coefficients:
             }
             checkTensorHealth(U_new, "U_new");
 
-        } else if (split_mode == 3) {
+        } else if (split_mode == 3 || split_mode == 4) {
             // Preserve tableau precision through stage assembly, the implicit
             // equation, and the final update. The Fortran timestep ABI stays float.
             const double dt_ark = static_cast<double>(dt);
@@ -9433,7 +9436,7 @@ vertical_coefficients:
                 static std::atomic<bool> logged_mode3_banner{false};
                 bool expected = false;
                 if (logged_mode3_banner.compare_exchange_strong(expected, true)) {
-                    std::cerr << "[IMEX MODE=3] Post-solve ARK324 active"
+                    std::cerr << "[IMEX MODE=" << split_mode << "] Post-solve ARK324 active"
                               << " slow_in_tangent=" << slow_in_tangent
                               << " phys_in_tangent=" << phys_in_tangent << std::endl;
                 }
@@ -12827,7 +12830,8 @@ vertical_coefficients:
             // Split-explicit Inc6 advances via its own acoustic-substep loop and publishes U_new
             // directly; the legacy Newton k1..k4 tensors are intentionally undefined on that path.
             const bool have_legacy_k_diag =
-                k1.defined() && k2.defined() && k3.defined() && (split_mode != 3 || k4.defined());
+                k1.defined() && k2.defined() && k3.defined() &&
+                ((split_mode != 3 && split_mode != 4) || k4.defined());
             if (have_legacy_k_diag) {
                 auto k1_cpu = k1.detach().to(torch::kCPU);
                 auto k2_cpu = k2.detach().to(torch::kCPU);
@@ -12844,7 +12848,7 @@ vertical_coefficients:
                           << "  ||w_K2||=" << w_k2.norm().item<float>() << std::endl;
                 std::cerr << "  w_K3: " << w_k3.min().item<float>() << " / " << w_k3.max().item<float>()
                           << "  ||w_K3||=" << w_k3.norm().item<float>() << std::endl;
-                if (split_mode == 3) {
+                if (split_mode == 3 || split_mode == 4) {
                     using Ark = wrf::sdirk3::ARK324L2SACoefficients;
                     std::cerr << "  w_K4: " << w_k4.min().item<float>() << " / " << w_k4.max().item<float>()
                               << "  ||w_K4||=" << w_k4.norm().item<float>() << std::endl;
@@ -15265,6 +15269,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::projectStateBoundaries(const torch::Tenso
     return combineStateVariables(pu, pv, w, ph, t, mu);
 }
 
+bool TileSDIRK3UnifiedSolver::usesImplicitTransport() const {
+    const auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    return !g_export_coupled_slow && cfg.imex_split_mode == 4 &&
+        !cfg.hevi_split && !cfg.split_explicit && !cfg.retain_graph_for_adjoint &&
+        !fixed_trajectory_open_ && !fixed_trajectory_requested_ &&
+        cfg.effective_wrf_omega_ww_cp() &&
+        !cfg.enable_ad_halo_exchange && nprocx_ * nprocy_ == 1 &&
+        its_ <= ids_ && ite_ >= ide_ - 1 && jts_ <= jds_ && jte_ >= jde_ - 1 &&
+        cfg.effective_mu_horizontal_div_only() && cfg.mu_tend_fortran_parity &&
+        cfg.wrf_zadvect_implicit == 0 &&
+        wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
+        wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate &&
+        !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_Z") &&
+        !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_H") &&
+        !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_Z") &&
+        !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_H");
+}
+
 torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U, RhsMode mode) {
     if (capture_theta_faces_now_) rhs_theta_faces_ = {};
     // Step 7b: Detect full-halo input and redirect
@@ -15341,6 +15363,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     const bool canonical_horizontal = use_wrf_mass_flux &&
         wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
         wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
+    TORCH_CHECK(wrf::sdirk3::g_sdirk3_config.imex_split_mode != 4 ||
+                mode == RhsMode::Full || usesImplicitTransport(),
+                "mode 4 requires supported single-tile WRFParity transport; unsupported split RHS");
     // PR302's bounded same-call PH/THM component packet. The fixed V1 wire
     // order is documented in the evidence schema; tensors are only copied
     // when the existing first-Full diagnostic call arms this local packet.
@@ -17472,7 +17497,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         option2_v_diffusion_to_coupled = velocity_mass_v/v_layer_mass;
     }
 
-    if (do_explicit) {  // Step 3: ADVECTION (slow-mode / explicit)
+    const bool do_transport = usesImplicitTransport() ? do_implicit : do_explicit;
+    if (do_transport) {  // Step 3: coupled advection
 
     const bool packed_periodic_x = isPackedPeriodicDomain() &&
         u.size(0) == ny_ && u.size(2) == nx_ + 1 &&
@@ -40728,6 +40754,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::combineGhostAndInterior(
 torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHSFullHalo(
     const torch::Tensor& U_full, RhsMode mode)
 {
+    TORCH_CHECK(wrf::sdirk3::g_sdirk3_config.imex_split_mode != 4 || mode == RhsMode::Full,
+                "mode 4 does not support split full-halo RHS evaluation");
     // ═══════════════════════════════════════════════════════════════════
     // FULL-HALO RHS (Plan Step 7c)
     //

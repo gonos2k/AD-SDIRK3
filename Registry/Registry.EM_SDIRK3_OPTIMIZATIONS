@@ -69,7 +69,7 @@ rconfig   integer sdirk3_stage3_max_krylov_restarts    namelist,dynamics  1  0  
 rconfig   real    sdirk3_stage3_krylov_tol             namelist,dynamics  1  0.0      rh   "sdirk3_stage3_krylov_tol"             "Stage>=3 Krylov tolerance override (0=off)"   ""
 rconfig   real    sdirk3_stage3_ew_eta_min             namelist,dynamics  1  0.0      rh   "sdirk3_stage3_ew_eta_min"             "Stage>=3 EW eta_min override (0=off)"   ""
 rconfig   real    sdirk3_stage3_ew_eta_max             namelist,dynamics  1  0.0      rh   "sdirk3_stage3_ew_eta_max"             "Stage>=3 EW eta_max override (0=off)"   ""
-rconfig   integer sdirk3_imex_split_mode               namelist,dynamics  1  0        rh   "sdirk3_imex_split_mode"               "IMEX split mode: 0=baseline,1=frozen,2=post-SDIRK3,3=post-ARK324"   ""
+rconfig   integer sdirk3_imex_split_mode               namelist,dynamics  1  0        rh   "sdirk3_imex_split_mode"               "IMEX split mode: 0=baseline,1=frozen,2=post-SDIRK3,3=post-ARK324,4=ARK324 implicit transport forward-only"   ""
 rconfig   logical sdirk3_imex_slow_in_tangent          namelist,dynamics  1  .false.  rh   "sdirk3_imex_slow_in_tangent"          "Include slow term in tangent-linear operator"   ""
 rconfig   logical sdirk3_imex_phys_in_tangent          namelist,dynamics  1  .false.  rh   "sdirk3_imex_phys_in_tangent"          "Include physics term in tangent-linear operator"   ""
 rconfig   logical sdirk3_stage1_explicit               namelist,dynamics  1  .false.  rh   "sdirk3_stage1_explicit"               "Use explicit stage-1 bypass in IMEX path"   ""

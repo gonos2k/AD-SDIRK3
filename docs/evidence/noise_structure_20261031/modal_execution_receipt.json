@@ -1,0 +1,89 @@
+{
+  "finished_local": "2026-10-31T11:45:17.190009+09:00",
+  "status": "six_cases_completed",
+  "master_return_code": 0,
+  "master_sha256": "af0de388cb9c520001ce24b649f08be079dfdd6cd847d8e18b0b1d8b2fa27aa9",
+  "intent_sha256": "ecd8576c4689f7b1e96ceff7d58c0bb57632511eac2a040020c390bcdfd5ed94",
+  "no_retries": true,
+  "cases": [
+    {
+      "mode": "baseline",
+      "method": "rk3",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_rk3/forecast_receipt.json",
+      "sha256": "0caa64c007a60c66184654e884ab0434f1aeec805d43f7c1b0a40d922ede2bc2",
+      "status": "completed",
+      "model_return_code": 0,
+      "steps": 1,
+      "wall_seconds": 3.904652,
+      "monotonic_seconds": 3.904645832721144,
+      "clock_gap_seconds": 6.1672788560507286e-06,
+      "initial_gate_status": "canonical_post_init_history"
+    },
+    {
+      "mode": "baseline",
+      "method": "ark",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_ark/forecast_receipt.json",
+      "sha256": "583cbe30cf55c959085788e60e1c9a841043be4e6943bf3f0bb2d6551ce71e30",
+      "status": "completed",
+      "model_return_code": 0,
+      "steps": 1,
+      "wall_seconds": 101.840501,
+      "monotonic_seconds": 101.84034516708925,
+      "clock_gap_seconds": 0.00015583291074960925,
+      "initial_gate_status": "passed"
+    },
+    {
+      "mode": "low",
+      "method": "rk3",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/low_rk3/forecast_receipt.json",
+      "sha256": "3217ef58af8a4904a0e67f714cf65ca1273524f2abbf4b008415635a9a9632ad",
+      "status": "completed",
+      "model_return_code": 0,
+      "steps": 1,
+      "wall_seconds": 3.410952,
+      "monotonic_seconds": 3.4109437922015786,
+      "clock_gap_seconds": 8.207798421366874e-06,
+      "initial_gate_status": "canonical_post_init_history"
+    },
+    {
+      "mode": "low",
+      "method": "ark",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/low_ark/forecast_receipt.json",
+      "sha256": "f5628fe24d97ed0027e3933f21fac69166266fd84d271505b88a839eae818b18",
+      "status": "completed",
+      "model_return_code": 0,
+      "steps": 1,
+      "wall_seconds": 96.179218,
+      "monotonic_seconds": 96.17907120892778,
+      "clock_gap_seconds": 0.00014679107222548282,
+      "initial_gate_status": "passed"
+    },
+    {
+      "mode": "high",
+      "method": "rk3",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/high_rk3/forecast_receipt.json",
+      "sha256": "e99105a0ce5860511a986d8ee86dc5f376720bfb6740adca3e7cf8c4f85625fe",
+      "status": "completed",
+      "model_return_code": 0,
+      "steps": 1,
+      "wall_seconds": 4.842552,
+      "monotonic_seconds": 4.842543958220631,
+      "clock_gap_seconds": 8.041779369527546e-06,
+      "initial_gate_status": "canonical_post_init_history"
+    },
+    {
+      "mode": "high",
+      "method": "ark",
+      "receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/high_ark/forecast_receipt.json",
+      "sha256": "dab7087d96257c0bc2dde63700657058af8db9da16a531d8daba1936a732e50c",
+      "status": "completed",
+      "model_return_code": 0,
+      "steps": 1,
+      "wall_seconds": 150.086813,
+      "monotonic_seconds": 150.0842376248911,
+      "clock_gap_seconds": 0.0025753751089041543,
+      "initial_gate_status": "passed"
+    }
+  ],
+  "scope": "One-step controlled modal diagnostic; not historical-state reproduction, robust timing, full energy stability or forecast accuracy acceptance."
+}

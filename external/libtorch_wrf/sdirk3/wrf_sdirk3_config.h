@@ -2176,6 +2176,7 @@ struct SDIRK3Config {
     // 1 = frozen IMEX (existing imex_enabled behavior)
     // 2 = post-solve IMEX SDIRK3 (Newton fast-only, K_slow at U_converged)
     // 3 = post-solve IMEX ARK324L2SA (4-stage, Newton fast-only, explicit first stage)
+    // 4 = ARK324 with coupled transport implicit; experimental forward-only scope
     // PRIORITY: imex_split_mode > imex_enabled. When split_mode != 0, imex_enabled is ignored.
     int imex_split_mode = 0;
 

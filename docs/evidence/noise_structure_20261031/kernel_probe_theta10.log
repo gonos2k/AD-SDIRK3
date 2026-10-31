@@ -1,0 +1,139 @@
+[CONFIG PROVENANCE] tile=0 experiment{uv_slow=none stage1_substeps=1} digest=0xd4cfc4696c08b97c diagnostics{trace_u_terms=0 dump_advect_u_split=0}
+[BC RECEIPT] first_emit_at_setter_call=1 proc_grid=1x1 my=(0,0) projection_is_identity=1 gcfg_matches_effective=1
+[BC RECEIPT] periodic     raw_x=1 raw_y=0 | eff_x=1 eff_y=0  (unprojected: global-domain metadata)
+[BC RECEIPT] symmetric    raw=0011 | eff=0011  (xs,xe,ys,ye)
+[BC RECEIPT] open         raw=0000 | eff=0000  (xs,xe,ys,ye)
+[BC RECEIPT] mode         specified=0 nested=0  consumers: grid_info_/newton<-EFFECTIVE, g_sdirk3_config<-RAW
+[RHS DEBUG GUARD] debug_level=0, ENABLE_RHS_DEBUG=FALSE
+[RHS CONFIG] split_mode=3 omega_update_ref_per_newton=0 omega_w_blend=1 imex_enabled=0 imex_split_mode=3 precond_relaxation=0 w_acoustic_boost=2
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+[NEWTON] Autograd disabled globally for FD mode (GradMode now: OFF)
+RESULT full_u_max=2.71050543121e-20 fast_u_max=0.000146410151598 slow_u_max=0.000146410151598 split_u_error=0 fast_mu_max=0.79999997979 predicted_fast_error=2.71050543121e-20 resplit_fast_max=2.71050543121e-20 resplit_slow_max=0 whole_split_max=0
+SCALARS theta_pert=10 full_theta=0 fast_theta=7.32050757988e-05 slow_theta=7.32050757988e-05 fast_theta_product_error=9.48676900925e-20 full_ph=0 fast_ph=0 slow_ph=0 fast_dph=0 full_mu=0.585640606391 slow_mu=0 fast_mu=0.585640606391 fast_pdot=0.726881215978 fast_pressure_theta_part=0.0242293738659 fast_pressure_mass_part=0.751110589844 fast_pressure_phi_part=0 eos_fd_error=3.3124864518e-09 whole_closure=0
+fast_u=0.0001 *
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+[ CPUDoubleType{40} ]
+slow_u=0.0001 *
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+[ CPUDoubleType{40} ]
+pred=0.0001 *
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 1.4641
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+ 0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-0.5359
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+-1.4641
+[ CPUDoubleType{40} ]

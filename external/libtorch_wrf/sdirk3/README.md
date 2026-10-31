@@ -127,6 +127,12 @@ through Registry + Fortran `set_config` + C++ (env, string setter, dump,
 
 ### Moved/standardized controls
 
+Experimental `sdirk3_imex_split_mode=4` uses ARK324 with coupled transport in
+the implicit partition. It is forward-only and restricted to a single whole
+tile, WRFParity, with no AD halo, HEVI, split-explicit, or retained
+adjoint. Mode 3 keeps its original partition. Mode 4 has not been promoted as
+a validated convergence or performance improvement.
+
 | Purpose | Namelist key (`&dynamics`) | Legacy env var |
 |---|---|---|
 | IMEX split path | `sdirk3_imex_split_mode` | `WRF_SDIRK3_IMEX_SPLIT_MODE` |

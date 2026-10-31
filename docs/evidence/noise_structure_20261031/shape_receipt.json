@@ -1,0 +1,42 @@
+{
+  "source_note": "Archived inputs; not a new model run. Archive analysis metadata identifies source revision 8dc34517336c901a5ec70bc990c5d0d87995e842; current worktree HEAD is not claimed as generating these outputs.",
+  "frames": {
+    "ARK": {
+      "24": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_00:00:00",
+        "sha256": "cd2c3bb7eacf791583a1e612e774cf656012cbdad420579d76247e9715904a6d"
+      },
+      "30": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_06:00:00",
+        "sha256": "de8801917e71c47170290ee504f96f3a9e671d920d7ed931547080527c571eee"
+      },
+      "36": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ark600-five-day-20261025/runs/ark_h600/wrfout_d01_0001-01-02_12:00:00",
+        "sha256": "76329dc4e0f90d9a4d024500b22f2103fb277f34068561bab6773b385fdd1b7d"
+      }
+    },
+    "RK3": {
+      "24": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_00:00:00",
+        "sha256": "ffd90ce843e0a20aca57ac2f7f8d1a0591aacd3f69c657360084119650db4064"
+      },
+      "30": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_06:00:00",
+        "sha256": "0a82f5027ef36fd1fa4316b2d77380b06ec35485edfde4bbfa5815397836faf7"
+      },
+      "36": {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/standard-forward-comparison-20261024/runs/rk3_h600/wrfout_d01_0001-01-02_12:00:00",
+        "sha256": "04495ada1c81f2321a7c72638e96f03fb9279a245efde55e82093729eb344aa0"
+      }
+    }
+  },
+  "slice": "Exploratory Python x index 20, native scalar x center 2050 km; no x mean",
+  "grid": "40 x 80 x 64, dx=dy=100 km; W y mass centers at (j+0.5)dy; W native vertical faces excluding fixed bottom; height (PH+PHB)/9.81 for same run, time, x and face",
+  "view": "Y 0\u20138000 km, Z 0\u201317 km (covers model top at this slice). Color limits symmetric and matched across all times and methods separately for raw and high-band; no clipping.",
+  "filter": "DCT-II orthonormal along 80 y mass points, zero k=0..39 then inverse DCT-II; k>=40 gives nominal wavelength <=400 km for reflected 8000 km span; signed reconstructed physical field, not coefficient magnitude. Band includes shorter than 2dy in nominal continuous wavelength terminology only up to discrete Nyquist.",
+  "limits_m_s": {
+    "raw": 0.011783938854932785,
+    "high_band": 0.009381924712007843
+  },
+  "source_script_sha256": "6fba7d81ed01d16c453e1b42921368ee1a5f68762db382f1012e047d4f0e346a"
+}

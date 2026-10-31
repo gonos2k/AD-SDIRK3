@@ -1,0 +1,250 @@
+{
+  "status": "gated_completed_one_step",
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "initial_gate": "helper exact field and input equality passed",
+  "sources": {
+    "RK3 00:00:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_rk3/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "RK3 00:10:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_rk3/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "mode3 FP64 00:00:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode3/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "mode3 FP64 00:10:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode3/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "mode4 FP64 00:00:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode4/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "mode4 FP64 00:10:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode4/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "c0d0d35abbdd79650a1e52f39f04174d0e5c58474d270aa74514f3bf15a22842",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "earlier mode3 FP64 00:10:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_ark/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af"
+    }
+  },
+  "stage_residuals_scaled_rms": {
+    "mode3 FP64": [
+      [
+        2,
+        6.333396e-14
+      ],
+      [
+        3,
+        6.32138e-14
+      ],
+      [
+        4,
+        6.31731e-14
+      ]
+    ],
+    "mode4 FP64": [
+      [
+        2,
+        6.320018e-14
+      ],
+      [
+        3,
+        8.963654e-10
+      ],
+      [
+        4,
+        6.306488e-14
+      ]
+    ]
+  },
+  "grid": {
+    "nx": 40,
+    "ny": 80,
+    "nz": 64
+  },
+  "raw_W_scale_m_s": 0.00576469162479043,
+  "highband_W_scale_m_s": 0.0010740031536535092,
+  "difference_fields": "native U periodic duplicate removed; V both wall faces; W/PH bottom omitted; T and MU mass points",
+  "highband": "DCT-II orthonormal, retain k>=40 and invert to physical space",
+  "scope": "FP64 mode3/mode4; native RK3 matched input/t0; earlier FP64 mode3 compared separately; one-step only",
+  "field_units": {
+    "U": "m s-1",
+    "V": "m s-1",
+    "W": "m s-1",
+    "PH": "m2 s-2",
+    "T": "K",
+    "MU": "Pa"
+  },
+  "mode3_vs_earlier_fp64_native": {
+    "U": {
+      "exact_native_array_equal": true,
+      "native_rms_difference": 0.0,
+      "native_max_abs_difference": 0.0
+    },
+    "V": {
+      "exact_native_array_equal": true,
+      "native_rms_difference": 0.0,
+      "native_max_abs_difference": 0.0
+    },
+    "W": {
+      "exact_native_array_equal": true,
+      "native_rms_difference": 0.0,
+      "native_max_abs_difference": 0.0
+    },
+    "PH": {
+      "exact_native_array_equal": true,
+      "native_rms_difference": 0.0,
+      "native_max_abs_difference": 0.0
+    },
+    "T": {
+      "exact_native_array_equal": true,
+      "native_rms_difference": 0.0,
+      "native_max_abs_difference": 0.0
+    },
+    "MU": {
+      "exact_native_array_equal": true,
+      "native_rms_difference": 0.0,
+      "native_max_abs_difference": 0.0
+    }
+  },
+  "rows": [
+    {
+      "candidate": "mode3 FP64",
+      "reference": "RK3",
+      "field": "U",
+      "difference_rms": 0.00031484921884297165,
+      "difference_max_abs": 0.002048492431640625
+    },
+    {
+      "candidate": "mode3 FP64",
+      "reference": "RK3",
+      "field": "V",
+      "difference_rms": 0.00020319480634667535,
+      "difference_max_abs": 0.0013668779283761978
+    },
+    {
+      "candidate": "mode3 FP64",
+      "reference": "RK3",
+      "field": "W",
+      "difference_rms": 0.0006909942879025659,
+      "difference_max_abs": 0.0035210284404456615
+    },
+    {
+      "candidate": "mode3 FP64",
+      "reference": "RK3",
+      "field": "PH",
+      "difference_rms": 0.3963487147823269,
+      "difference_max_abs": 4.1317138671875
+    },
+    {
+      "candidate": "mode3 FP64",
+      "reference": "RK3",
+      "field": "T",
+      "difference_rms": 0.00029223435090725854,
+      "difference_max_abs": 0.004150390625
+    },
+    {
+      "candidate": "mode3 FP64",
+      "reference": "RK3",
+      "field": "MU",
+      "difference_rms": 0.31379463510573785,
+      "difference_max_abs": 1.4685750007629395
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "RK3",
+      "field": "U",
+      "difference_rms": 0.00032493842635558846,
+      "difference_max_abs": 0.00208282470703125
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "RK3",
+      "field": "V",
+      "difference_rms": 0.00020652987972135365,
+      "difference_max_abs": 0.0013607414439320564
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "RK3",
+      "field": "W",
+      "difference_rms": 0.0006863641902708998,
+      "difference_max_abs": 0.003450284479185939
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "RK3",
+      "field": "PH",
+      "difference_rms": 0.2677159086695966,
+      "difference_max_abs": 2.62298583984375
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "RK3",
+      "field": "T",
+      "difference_rms": 0.00027811231194631915,
+      "difference_max_abs": 0.003997802734375
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "RK3",
+      "field": "MU",
+      "difference_rms": 0.3117057925791845,
+      "difference_max_abs": 1.4566230773925781
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "mode3 FP64",
+      "field": "U",
+      "difference_rms": 1.4953539233617116e-05,
+      "difference_max_abs": 0.00014495849609375
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "mode3 FP64",
+      "field": "V",
+      "difference_rms": 4.2283152653348765e-05,
+      "difference_max_abs": 0.0002052709460258484
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "mode3 FP64",
+      "field": "W",
+      "difference_rms": 7.838774692417715e-05,
+      "difference_max_abs": 0.0007345734920818359
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "mode3 FP64",
+      "field": "PH",
+      "difference_rms": 0.15613095956940545,
+      "difference_max_abs": 1.51025390625
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "mode3 FP64",
+      "field": "T",
+      "difference_rms": 3.439143170638059e-05,
+      "difference_max_abs": 0.00018310546875
+    },
+    {
+      "candidate": "mode4 FP64",
+      "reference": "mode3 FP64",
+      "field": "MU",
+      "difference_rms": 0.006305469173114729,
+      "difference_max_abs": 0.026172280311584473
+    }
+  ],
+  "script_sha256": "a579c6bf57edb02b4385f35aabebb2403d6901fb12655c69c87f9a92f9ae3746"
+}

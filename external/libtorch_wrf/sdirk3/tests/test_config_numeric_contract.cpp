@@ -27,6 +27,7 @@ void clear_knobs() {
 
 void expect_throw(const char* name, const char* value) {
     using wrf::sdirk3::g_sdirk3_config;
+
     clear_knobs();
     g_sdirk3_config = wrf::sdirk3::SDIRK3Config{};
     setenv(name, value, 1);
@@ -71,6 +72,36 @@ void expect_invalid_direct(float& field, const char* name, float value) {
 int main() {
     using wrf::sdirk3::SDIRK3Config;
     using wrf::sdirk3::g_sdirk3_config;
+
+    // Mode 4 is opt-in and must survive each existing configuration route.
+    clear_knobs();
+    SDIRK3Config mode4_namelist;
+    mode4_namelist.load_from_namelist("sdirk3_imex_split_mode = 4\n");
+    if (mode4_namelist.imex_split_mode != 4 || !mode4_namelist.validate()) ++failures;
+    auto mode4_fp64 = mode4_namelist;
+    mode4_fp64.internal_fp64 = true;
+    if (!mode4_fp64.validate()) ++failures;
+    mode4_fp64.internal_fp64_state_carry = true;
+    if (!mode4_fp64.validate()) ++failures;
+    mode4_fp64.retain_graph_for_adjoint = true;
+    if (mode4_fp64.validate()) ++failures;
+    setenv("WRF_SDIRK3_IMEX_SPLIT_MODE", "4", 1);
+    SDIRK3Config mode4_env;
+    mode4_env.load_from_env();
+    if (mode4_env.imex_split_mode != 4 || !mode4_env.validate()) ++failures;
+    clear_knobs();
+    g_sdirk3_config = SDIRK3Config{};
+    wrf::sdirk3::wrf_sdirk3_set_config_int("imex_split_mode", 4);
+    if (g_sdirk3_config.imex_split_mode != 4 || !g_sdirk3_config.validate()) ++failures;
+    auto unsupported = mode4_namelist;
+    unsupported.hevi_split = true;
+    if (unsupported.validate()) ++failures;
+    unsupported = mode4_namelist;
+    unsupported.enable_ad_halo_exchange = true;
+    if (unsupported.validate()) ++failures;
+    unsupported = mode4_namelist;
+    unsupported.retain_graph_for_adjoint = true;
+    if (unsupported.validate()) ++failures;
 
     // Complete integer parsing rejects trailing junk, overflow, and empty text.
     const char* bad_ints[][2] = {
