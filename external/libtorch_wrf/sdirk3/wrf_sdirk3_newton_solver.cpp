@@ -91,8 +91,54 @@
 #include <cstdint>  // uint64_t, same reason
 #include <chrono>
 #include <cstdlib>  // PR 9F.9.1: std::getenv for the numerical-shadow gate
+#ifdef WRF_SDIRK3_PRESSURE_A4
+#ifndef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+#error "A4 requires the pressure stage observer"
+#endif
+#include <fstream>
+#endif
 
 namespace {
+#ifdef WRF_SDIRK3_PRESSURE_A4
+struct PressureA4Context {
+    int a_calls=0, m_wrapped_calls=0, m_physical_calls=0;
+    int capture_attempts=0, capture_count=0;
+    int a_depth=0, m_depth=0, physical_depth=0;
+    bool overlap=false, nesting=false, capture_failed=false;
+    double a_ms=0, m_wrapped_ms=0, m_physical_ms=0, capture_ms=0;
+    torch::Tensor v0, raw_w0;
+};
+thread_local PressureA4Context* pressure_a4_active = nullptr;
+struct PressureA4Scope {
+    PressureA4Context* previous;
+    PressureA4Context& context;
+    explicit PressureA4Scope(PressureA4Context& c, bool enabled) : previous(pressure_a4_active), context(c) {
+        if (enabled && previous) { context.nesting=true; return; }
+        if (enabled) pressure_a4_active=&context;
+    }
+    ~PressureA4Scope() noexcept { pressure_a4_active=previous; }
+};
+enum class PressureA4Kind { A, WrappedM, PhysicalM };
+struct PressureA4Timer {
+    PressureA4Context* ctx = pressure_a4_active;
+    PressureA4Kind kind;
+    std::chrono::steady_clock::time_point start;
+    explicit PressureA4Timer(PressureA4Kind k) : kind(k) {
+        if (!ctx) return;
+        if (k==PressureA4Kind::A) { ctx->overlap |= ctx->m_depth>0 || ctx->a_depth>0; ++ctx->a_depth; ++ctx->a_calls; }
+        else if (k==PressureA4Kind::WrappedM) { ctx->overlap |= ctx->a_depth>0 || ctx->m_depth>0; ++ctx->m_depth; ++ctx->m_wrapped_calls; }
+        else { ctx->overlap |= ctx->physical_depth>0 || ctx->m_depth!=1; ++ctx->physical_depth; ++ctx->m_physical_calls; }
+        start=std::chrono::steady_clock::now();
+    }
+    ~PressureA4Timer() noexcept {
+        if (!ctx) return;
+        const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+        if (kind==PressureA4Kind::A) { ctx->a_ms+=ms; --ctx->a_depth; }
+        else if (kind==PressureA4Kind::WrappedM) { ctx->m_wrapped_ms+=ms; --ctx->m_depth; }
+        else { ctx->m_physical_ms+=ms; --ctx->physical_depth; }
+    }
+};
+#endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
 // Same ordered, byte-exact preflight in both independently initialized flavors.
 // FNV is an identity check, not a substitute for external SHA/provenance pins.
@@ -3154,7 +3200,28 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // and capture the actual operator output the solve used.
             if (basis_capture) basis_capture->arnoldi_call_active = true;
             torch::Tensor w = A(v_precond);
-
+#ifdef WRF_SDIRK3_PRESSURE_A4
+            // Capture the actual first pair before weighting or orthogonalization.
+            if (pressure_a4_active && iter == 0 && j == 0 && !pressure_a4_active->v0.defined()) {
+                const auto capture_start=std::chrono::steady_clock::now();
+                ++pressure_a4_active->capture_attempts;
+                try {
+                    torch::NoGradGuard no_grad;
+                    TORCH_CHECK(V[0].is_cpu() && w.is_cpu() && V[0].scalar_type()==torch::kFloat64 &&
+                                w.scalar_type()==torch::kFloat64 && V[0].dim()==1 && w.sizes()==V[0].sizes(),
+                                "A4 requires matched CPU FP64 packed vectors");
+                    auto v_copy=V[0].detach().contiguous().clone();
+                    auto w_copy=w.detach().contiguous().clone();
+                    pressure_a4_active->v0=std::move(v_copy);
+                    pressure_a4_active->raw_w0=std::move(w_copy);
+                    ++pressure_a4_active->capture_count;
+                } catch (const std::bad_alloc&) { throw; }
+                  catch (const c10::OutOfMemoryError&) { throw; }
+                  catch (...) { pressure_a4_active->capture_failed=true; }
+                pressure_a4_active->capture_ms += std::chrono::duration<double,std::milli>(
+                    std::chrono::steady_clock::now()-capture_start).count();
+            }
+#endif
 
             // THE JUDGEMENT, from the triplet FGMRES already has.
             //
@@ -7515,7 +7582,22 @@ public:
                         std::cerr << "[PRECOND] Input residual norm: " << r_norm << std::endl;
                     }
 
+#ifdef WRF_SDIRK3_PRESSURE_A4
+                    auto Minv_r = [&]() -> torch::Tensor {
+                        PressureA4Timer timer(PressureA4Kind::PhysicalM);
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                        if (pressure_reference_active) {
+                            try { ++pressure_reference_calls; return pressure_reference->apply(r); }
+                            catch (const std::exception& error) {
+                                std::cerr << "[PRESSURE_REFERENCE_ERROR] " << error.what() << '\n';
+                                std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"apply_failed\"}\n";
+                                std::abort();
+                            }
+                        }
+#endif
+                        return preconditioner_->apply(r);
+                    }();
+#elif defined(WRF_SDIRK3_PRESSURE_REFERENCE_STAGE)
                     auto Minv_r = [&]() -> torch::Tensor {
                         if (!pressure_reference_active) return preconditioner_->apply(r);
                         try {
@@ -7989,6 +8071,24 @@ public:
                 gmres_op = apply_jacobian;
                 gmres_M_inv = M_inv;
             }
+
+#ifdef WRF_SDIRK3_PRESSURE_A4
+            // Wrappers are active only while the selected original solve owns TLS.
+            if (pressure_capture_here) {
+                auto original_A = gmres_op;
+                gmres_op = [original_A](const torch::Tensor& v) {
+                    PressureA4Timer timer(PressureA4Kind::A);
+                    return original_A(v);
+                };
+                if (gmres_M_inv) {
+                    auto original_M = gmres_M_inv;
+                    gmres_M_inv = [original_M](const torch::Tensor& v) {
+                        PressureA4Timer timer(PressureA4Kind::WrappedM);
+                        return original_M(v);
+                    };
+                }
+            }
+#endif
 
             // v20.14: DEFECT-CORRECTION PRECONDITIONER REFINEMENT
             // Wraps gmres_M_inv with iterative defect correction:
@@ -8837,6 +8937,9 @@ public:
                     const bool eligible = !options_.reuse_linearization && use_autograd_jvp &&
                         gmres_M_inv && raw && layout_initialized_ && !halo_mask_initialized_ &&
                         pressure_refinement == 1 && !pressure_apinv_probe && !jvp_check_this_iter &&
+#ifdef WRF_SDIRK3_PRESSURE_A4
+                        wrf::sdirk3::g_sdirk3_config.gmres_block_scale == 0 &&
+#endif
                         pressure_eos_context.captured && !pressure_eos_context.failed &&
                         !pressure_eos_context.duplicate;
                     if (!eligible) {
@@ -8983,6 +9086,9 @@ public:
                 // identity lock / warn_only / defect toggling) and standard GMRES's
                 // M_inv(sum yV) reconstruction is then inconsistent with the Arnoldi
                 // Hessenberg. Unpreconditioned solves keep solve_gmres bit-for-bit.
+#ifdef WRF_SDIRK3_PRESSURE_A4
+                PressureA4Context pressure_a4;
+#endif
                 auto gmres_result = [&]() {
                     std::unique_ptr<wrf::sdirk3::PreparedJvp> prepared;
                     rhs_interleaved = false;
@@ -9056,6 +9162,9 @@ public:
                         ~PressureReferenceScope() noexcept { active = false; }
                     } pressure_scope(pressure_reference_active,
                                      pressure_capture_here && pressure_reference != nullptr);
+#endif
+#ifdef WRF_SDIRK3_PRESSURE_A4
+                    PressureA4Scope pressure_a4_scope(pressure_a4, pressure_capture_here && pressure_preflight_ok);
 #endif
                     auto result = gmres_M_inv
                     ? krylov_methods::solve_fgmres(
@@ -9209,6 +9318,107 @@ public:
 #endif
                               << "}";
                     std::cerr << linear_receipt.str() << '\n';
+#ifdef WRF_SDIRK3_PRESSURE_A4
+                    // The interval is closed: reductions and serialization below
+                    // are excluded; the Arnoldi snapshot clones remain included.
+                    const bool pair_ready = !pressure_a4.capture_failed && !pressure_a4.nesting &&
+                        pressure_a4.capture_attempts==1 && pressure_a4.capture_count==1 &&
+                        pressure_a4.v0.defined() && pressure_a4.raw_w0.defined() &&
+                        pressure_a4.v0.numel()==cached_layout_.total_size &&
+                        pressure_a4.raw_w0.sizes()==pressure_a4.v0.sizes() &&
+                        metric == static_cast<int>(wrf::sdirk3::KrylovStoppingMetric::IdentityS);
+                    bool wrote_pair=false, finite_pair=false;
+                    std::ostringstream blocks;
+                    blocks << std::setprecision(17) << "[";
+                    if (pair_ready) {
+                        try {
+                            const auto v=pressure_a4.v0;
+                            const auto w=pressure_a4.raw_w0;
+                            const auto vp=(scaling_initialized_ ? S_diag_*v : v).contiguous();
+                            const auto wp=(scaling_initialized_ ? S_diag_*w : w).contiguous();
+                            finite_pair=torch::isfinite(vp).all().item<bool>() &&
+                                        torch::isfinite(wp).all().item<bool>();
+                            if (finite_pair) {
+                                const uint16_t endian_probe=1;
+                                const bool little=*reinterpret_cast<const unsigned char*>(&endian_probe)==1;
+                                if (little) {
+                                    std::ofstream out("pressure_a4_first_pair.bin", std::ios::binary|std::ios::trunc);
+                                    const char magic[8]={'S','D','I','R','K','A','4','1'};
+                                    const uint64_t n=static_cast<uint64_t>(vp.numel());
+                                    out.write(magic,sizeof(magic));
+                                    out.write(reinterpret_cast<const char*>(&n),sizeof(n));
+                                    out.write(reinterpret_cast<const char*>(vp.const_data_ptr<double>()),n*sizeof(double));
+                                    out.write(reinterpret_cast<const char*>(wp.const_data_ptr<double>()),n*sizeof(double));
+                                    out.flush(); wrote_pair=out.good();
+                                }
+                                bool first=true;
+                                for (const auto& block : cached_layout_.blocks) {
+                                    const auto vs=v.slice(0,block.start,block.start+block.size);
+                                    const auto ws=w.slice(0,block.start,block.start+block.size);
+                                    const auto vq=vp.slice(0,block.start,block.start+block.size);
+                                    const auto wq=wp.slice(0,block.start,block.start+block.size);
+                                    const double vsn=vs.norm().item<double>(), wsn=ws.norm().item<double>();
+                                    const double dsn=(ws-vs).norm().item<double>();
+                                    const double vn=vq.norm().item<double>(), wn=wq.norm().item<double>();
+                                    const double dn=(wq-vq).norm().item<double>();
+                                    const double cosine=(vn>0 && wn>0) ? vq.dot(wq).item<double>()/(vn*wn) : -1;
+                                    if (!first) blocks << ","; first=false;
+                                    blocks << "{\"name\":\"" << block.name << "\",\"start\":" << block.start
+                                           << ",\"size\":" << block.size
+                                           << ",\"v_scaled_l2\":" << safe_number(vsn)
+                                           << ",\"w_scaled_l2\":" << safe_number(wsn)
+                                           << ",\"defect_scaled_l2\":" << safe_number(dsn)
+                                           << ",\"v_physical_l2\":" << safe_number(vn)
+                                           << ",\"w_physical_l2\":" << safe_number(wn)
+                                           << ",\"defect_physical_l2\":" << safe_number(dn)
+                                           << ",\"amplitude_ratio_physical\":" << safe_number(vn>0 ? wn/vn : -1)
+                                           << ",\"cos_physical\":" << safe_number(cosine) << "}";
+                                }
+                            }
+                        } catch (const std::bad_alloc&) { throw; }
+                          catch (const c10::OutOfMemoryError&) { throw; }
+                          catch (...) { pressure_a4.capture_failed=true; }
+                    }
+                    blocks << "]";
+                    const double remainder=linear_ms-pressure_a4.a_ms-pressure_a4.m_wrapped_ms;
+                    const bool timing_ok=!pressure_a4.overlap && !pressure_a4.nesting &&
+                        pressure_a4.a_depth==0 && pressure_a4.m_depth==0 && pressure_a4.physical_depth==0 &&
+                        std::isfinite(remainder) && remainder>=0 && pressure_a4.a_calls>0 &&
+                        pressure_a4.m_wrapped_calls>0 && pressure_a4.m_physical_calls>0 &&
+                        pressure_a4.m_physical_ms<=pressure_a4.m_wrapped_ms;
+                    PressurePreflightHash scale_hash;
+                    try { scale_hash.tensor(scaling_initialized_ ? S_diag_ : torch::Tensor()); }
+                    catch (const std::bad_alloc&) { throw; }
+                    catch (const c10::OutOfMemoryError&) { throw; }
+                    catch (...) { pressure_a4.capture_failed=true; }
+                    const bool a4_eligible=comparison_eligible && pair_ready && finite_pair && wrote_pair &&
+                        !pressure_a4.capture_failed && timing_ok;
+                    std::ostringstream a4;
+                    a4 << std::setprecision(17)
+                       << "[PRESSURE_A4] {\"eligible\":" << (a4_eligible ? "true" : "false")
+                       << ",\"capture\":\"fgmres_restart0_arnoldi0_raw_A_M_v_before_D_and_orthogonalization\""
+                       << ",\"pair_file\":\"pressure_a4_first_pair.bin\",\"pair_written\":"
+                       << (wrote_pair ? "true" : "false")
+                       << ",\"pair_format\":\"SDIRKA41,u64le_numel,physical_v_f64le,physical_w_f64le\""
+                       << ",\"physical_transform\":\"S_times_scaled_krylov_vectors\""
+                       << ",\"S_fnv64\":\"" << std::hex << scale_hash.value << "\"" << std::dec
+                       << ",\"full_scaled_A_calls\":" << pressure_a4.a_calls
+                       << ",\"full_scaled_A_ms\":" << safe_number(pressure_a4.a_ms)
+                       << ",\"wrapped_M_calls\":" << pressure_a4.m_wrapped_calls
+                       << ",\"wrapped_M_ms\":" << safe_number(pressure_a4.m_wrapped_ms)
+                       << ",\"physical_M_calls\":" << pressure_a4.m_physical_calls
+                       << ",\"physical_M_ms_nested\":" << safe_number(pressure_a4.m_physical_ms)
+                       << ",\"linear_remainder_ms\":" << safe_number(remainder)
+                       << ",\"capture_clone_ms_included\":" << safe_number(pressure_a4.capture_ms)
+                       << ",\"capture_attempts\":" << pressure_a4.capture_attempts
+                       << ",\"capture_count\":" << pressure_a4.capture_count
+                       << ",\"block_scope\":\"full_packed_block_not_owned_core\""
+                       << ",\"timer_overlap\":" << (pressure_a4.overlap ? "true" : "false")
+                       << ",\"nested_scope\":" << (pressure_a4.nesting ? "true" : "false")
+                       << ",\"capture_failed\":" << (pressure_a4.capture_failed ? "true" : "false")
+                       << ",\"blocks\":" << blocks.str() << "}";
+                    std::cerr << a4.str() << '\n';
+#endif
                 }
                 // Frozen observation only: the original Krylov solve and its local
                 // prepared graph have both completed. No production M wrapper is called.
