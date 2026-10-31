@@ -1,0 +1,100 @@
+{
+  "scope": "preregistered four-case instrumented first Newton point only; no model/forecast-speed claim, no adoption and no automatic Gate B",
+  "source_commit": "b0be4a94578739db91c77ee4d80dcc739483e03c",
+  "registration_sha256": "a5a6e2c3b8143aac70e48e0084c5bdebad03455df599f0ca6230acfc081215b7",
+  "case_order": [
+    "A0",
+    "B0",
+    "B1",
+    "A1"
+  ],
+  "attempts": 4,
+  "retry": false,
+  "all_case_gates_passed": true,
+  "old_performance_A2_remains_failed_timing": true,
+  "same_context_preflight_digest_fnv64": "7bdd17f3a694726e",
+  "identity_scope": "bounded_captured_inputs_not_all_transitive_state",
+  "first_point_ratio_A0_over_B0": 1.2825010589286105,
+  "first_point_ratio_A1_over_B1": 1.2212824928502146,
+  "median_of_two_ratios": 1.2518917758894126,
+  "registered_threshold_each_and_median": 2,
+  "decision": "NO-GO",
+  "promote": false,
+  "gate_B": false,
+  "timing_accounting": "Within each linear interval: scaled A + wrapped M + remainder. Physical M is nested in wrapped M. First-solve JVP summary is nested in scaled A; whole-step JVP summary spans six solves. Do not add nested times again. First-point interval also includes base/preflight/setup and clone.",
+  "snapshot_clone_rule": "clone remains included in interval; all fractions <=1%, no subtraction",
+  "snapshot_identity": {
+    "all_four_physical_v0_byte_equal": true,
+    "A0_A1_full_pair_byte_equal": true,
+    "B0_B1_full_pair_byte_equal": true,
+    "canonical_A": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/pressure_a4_first_pair.bin",
+    "canonical_B": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B0/pressure_a4_first_pair.bin",
+    "A_pair_sha256": "cf2f62183cefe1968ce71a5f2f1753a90b790dbf63e59b262a8a4a3d1678d3e0",
+    "B_pair_sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+    "no_snapshot_modified": true
+  },
+  "pins_and_receipts": {
+    "A0": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/A0_pins.json",
+      "sha256": "691cb5d1bd94fc7e0d404d2cb06c83a1e3d15754d0f88168d58383608f759264",
+      "verified_paths": 165,
+      "intent_sha256": "598936d79339d7a02b46a4add6173744ae66ffd473e2bb7cceb9badc64bb2fde",
+      "result_sha256": "830369070c3bbcc495ba11b0bb46ce98d77a3a8db6cd6721a9e03b7fd52dc891",
+      "attempt_sha256": "d9c864741f7d2c49165e97bed343846e8024bc6379dc7803b1e1279f552de816",
+      "executable_sha256": "2f8d66e6b04ea411670710e249023518bda7bb63980041ba249f73fe5cbd77b9",
+      "pair_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/pressure_a4_first_pair.bin",
+      "pair_bytes": 17287872,
+      "pair_sha256": "cf2f62183cefe1968ce71a5f2f1753a90b790dbf63e59b262a8a4a3d1678d3e0",
+      "v0_sha256": "2f6fbc92002744dfafd56055ae85f7bb60651eb488dd3011dabef3ea330eb70d"
+    },
+    "B0": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/B0_pins.json",
+      "sha256": "62097eb2deb9bd3898b0fe321d54404d9e63bf72cd91595137b7ad52ebe7557b",
+      "verified_paths": 180,
+      "intent_sha256": "9bc74dd4b514129ae103bac6b3a38cb154aca20b8356479ef778798427cab0ab",
+      "result_sha256": "dcd43acd1d4ddf4593539604b1ee52d79a9e443e7781ba9c0311dfbe4badbe5c",
+      "attempt_sha256": "02a64542f3797f2efb9e345fda683ab6a22b416d716ccd2f26a6b239a15e96c3",
+      "executable_sha256": "2289132504ece3b3f6c897834b71f100f14f36c406b925b12b76cfcba07633d0",
+      "pair_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B0/pressure_a4_first_pair.bin",
+      "pair_bytes": 17287872,
+      "pair_sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "v0_sha256": "2f6fbc92002744dfafd56055ae85f7bb60651eb488dd3011dabef3ea330eb70d"
+    },
+    "B1": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/B1_pins.json",
+      "sha256": "fd14e68548747f3fc468bbeeea29d3fa9a66d9a50863db8e8c72b38a46d2e58d",
+      "verified_paths": 197,
+      "intent_sha256": "db95f4890bed53c5c9568856fc5dc101314d7a3a67bcf00e51121b6664d515d3",
+      "result_sha256": "5018f95391d475761ca8720c5b3645e2227787249104ba3dfe10e112c17e4804",
+      "attempt_sha256": "656ff0cc31c178825e63bb5375eaa40912fc9256b41e51caab410b52f0a4dc81",
+      "executable_sha256": "2289132504ece3b3f6c897834b71f100f14f36c406b925b12b76cfcba07633d0",
+      "pair_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B1/pressure_a4_first_pair.bin",
+      "pair_bytes": 17287872,
+      "pair_sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "v0_sha256": "2f6fbc92002744dfafd56055ae85f7bb60651eb488dd3011dabef3ea330eb70d"
+    },
+    "A1": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/A1_pins.json",
+      "sha256": "34692063a8a52f61417a0113576a44df5a4161cec9a44147193a283f20bfa6d8",
+      "verified_paths": 214,
+      "intent_sha256": "5d787bd7dc3f1a56049c257c876d5939f6b120f3d84393ab83061b489811d0d3",
+      "result_sha256": "3cbae53f8ee80ea95394e867848530293f07930331ed7f40c13e67438ca067a8",
+      "attempt_sha256": "635543f041efd47fbbe530696afb011217c717584a0bce34452779c3110cc9a6",
+      "executable_sha256": "2f8d66e6b04ea411670710e249023518bda7bb63980041ba249f73fe5cbd77b9",
+      "pair_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A1/pressure_a4_first_pair.bin",
+      "pair_bytes": 17287872,
+      "pair_sha256": "cf2f62183cefe1968ce71a5f2f1753a90b790dbf63e59b262a8a4a3d1678d3e0",
+      "v0_sha256": "2f6fbc92002744dfafd56055ae85f7bb60651eb488dd3011dabef3ea330eb70d"
+    }
+  },
+  "raw_log_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/rsl.error.0000": "2d4c4df8363f54b8ddab4cfb48dba8a2878f2f0048a38a7207cb40192553a791",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B0/rsl.error.0000": "281f3a8b60d188a77616a77a014b383c1daa04c5ee6fa2b824eb90a7a3c025aa",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B1/rsl.error.0000": "e0f8d9803120f08524731af9be2645ad346a716c59c262e69cb85832289eef98",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A1/rsl.error.0000": "73b4835d2de4cb52f2a5f95558a22bdf29f6002b35e3e904e5cbfb9836a92773"
+  },
+  "cost_csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_analysis/first_point_cost.csv",
+  "cost_csv_sha256": "6edd35c3f2539c367c6cdba5c8033d96ab3c49d7625ed80b9eefe59bd3611ae0",
+  "new_model_run": false,
+  "created_local": "2026-10-31T22:39:13+0900"
+}

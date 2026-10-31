@@ -1,0 +1,15 @@
+{
+  "time_local": "2026-10-31T22:11:02.943375+09:00",
+  "main_before": "b364b0e08b12e9a290dfe68b374c033b292991fe",
+  "source_329_merge": "51ee1e6b810aca0dd7a16a2b82b51a6e0e31a6f0",
+  "integration_commit": "580a5f0c18258dd4fc843e2f6d5e8678af49b77c",
+  "tree_identical_to_329_merge": true,
+  "pressure_graph_18_source_pins_match": true,
+  "model_run": false,
+  "numerical_change_relative_to_reviewed_tree": false,
+  "main_after": "ed18858887846cdb2afa28cbc6b465f12b73d270",
+  "main_tree_exactly_matches_reviewed_merge": true,
+  "integration_pr": 330,
+  "main_pressure18_git_blob_hashes_match": true,
+  "verified_local": "2026-10-31T22:23:40.632879+09:00"
+}

@@ -1,0 +1,352 @@
+{
+  "case": "A0",
+  "source_commit": "b0be4a94578739db91c77ee4d80dcc739483e03c",
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+  "status": "completed",
+  "a4_eligible": true,
+  "model_completed": true,
+  "failure_class": null,
+  "failure_reason": null,
+  "executable_sha256": "2f8d66e6b04ea411670710e249023518bda7bb63980041ba249f73fe5cbd77b9",
+  "thread_count_actual": "not independently measured",
+  "rss_scope": "postrun rank maxrss; excludes launcher",
+  "cost_scope": "instrumented first Newton point only",
+  "return_code": 0,
+  "command": [
+    "/opt/homebrew/bin/mpirun",
+    "--timeout",
+    "360",
+    "--report-state-on-timeout",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/rank_rusage.log",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/A0/wrf.exe"
+  ],
+  "monotonic_elapsed_seconds": 39.47138625010848,
+  "wall_elapsed_seconds": 39.470980167388916,
+  "environment_overrides": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+    "WRF_SDIRK3_EW_ETA_INITIAL": "0.1",
+    "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0"
+  },
+  "clock_gap_seconds": -0.00040608271956443787,
+  "steps": 1,
+  "stage_residuals": [
+    "[Newton] CONVERGED stage=2 iters=3 ||S\u207b\u00b9R||_rms=6.333396e-14 [scaled-RMS] (||R||=6.583852e-11 [unscaled-L2])",
+    "[Newton] CONVERGED stage=3 iters=3 ||S\u207b\u00b9R||_rms=6.321380e-14 [scaled-RMS] (||R||=6.571196e-11 [unscaled-L2])",
+    "[Newton] CONVERGED stage=4 iters=3 ||S\u207b\u00b9R||_rms=6.317310e-14 [scaled-RMS] (||R||=6.566998e-11 [unscaled-L2])"
+  ],
+  "wrapper_rows": [
+    [
+      3,
+      0
+    ]
+  ],
+  "rank_peak_rss_bytes": 2026192896,
+  "stage_residual_scaled_rms": {
+    "2": 6.333396e-14,
+    "3": 6.32138e-14,
+    "4": 6.31731e-14
+  },
+  "output_check": {
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "physical_minima_over_all_frames": {
+      "total_theta_K": 258.83935546875,
+      "total_mu_Pa": 89072.1247472763,
+      "layer_depth_m_from_PH_plus_PHB_over_g": 215.13885902459225,
+      "g_m_s2": 9.81
+    },
+    "physical_minimum_total_pressure_Pa": 11079.84334230423,
+    "timestamps": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:10:00"
+    ],
+    "step_logs": {
+      "rsl_main_step_count": 1,
+      "rsl_main_step_sum_seconds": 37.52396,
+      "rsl_main_step_seconds": [
+        37.52396
+      ],
+      "converged_newton_stage_count": 3,
+      "newton_iterations_sum": 9,
+      "rsl_timing_files": {
+        "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/rsl.out.0000",
+        "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/rsl.error.0000"
+      },
+      "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+    }
+  },
+  "t0_gate": {
+    "status": "passed",
+    "reference_label": "rk3",
+    "labels": [
+      "rk3",
+      "A0"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "preflight": {
+    "status": "ok",
+    "digest_fnv64": "7bdd17f3a694726e",
+    "state_fnv64": "bfc3393acc9791c0",
+    "F_fnv64": "ff7fe0162403c3c0",
+    "K_fnv64": "5d065c0f7df71aa0",
+    "b_fnv64": "beebab996c9f810b",
+    "x0_fnv64": "fdf60492df066d12",
+    "S_fnv64": "73dac3183f782879",
+    "Sinv_fnv64": "70e824aa5bce8528",
+    "mask_fnv64": "af63bd4c8601b7df",
+    "eos_fnv64": "d53e209fb0d78407",
+    "geometry_fnv64": "9e59543442ce1b6f",
+    "raw_grid_fnv64": "a358e8986d95c6c1",
+    "raw_column_0_0_fnv64": "d9b832053aa30223",
+    "raw_full_fnv64": "d88d4c145bbc2d91",
+    "restart": 30,
+    "max_restarts": 50,
+    "tolerance": 1.0000000116860974e-07,
+    "periodic_x": 1,
+    "periodic_y": 0,
+    "scaling": 1,
+    "mask": 0,
+    "block_scale_requested": 0,
+    "refinement_passes": 1,
+    "apinv_probe": 0,
+    "jvp_probe": 0,
+    "identity_scope": "bounded_captured_inputs_not_all_transitive_state",
+    "preflight_ms": 113.105791
+  },
+  "linear": {
+    "flavor": "native_raw",
+    "comparison_eligible": true,
+    "preflight_ms": 113.105791,
+    "setup_ms": 0,
+    "linear_with_native_truecheck_ms": 3997.89525,
+    "interval_from_newton_entry_ms": 4182.134583,
+    "iterations": 29,
+    "restarts": 1,
+    "restart_budget": 30,
+    "max_restarts": 50,
+    "tolerance_applied": 1.0000000116860974e-07,
+    "stopping_metric": 1,
+    "stopping_metric_name": "unweighted_scaled_L2",
+    "stopping_relative_norm": 1.6527321733406097e-08,
+    "scaled_relative_norm": 1.6527321733406097e-08,
+    "residual_provenance": "saved_native_checked_raw_not_independent",
+    "saved_native_scaled_residual_norm": 3.3298265349827417e-07,
+    "saved_native_physical_residual_norm": 1.163601657929733e-06,
+    "scaled_rhs_norm": 20.14740542763099,
+    "physical_rhs_norm": 312.3019131227635,
+    "mask_active": false,
+    "refinement_passes": 1,
+    "apinv_probe": false,
+    "jvp_probe": false,
+    "jvp_fd_fallbacks": 0,
+    "success": true,
+    "preconditioner_calls": 29,
+    "guard_events": 0
+  },
+  "a4": {
+    "eligible": true,
+    "capture": "fgmres_restart0_arnoldi0_raw_A_M_v_before_D_and_orthogonalization",
+    "pair_file": "pressure_a4_first_pair.bin",
+    "pair_written": true,
+    "pair_format": "SDIRKA41,u64le_numel,physical_v_f64le,physical_w_f64le",
+    "physical_transform": "S_times_scaled_krylov_vectors",
+    "S_fnv64": "73dac3183f782879",
+    "full_scaled_A_calls": 32,
+    "full_scaled_A_ms": 2824.1093769999998,
+    "wrapped_M_calls": 29,
+    "wrapped_M_ms": 257.816208,
+    "physical_M_calls": 29,
+    "physical_M_ms_nested": 205.23895400000006,
+    "linear_remainder_ms": 915.9696650000003,
+    "capture_clone_ms_included": 0.647542,
+    "capture_attempts": 1,
+    "capture_count": 1,
+    "block_scope": "full_packed_block_not_owned_core",
+    "timer_overlap": false,
+    "nested_scope": false,
+    "capture_failed": false,
+    "blocks": [
+      {
+        "name": "ru",
+        "start": 0,
+        "size": 217728,
+        "v_scaled_l2": 7.449424427716914e-05,
+        "w_scaled_l2": 0.00012672187564664555,
+        "defect_scaled_l2": 6.083762063290695e-05,
+        "v_physical_l2": 7.449424427716914e-05,
+        "w_physical_l2": 0.00012672187564664555,
+        "defect_physical_l2": 6.083762063290695e-05,
+        "amplitude_ratio_physical": 1.7010961971122787,
+        "cos_physical": 0.9484382726405941
+      },
+      {
+        "name": "rv",
+        "start": 217728,
+        "size": 215168,
+        "v_scaled_l2": 0.00012888896089206222,
+        "w_scaled_l2": 0.0002570274852669677,
+        "defect_scaled_l2": 0.00015334868516300346,
+        "v_physical_l2": 0.00012888896089206222,
+        "w_physical_l2": 0.0002570274852669677,
+        "defect_physical_l2": 0.00015334868516300346,
+        "amplitude_ratio_physical": 1.994177650964343,
+        "cos_physical": 0.8928951848166725
+      },
+      {
+        "name": "rw",
+        "start": 432896,
+        "size": 215865,
+        "v_scaled_l2": 0.025568219723538954,
+        "w_scaled_l2": 0.033981672018858135,
+        "defect_scaled_l2": 0.022383608595320167,
+        "v_physical_l2": 0.025568219723538954,
+        "w_physical_l2": 0.033981672018858135,
+        "defect_physical_l2": 0.022383608595320167,
+        "amplitude_ratio_physical": 1.329058979713534,
+        "cos_physical": 0.7524087414544384
+      },
+      {
+        "name": "ph",
+        "start": 648761,
+        "size": 215865,
+        "v_scaled_l2": 0.999609910961963,
+        "w_scaled_l2": 0.9996107474600119,
+        "defect_scaled_l2": 0.000247643104849218,
+        "v_physical_l2": 15.50082502287768,
+        "w_physical_l2": 15.500837994347691,
+        "defect_physical_l2": 0.0038401704447847346,
+        "amplitude_ratio_physical": 1.000000836824491,
+        "cos_physical": 0.9999999693129067
+      },
+      {
+        "name": "t",
+        "start": 864626,
+        "size": 212544,
+        "v_scaled_l2": 6.201550577608807e-05,
+        "w_scaled_l2": 6.203692510884832e-05,
+        "defect_scaled_l2": 1.6272818160207582e-06,
+        "v_physical_l2": 6.201550577608807e-05,
+        "w_physical_l2": 6.203692510884832e-05,
+        "defect_physical_l2": 1.6272818160207582e-06,
+        "amplitude_ratio_physical": 1.0003453867301766,
+        "cos_physical": 0.9996559118285193
+      },
+      {
+        "name": "mu",
+        "start": 1077170,
+        "size": 3321,
+        "v_scaled_l2": 0.011236816256539254,
+        "w_scaled_l2": 0.01124061528264946,
+        "defect_scaled_l2": 0.0002923877367903156,
+        "v_physical_l2": 0.011236816256539254,
+        "w_physical_l2": 0.01124061528264946,
+        "defect_physical_l2": 0.0002923877367903156,
+        "amplitude_ratio_physical": 1.0003380874104795,
+        "cos_physical": 0.9996616379682897
+      }
+    ]
+  },
+  "capture_fraction": 0.00015483528498394094,
+  "pair": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/pressure_a4_first_pair.bin",
+    "file_sha256": "cf2f62183cefe1968ce71a5f2f1753a90b790dbf63e59b262a8a4a3d1678d3e0",
+    "numel": 1080491,
+    "v_sha256": "2f6fbc92002744dfafd56055ae85f7bb60651eb488dd3011dabef3ea330eb70d",
+    "w_sha256": "544b177659b2d2d87f90a91ae163414c93f5d564c7f562f10957b823cb59f383"
+  },
+  "existing_jvp_summaries": {
+    "first_linear_solve": {
+      "calls": 32,
+      "time_ms": 2791.09
+    },
+    "whole_step_records": [
+      {
+        "calls": 32,
+        "time_ms": 2791.09
+      },
+      {
+        "calls": 48,
+        "time_ms": 4046.13
+      },
+      {
+        "calls": 32,
+        "time_ms": 2712.41
+      },
+      {
+        "calls": 48,
+        "time_ms": 4058.0
+      },
+      {
+        "calls": 32,
+        "time_ms": 2817.92
+      },
+      {
+        "calls": 48,
+        "time_ms": 8223.71
+      }
+    ],
+    "whole_step_calls_sum": 240,
+    "whole_step_jvp_time_ms_sum": 24649.26,
+    "scope": "existing JVP summaries: first-solve JVP is nested in first-point scaled A; whole-step sum spans six solves. Never add either to A time; JVP counts need not equal A calls"
+  },
+  "off_parity": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/A0/wrf.exe",
+  "disk_free_end": 35372777472,
+  "postrun_disk_floor_met": true
+}

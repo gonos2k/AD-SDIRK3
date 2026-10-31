@@ -1,0 +1,62 @@
+{
+  "case": "A1",
+  "source_commit": "b0be4a94578739db91c77ee4d80dcc739483e03c",
+  "registration": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_registration.json",
+    "sha256": "a5a6e2c3b8143aac70e48e0084c5bdebad03455df599f0ca6230acfc081215b7"
+  },
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/A0/build_receipt.json",
+    "sha256": "e196a7793b64398657e519fbcaa71d193f090686a2085f463d3d753ae7e886a1"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/A0/wrf.exe",
+    "sha256": "2f8d66e6b04ea411670710e249023518bda7bb63980041ba249f73fe5cbd77b9"
+  },
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+  "be661_off_endpoint": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/runs/OFF/wrfout_d01_0001-01-01_00:10:00",
+    "sha256": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af"
+  },
+  "reference_rk3_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "case_attempt_limit": 1,
+  "block_attempt_limit": 4,
+  "retry": false,
+  "cost_scope": "instrumented first-point only; no claim without all registered gates",
+  "B0_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B0/result.json",
+    "sha256": "dcd43acd1d4ddf4593539604b1ee52d79a9e443e7781ba9c0311dfbe4badbe5c"
+  },
+  "B1_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B1/result.json",
+    "sha256": "5018f95391d475761ca8720c5b3645e2227787249104ba3dfe10e112c17e4804"
+  }
+}

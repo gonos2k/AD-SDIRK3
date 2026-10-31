@@ -1,0 +1,10 @@
+{
+  "scope": "one captured first direction; not a long-term noise explanation",
+  "source_receipt_sha256": "23e1ec8f60d51d97ab1fa0a66f4f65d301b918c1880fd7202df9d0279b6ba778",
+  "source_A1_result_sha256": "3cbae53f8ee80ea95394e867848530293f07930331ed7f40c13e67438ca067a8",
+  "script_sha256": "1fd72165588e2508f277410b27e033b84ad84ba0161ab684c48549a99995f156",
+  "plot_sha256": "017f341224ec27b0efc4bacb90340d0b70bf19f9dedfad4235bb6e7030d0f8f8",
+  "W_native_k": "1..64, bottom excluded and dynamic top included",
+  "V_T_native_k": "0..63 mass levels",
+  "metric": "physical rate-coordinate XY RMS separately for each staggered component; no mixed-unit energy"
+}
