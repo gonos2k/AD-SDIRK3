@@ -34,3 +34,4 @@ wrf_sdirk3_reference_pressure.cpp
 wrf_sdirk3_reference_pressure_model.cpp
 wrf_sdirk3_pressure_packed_adapter.cpp
 wrf_sdirk3_native_pressure_reference.cpp
+wrf_sdirk3_v_primary_probe.cpp

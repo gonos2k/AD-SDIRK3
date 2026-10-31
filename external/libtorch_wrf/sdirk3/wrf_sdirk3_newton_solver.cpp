@@ -73,6 +73,9 @@
 #include "wrf_sdirk3_native_pressure_reference.h"
 #include "wrf_sdirk3_pressure_reference_expected.h"
 #endif
+#ifdef WRF_SDIRK3_PRESSURE_A5
+#include "wrf_sdirk3_v_primary_probe.h"
+#endif
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
 #include <iostream>
@@ -91,6 +94,9 @@
 #include <cstdint>  // uint64_t, same reason
 #include <chrono>
 #include <cstdlib>  // PR 9F.9.1: std::getenv for the numerical-shadow gate
+#if defined(WRF_SDIRK3_PRESSURE_A5) && (!defined(WRF_SDIRK3_PRESSURE_A4) || !defined(WRF_SDIRK3_PRESSURE_STAGE_PROBE) || !defined(WRF_SDIRK3_PRESSURE_REFERENCE_STAGE))
+#error "A5 requires the A4, pressure stage and reference-stage research macros"
+#endif
 #ifdef WRF_SDIRK3_PRESSURE_A4
 #ifndef WRF_SDIRK3_PRESSURE_STAGE_PROBE
 #error "A4 requires the pressure stage observer"
@@ -107,6 +113,12 @@ struct PressureA4Context {
     bool overlap=false, nesting=false, capture_failed=false;
     double a_ms=0, m_wrapped_ms=0, m_physical_ms=0, capture_ms=0;
     torch::Tensor v0, raw_w0;
+#ifdef WRF_SDIRK3_PRESSURE_A5
+    torch::Tensor z0;
+    int z_capture_attempts=0, z_capture_count=0;
+    bool z_capture_failed=false;
+    double z_capture_ms=0;
+#endif
 };
 thread_local PressureA4Context* pressure_a4_active = nullptr;
 struct PressureA4Scope {
@@ -3199,6 +3211,27 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // operator application (probe/true-residual A calls stay dark),
             // and capture the actual operator output the solve used.
             if (basis_capture) basis_capture->arnoldi_call_active = true;
+#ifdef WRF_SDIRK3_PRESSURE_A5
+            // Capture the exact preconditioned vector before A can touch it.
+            if (pressure_a4_active && iter == 0 && j == 0 && pressure_a4_active->z_capture_attempts == 0) {
+                const auto z_start=std::chrono::steady_clock::now();
+                ++pressure_a4_active->z_capture_attempts;
+                try {
+                    torch::NoGradGuard no_grad;
+                    TORCH_CHECK(v_precond.is_cpu() && v_precond.scalar_type()==torch::kFloat64 &&
+                                v_precond.dim()==1 && v_precond.sizes()==V[0].sizes(),
+                                "A5 requires matched CPU FP64 packed z");
+                    auto z_copy=v_precond.detach().contiguous().clone();
+                    pressure_a4_active->z0=std::move(z_copy);
+                    ++pressure_a4_active->z_capture_count;
+                } catch (const std::bad_alloc&) { throw; }
+                  catch (const c10::OutOfMemoryError&) { throw; }
+                  catch (...) { pressure_a4_active->z_capture_failed=true; }
+                pressure_a4_active->z_capture_ms=std::chrono::duration<double,std::milli>(
+                    std::chrono::steady_clock::now()-z_start).count();
+                pressure_a4_active->capture_ms+=pressure_a4_active->z_capture_ms;
+            }
+#endif
             torch::Tensor w = A(v_precond);
 #ifdef WRF_SDIRK3_PRESSURE_A4
             // Capture the actual first pair before weighting or orthogonalization.
@@ -9418,6 +9451,35 @@ public:
                        << ",\"capture_failed\":" << (pressure_a4.capture_failed ? "true" : "false")
                        << ",\"blocks\":" << blocks.str() << "}";
                     std::cerr << a4.str() << '\n';
+#ifdef WRF_SDIRK3_PRESSURE_A5
+                    // A5 is diagnostic-only and occurs after the A4 interval.
+                    // It uses the saved same-Arnoldi triplet, pure native Q and
+                    // isolated P0/primary kernels; it never calls the live A/M.
+                    if (a4_eligible && pressure_reference &&
+                        !pressure_a4.z_capture_failed && pressure_a4.z_capture_attempts==1 &&
+                        pressure_a4.z_capture_count==1 && pressure_a4.z0.defined() &&
+                        pressure_a4.z0.sizes()==pressure_a4.v0.sizes()) {
+                        try {
+                            const auto v_phys=scaling_initialized_ ? S_diag_*pressure_a4.v0 : pressure_a4.v0;
+                            const auto z_phys=scaling_initialized_ ? S_diag_*pressure_a4.z0 : pressure_a4.z0;
+                            const auto az_phys=scaling_initialized_ ? S_diag_*pressure_a4.raw_w0 : pressure_a4.raw_w0;
+                            wrf::sdirk3::v_primary_probe::run(U_eval.detach(),v_phys,z_phys,az_phys,
+                                pressure_a4.v0,pressure_a4.z0,pressure_a4.raw_w0,
+                                scaling_initialized_ ? S_diag_.detach() : torch::Tensor(),
+                                dt*gamma,cached_layout_,pressure_eos_context,pressure_eos_context.v_primary,
+                                *pressure_reference);
+                        } catch (const std::bad_alloc&) { throw; }
+                          catch (const c10::OutOfMemoryError&) { throw; }
+                          catch (const std::exception& error) {
+                            std::cerr << "[PRESSURE_A5_ERROR] " << error.what() << '\n';
+                            std::cerr << "[PRESSURE_A5] {\"status\":\"failed\",\"cost_eligible\":false}\n";
+                        }
+                    } else {
+                        std::cerr << "[PRESSURE_A5] {\"status\":\"unsupported_context\",\"cost_eligible\":false,"
+                                  << "\"z_capture_attempts\":" << pressure_a4.z_capture_attempts
+                                  << ",\"z_capture_count\":" << pressure_a4.z_capture_count << "}\n";
+                    }
+#endif
 #endif
                 }
                 // Frozen observation only: the original Krylov solve and its local

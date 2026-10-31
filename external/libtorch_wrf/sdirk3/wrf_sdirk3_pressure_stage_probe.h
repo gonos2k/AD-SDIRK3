@@ -2,6 +2,9 @@
 
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
 #include <torch/torch.h>
+#ifdef WRF_SDIRK3_PRESSURE_A5
+#include <functional>
+#endif
 
 namespace wrf::sdirk3 {
 struct StateLayout;
@@ -12,11 +15,25 @@ struct PressureGeometryEvidence {
     float rdx=0,rdy=0,gravity=0;
     bool whole_single_rank=false,packed_periodic_x_symmetric_y=false;
 };
+#ifdef WRF_SDIRK3_PRESSURE_A5
+// Captured only from the original base F; callbacks are synchronous and must
+// not outlive its Tile solve. They do not evaluate the RHS.
+struct PressureVPrimaryContext {
+    torch::Tensor cqv_at_v,level_mass_v,velocity_mass_v,alpha_v,msf_ratio_v,dpy_primary;
+    float rdy=0,velocity_eps=0;
+    bool canonical_packed_dry=false,base_state_branch=false,use_wrf_mass_flux=false,native_nh=false;
+    bool captured=false,failed=false,duplicate=false;
+    std::function<torch::Tensor(const torch::Tensor&)> project_native,avg_y_3d,avg_y_2d,level_mass_v_of;
+};
+#endif
 struct PressureEosContext {
     torch::Tensor ph,t,mu,mu_base,alb,p_base,c1h,c2h,rdnw,alt,p_pert;
     float rd=0,cv=0,cp=0,p0=0,t0=0;
     bool captured=false,duplicate=false,failed=false;
     PressureGeometryEvidence geometry;
+#ifdef WRF_SDIRK3_PRESSURE_A5
+    PressureVPrimaryContext v_primary;
+#endif
 };
 class ScopedEosCapture {
 public:
@@ -28,6 +45,10 @@ private:
     PressureEosContext* previous_;
 };
 bool capture_active() noexcept;
+#ifdef WRF_SDIRK3_PRESSURE_A5
+void capture_v_primary(const PressureVPrimaryContext& input);
+void mark_v_primary_capture_failed() noexcept;
+#endif
 void mark_capture_failed() noexcept;
 void capture_eos(const torch::Tensor& ph,const torch::Tensor& t,const torch::Tensor& mu,
                  const torch::Tensor& mu_base,const torch::Tensor& alb,const torch::Tensor& p_base,

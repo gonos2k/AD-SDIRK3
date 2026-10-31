@@ -21032,6 +21032,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // --- 5.2: V-Momentum PGF ---
     {
+#ifdef WRF_SDIRK3_PRESSURE_A5
+        torch::Tensor a5_dpy_primary, a5_cqv_at_v, a5_msf_ratio_v;
+#endif
         // Get mu at v-points (note: muv is dry air mass at v-points, not coupled)
         auto muv = avg_y_to_v_2d(mu_full, v.size(0));
         
@@ -21210,6 +21213,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto dpy = wrf::sdirk3::acoustic::horizontal_pgf_primary(
                 rdy, msf_ratio_v * vert_coupling, dph_diff,
                 2.0f * alt, dp_diff, 2.0f * al, dpb_diff);
+#ifdef WRF_SDIRK3_PRESSURE_A5
+            if (wrf::sdirk3::pressure_stage_probe::capture_active()) {
+                a5_dpy_primary=dpy;
+                a5_msf_ratio_v=msf_ratio_v;
+            }
+#endif
 
             // Add non-hydrostatic term if configured
             if (native_nh) {
@@ -21280,6 +21289,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
             }
 
+#ifdef WRF_SDIRK3_PRESSURE_A5
+            if (wrf::sdirk3::pressure_stage_probe::capture_active()) a5_cqv_at_v=cqv_at_v;
+#endif
             rv_tend_pgf = -cqv_at_v * dpy;
 
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -21320,6 +21332,73 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 .slice(0, 0, nz_actual).view({1, nz_actual, 1});
             const auto alpha_v = (canonical_horizontal ? level_mass_v : c1 * muv_3d + c2) / msfvx_3d;
             rv_tend_pgf = rv_tend_pgf * (velocity_mass_v / alpha_v);
+#ifdef WRF_SDIRK3_PRESSURE_A5
+            if (wrf::sdirk3::pressure_stage_probe::capture_active()) {
+                try {
+                    torch::NoGradGuard guard;
+                    wrf::sdirk3::pressure_stage_probe::PressureVPrimaryContext cap;
+                    cap.cqv_at_v=a5_cqv_at_v; cap.level_mass_v=level_mass_v;
+                    cap.velocity_mass_v=velocity_mass_v; cap.alpha_v=alpha_v;
+                    cap.msf_ratio_v=a5_msf_ratio_v; cap.dpy_primary=a5_dpy_primary;
+                    cap.rdy=rdy; cap.velocity_eps=eps_v;
+                    cap.base_state_branch=a5_dpy_primary.defined();
+                    cap.use_wrf_mass_flux=use_wrf_mass_flux; cap.native_nh=native_nh;
+                    cap.canonical_packed_dry=canonical_horizontal && use_wrf_mass_flux &&
+                        isPackedPeriodicDomain() && !config_flags_polar_ && nprocx_*nprocy_==1 &&
+                        n_moist_==0 && U.is_cpu() && U.scalar_type()==torch::kFloat64;
+                    const int saved_nx=nx_, saved_ny=ny_, saved_nz=nz_, saved_nyv=ny_v_;
+                    const std::array<int,12> saved_indices={nx_u_,nz_w_,its_,ite_,ids_,ide_,
+                                                            jts_,jte_,jds_,jde_,nprocx_,nprocy_};
+                    const std::array<bool,13> saved_flags={config_flags_periodic_x_,config_flags_periodic_y_,
+                        config_flags_symmetric_xs_,config_flags_symmetric_xe_,config_flags_symmetric_ys_,
+                        config_flags_symmetric_ye_,config_flags_open_xs_,config_flags_open_xe_,
+                        config_flags_open_ys_,config_flags_open_ye_,config_flags_specified_,
+                        config_flags_nested_,config_flags_polar_};
+                    const bool saved_ad_halo=wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange;
+                    const auto saved_y_policy=wdamp_contract_.y_policy;
+                    auto check_context=[this,saved_nx,saved_ny,saved_nz,saved_nyv,saved_indices,
+                                        saved_flags,saved_ad_halo,saved_y_policy]() {
+                        const std::array<int,12> indices={nx_u_,nz_w_,its_,ite_,ids_,ide_,
+                                                          jts_,jte_,jds_,jde_,nprocx_,nprocy_};
+                        const std::array<bool,13> flags={config_flags_periodic_x_,config_flags_periodic_y_,
+                            config_flags_symmetric_xs_,config_flags_symmetric_xe_,config_flags_symmetric_ys_,
+                            config_flags_symmetric_ye_,config_flags_open_xs_,config_flags_open_xe_,
+                            config_flags_open_ys_,config_flags_open_ye_,config_flags_specified_,
+                            config_flags_nested_,config_flags_polar_};
+                        TORCH_CHECK(nx_==saved_nx && ny_==saved_ny && nz_==saved_nz && ny_v_==saved_nyv &&
+                                    indices==saved_indices && flags==saved_flags &&
+                                    wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange==saved_ad_halo &&
+                                    isPackedPeriodicDomain() && !config_flags_polar_ &&
+                                    nprocx_*nprocy_==1 && n_moist_==0 &&
+                                    wdamp_contract_.y_policy==saved_y_policy,
+                                    "A5 Tile topology changed after base RHS");
+                    };
+                    cap.project_native=[this,check_context](const torch::Tensor& x) {
+                        check_context(); return projectStateBoundaries(x);
+                    };
+                    cap.avg_y_3d=[this,check_context,saved_nyv](const torch::Tensor& x) {
+                        check_context(); return avg_y_to_v(x,saved_nyv);
+                    };
+                    cap.avg_y_2d=[this,check_context,saved_nyv](const torch::Tensor& x) {
+                        check_context(); return avg_y_to_v_2d(x,saved_nyv);
+                    };
+                    auto frozen_c1=c1h_.detach().to(u.device(),u.scalar_type()).slice(0,0,nz_).view({1,-1,1}).clone();
+                    auto frozen_c2=c2h_.detach().to(u.device(),u.scalar_type()).slice(0,0,nz_).view({1,-1,1}).clone();
+                    const int64_t m=momentum_m, n=momentum_n;
+                    cap.level_mass_v_of=[frozen_c1,frozen_c2,m,n,saved_y_policy,check_context](const torch::Tensor& mu_full) {
+                        check_context();
+                        const auto mass=mu_full.slice(0,0,m).slice(1,0,n);
+                        const auto mass_v=stagger_wrf_mass_field(mass,0,saved_y_policy);
+                        const auto q=frozen_c1*mass_v.unsqueeze(1)+frozen_c2;
+                        const auto x=torch::cat({q,q.slice(2,0,1)},2);
+                        return torch::cat({x,x.slice(0,m-1,m)},0);
+                    };
+                    wrf::sdirk3::pressure_stage_probe::capture_v_primary(cap);
+                } catch (const std::bad_alloc&) { throw; }
+                  catch (const c10::OutOfMemoryError&) { throw; }
+                  catch (...) { wrf::sdirk3::pressure_stage_probe::mark_v_primary_capture_failed(); }
+            }
+#endif
         }
         // AUTOGRAD DEBUG: Check tensor shapes before addition
         rv_tend = rv_tend + rv_tend_pgf;    }

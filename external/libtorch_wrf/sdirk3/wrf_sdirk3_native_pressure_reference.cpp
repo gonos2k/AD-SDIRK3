@@ -175,5 +175,13 @@ torch::Tensor NativePressureReference::apply(const torch::Tensor& rhs) const {
                 "native pressure reference packed input must be finite CPU FP64");
     return adapter_.solve(model_,rhs);
 }
+#ifdef WRF_SDIRK3_PRESSURE_A5
+torch::Tensor NativePressureReference::apply_operator(const torch::Tensor& direction) const {
+    TORCH_CHECK(direction.defined() && direction.is_cpu() && direction.scalar_type()==torch::kFloat64 &&
+                direction.dim()==1 && direction.numel()==layout_.total_size && torch::isfinite(direction).all().item<bool>(),
+                "native pressure reference packed direction must be finite CPU FP64");
+    return adapter_.apply(model_, direction);
+}
+#endif
 }
 #endif

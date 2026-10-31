@@ -33,6 +33,9 @@ public:
         const torch::Tensor& U_eval, double a);
     // Physical packed inverse using the shared projected/complement adapter.
     torch::Tensor apply(const torch::Tensor& rhs) const;
+#ifdef WRF_SDIRK3_PRESSURE_A5
+    torch::Tensor apply_operator(const torch::Tensor& physical_direction) const;
+#endif
     const NativePressureProfileReceipt& receipt() const { return receipt_; }
 private:
     NativePressureReference(const StateLayout& layout, int64_t nx, int64_t ny, int64_t nz,

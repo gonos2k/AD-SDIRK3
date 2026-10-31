@@ -58,6 +58,40 @@ ScopedEosCapture::ScopedEosCapture(PressureEosContext& context) : previous_(acti
 }
 ScopedEosCapture::~ScopedEosCapture() noexcept { active_eos_context=previous_; }
 bool capture_active() noexcept { return active_eos_context != nullptr; }
+#ifdef WRF_SDIRK3_PRESSURE_A5
+void mark_v_primary_capture_failed() noexcept {
+    if (active_eos_context) active_eos_context->v_primary.failed=true;
+}
+void capture_v_primary(const PressureVPrimaryContext& input) {
+    if (!active_eos_context) return;
+    auto& c=active_eos_context->v_primary;
+    if (c.captured) { c.duplicate=true; return; }
+    if (c.failed) return;
+    try {
+        torch::NoGradGuard guard;
+        TORCH_CHECK(active_eos_context->captured && !active_eos_context->failed &&
+                    !active_eos_context->duplicate, "A5 requires its same-call EOS capture");
+        PressureVPrimaryContext snapshot;
+        snapshot.cqv_at_v=input.cqv_at_v.detach().clone();
+        snapshot.level_mass_v=input.level_mass_v.detach().clone();
+        snapshot.velocity_mass_v=input.velocity_mass_v.detach().clone();
+        snapshot.alpha_v=input.alpha_v.detach().clone();
+        snapshot.msf_ratio_v=input.msf_ratio_v.detach().clone();
+        snapshot.dpy_primary=input.dpy_primary.detach().clone();
+        snapshot.rdy=input.rdy; snapshot.velocity_eps=input.velocity_eps;
+        snapshot.canonical_packed_dry=input.canonical_packed_dry;
+        snapshot.base_state_branch=input.base_state_branch;
+        snapshot.use_wrf_mass_flux=input.use_wrf_mass_flux; snapshot.native_nh=input.native_nh;
+        snapshot.project_native=input.project_native;
+        snapshot.avg_y_3d=input.avg_y_3d; snapshot.avg_y_2d=input.avg_y_2d;
+        snapshot.level_mass_v_of=input.level_mass_v_of;
+        snapshot.captured=true;
+        c=std::move(snapshot);
+    } catch (const std::bad_alloc&) { throw; }
+      catch (const c10::OutOfMemoryError&) { throw; }
+      catch (...) { c.failed=true; }
+}
+#endif
 void mark_capture_failed() noexcept { if (active_eos_context) active_eos_context->failed=true; }
 
 void capture_eos(const torch::Tensor& ph,const torch::Tensor& t,const torch::Tensor& mu,
