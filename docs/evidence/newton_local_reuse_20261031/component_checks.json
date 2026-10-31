@@ -1,0 +1,121 @@
+{
+  "commit": "be66161fa03b50d5b0006b5faec016135517d6da",
+  "archive": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+  "archive_sha256": "c4686a110b01ebb1b771c2151cd753888314024dc5e40567ac4c21a47c10e790",
+  "native_fortran_runtime": "/opt/homebrew/opt/gcc/lib/gcc/current",
+  "native_fortran_object_sha256": "fd5bd3b28692e17f8ceb2ac6a18aaf44caa58bddfd72c17565a25d0c7a03c143",
+  "source_tree": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source",
+  "tests": {
+    "test_prepared_jvp": {
+      "source_sha256": "712c6d9420165bd1cc2f3c314b03888803384ef764b1d362a2fc1c56be373e1e",
+      "build_cmd": [
+        "/usr/bin/g++",
+        "-std=c++17",
+        "-O3",
+        "-DMACOS",
+        "-DDMPARALLEL",
+        "-DUSE_SDIRK3",
+        "-D_GLIBCXX_USE_CXX11_ABI=0",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+        "-I/opt/homebrew/include",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3/tests/test_prepared_jvp.cpp",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+        "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+        "-ltorch",
+        "-ltorch_cpu",
+        "-lc10",
+        "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+        "-L/opt/homebrew/opt/open-mpi/lib",
+        "-lmpi",
+        "-L/opt/homebrew/opt/gcc/lib/gcc/current",
+        "-lgfortran",
+        "-lquadmath",
+        "-o",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/component_checks/test_prepared_jvp"
+      ],
+      "build_returncode": 0,
+      "executable_sha256": "3a375c48bdab7fdfa1f7bdb44122dc95837f822cd8f347b7f599d2d7a92c11f4",
+      "run_cmd": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/component_checks/test_prepared_jvp"
+      ],
+      "run_returncode": 0,
+      "run_seconds": 0.9237465411424637
+    },
+    "test_prepared_rhs_jvp": {
+      "source_sha256": "aeeee4cd63f091c8f5475d9b4dc6532b037697121e6545f75aeeccd1682b8e2f",
+      "build_cmd": [
+        "/usr/bin/g++",
+        "-std=c++17",
+        "-O3",
+        "-DMACOS",
+        "-DDMPARALLEL",
+        "-DUSE_SDIRK3",
+        "-D_GLIBCXX_USE_CXX11_ABI=0",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+        "-I/opt/homebrew/include",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3/tests/test_prepared_rhs_jvp.cpp",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+        "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+        "-ltorch",
+        "-ltorch_cpu",
+        "-lc10",
+        "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+        "-L/opt/homebrew/opt/open-mpi/lib",
+        "-lmpi",
+        "-L/opt/homebrew/opt/gcc/lib/gcc/current",
+        "-lgfortran",
+        "-lquadmath",
+        "-o",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/component_checks/test_prepared_rhs_jvp"
+      ],
+      "build_returncode": 0,
+      "executable_sha256": "7952f51ffc604011557a46039e257753664df8486e1b898b9131fd4d4f216761",
+      "run_cmd": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/component_checks/test_prepared_rhs_jvp"
+      ],
+      "run_returncode": 0,
+      "run_seconds": 0.8566680829972029
+    },
+    "test_config_numeric_contract": {
+      "source_sha256": "710f4d93aaae613a79f79175efe92e1460fe783874cfdaea502d7e010bf772d8",
+      "build_cmd": [
+        "/usr/bin/g++",
+        "-std=c++17",
+        "-O3",
+        "-DMACOS",
+        "-DDMPARALLEL",
+        "-DUSE_SDIRK3",
+        "-D_GLIBCXX_USE_CXX11_ABI=0",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+        "-I/opt/homebrew/include",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3/tests/test_config_numeric_contract.cpp",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a",
+        "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+        "-ltorch",
+        "-ltorch_cpu",
+        "-lc10",
+        "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+        "-L/opt/homebrew/opt/open-mpi/lib",
+        "-lmpi",
+        "-L/opt/homebrew/opt/gcc/lib/gcc/current",
+        "-lgfortran",
+        "-lquadmath",
+        "-o",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/component_checks/test_config_numeric_contract"
+      ],
+      "build_returncode": 0,
+      "executable_sha256": "5e3fc2b2fb4e92580bdfb11da33a2d16e05dcf28d202c5806a825cafa6c90401",
+      "run_cmd": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/component_checks/test_config_numeric_contract"
+      ],
+      "run_returncode": 0,
+      "run_seconds": 0.7352860411629081
+    }
+  }
+}

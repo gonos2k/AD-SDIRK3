@@ -4871,12 +4871,37 @@ public:
     WRFNewtonKrylovSolver::NewtonResult solve_stage_impl(
         const torch::Tensor& U_n,
         const torch::Tensor& K_prev,
-        const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
+        const std::function<torch::Tensor(const torch::Tensor&)>& rhs_callback,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs_fast,
         double dt,
         double gamma,
         int stage,
         const torch::Tensor& F_phys = torch::Tensor()) {  // Added F_phys with default
+
+        TORCH_CHECK(!options_.reuse_linearization ||
+                    (!options_.retain_graph_for_adjoint && !options_.save_trajectory),
+                    "JVP reuse is forward-only and cannot retain an adjoint trajectory");
+
+        // Any RHS evaluation during Krylov invalidates the retained graph before
+        // touching Tile work buffers. The slot is armed only around the solve.
+        std::unique_ptr<wrf::sdirk3::PreparedJvp>* active_prepared = nullptr;
+        bool rhs_interleaved = false;
+        bool prepared_application_error = false;
+        int prepared_apply_calls = 0;
+        int reference_calls = 0;
+        int preparation_calls = 0;
+        int validation_apply_calls = 0;
+        std::function<torch::Tensor(const torch::Tensor&)> decorated_rhs;
+        if (options_.reuse_linearization) {
+            decorated_rhs = [&](const torch::Tensor& x) {
+                if (active_prepared && *active_prepared) {
+                    active_prepared->reset();
+                    rhs_interleaved = true;
+                }
+                return rhs_callback(x);
+            };
+        }
+        const auto& compute_rhs = options_.reuse_linearization ? decorated_rhs : rhs_callback;
 
         // PR 9E (diagnosis-only): clear the retained final fast-RHS / defect
         // tensors so a stale value from a previous solve can never leak into
@@ -6074,7 +6099,7 @@ public:
                     jacobian_cache_.U_cached = U_eval.detach();
                     jacobian_cache_.F_cached = F.detach();
                 }
-                jacobian_cache_.cached_rhs = compute_rhs;
+                jacobian_cache_.cached_rhs = rhs_callback;
                 jacobian_cache_.is_valid = true;
                 jacobian_cache_.dt_cached = dt;
                 jacobian_cache_.gamma_cached = gamma;
@@ -6971,7 +6996,10 @@ public:
             // FIX (2025-12-05): Gate JVP method logging by debug_level >= 1
             if (debug_level_local >= 1) {
                 if (use_autograd_jvp) {
-                    std::cerr << "[Newton] JVP method: FORWARD-MODE AD (compute_jvp_forward_mode)\n";
+                    std::cerr << "[Newton] JVP method: "
+                              << (options_.reuse_linearization
+                                  ? "prepared AD with forward-mode fallback\n"
+                                  : "FORWARD-MODE AD (compute_jvp_forward_mode)\n");
                 } else {
                     int mixed_sw = jvp_mixed_fd_switch_cfg;
                     if (mixed_sw != 0) {
@@ -7015,18 +7043,35 @@ public:
                 // ========================================
                 if (use_autograd_jvp) {
                     jvp_ad_calls++;
-                    const bool log_forward_jvp = debug_level_local >= 1 && jvp_call_count <= 3;
+                    const bool log_forward_jvp = !options_.reuse_linearization &&
+                        debug_level_local >= 1 && jvp_call_count <= 3;
                     std::chrono::high_resolution_clock::time_point grad_start;
                     if (log_forward_jvp) {
                         grad_start = std::chrono::high_resolution_clock::now();
                     }
 
                     // Use forward-mode AD for true JVP (J·v)
-                    jvp_result = compute_jvp_forward_mode(
-                        /*F=*/[&](const torch::Tensor& x) { return compute_rhs(x); },
-                        /*u=*/U_eval,
-                        /*v=*/v
-                    );
+                    if (active_prepared && *active_prepared) {
+                        try {
+                            ++prepared_apply_calls;
+                            jvp_result = (*active_prepared)->apply(v);
+                        } catch (const std::bad_alloc&) {
+                            throw;
+                        } catch (const c10::OutOfMemoryError&) {
+                            throw;
+                        } catch (...) {
+                            // Destroy the tape before the legacy RHS is called again.
+                            active_prepared->reset();
+                            prepared_application_error = true;
+                        }
+                    }
+                    if (!jvp_result.defined()) {
+                        jvp_result = compute_jvp_forward_mode(
+                            /*F=*/[&](const torch::Tensor& x) { return compute_rhs(x); },
+                            /*u=*/U_eval,
+                            /*v=*/v
+                        );
+                    }
 
                     if (log_forward_jvp) {
                         const auto grad_end = std::chrono::high_resolution_clock::now();
@@ -8705,7 +8750,73 @@ public:
                 // identity lock / warn_only / defect toggling) and standard GMRES's
                 // M_inv(sum yV) reconstruction is then inconsistent with the Arnoldi
                 // Hessenberg. Unpreconditioned solves keep solve_gmres bit-for-bit.
-                auto gmres_result = gmres_M_inv
+                auto gmres_result = [&]() {
+                    std::unique_ptr<wrf::sdirk3::PreparedJvp> prepared;
+                    rhs_interleaved = false;
+                    prepared_application_error = false;
+                    prepared_apply_calls = reference_calls = preparation_calls = validation_apply_calls = 0;
+                    std::chrono::steady_clock::time_point reuse_start;
+                    if (options_.reuse_linearization) reuse_start = std::chrono::steady_clock::now();
+                    const char* reuse_status = "disabled";
+                    if (options_.reuse_linearization && use_autograd_jvp) {
+                        reuse_status = "unsupported";
+#ifndef DNWP_DISABLE_FWAD
+                        try {
+                            // This is the physical direction corresponding to the Krylov RHS.
+                            const auto direction = dt * gamma *
+                                (scaling_initialized_ ? S_diag_ * gmres_rhs : gmres_rhs);
+                            {
+                                torch::NoGradGuard no_grad;
+                                TORCH_CHECK(torch::isfinite(direction).all().item<bool>() &&
+                                            torch::count_nonzero(direction).item<int64_t>() > 0,
+                                            "invalid reference direction");
+                            }
+                            torch::Tensor reference;
+                            {
+                                torch::NoGradGuard no_grad;
+                                wrf::sdirk3::jvp_detail::DualLevelGuard level;
+                                auto dual = torch::_make_dual(U_eval, direction,
+                                    static_cast<int64_t>(level.level()));
+                                ++reference_calls;
+                                auto parts = torch::_unpack_dual(compute_rhs(dual),
+                                    static_cast<int64_t>(level.level()));
+                                reference = std::get<1>(parts);
+                                TORCH_CHECK(reference.defined(), "undefined fwAD tangent");
+                            }
+                            ++preparation_calls;
+                            prepared = std::make_unique<wrf::sdirk3::PreparedJvp>(compute_rhs, U_eval);
+                            if (!torch::equal(prepared->primal(), F.detach())) {
+                                reuse_status = "primal_mismatch";
+                                prepared.reset();
+                            } else {
+                                ++validation_apply_calls;
+                                if (!torch::allclose(prepared->apply(direction), reference, 1e-10, 1e-12)) {
+                                    reuse_status = "derivative_mismatch";
+                                    prepared.reset();
+                                } else {
+                                    reuse_status = "enabled";
+                                }
+                            }
+                        } catch (const std::bad_alloc&) {
+                            throw;
+                        } catch (const c10::OutOfMemoryError&) {
+                            throw;
+                        } catch (...) {
+                            prepared.reset();
+                            reuse_status = "preparation_error";
+                        }
+#endif
+                    }
+                    std::chrono::steady_clock::time_point krylov_start;
+                    if (options_.reuse_linearization) krylov_start = std::chrono::steady_clock::now();
+                    struct ActivePreparedScope {
+                        std::unique_ptr<wrf::sdirk3::PreparedJvp>*& slot;
+                        std::unique_ptr<wrf::sdirk3::PreparedJvp>* previous;
+                        ActivePreparedScope(decltype(slot) s, decltype(previous) value)
+                            : slot(s), previous(s) { slot = value; }
+                        ~ActivePreparedScope() noexcept { slot = previous; }
+                    } active_scope(active_prepared, &prepared);
+                    auto result = gmres_M_inv
                     ? krylov_methods::solve_fgmres(
                           gmres_op,
                           gmres_rhs,
@@ -8754,6 +8865,25 @@ public:
                           halo_mask_initialized_ ? &halo_mask_ : nullptr,
                           options_.periodic_x,
                           options_.periodic_y);
+                    if (rhs_interleaved) reuse_status = "rhs_interleaved";
+                    else if (prepared_application_error) reuse_status = "application_error";
+                    prepared.reset();
+                    if (options_.reuse_linearization) {
+                        const auto end = std::chrono::steady_clock::now();
+                        const double preparation_ms = std::chrono::duration<double, std::milli>(
+                            krylov_start - reuse_start).count();
+                        const double krylov_ms = std::chrono::duration<double, std::milli>(
+                            end - krylov_start).count();
+                        std::cerr << "[JVP REUSE] status=" << reuse_status
+                                  << " preparation_ms=" << preparation_ms
+                                  << " krylov_ms=" << krylov_ms
+                                  << " reference_calls=" << reference_calls
+                                  << " preparation_calls=" << preparation_calls
+                                  << " validation_apply_calls=" << validation_apply_calls
+                                  << " prepared_apply_calls=" << prepared_apply_calls << "\n";
+                    }
+                    return result;
+                }();
                 variable_pc_event_this_newton = *variable_pc_event;
 
                 // PR 9F.9.1 SHADOW: save r_g = b_s - A_s*x for the exact trust model at

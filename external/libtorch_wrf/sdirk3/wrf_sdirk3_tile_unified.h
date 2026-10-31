@@ -409,6 +409,7 @@ namespace sdirk3 {
 namespace test {
     struct TileCase;
     struct PrincipalFactoryCase;
+    struct PreparedRhsTest;
 }
 }
 }
@@ -417,6 +418,7 @@ class TileSDIRK3UnifiedSolver : public wrf::sdirk3::TileSDIRK3Solver {
 private:
     friend struct wrf::sdirk3::test::TileCase;
     friend struct wrf::sdirk3::test::PrincipalFactoryCase;
+    friend struct wrf::sdirk3::test::PreparedRhsTest;
     // UnifiedRHS for physics computation (FINAL_DESIGN.md compliant)
     std::unique_ptr<wrf::sdirk3::UnifiedRHS> unified_rhs_;
     // Native WRF transport selection. Zero means no WRF bridge setter: preserve each
@@ -2280,6 +2282,9 @@ private:
     bool usesImplicitTransport() const;
     torch::Tensor projectStateBoundaries(const torch::Tensor& state);
 
+    bool prepared_rhs_enabled_ = false;
+    void releasePreparedRhsOwners();
+    torch::Tensor withPreparedRhsCleanup(const std::function<torch::Tensor()>& evaluate);
     torch::Tensor computeUnifiedRHS(const torch::Tensor& U, wrf::sdirk3::RhsMode mode = wrf::sdirk3::RhsMode::Full);
 
     // Full-halo RHS computation for AD halo path (Step 7c)

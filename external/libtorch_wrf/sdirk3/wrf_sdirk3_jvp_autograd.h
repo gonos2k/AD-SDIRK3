@@ -398,6 +398,25 @@ namespace sdirk3 {
  * ═══════════════════════════════════════════════════════════════════════
  */
 
+// A fixed-point JVP linearization for sequential use within one Newton iteration.
+// The callback runs once; callers must ensure its context remains unchanged and
+// release any graphs retained by callback-owned state when this object is destroyed.
+class PreparedJvp {
+public:
+    PreparedJvp(const std::function<torch::Tensor(const torch::Tensor&)>& F,
+                const torch::Tensor& point);
+    PreparedJvp(const PreparedJvp&) = delete;
+    PreparedJvp& operator=(const PreparedJvp&) = delete;
+    PreparedJvp(PreparedJvp&&) = default;
+    PreparedJvp& operator=(PreparedJvp&&) = default;
+
+    torch::Tensor primal() const;
+    torch::Tensor apply(const torch::Tensor& direction) const;
+
+private:
+    torch::Tensor point_, primal_, cotangent_, gradient_;
+};
+
 // Compute the VECTOR-JACOBIAN product (VJP), J(u)^T * v, via reverse-mode
 // autograd (grad_outputs = v). RENAMED from compute_jvp_autograd (full-repo
 // review P1-3): the old name and docs claimed J*v, but torch::autograd::grad

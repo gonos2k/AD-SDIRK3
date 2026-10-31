@@ -1,0 +1,55 @@
+{
+  "commit": "be66161fa03b50d5b0006b5faec016135517d6da",
+  "archive_member_sha256": {
+    "wrf_sdirk3_globals.o": "83d02af58e377694cb0015125371cd020f503ab0115d32362490b5a85f4623c0",
+    "wrf_sdirk3_operator_contract.o": "e389769ac8c9f38af9cd00e5bc5d56d3c180dff5985fb81ddfff63dfa89eb453",
+    "wrf_sdirk3_tile_unified_interface.o": "7db700f2c3984b4886190359b0e7d144a477636e33dc9077df8f61b6e187f3c0",
+    "wrf_sdirk3_interface_zerocopy.o": "d798da66dd24e1b7389beb048d427920350f9a3b2caca6abe3508583f8028c25",
+    "wrf_sdirk3_zero_copy_interface.o": "e389769ac8c9f38af9cd00e5bc5d56d3c180dff5985fb81ddfff63dfa89eb453",
+    "wrf_sdirk3_tile_unified.o": "f82448d79574e24b39a8bff62dde119d2a81188c19fd0ca023f5497c435ba215",
+    "wrf_sdirk3_tile_unified_impl.o": "ef561b3aef21c2fa9f762ef1c73414da49d41e0d1d04847fa3d13482c6bf8ab8",
+    "wrf_sdirk3_newton_solver.o": "a3afa3710a83515b293006eddbe42f1ef44136efa922ff400ff3b401aabf3b33",
+    "wrf_sdirk3_jvp_autograd.o": "23442e0b37072bc4415bafac777d688a3383223d18146d4bf3e5c3f277f9eada",
+    "wrf_hydrostatic_pressure.o": "d187a774decaa1efc44e20ff131be903fc12fde371c952c332b2c8a8508d7674",
+    "wrf_sdirk3_acoustic_substep.o": "51b1e3e168edafe0f01f0ea43d51d7ab882d2022e3dbdcc6df5d1ed567724e20",
+    "wrf_sdirk3_base_state_zerocopy.o": "bb8d7ca94526db2a71c8c0cf9ca89216de9e931f33d4e9c78a83186a96f375c8",
+    "wrf_tile_boundary_optimizer.o": "101c949e61511d536c09c962ae674e5f8b75ef394efd51596ab585fbfadb0af1",
+    "wrf_sdirk3_config.o": "0d6745e031f541c94a446d36959834915ad3b3027041a9d373580109f10ee8d1",
+    "wrf_sdirk3_unified_preconditioner.o": "c24e0a6638ae4b1328741f52e558fc912801fe937995bb6cc25975a312589448",
+    "wrf_sdirk3_unified_rhs_extended.o": "f6cfa7becae0129bea513b14e510f49ff77fe67a3689aa17c66a5ef5c9186493",
+    "wrf_sdirk3_cache_utils.o": "a41146d0ba0c1f6a035abd002af497be6e4b51732d000d50e9d8eec6c44fbcd2",
+    "wrf_sdirk3_boundary_ad.o": "1868ab825f074802131700e224e3d1d1e98b7007b24e26f6757c6c5a8ee0c261",
+    "wrf_sdirk3_rayleigh_damping_ad.o": "e8fcc452fe0a5d137e3849254fbe381065f3cbdf0c620c0914303b8334144715",
+    "wrf_sdirk3_mpi_safety_impl.o": "2bbe6a23e8dc124c24cde42b3714b96e39a11c298f08aef6ff0e84cfb10bdd52",
+    "wrf_sdirk3_halo_exchange.o": "683e5bac0fa16138567a0373225fa257f49a35bc6ead8a9619899f8d14eb7475",
+    "wrf_sdirk3_ad_halo_exchange.o": "611385d0ed55260183b55b11d7934d7e296bb3ed396b26ca1e4a2920bf69e595",
+    "wrf_sdirk3_rhs_run_close.o": "f1ee51efc081d6949b40a611f7e950a92aad3bdde9ec67405dd6c94ac97bda8b",
+    "wrf_sdirk3_u_slow_diagnostics.o": "ac0c71550fb19c3f0fae4abf3f09d5ef1ae6a10cf0cb8afa4b6a14aee6a50b7e"
+  },
+  "all_archive_members_equal_fresh_objects": true,
+  "fresh_fortran_object": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/dyn_em/module_implicit_sdirk3.o",
+    "sha256": "fd5bd3b28692e17f8ceb2ac6a18aaf44caa58bddfd72c17565a25d0c7a03c143",
+    "modified_local": "2026-10-31T17:46:16.941793+09:00",
+    "contains_reuse_linearization": true
+  },
+  "compiled_fortran_object_count": 760,
+  "compile_errors_or_ignored_failures": [
+    "collect2: error: ld returned 1 exit status",
+    "make[3]: [test_io_idx] Error 1 (ignored)",
+    "collect2: error: ld returned 1 exit status",
+    "make[2]: [diffwrf] Error 1 (ignored)",
+    "collect2: error: ld returned 1 exit status",
+    "make[2]: [diffwrf] Error 1 (ignored)"
+  ],
+  "baseline_hashes_verified_after_build": {
+    "source/main/wrf.exe": "bd9b64fa2e615247dc23ebaf9c9056c4e99cd5e67e7d8978f9c7cc64434d02af",
+    "source/main/ideal.exe": "681e8369ea6f6567068ccf635b8c3678baa387a688b9d8d2aeec784fedb37605",
+    "source/main/libwrflib.a": "49c0c677f6e0c92029d88612f831b398dd881302200c9f1e61ee5b6b359cac86",
+    "source/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a": "d3a2a6fdb29bd8dd5fdb0eaccf5ef071eef33704f698112a7a433a0469d791bd",
+    "source/configure.wrf": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289"
+  },
+  "prebuild_removed_objects_proof": 0,
+  "prebuild_inventory_empty": true,
+  "model_run": false
+}

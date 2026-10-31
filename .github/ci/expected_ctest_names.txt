@@ -131,3 +131,5 @@ Raw_Principal_Disabled
 Implicit_Transport_RHS_Contract
 Implicit_Transport_Face_Contract
 FP64_Implicit_Transport_Handoff_Contract
+Prepared_JVP_Contract
+Prepared_RHS_JVP_Contract

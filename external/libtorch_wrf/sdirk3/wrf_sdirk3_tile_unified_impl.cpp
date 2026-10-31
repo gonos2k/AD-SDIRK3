@@ -124,6 +124,7 @@
 // they have been reviewed for const-correctness safety.
 // =========================================================================
 
+#include <exception>
 #include <array>
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_coriolis.h"
@@ -3774,6 +3775,8 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     nk_options.save_trajectory = wrf::sdirk3::g_sdirk3_config.save_trajectory;
     nk_options.checkpoint_interval = std::max(1, wrf::sdirk3::g_sdirk3_config.checkpoint_interval);
     nk_options.retain_graph_for_adjoint = wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint;
+    prepared_rhs_enabled_ = wrf::sdirk3::g_sdirk3_config.reuse_linearization;
+    nk_options.reuse_linearization = prepared_rhs_enabled_;
 
     // Eisenstat-Walker adaptive forcing parameters
     nk_options.ew_eta_max = wrf::sdirk3::g_sdirk3_config.nk_forcing_eta_max;
@@ -14031,7 +14034,31 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         }
     }
 
+    TORCH_CHECK(prepared_rhs_enabled_ == wrf::sdirk3::g_sdirk3_config.reuse_linearization,
+                "JVP reuse changed after Tile construction; reinitialize the solver");
+    if (prepared_rhs_enabled_) {
+        const auto& cfg = wrf::sdirk3::g_sdirk3_config;
+        TORCH_CHECK(cfg.reuse_linearization && cfg.use_autograd &&
+                    (split_mode == 3 || split_mode == 4) && U_stage.is_cpu() &&
+                    U_stage.scalar_type() == torch::kFloat64 && cfg.internal_fp64 &&
+                    cfg.internal_fp64_state_carry && cfg.stage_fail_action == 1 && !cfg.hevi_split && !cfg.split_explicit &&
+                    !cfg.retain_graph_for_adjoint && !cfg.save_trajectory &&
+                    !fixed_trajectory_open_ && !fixed_trajectory_requested_ &&
+                    !cfg.omega_update_ref_per_newton && !cfg.enable_ad_halo_exchange &&
+                    !U_full_exchanged.defined() && n_moist_ == 0 && !has_physics &&
+                    nprocx_ * nprocy_ == 1 && its_ <= ids_ && ite_ >= ide_ - 1 &&
+                    jts_ <= jds_ && jte_ >= jde_ - 1 && !g_export_coupled_slow &&
+                    cfg.effective_wrf_omega_ww_cp() && cfg.effective_mu_horizontal_div_only() &&
+                    cfg.mu_tend_fortran_parity &&
+                    wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
+                    wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate,
+                    "JVP reuse requires the forward-only dry single-tile FP64 WRFParity profile");
+    }
+
     auto compute_rhs = [&, has_physics, split_mode](const torch::Tensor& U) -> torch::Tensor {
+        // Preparation enables reverse AD; ordinary forward evaluations are unchanged.
+        const bool cleanup = prepared_rhs_enabled_ && U.requires_grad();
+        auto evaluate = [&]() -> torch::Tensor {
         // JVP FIX: Update reference state during Newton iterations if enabled
         if (wrf::sdirk3::g_sdirk3_config.omega_update_ref_per_newton) {
             U_ref_stage_ = U.clone();
@@ -14062,6 +14089,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
             if (has_physics) { F_full = F_full + F_phys; }
             return F_full;
         }
+        };
+        if (!cleanup) return evaluate();
+        return withPreparedRhsCleanup(evaluate);
     };
 
     // Fast-only RHS for predictor refinement in Newton solver.
@@ -15267,6 +15297,29 @@ torch::Tensor TileSDIRK3UnifiedSolver::projectStateBoundaries(const torch::Tenso
                                      mass(mu.unsqueeze(1)).squeeze(1));
     }
     return combineStateVariables(pu, pv, w, ph, t, mu);
+}
+
+torch::Tensor TileSDIRK3UnifiedSolver::withPreparedRhsCleanup(
+    const std::function<torch::Tensor()>& evaluate) {
+    torch::Tensor result;
+    std::exception_ptr error;
+    try {
+        result = evaluate();
+    } catch (...) {
+        error = std::current_exception();
+    }
+    releasePreparedRhsOwners();
+    if (error) std::rethrow_exception(error);
+    return result;
+}
+
+void TileSDIRK3UnifiedSolver::releasePreparedRhsOwners() {
+    // Preserve values for later consumers while releasing member-owned graph edges.
+    for (auto* tensor : {&p_pert_, &ru_tend_, &rv_tend_, &rw_tend_, &t_tend_,
+                         &mu_tend_, &ph_tend_, &qv_tend_, &dpx_work_, &ru_adv_z_work_,
+                         &rv_adv_z_work_, &rw_adv_z_work_, &t_adv_z_work_}) {
+        if (tensor->defined()) *tensor = tensor->detach();
+    }
 }
 
 bool TileSDIRK3UnifiedSolver::usesImplicitTransport() const {
@@ -43551,7 +43604,7 @@ uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
     // fixed inputs and must not be folded into this digest.
     for (const bool value : {non_hydrostatic_, c.non_hydrostatic, c.do_curvature,
                              c.split_explicit_top_lid, c.hevi_split, c.split_explicit,
-                             c.use_autograd, c.retain_graph_for_adjoint,
+                             c.use_autograd, c.retain_graph_for_adjoint, c.reuse_linearization,
                              c.imex_slow_in_tangent, c.buoyancy_use_current_w,
                              c.implicit_acoustic, c.implicit_gravity,
                              c.implicit_rayleigh, c.implicit_wdamp,

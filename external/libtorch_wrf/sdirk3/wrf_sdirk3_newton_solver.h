@@ -66,6 +66,9 @@ struct WRFNewtonKrylovOptions {
     int checkpoint_interval;    // Steps between checkpoints (e.g., 360 = 1 hour)
     bool retain_graph_for_adjoint;  // Attach first-order implicit pullbacks to converged roots
 
+    // Caller guarantees a stable, forward-only RHS for this Newton solve.
+    bool reuse_linearization = false;
+
     // Block diagonal scaling for GMRES conditioning
     // S transforms A·dK = -R into S⁻¹·A·S·(S⁻¹·dK) = -S⁻¹·R
     //

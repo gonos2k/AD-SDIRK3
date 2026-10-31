@@ -60,6 +60,13 @@ static bool parse_bool_env(const char* v) {
     return parse_fortran_bool_value(std::string(v));
 }
 
+static bool parse_reuse_linearization(const std::string& value) {
+    const auto parsed = parse_bool_text(value);
+    if (value.empty() || parsed == BoolText::Unrecognized)
+        throw std::invalid_argument("reuse_linearization must be a boolean: '" + value + "'");
+    return parsed == BoolText::True;
+}
+
 // Numeric configuration is authority, so reject both non-finite values and
 // consumed-prefix text before applying a range clamp.  std::clamp(NaN, lo, hi)
 // returns NaN because both comparisons are false.
@@ -647,6 +654,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             } else if (key == "sdirk3_internal_fp64_state_carry" ||
                        key == "internal_fp64_state_carry") {
                 internal_fp64_state_carry = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_reuse_linearization" || key == "reuse_linearization") {
+                reuse_linearization = parse_reuse_linearization(value);
             } else if (key == "sdirk3_obs_aware_4dvar" || key == "obs_aware_4dvar") {
                 obs_aware_4dvar = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_obs_source_mode" || key == "obs_source_mode") {
@@ -870,6 +879,7 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                     key == "sdirk3_newton_tol" || key == "sdirk3_newton_rtol" ||
                     key == "sdirk3_krylov_tol" ||
                     key == "sdirk3_imex_split_mode" || key == "imex_split_mode" ||
+                    key == "sdirk3_reuse_linearization" || key == "reuse_linearization" ||
                     key == "sdirk3_split_explicit_time_step_sound" ||
                     key == "split_explicit_time_step_sound") {
                     if (key != "sdirk3_mass_coordinate_mode" && key != "mass_coordinate_mode") {
@@ -1314,6 +1324,10 @@ void SDIRK3Config::load_from_env() {
         internal_fp64_state_carry = parse_bool_env(env_val);
         std::cerr << "[CONFIG ENV] internal_fp64_state_carry = "
                   << (internal_fp64_state_carry ? "true" : "false") << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_REUSE_LINEARIZATION"))) {
+        reuse_linearization = parse_reuse_linearization(env_val);
+        std::cerr << "[CONFIG ENV] reuse_linearization = " << reuse_linearization << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_RETAIN_GRAPH_FOR_ADJOINT"))) {
         retain_graph_for_adjoint = parse_bool_env(env_val);
@@ -2088,6 +2102,7 @@ void SDIRK3Config::load_from_env() {
               << "/" << precond_du_weak_ru_thresh
               << (precond_du_weak_factor < 0.999f ? " (dual-phase)" : "")
               << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] reuse_linearization=" << (reuse_linearization ? "ON" : "off") << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] rayleigh: wrf_damp_opt=" << wrf_damp_opt
               << " (WRF applies rk_rayleigh_damp only when ==2) coef=" << rayleigh_damp_coef
               << " depth=" << rayleigh_damp_depth << std::endl;
@@ -2289,6 +2304,19 @@ void SDIRK3Config::normalize_adaptive_thresholds() {
 
 bool SDIRK3Config::validate() const {
     bool valid = true;
+    if (reuse_linearization &&
+        ((effective_imex_split_mode() != 3 && effective_imex_split_mode() != 4) ||
+         !use_autograd || !internal_fp64 || !internal_fp64_state_carry || stage_fail_action != 1 ||
+         mass_coordinate_mode != 1 || !effective_wrf_omega_ww_cp() ||
+         !effective_mu_horizontal_div_only() || !mu_tend_fortran_parity ||
+         wrf_zadvect_implicit != 0 || omega_update_ref_per_newton || ad_strict_mode ||
+         retain_graph_for_adjoint || save_trajectory || enable_ad_halo_exchange || hevi_split || split_explicit ||
+         diffusion_option != 1 || khdif != 0.0f || kvdif != 0.0f)) {
+        std::cerr << "SDIRK3 Config Error: reuse_linearization requires the forward-only "
+                     "FP64 carried ARK mode 3/4 WRFParity profile with autograd, "
+                     "fixed omega reference and zero diffusion coefficients" << std::endl;
+        valid = false;
+    }
     if (imex_split_mode == 4 && (retain_graph_for_adjoint || hevi_split || split_explicit || enable_ad_halo_exchange ||
         !effective_wrf_omega_ww_cp() || !effective_mu_horizontal_div_only() ||
         !mu_tend_fortran_parity || wrf_zadvect_implicit != 0)) {
@@ -3022,6 +3050,7 @@ void SDIRK3Config::print() const {
     std::cout << "  stage2_rejection_snapshot_diag = "
               << (stage2_rejection_snapshot_diag ? "true" : "false") << std::endl;
     std::cout << "  internal_fp64 = " << (internal_fp64 ? "true" : "false") << std::endl;
+    std::cout << "  reuse_linearization = " << (reuse_linearization ? "true" : "false") << std::endl;
     std::cout << "  internal_fp64_state_carry = "
               << (internal_fp64_state_carry ? "true" : "false") << std::endl;
     std::cout << "  precond_gs_awphi_cap = " << precond_gs_awphi_cap << std::endl;
@@ -4110,6 +4139,9 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.internal_fp64 = (value != 0);
         std::cerr << "[CONFIG] internal_fp64 = "
                   << (g_sdirk3_config.internal_fp64 ? "true" : "false") << std::endl;
+    } else if (key == "reuse_linearization") {
+        g_sdirk3_config.reuse_linearization = (value != 0);
+        std::cerr << "[CONFIG] reuse_linearization = " << g_sdirk3_config.reuse_linearization << std::endl;
     } else if (key == "internal_fp64_state_carry") {
         g_sdirk3_config.internal_fp64_state_carry = (value != 0);
         std::cerr << "[CONFIG] internal_fp64_state_carry = "
