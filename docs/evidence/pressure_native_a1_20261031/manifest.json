@@ -1,0 +1,29 @@
+{
+  "scope": "Completed bounded same-call native EOS/column observation only; no pressure inverse/A2/replay or forecast timing claim",
+  "files": {
+    "intent.json": {
+      "sha256": "1fe630a911be74cadfe77eb087e5e1df68f2726726232eb8326ee81b09f7e5fe",
+      "bytes": 2503
+    },
+    "result.json": {
+      "sha256": "cf6df51defe86034dd13ebc56f5b3d95dec6a2ed0e70c9dd4ab602f7b7d67a6a",
+      "bytes": 8528
+    },
+    "observation.json": {
+      "sha256": "941145a6fcb1a5bf00067497f5ef6fa2c3f5d0f653e01d796037bc81bd8e54a8",
+      "bytes": 4442
+    },
+    "link_audit.json": {
+      "sha256": "abd6298b15fff29bca4c72d2c2d83a88956d02ce0e821d634e07a291c184ac5c",
+      "bytes": 3211
+    },
+    "preregistration.json": {
+      "sha256": "49f8fff2a94413924692820f41ab5221ccf4c69ca0e38228486c7a42408915b9",
+      "bytes": 2181
+    },
+    "build_receipt.json": {
+      "sha256": "5bbf41d0ac3ccc8dbcf585f04c5ba7361b4f1e0a940dc56622c17fbdc8803b15",
+      "bytes": 190830
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "registered_at_local": "2026-10-31T20:25:09.995902+09:00",
+  "goal": "Gate A: pressure-reference preconditioner on first real mode3 ARK600 stage2/Newton0 original FGMRES",
+  "not_goal": "No time-map/PDE/damping/unknown-coordinate change; no mode5, forecast adoption, or 5day run",
+  "comparison": "two independently initialized WRF processes, common frozen source+NML+canonicalinput, C++flavor differs ONLY in first physical preconditioner action",
+  "flavors": [
+    "observer baseline raw",
+    "observer + WRF_SDIRK3_PRESSURE_REFERENCE_STAGE"
+  ],
+  "runtime_configuration": "no new key; all compile-only research macros absent by default",
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "dt_seconds": 600,
+  "mode": 3,
+  "reuse_linearization": false,
+  "FP64_carry": true,
+  "outer_steps_per_process": 1,
+  "outputs": "t0/end10min only",
+  "order": [
+    "baseline",
+    "candidate"
+  ],
+  "max_native_attempts": 2,
+  "retry": false,
+  "candidate_condition": "only after complete eligible baseline; generated constexpr expected FNV digest header is externally SHA256-pinned; candidate must match captured input/context before first M",
+  "operator_identity_scope": "bounded captured operands/geometry/raw cache fingerprints+identical source/initialization and pinned flags; FNV noncryptographic, not universal transitive-state or byte-exact entire-operator proof",
+  "frozen_preflight": [
+    "U_eval",
+    "F",
+    "K",
+    "b_scaled",
+    "x0_scaled",
+    "S",
+    "S_inv",
+    "layout",
+    "mask",
+    "live EOS inputs/output/constants",
+    "live geometry/maps/ground/rdx/rdy/g",
+    "raw imported inputs and all-column cache",
+    "actual effective tol/restart/max_restarts/stopping metric/BC"
+  ],
+  "solver": "original native FGMRES and true-r_true evaluation; no extra shadow RHS callbacks; same budgets/norm/scaling/guards; candidate setup does not modify raw P pointer/locks",
+  "numerical_acceptance": [
+    "rc0/one step/stages2,3,4 below original1e-9 scaledRMS/wrapper3,0",
+    "first linear FGMRES success under same actual tolerance1e-7 and supported metric",
+    "finite saved raw physical/scaled r_true and actual convergence norm; saved is not independent rerun",
+    "no ratio guard/fallback/preconditioner defect changes or fwAD->FDfallback; candidate action called",
+    "exact common input and post-init fields",
+    "baseline174numericarrays bit match existing OFF control",
+    "candidate6ownedfields8eps screen and per-physical-unit RMS/max report; not new physical accuracy budget"
+  ],
+  "resources": {
+    "MPI_timeout_seconds_each": 360,
+    "postrun_rank_RSS_bound_bytes": 4294967296,
+    "scope": "postrun rank peak excludes launcher, notlive cap",
+    "disk_pre_post_floor_bytes": 5368709120,
+    "no_periodic_space_or_global_ps_or_lsof": true,
+    "clock_abs_wall_monotonic_gap_limit_seconds": 1
+  },
+  "timing_scope": "first Newton-entry-to-first-FGMRES interval includes common base/preflight/raw binding and candidate setup; report preflight/setup/linear separately; whole step instrumented timing not general performance",
+  "decision_threshold": "at least2x reduction of first-point total interval including setup, all numerical/resource/guard/context criteria pass to justify GateB; a paired screen not reproducibility or equal-accuracy RK3win",
+  "stop_rule": "failure/mismatch/fallback/under2x means reference candidate not promoted or expanded; recordcause theninspect actual A-P0 horizontal/geometry/coupling, do not tune damp/space/tolerance",
+  "limitations": "flat unit-map horizontally averaged reference, dense DCT Y cost, chosen Phi/Omega compensation is approximate, W0/complement crosscouplings omitted asdocumented; fullNativeA notassumedSPD",
+  "remaining": "live stage profile+originalAcost measurement; variable coefficients/MG and6-12steps onlyaftergate; 5day onlyselectedcandidate later"
+}

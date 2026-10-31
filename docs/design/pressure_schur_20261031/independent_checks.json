@@ -1,0 +1,67 @@
+{
+  "pressure_reference": {
+    "shape": [
+      64,
+      80,
+      40
+    ],
+    "unknowns": 204800,
+    "gamma": 0.435866521508459,
+    "dt_seconds": 600.0,
+    "sound_speed_assumed_m_s": 340.0,
+    "dz_example_m": 250.0,
+    "relative_solution_error": 4.019251955056317e-12,
+    "relative_true_residual": 3.925173494159129e-16,
+    "boundary_scope": "synthetic periodic x / reflecting y / rigid z; NOT native WRF top",
+    "runtime_claim": "No timing or native speedup claim"
+  },
+  "block_schur_equivalence": {
+    "full_unknowns": 426,
+    "pressure_unknowns": 120,
+    "relative_solution_difference": 1.535842994684908e-12,
+    "relative_block_residual": 5.217138846953439e-12,
+    "schur_min_eigenvalue": 0.9999999999576499,
+    "schur_max_eigenvalue": 431901.87328315206
+  },
+  "horizontal_acoustic_example": {
+    "explicit_imaginary_axis_limit": 2.4841794172531735,
+    "C_at_600s": 2.04,
+    "Cgrid_max_h_omega": 4.08,
+    "explicit_ARK_amplification_at_Cgrid_Nyquist": 7.263881238394654,
+    "one_dimensional_HEVI_dt_limit_example_s": 365.3205025372314,
+    "staggered_nyquist_gradient_magnitude": 2e-05,
+    "collocated_centered_nyquist_gradient_magnitude": 1.2246467991473532e-21,
+    "qualification": "constant coefficients, no filters, 1D horizontal wave; not full WRF stability"
+  },
+  "macrostep_fixed_reference_order": {
+    "steps": [
+      10,
+      20,
+      40,
+      80,
+      160
+    ],
+    "errors": [
+      1.2268328695580731e-05,
+      1.9990224511003337e-06,
+      2.8786471076436584e-07,
+      3.875061123188362e-08,
+      5.031649739107762e-09
+    ],
+    "observed_orders": [
+      2.6175721449657368,
+      2.7958318297726183,
+      2.8930999682570713,
+      2.9451156642835827
+    ],
+    "scope": "smooth nonlinear manufactured ODE; macrostep-fixed affine IMEX split; NOT WRF order proof"
+  },
+  "cost_arithmetic": {
+    "native_shape_illustration_state_scalars": 1041280,
+    "pressure_scalars": 204800,
+    "V_Z_bytes_restart30": 508144640,
+    "old_paired_same_dt_cost_ratio": 443.29491109748625,
+    "required_timestep_for_ratio_alone_s": 265976.94665849174,
+    "note": "historic paired timing, not a current benchmark; step-count ratios do not predict speedups"
+  }
+}

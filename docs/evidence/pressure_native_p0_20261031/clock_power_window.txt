@@ -1,0 +1,2 @@
+2026-10-31 20:41:18 +0900 Assertions          	PID 58574(caffeinate) ClientDied PreventUserIdleSystemSleep "caffeinate command-line tool" 00:00:43  id:0x0x10000a354 [System: PrevIdle]
+2026-10-31 20:41:19 +0900 Assertions          	PID 38015(mds_stores) Released BackgroundTask "com.apple.metadata.mds_stores.power" 00:01:34  id:0x0xb0000a353 [System: PrevIdle]

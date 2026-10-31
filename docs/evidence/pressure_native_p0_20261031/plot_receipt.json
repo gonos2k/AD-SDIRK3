@@ -1,0 +1,199 @@
+{
+  "scope": "One h600 first-FGMRES P0 numerical diagnostic, not long-term noise or cost evidence; baseline clock ineligible and candidate cost ineligible.",
+  "sources": {
+    "RK3 00:00:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_rk3/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "RK3 00:10:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_rk3/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "Baseline 00:00:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "Baseline 00:10:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "P0 candidate 00:00:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "P0 candidate 00:10:00": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_geometry_validation/run/runs/candidate/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+      "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "initial_field_gate": "passed exact shared fields, grid and canonical input",
+  "stage_residual_scaled_rms": {
+    "Baseline": {
+      "2": 6.333396e-14,
+      "3": 6.32138e-14,
+      "4": 6.31731e-14
+    },
+    "P0 candidate": {
+      "2": 6.296993e-14,
+      "3": 6.345785e-14,
+      "4": 6.344006e-14
+    }
+  },
+  "owned": "U omit periodic x duplicate; V both wall faces; W and PH omit bottom face; T and MU all mass points",
+  "W_plot": "x index 20, own native PH+PHB height, DCT-II k>=40 inverse, shared column scales",
+  "raw_scale_m_s": 0.00576469162479043,
+  "high_band_scale_m_s": 0.0010740031536535092,
+  "field_rows": [
+    {
+      "case": "Baseline",
+      "reference": "RK3",
+      "field": "U",
+      "units": "m/s",
+      "rms": 0.00031484921884297165,
+      "max_abs": 0.002048492431640625
+    },
+    {
+      "case": "Baseline",
+      "reference": "RK3",
+      "field": "V",
+      "units": "m/s",
+      "rms": 0.00020319480634667535,
+      "max_abs": 0.0013668779283761978
+    },
+    {
+      "case": "Baseline",
+      "reference": "RK3",
+      "field": "W",
+      "units": "m/s",
+      "rms": 0.0006909942879025659,
+      "max_abs": 0.0035210284404456615
+    },
+    {
+      "case": "Baseline",
+      "reference": "RK3",
+      "field": "PH",
+      "units": "m2/s2",
+      "rms": 0.3963487147823269,
+      "max_abs": 4.1317138671875
+    },
+    {
+      "case": "Baseline",
+      "reference": "RK3",
+      "field": "T",
+      "units": "K",
+      "rms": 0.00029223435090725854,
+      "max_abs": 0.004150390625
+    },
+    {
+      "case": "Baseline",
+      "reference": "RK3",
+      "field": "MU",
+      "units": "Pa",
+      "rms": 0.31379463510573785,
+      "max_abs": 1.4685750007629395
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "RK3",
+      "field": "U",
+      "units": "m/s",
+      "rms": 0.00031484921884297165,
+      "max_abs": 0.002048492431640625
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "RK3",
+      "field": "V",
+      "units": "m/s",
+      "rms": 0.00020319480626702284,
+      "max_abs": 0.0013668779283761978
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "RK3",
+      "field": "W",
+      "units": "m/s",
+      "rms": 0.0006909942879028214,
+      "max_abs": 0.0035210284404456615
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "RK3",
+      "field": "PH",
+      "units": "m2/s2",
+      "rms": 0.39634871478232453,
+      "max_abs": 4.1317138671875
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "RK3",
+      "field": "T",
+      "units": "K",
+      "rms": 0.00029223435090725854,
+      "max_abs": 0.004150390625
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "RK3",
+      "field": "MU",
+      "units": "Pa",
+      "rms": 0.31379463510573785,
+      "max_abs": 1.4685750007629395
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "Baseline",
+      "field": "U",
+      "units": "m/s",
+      "rms": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "Baseline",
+      "field": "V",
+      "units": "m/s",
+      "rms": 8.210724610655193e-12,
+      "max_abs": 3.725290298461914e-09
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "Baseline",
+      "field": "W",
+      "units": "m/s",
+      "rms": 1.564990747375291e-13,
+      "max_abs": 5.820766091346741e-11
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "Baseline",
+      "field": "PH",
+      "units": "m2/s2",
+      "rms": 8.23180634978399e-12,
+      "max_abs": 3.725290298461914e-09
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "Baseline",
+      "field": "T",
+      "units": "K",
+      "rms": 0.0,
+      "max_abs": 0.0
+    },
+    {
+      "case": "P0 candidate",
+      "reference": "Baseline",
+      "field": "MU",
+      "units": "Pa",
+      "rms": 0.0,
+      "max_abs": 0.0
+    }
+  ],
+  "script_sha256": "6c2990ef41f717a153c2f7c7a9e75ed4a2ac750a717ebdc6c9cf324f20c7e378"
+}
