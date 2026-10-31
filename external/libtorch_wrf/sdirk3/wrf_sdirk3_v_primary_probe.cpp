@@ -117,13 +117,20 @@ Primal primary(const torch::Tensor& x,const StateLayout& layout,
 }
 }
 
-Actions evaluate(const torch::Tensor& U_eval,const torch::Tensor& z,const StateLayout& layout,
+struct PreparedPrimary::Impl {
+    torch::Tensor U,c1,R,H,T,p,alt_v,bg_grad;
+    StateLayout layout;
+    pressure_stage_probe::PressureEosContext e;
+    pressure_stage_probe::PressureVPrimaryContext c;
+    int64_t ny=0,nz=0,nx=0;
+    Actions primal;
+};
+PreparedPrimary::PreparedPrimary(const torch::Tensor& U_eval,const StateLayout& layout,
                  const pressure_stage_probe::PressureEosContext& e,
-                 const pressure_stage_probe::PressureVPrimaryContext& c) {
-    finite(U_eval,"U_eval"); finite(z,"z");
+                 const pressure_stage_probe::PressureVPrimaryContext& c) : impl_(new Impl) {
+    finite(U_eval,"U_eval");
     TORCH_CHECK(layout.is_valid() && layout.is_exact && layout.blocks.size()==6 && U_eval.dim()==1 &&
-                U_eval.scalar_type()==torch::kFloat64 && z.scalar_type()==torch::kFloat64 &&
-                z.sizes()==U_eval.sizes() && U_eval.numel()==layout.total_size &&
+                U_eval.scalar_type()==torch::kFloat64 && U_eval.numel()==layout.total_size &&
                 e.captured && !e.failed && !e.duplicate && c.captured && !c.failed && !c.duplicate &&
                 c.canonical_packed_dry && c.base_state_branch && c.use_wrf_mass_flux &&
                 c.project_native && c.avg_y_3d && c.avg_y_2d && c.level_mass_v_of &&
@@ -163,7 +170,7 @@ Actions evaluate(const torch::Tensor& U_eval,const torch::Tensor& z,const StateL
     const auto projected=c.project_native(U_eval);
     const auto f=fields(projected,layout,ny,nz,nx);
     finite(projected,"projected U_eval");
-    Actions result;
+    auto& result=impl_->primal;
     result.projected_state_max=std::max({maxabs(f.ph-e.ph),maxabs(f.t-e.t),maxabs(f.mu-e.mu)});
     TORCH_CHECK(torch::equal(f.ph,e.ph) && torch::equal(f.t,e.t) && torch::equal(f.mu,e.mu),
                 "A5 captured EOS state differs from native Q(U_eval)");
@@ -179,6 +186,57 @@ Actions evaluate(const torch::Tensor& U_eval,const torch::Tensor& z,const StateL
                 torch::equal(base.velocity,c.velocity_mass_v) && torch::equal(base.alpha_v,c.alpha_v) &&
                 torch::equal(base.ratio,c.msf_ratio_v) && torch::equal(base.alt,e.alt) &&
                 torch::equal(base.ppert,e.p_pert),"A5 isolated primal differs from captured source operands");
+    auto& d=*impl_;d.U=U_eval.detach().clone();d.layout=layout;d.e=e;d.c=c;
+    d.ny=ny;d.nz=nz;d.nx=nx;
+    // Owned snapshots prevent stale live-context mutation from changing this stage operator.
+    d.e.alt=e.alt.detach().clone();d.e.t=e.t.detach().clone();d.e.p_pert=e.p_pert.detach().clone();
+    d.e.p_base=e.p_base.detach().clone();d.c.cqv_at_v=c.cqv_at_v.detach().clone();
+    d.e.geometry.msfvy=e.geometry.msfvy.detach().clone();
+    d.c1=e.c1h.to(U_eval.options()).flatten().slice(0,0,nz).view({1,nz,1}).clone();
+    d.R=e.rdnw.to(U_eval.options()).flatten().slice(0,0,nz).view({1,nz,1}).clone();
+    const auto c2=e.c2h.to(U_eval.options()).flatten().slice(0,0,nz).view({1,nz,1});
+    d.H=(d.c1*(e.mu_base+e.mu).unsqueeze(1)+c2).detach().clone();
+    d.T=(e.t+e.t0).detach().clone();d.p=(e.p_pert+e.p_base).detach().clone();
+    TORCH_CHECK((d.H>0).all().item<bool>() && (d.T>0).all().item<bool>() && (e.alt>0).all().item<bool>(),
+                "A5 analytic EOS requires positive state");
+    d.alt_v=c.avg_y_3d(d.e.alt).detach().clone();
+    d.bg_grad=(ydiff(d.e.p_pert)+ydiff(d.e.p_base)).detach().clone();
+}
+PreparedPrimary::~PreparedPrimary()=default;
+PreparedPrimary::PreparedPrimary(PreparedPrimary&&) noexcept=default;
+PreparedPrimary& PreparedPrimary::operator=(PreparedPrimary&&) noexcept=default;
+Actions PreparedPrimary::compute(const torch::Tensor& z,bool summed) const {
+    Actions result;
+    const auto& d=*impl_; const auto& c=d.c;const auto& e=d.e;
+    const auto& layout=d.layout;const auto& U_eval=d.U;
+    const auto ny=d.ny,nz=d.nz,nx=d.nx,nv=ny+1;
+    finite(z,"z");TORCH_CHECK(z.scalar_type()==torch::kFloat64 && z.sizes()==U_eval.sizes(),"A5 direction mismatch");
+    const auto dz=c.project_native(z);
+    const auto df=fields(dz,layout,ny,nz,nx);
+    const auto& c1=d.c1;const auto& R=d.R;const auto& H=d.H;
+    const auto& T=d.T;const auto& p=d.p;
+    const auto dphi=df.ph.slice(1,1,nz+1)-df.ph.slice(1,0,nz);
+    const auto dalpha=R*dphi/H-e.alt*c1*df.mu.unsqueeze(1)/H;
+    const double kappa=static_cast<double>(e.cp)/e.cv;
+    const auto dp=kappa*p*(df.t/T-dalpha/e.alt);
+    const auto yphi=0.5*(ydiff(df.ph.slice(1,1,nz+1))+ydiff(df.ph.slice(1,0,nz)));
+    const auto vy=e.geometry.msfvy.to(U_eval.options()).unsqueeze(1).expand({nv,nz,nx});
+    const auto factor=-c.cqv_at_v*vy*c.rdy;
+    const auto phi=factor*yphi;
+    const auto pressure=factor*d.alt_v*ydiff(dp);
+    const auto alpha=factor*c.avg_y_3d(dalpha)*d.bg_grad;
+    // Private carrier for apply_sum: only this branch uses phi for the total.
+    if(summed) { result.phi=project_v(phi+pressure+alpha,U_eval,layout,c); return result; }
+    result.phi=project_v(phi,U_eval,layout,c);result.pressure=project_v(pressure,U_eval,layout,c);
+    result.alpha=project_v(alpha,U_eval,layout,c);return result;
+}
+Actions PreparedPrimary::apply_terms(const torch::Tensor& z) const { return compute(z,false); }
+torch::Tensor PreparedPrimary::apply_sum(const torch::Tensor& z) const { return compute(z,true).phi; }
+Actions evaluate(const torch::Tensor& U_eval,const torch::Tensor& z,const StateLayout& layout,
+                 const pressure_stage_probe::PressureEosContext& e,
+                 const pressure_stage_probe::PressureVPrimaryContext& c) {
+    PreparedPrimary prepared(U_eval,layout,e,c);
+    Actions result=prepared.impl_->primal;
     {
         jvp_detail::DualLevelGuard level;
         auto dual=torch::_make_dual(U_eval,z,static_cast<int64_t>(level.level()));
@@ -191,25 +249,8 @@ Actions evaluate(const torch::Tensor& U_eval,const torch::Tensor& z,const StateL
         result.fd[k]=(primary(U_eval+steps[k]*z,layout,e,c).output-
                       primary(U_eval-steps[k]*z,layout,e,c).output)/(2*steps[k]);
 
-    const auto dz=c.project_native(z);
-    const auto df=fields(dz,layout,ny,nz,nx);
-    const auto c1=e.c1h.to(U_eval.options()).flatten().slice(0,0,nz).view({1,nz,1});
-    const auto c2=e.c2h.to(U_eval.options()).flatten().slice(0,0,nz).view({1,nz,1});
-    const auto R=e.rdnw.to(U_eval.options()).flatten().slice(0,0,nz).view({1,nz,1});
-    const auto H=c1*(e.mu_base+e.mu).unsqueeze(1)+c2;
-    const auto T=e.t+e.t0, p=e.p_pert+e.p_base;
-    TORCH_CHECK((H>0).all().item<bool>() && (T>0).all().item<bool>() && (e.alt>0).all().item<bool>(),
-                "A5 analytic EOS requires positive state");
-    const auto dphi=df.ph.slice(1,1,nz+1)-df.ph.slice(1,0,nz);
-    const auto dalpha=R*dphi/H-e.alt*c1*df.mu.unsqueeze(1)/H;
-    const double kappa=static_cast<double>(e.cp)/e.cv;
-    const auto dp=kappa*p*(df.t/T-dalpha/e.alt);
-    const auto yphi=0.5*(ydiff(df.ph.slice(1,1,nz+1))+ydiff(df.ph.slice(1,0,nz)));
-    const auto vy=e.geometry.msfvy.to(U_eval.options()).unsqueeze(1).expand({nv,nz,nx});
-    const auto factor=-c.cqv_at_v*vy*c.rdy;
-    result.phi=project_v(factor*yphi,U_eval,layout,c);
-    result.pressure=project_v(factor*c.avg_y_3d(e.alt)*ydiff(dp),U_eval,layout,c);
-    result.alpha=project_v(factor*c.avg_y_3d(dalpha)*ydiff(e.p_pert+e.p_base),U_eval,layout,c);
+    const auto terms=prepared.apply_terms(z);
+    result.phi=terms.phi;result.pressure=terms.pressure;result.alpha=terms.alpha;
     for (const auto& x:{result.phi,result.pressure,result.alpha,result.fwad,result.fd[0],result.fd[1],result.fd[2]})
         finite(x,"directional result");
     return result;
@@ -220,7 +261,7 @@ void run(const torch::Tensor& U_eval,const torch::Tensor& v,const torch::Tensor&
          const torch::Tensor& Az_scaled,const torch::Tensor& S_diag,double a,const StateLayout& layout,
          const pressure_stage_probe::PressureEosContext& eos,
          const pressure_stage_probe::PressureVPrimaryContext& c,
-         const NativePressureReference& P0) {
+         const NativePressureReference& P0,const torch::Tensor& base_z_scaled) {
     torch::NoGradGuard guard;
     for (const auto& x:{U_eval,v,z,Az,v_scaled,z_scaled,Az_scaled}) finite(x,"Arnoldi vector");
     TORCH_CHECK(std::isfinite(a) && a>0 && v.scalar_type()==torch::kFloat64 &&
@@ -270,6 +311,11 @@ void run(const torch::Tensor& U_eval,const torch::Tensor& v,const torch::Tensor&
                  static_cast<double>(c.duplicate),static_cast<double>(c.canonical_packed_dry),
                  static_cast<double>(c.native_nh),static_cast<double>(c.base_state_branch),
                  static_cast<double>(c.use_wrf_mass_flux),static_cast<double>(S_diag.defined())},torch::kFloat64)}};
+        if(base_z_scaled.defined()) {
+            finite(base_z_scaled,"base_z_scaled");
+            TORCH_CHECK(base_z_scaled.sizes()==z_scaled.sizes(),"A5 base z shape mismatch");
+            context.emplace_back("base_z_scaled",base_z_scaled);
+        }
         write_records("pressure_a5_direction.bin",context);
         std::ostringstream captured;
         captured << "[PRESSURE_A5_CAPTURE] {\"status\":\"captured\",\"path\":\"pressure_a5_direction.bin\",\"missing\":[";

@@ -114,6 +114,25 @@ int main() {
     auto no_bottom=v_primary_probe::evaluate(U,z_no_bottom,layout,e,c);
     TORCH_CHECK(core(out.fwad-no_bottom.fwad).norm().item<double>()>1.e-12,
                 "native projection silently dropped physical Phi0 direction");
+    // Prepared action is stage-frozen, linear in the packed direction and
+    // insensitive to V-only input (the intended update is nilpotent).
+    v_primary_probe::PreparedPrimary prepared(U,layout,e,c);
+    auto z2=torch::randn_like(z);
+    auto t2=v_primary_probe::evaluate(U,z2,layout,e,c);
+    const auto sum1=prepared.apply_sum(z),sum2=prepared.apply_sum(z2);
+    TORCH_CHECK((core(sum1-out.fwad)).norm().item<double>()<=1.e-9*scale+1.e-12 &&
+                (core(sum2-t2.fwad)).norm().item<double>()<=1.e-9*core(t2.fwad).norm().item<double>()+1.e-12,
+                "prepared primary differs from source FWAD");
+    TORCH_CHECK((prepared.apply_sum(0.3*z-0.7*z2)-(0.3*sum1-0.7*sum2)).abs().max().item<double>()<1.e-12,
+                "prepared primary is not linear");
+    auto only_v=torch::zeros_like(z);block(only_v,1,{nv,nz,nx}).copy_(sum1);
+    TORCH_CHECK(prepared.apply_sum(only_v).abs().max().item<double>()==0,
+                "prepared primary depends on V-only direction");
+    auto detached=e;detached.alt=e.alt.clone();detached.p_pert=e.p_pert.clone();
+    auto local_c=c;local_c.cqv_at_v=c.cqv_at_v.clone();
+    v_primary_probe::PreparedPrimary frozen(U,layout,detached,local_c);
+    const auto before=frozen.apply_sum(z);detached.alt.mul_(1.1);local_c.cqv_at_v.mul_(0.8);
+    TORCH_CHECK(torch::equal(before,frozen.apply_sum(z)),"prepared coefficients follow mutated capture");
     auto wrong_q=c;
     wrong_q.project_native=[&](const torch::Tensor& x) { return adapter.project(x); };
     bool rejected=false;

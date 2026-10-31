@@ -94,6 +94,9 @@
 #include <cstdint>  // uint64_t, same reason
 #include <chrono>
 #include <cstdlib>  // PR 9F.9.1: std::getenv for the numerical-shadow gate
+#if defined(WRF_SDIRK3_PRESSURE_A5_VROW) && !defined(WRF_SDIRK3_PRESSURE_A5)
+#error "V-row experiment requires the A5 research observer"
+#endif
 #if defined(WRF_SDIRK3_PRESSURE_A5) && (!defined(WRF_SDIRK3_PRESSURE_A4) || !defined(WRF_SDIRK3_PRESSURE_STAGE_PROBE) || !defined(WRF_SDIRK3_PRESSURE_REFERENCE_STAGE))
 #error "A5 requires the A4, pressure stage and reference-stage research macros"
 #endif
@@ -118,6 +121,12 @@ struct PressureA4Context {
     int z_capture_attempts=0, z_capture_count=0;
     bool z_capture_failed=false;
     double z_capture_ms=0;
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+    torch::Tensor base_physical;
+    bool capture_first_base=false;
+    int base_capture_attempts=0, base_capture_count=0;
+    double base_capture_ms=0;
+#endif
 #endif
 };
 thread_local PressureA4Context* pressure_a4_active = nullptr;
@@ -3201,6 +3210,16 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             auto jvp_start = std::chrono::high_resolution_clock::now();
             torch::Tensor v_precond = V[j];
             if (M_inv) {
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+                struct FirstBaseScope {
+                    PressureA4Context* ctx;
+                    bool old=false;
+                    FirstBaseScope(PressureA4Context* p,bool first) : ctx(p) {
+                        if (ctx) { old=ctx->capture_first_base; ctx->capture_first_base=first; }
+                    }
+                    ~FirstBaseScope() noexcept { if (ctx) ctx->capture_first_base=old; }
+                } first_base_scope(pressure_a4_active,iter==0 && j==0);
+#endif
                 v_precond = M_inv(V[j]);
                 // FGMRES: keep the EXACT preconditioned vector used for this
                 // Arnoldi column (not a recomputation — M may differ next call).
@@ -7591,6 +7610,12 @@ public:
             std::unique_ptr<wrf::sdirk3::NativePressureReference> pressure_reference;
             bool pressure_reference_active = false;
             int pressure_reference_calls = 0;
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+            std::unique_ptr<wrf::sdirk3::v_primary_probe::PreparedPrimary> pressure_primary;
+            int pressure_vrow_calls=0;
+            double pressure_vrow_prep_ms=0;
+            const double pressure_vrow_a=dt*gamma;
+#endif
 #endif
             std::function<torch::Tensor(const torch::Tensor&)> precond_func = nullptr;
             if (preconditioner_) {
@@ -7600,6 +7625,9 @@ public:
                 precond_func = [this, variable_pc_event,
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                                 &pressure_reference, &pressure_reference_active, &pressure_reference_calls,
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+                                &pressure_primary, &pressure_vrow_calls, pressure_vrow_a,
+#endif
 #endif
                                 fallback_locked = false](const torch::Tensor& r) mutable -> torch::Tensor {
                     torch::NoGradGuard no_grad;
@@ -7620,7 +7648,38 @@ public:
                         PressureA4Timer timer(PressureA4Kind::PhysicalM);
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                         if (pressure_reference_active) {
-                            try { ++pressure_reference_calls; return pressure_reference->apply(r); }
+                            try {
+                                ++pressure_reference_calls;
+                                auto base=pressure_reference->apply(r);
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+                                TORCH_CHECK(pressure_primary,"V-row coefficients were not prepared");
+                                if (pressure_a4_active && pressure_a4_active->capture_first_base &&
+                                    pressure_a4_active->base_capture_attempts==0) {
+                                    auto* c=pressure_a4_active;
+                                    const auto start=std::chrono::steady_clock::now();
+                                    ++c->base_capture_attempts;
+                                    c->base_physical=base.detach().contiguous().clone();
+                                    ++c->base_capture_count;
+                                    c->base_capture_ms=std::chrono::duration<double,std::milli>(
+                                        std::chrono::steady_clock::now()-start).count();
+                                    c->capture_ms+=c->base_capture_ms;
+                                }
+                                const auto pbase=pressure_reference->apply_operator(base);
+                                const auto jv=pressure_primary->apply_sum(base).flatten();
+                                const auto& vb=cached_layout_.blocks[1];
+                                TORCH_CHECK(vb.name=="rv" && jv.numel()==vb.size &&
+                                            pbase.sizes()==base.sizes(),"V-row layout mismatch");
+                                const auto end=vb.start+vb.size;
+                                const auto correction=pressure_vrow_a*jv-
+                                    (base.slice(0,vb.start,end)-pbase.slice(0,vb.start,end));
+                                ++pressure_vrow_calls;
+                                return torch::cat({base.slice(0,0,vb.start),
+                                                   base.slice(0,vb.start,end)+correction,
+                                                   base.slice(0,end,base.numel())});
+#else
+                                return base;
+#endif
+                            }
                             catch (const std::exception& error) {
                                 std::cerr << "[PRESSURE_REFERENCE_ERROR] " << error.what() << '\n';
                                 std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"apply_failed\"}\n";
@@ -9079,6 +9138,13 @@ public:
                             const auto setup_start = std::chrono::steady_clock::now();
                             pressure_reference = wrf::sdirk3::NativePressureReference::create(
                                 pressure_eos_context, *raw, cached_layout_, U_eval, a);
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+                            const auto vrow_start=std::chrono::steady_clock::now();
+                            pressure_primary=std::make_unique<wrf::sdirk3::v_primary_probe::PreparedPrimary>(
+                                U_eval,cached_layout_,pressure_eos_context,pressure_eos_context.v_primary);
+                            pressure_vrow_prep_ms=std::chrono::duration<double,std::milli>(
+                                std::chrono::steady_clock::now()-vrow_start).count();
+#endif
                             pressure_setup_ms = std::chrono::duration<double,std::milli>(
                                 std::chrono::steady_clock::now() - setup_start).count();
                         } catch (const std::exception& error) {
@@ -9304,13 +9370,22 @@ public:
                         precond_fallback_count_ == pressure_fallback_before && fw_fallbacks == 0;
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                     comparison_eligible = comparison_eligible && pressure_reference_calls > 0;
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+                    comparison_eligible = comparison_eligible && pressure_vrow_calls > 0 &&
+                        pressure_a4.base_capture_attempts==1 && pressure_a4.base_capture_count==1 &&
+                        pressure_a4.base_physical.defined();
+#endif
 #endif
                     const auto safe_number = [](double x) { return std::isfinite(x) ? x : -1.0; };
                     std::ostringstream linear_receipt;
                     linear_receipt << std::setprecision(17)
                               << "[PRESSURE_LINEAR] {\"flavor\":\""
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+                              << "P0_plus_V_primary"
+#else
                               << "reference_p0"
+#endif
 #else
                               << "native_raw"
 #endif
@@ -9348,6 +9423,14 @@ public:
                               << ",\"guard_events\":" << precond_fallback_count_ - pressure_fallback_before
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                               << ",\"reference_calls\":" << pressure_reference_calls
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+                              << ",\"cost_class\":\"instrumented_feasibility_only\""
+                              << ",\"vrow_calls\":" << pressure_vrow_calls
+                              << ",\"vrow_prep_ms\":" << pressure_vrow_prep_ms
+                              << ",\"first_base_capture_attempts\":" << pressure_a4.base_capture_attempts
+                              << ",\"first_base_capture_count\":" << pressure_a4.base_capture_count
+                              << ",\"first_base_capture_ms_included\":" << pressure_a4.base_capture_ms
+#endif
 #endif
                               << "}";
                     std::cerr << linear_receipt.str() << '\n';
@@ -9467,12 +9550,19 @@ public:
                                 pressure_a4.v0,pressure_a4.z0,pressure_a4.raw_w0,
                                 scaling_initialized_ ? S_diag_.detach() : torch::Tensor(),
                                 dt*gamma,cached_layout_,pressure_eos_context,pressure_eos_context.v_primary,
-                                *pressure_reference);
+                                *pressure_reference
+#ifdef WRF_SDIRK3_PRESSURE_A5_VROW
+                                ,scaling_initialized_ ? S_inv_diag_*pressure_a4.base_physical : pressure_a4.base_physical
+#endif
+                                );
                         } catch (const std::bad_alloc&) { throw; }
                           catch (const c10::OutOfMemoryError&) { throw; }
                           catch (const std::exception& error) {
                             std::cerr << "[PRESSURE_A5_ERROR] " << error.what() << '\n';
-                            std::cerr << "[PRESSURE_A5] {\"status\":\"failed\",\"cost_eligible\":false}\n";
+                            std::cerr << "[PRESSURE_A5] {\"status\":\"failed\",\"cost_eligible\":false"
+                                      << (std::ifstream("pressure_a5_direction.bin").good()
+                                          ? ",\"raw_artifact\":\"pressure_a5_direction.bin\"" : "")
+                                      << "}\n";
                         }
                     } else {
                         std::cerr << "[PRESSURE_A5] {\"status\":\"unsupported_context\",\"cost_eligible\":false,"
