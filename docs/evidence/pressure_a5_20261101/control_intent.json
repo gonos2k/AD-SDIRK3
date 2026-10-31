@@ -1,0 +1,94 @@
+{
+  "case": "control",
+  "source_commit": "112f3449b177128bfd71d645cead81606a5708c7",
+  "registration": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/registration.json",
+    "sha256": "8ff5eb40e7c66e63e08062123cfb1e947b6f58ef071550d04d64de9dce9592d3"
+  },
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/build_control/build_receipt.json",
+    "sha256": "d23e6c11841ebab0dfae24c4a43b5b9fc7393277eaf6edfb2ec3dfea428b6067"
+  },
+  "focused_test_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/focused_test/receipt.json",
+    "sha256": "6ee71749087f67b248de6ff41a359a70e473468e340d9a3ed0a2b4eeae50a9e3"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/build_control/wrf.exe",
+    "sha256": "c503ed3a544c099e797101138a7b93787b92120096e1f7c2567f66711a0fc931"
+  },
+  "old05_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/result.json",
+    "sha256": "61eba7dfc14c4ee448c4dd3ea259ecd7677de067490ab4c2650cb1eb05ef57cf",
+    "attribution_outcome": "INCONCLUSIVE"
+  },
+  "old05_direction": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_direction.bin",
+    "sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6"
+  },
+  "old05_pair": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a4_first_pair.bin",
+    "sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1"
+  },
+  "old05_endpoint": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:10:00",
+    "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e"
+  },
+  "expected_header": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/B/wrf_sdirk3_pressure_reference_expected.h",
+    "sha256": "91acfb9ec88905e7e5f762bc84211ec9ae57a78c375771aa36995fbd0c64b845"
+  },
+  "expected_preflight_digest_fnv64": "7bdd17f3a694726e",
+  "reference_rk3_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "order": [
+    "control",
+    "candidate"
+  ],
+  "case_attempt_limit": 1,
+  "pair_attempt_limit": 2,
+  "retry": false,
+  "scope": "one instrumented pair feasibility only, no automatic Gate B or forecast performance claim",
+  "case_input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "case_namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+  "entrypoints": {
+    "sealed_original": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/run_pair_case.py",
+      "sha256": "e0fd72239ce3ae5ff3de294902e240abe7cabd3ecdaabd11898f4fafdcc34dd5"
+    },
+    "corrected": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/run_pair_case_endpoints.py",
+      "sha256": "c91909cd9ddb00c2b2f45b706a45c75cb5bd4e0ddd5629f367c783c990b72203"
+    }
+  },
+  "classification_clarification": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/classification_clarification.json",
+    "sha256": "95aefe0a81b67102a62c5a3eedacb5167e27ab7f5dee9d497bd39c3ac4805bb1"
+  }
+}

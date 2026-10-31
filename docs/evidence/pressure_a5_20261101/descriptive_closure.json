@@ -1,0 +1,365 @@
+{
+  "scope": "one first Arnoldi direction, physical rate coordinates are arbitrarily normalized; not mixed-units energy, no cost or late forecast claim",
+  "result_status": "inconclusive",
+  "model_completed": true,
+  "result_sha256": "61eba7dfc14c4ee448c4dd3ea259ecd7677de067490ab4c2650cb1eb05ef57cf",
+  "raw_sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+  "raw_records": {
+    "U_eval": {
+      "shape": [
+        1080491
+      ],
+      "dtype": "float64"
+    },
+    "P0z_physical": {
+      "shape": [
+        1080491
+      ],
+      "dtype": "float64"
+    },
+    "v_scaled": {
+      "shape": [
+        1080491
+      ],
+      "dtype": "float64"
+    },
+    "z_scaled": {
+      "shape": [
+        1080491
+      ],
+      "dtype": "float64"
+    },
+    "Az_scaled": {
+      "shape": [
+        1080491
+      ],
+      "dtype": "float64"
+    },
+    "S_diag": {
+      "shape": [
+        1080491
+      ],
+      "dtype": "float64"
+    },
+    "eos_ph": {
+      "shape": [
+        81,
+        65,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "eos_t": {
+      "shape": [
+        81,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "eos_mu": {
+      "shape": [
+        81,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "mu_base": {
+      "shape": [
+        81,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "alb": {
+      "shape": [
+        81,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "p_base": {
+      "shape": [
+        81,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "c1h": {
+      "shape": [
+        64
+      ],
+      "dtype": "float32"
+    },
+    "c2h": {
+      "shape": [
+        64
+      ],
+      "dtype": "float32"
+    },
+    "rdnw": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "alt": {
+      "shape": [
+        81,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "p_pert": {
+      "shape": [
+        81,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "c1f": {
+      "shape": [
+        65
+      ],
+      "dtype": "float32"
+    },
+    "c2f": {
+      "shape": [
+        65
+      ],
+      "dtype": "float32"
+    },
+    "rdn": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "msftx": {
+      "shape": [
+        81,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "msfty": {
+      "shape": [
+        81,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "msfux": {
+      "shape": [
+        81,
+        42
+      ],
+      "dtype": "float64"
+    },
+    "msfuy": {
+      "shape": [
+        81,
+        42
+      ],
+      "dtype": "float64"
+    },
+    "msfvx": {
+      "shape": [
+        82,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "msfvy": {
+      "shape": [
+        82,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "ground_phi": {
+      "shape": [
+        81,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "cqv_at_v": {
+      "shape": [
+        82,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "level_mass_v": {
+      "shape": [
+        82,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "velocity_mass_v": {
+      "shape": [
+        82,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "alpha_v": {
+      "shape": [
+        82,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "msf_ratio_v": {
+      "shape": [
+        82,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "dpy_primary": {
+      "shape": [
+        82,
+        64,
+        41
+      ],
+      "dtype": "float64"
+    },
+    "profile_q": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_etheta": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_emu": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_gz_edge": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_alpha": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_beta": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_H": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_nu": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_dnw": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_p_ref": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_alpha_ref": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "profile_theta_ref": {
+      "shape": [
+        64
+      ],
+      "dtype": "float64"
+    },
+    "constants": {
+      "shape": [
+        9
+      ],
+      "dtype": "float64"
+    },
+    "flags": {
+      "shape": [
+        8
+      ],
+      "dtype": "float64"
+    }
+  },
+  "global_scaled_inverse_norm": 3.798377971987565e-14,
+  "packed_closure": [
+    {
+      "name": "ru",
+      "max_abs": 1.0587911840678754e-22,
+      "bound": 5.812561011151328e-20,
+      "passed": true
+    },
+    {
+      "name": "rv",
+      "max_abs": 2.117582368135751e-22,
+      "bound": 1.4919043888241515e-19,
+      "passed": true
+    },
+    {
+      "name": "rw",
+      "max_abs": 6.776263578034403e-21,
+      "bound": 3.5326873106916203e-17,
+      "passed": true
+    },
+    {
+      "name": "ph",
+      "max_abs": 0.0,
+      "bound": 5.72631982468653e-15,
+      "passed": true
+    },
+    {
+      "name": "t",
+      "max_abs": 1.6543612251060553e-24,
+      "bound": 4.159141119395235e-20,
+      "passed": true
+    },
+    {
+      "name": "mu",
+      "max_abs": 0.0,
+      "bound": 2.6100799248186307e-17,
+      "passed": true
+    }
+  ],
+  "hypothesis": "INCONCLUSIVE",
+  "actions_available": true
+}

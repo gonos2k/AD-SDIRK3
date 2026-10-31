@@ -1,0 +1,42 @@
+{
+  "scope": "offline noninterference confirmation; A5 remains INCONCLUSIVE; no model rerun, no cost claim",
+  "source_commit": "fe1afb785fc5abc18cfdb3e4c6f722f358f584db",
+  "original_result_sha256": "580243f4b813a52bbbe48541e7cd39b368042eb9e2bfc596462636475e811a27",
+  "registration_sha256": "b8abcbd7cb1c973395553bd74d9b4a4c6265b61949f81c8e35d0e59eb860b0fb",
+  "fixture_clarification_sha256": "c6d1c7c8186672038978f0b4fce4509d038af88ed79ef75587a892e04fc2801c",
+  "pins_sha256": "3e8b1d740acd06db3cbb75444c16bd67aa870f95b156cf73a4b204c053c3448e",
+  "model_completed": true,
+  "model_return_code": 0,
+  "diagnostic_outcome": "INCONCLUSIVE",
+  "preflight_fnv64": "7bdd17f3a694726e",
+  "end_numeric_array_parity_vs_A4_B0": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "endpoint_sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+  "B0_endpoint_sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+  "A4_pair_full_bytes_equal_B0": true,
+  "A4_pair_sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+  "B0_pair_sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+  "A5_error_log_line": "[PRESSURE_A5_ERROR] Expected all elements of the tensor to have the same scalar type: Float, but got element of scalar type: Double",
+  "failure_location": "source helper context metadata constants tensor construction, before early A5 capture; source diagnosis subject to fix/test",
+  "capture_record_present": false,
+  "A5_payloads": {
+    "pressure_a5_direction.bin": {
+      "exists": false
+    },
+    "pressure_a5_actions.bin": {
+      "exists": false
+    },
+    "pressure_a5_direction.bin.tmp": {
+      "exists": false
+    },
+    "pressure_a5_actions.bin.tmp": {
+      "exists": false
+    }
+  },
+  "A5_attribution_decision": "not evaluated; no hypothesis NO-GO or correction",
+  "model_run": false,
+  "time_local": "2026-11-01T02:16:08+0900"
+}

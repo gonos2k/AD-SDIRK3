@@ -1,0 +1,9 @@
+{
+  "scope": "synthetic endpoint classification only; no model",
+  "corrected_runner_sha256": "c91909cd9ddb00c2b2f45b706a45c75cb5bd4e0ddd5629f367c783c990b72203",
+  "failed_endpoint_yields_NO_GO": true,
+  "all_six_rows_and_work_preserved": true,
+  "passing_endpoint_does_not_upgrade_existing_NO_GO": true,
+  "model_run": false,
+  "time_local": "2026-11-01T03:39:05+0900"
+}

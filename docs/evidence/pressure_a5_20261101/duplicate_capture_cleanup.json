@@ -1,0 +1,29 @@
+{
+  "time_local": "2026-11-01T04:08:39.698311+09:00",
+  "records": [
+    {
+      "duplicate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a5_direction.bin",
+      "canonical_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_direction.bin",
+      "bytes": 72673488,
+      "sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+      "action": "same bytes replaced by read-only hard link; paths and pins preserved"
+    },
+    {
+      "duplicate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a5_actions.bin",
+      "canonical_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_actions.bin",
+      "bytes": 17251144,
+      "sha256": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+      "action": "same bytes replaced by read-only hard link; paths and pins preserved"
+    },
+    {
+      "duplicate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a4_first_pair.bin",
+      "canonical_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a4_first_pair.bin",
+      "bytes": 17287872,
+      "sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "action": "same bytes replaced by read-only hard link; paths and pins preserved"
+    }
+  ],
+  "redundant_logical_bytes": 107212504,
+  "physical_free_space_claim": false,
+  "scope": "user-authorized unnecessary duplicate experiment output cleanup; canonical same-point data retained"
+}

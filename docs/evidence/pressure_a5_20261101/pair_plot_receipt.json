@@ -1,0 +1,144 @@
+{
+  "source_commit": "112f3449b177128bfd71d645cead81606a5708c7",
+  "pair_decision": "NO-GO",
+  "common_v_and_S_exact": true,
+  "candidate_base_z_equals_control_z": true,
+  "control_174_bitwise_parity": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "candidate_six_fields_8eps": {
+    "U": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "V": {
+      "unit": "m s-1",
+      "owned_points": 207360,
+      "max_abs": 7.450580596923828e-09,
+      "rms": 2.7972163311262523e-11,
+      "violations": 0
+    },
+    "W": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 5.820766091346741e-11,
+      "rms": 3.349143270966435e-13,
+      "violations": 0
+    },
+    "PH": {
+      "unit": "m2 s-2",
+      "owned_points": 204800,
+      "max_abs": 1.4901161193847656e-08,
+      "rms": 3.3940607069789554e-11,
+      "violations": 0
+    },
+    "T": {
+      "unit": "K",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "MU": {
+      "unit": "Pa",
+      "owned_points": 3200,
+      "max_abs": 2.384185791015625e-07,
+      "rms": 4.214684851089403e-09,
+      "violations": 0
+    }
+  },
+  "first_scaled_norms": {
+    "control": 0.002687919855048388,
+    "candidate": 0.0036678370850081188
+  },
+  "block_rows": [
+    {
+      "field": "ru",
+      "control_physical_owned_l2": 3.408029886313854e-05,
+      "control_scaled_fullblock_l2": 3.430649933260993e-05,
+      "control_physical_owned_rms": 7.53075325968427e-08,
+      "candidate_physical_owned_l2": 3.434696934507333e-05,
+      "candidate_scaled_fullblock_l2": 3.458460182401109e-05,
+      "candidate_physical_owned_rms": 7.589679667846191e-08
+    },
+    {
+      "field": "rv",
+      "control_physical_owned_l2": 9.615210825050719e-05,
+      "control_scaled_fullblock_l2": 9.97995516024313e-05,
+      "control_physical_owned_rms": 2.111525443740781e-07,
+      "candidate_physical_owned_l2": 1.0368561423649698e-05,
+      "candidate_scaled_fullblock_l2": 1.0388901348755078e-05,
+      "candidate_physical_owned_rms": 2.2769632054229915e-08
+    },
+    {
+      "field": "rw",
+      "control_physical_owned_l2": 0.0026191389301876856,
+      "control_scaled_fullblock_l2": 0.002678877181104007,
+      "control_physical_owned_rms": 5.787534057516849e-06,
+      "candidate_physical_owned_l2": 0.0026191357484641404,
+      "candidate_scaled_fullblock_l2": 0.0026788739368564744,
+      "candidate_physical_owned_rms": 5.787527026834668e-06
+    },
+    {
+      "field": "ph",
+      "control_physical_owned_l2": 0.0023459348663544817,
+      "control_scaled_fullblock_l2": 0.00015156490078551305,
+      "control_physical_owned_rms": 5.18383266319129e-06,
+      "candidate_physical_owned_l2": 0.008274554041798677,
+      "candidate_scaled_fullblock_l2": 0.0005453959371616595,
+      "candidate_physical_owned_rms": 1.8284353982032474e-05
+    },
+    {
+      "field": "t",
+      "control_physical_owned_l2": 6.904043728200362e-07,
+      "control_scaled_fullblock_l2": 6.908982912408228e-07,
+      "control_physical_owned_rms": 1.5255925430684085e-09,
+      "candidate_physical_owned_l2": 1.3666948595479692e-05,
+      "candidate_scaled_fullblock_l2": 1.39734607987317e-05,
+      "candidate_physical_owned_rms": 3.0199975093723733e-08
+    },
+    {
+      "field": "mu",
+      "control_physical_owned_l2": 0.00012008653847336854,
+      "control_scaled_fullblock_l2": 0.00012008710520698969,
+      "control_physical_owned_rms": 2.122850142093454e-06,
+      "candidate_physical_owned_l2": 0.002390310303177475,
+      "candidate_scaled_fullblock_l2": 0.002444935030375699,
+      "candidate_physical_owned_rms": 4.225511561292161e-05
+    }
+  ],
+  "source_hashes": {
+    "control": {
+      "result": "7d905e45f3e5c0aacfddbe0d35e0283258b36d0ff75572cc03297babee762d00",
+      "a4": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "direction": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+      "actions": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+      "intent": "00c075f6e0842c214a893a0312c3faa7bd8a5aa445d013be687f52d85222909d",
+      "pins": "ca9e174278490132767719a86d8882dd528c65f3d7af22960c4d1e86aacff088"
+    },
+    "candidate": {
+      "result": "6f4d705429c87efc9d0b60887a8d5b1d9fb104d031caa33694ec028086142d56",
+      "a4": "500ffda20931781c909ea03334cb52fea257fcec1b56453386e5e5c29f9724c2",
+      "direction": "4ea0639108762501c00d2907ef003030793051841b3fc6d2125ee049b42f0d8b",
+      "actions": "10aeae5b69d3dc3d9e327ce7b6545b48060397062bda026d73be07b879a36e63",
+      "intent": "a2cb29d8acc0fec6af955bdfa2e87f2ed37cb9cb86a4ccfeb0d5cb6b6f4d0f0b",
+      "pins": "c44d35a0a631821b1077af4e027995ac9e59c1b8f5715c3a91aa1e67ec8fc7ce"
+    },
+    "RK3_forecast": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41",
+    "control_forecast": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+    "candidate_forecast": "c6cad8918f8f5848a9724d287205d60fee2c2d7cc64c0f09714ab708387ed7bd"
+  },
+  "scope": "one instrumented first direction; rate-coordinate vectors arbitrary normalized. Legacy A5 FD and inverse gates not candidate eligibility; no promotion or longer-term forecast claim.",
+  "script_sha256": "1927d62856112cf6673e0a51283aea292ddf05ae2eb9ffc9baef9eabdeb072f1",
+  "figure_title_revision": {
+    "description": "Clarified inverse-preconditioner notation; no arithmetic change",
+    "redraw_script_sha256": "bc8a846440d913c442423c2e52318905a079e7a76f28c771093e678124601449",
+    "figure_sha256": "c28f0bde86e51159609fdfcaf63d1087c7253ce0bd408420b547f5762d37b997",
+    "forecast_context_sha256_unchanged": "e29af17e2ea4a94eee67c0414d432c663f197de52da0772e878ddd2c3e7ce8be"
+  }
+}

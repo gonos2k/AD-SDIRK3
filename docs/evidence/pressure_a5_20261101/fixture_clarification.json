@@ -1,0 +1,15 @@
+{
+  "time_local": "2026-11-01T02:03:18+0900",
+  "parent_registration_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/native_registration.json",
+  "parent_registration_sha256": "b8abcbd7cb1c973395553bd74d9b4a4c6265b61949f81c8e35d0e59eb860b0fb",
+  "clarification": "One frozen-point fixture comprises the two SDIRKA53 A5 files. The inherited A4 physical V0/Az pair is accepted as a transient supporting capture and must match old B0 byte-for-byte. All three raw files together must remain within the 256 MiB aggregate cap. No source suppression or new diagnostic seed; root may deduplicate the A4 pair against canonical B0 only after audit, without writing canonical data.",
+  "A5_payload_files": [
+    "pressure_a5_direction.bin",
+    "pressure_a5_actions.bin"
+  ],
+  "transient_support_file": "pressure_a4_first_pair.bin",
+  "three_file_aggregate_max_bytes": 268435456,
+  "preserve_early_direction_if_later_helper_fails": true,
+  "cost_eligible": false,
+  "new_native_attempts": 0
+}
