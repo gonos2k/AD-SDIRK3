@@ -136,6 +136,7 @@ struct SDIRK3Config {
     // Set via env: WRF_SDIRK3_GMRES_TRUE_RESIDUAL_START_J, WRF_SDIRK3_GMRES_TRUE_RESIDUAL_PERIOD
     int gmres_true_residual_start_j = 12;  // min Arnoldi steps before first true_err check
     int gmres_true_residual_period = 8;    // check every N Arnoldi steps after start_j
+    bool gmres_estimate_probe = false;     // opt in to a bounded estimate-triggered true residual check
 
     // v20.14r48: GMRES Arnoldi-level stagnation early termination.
     // If true_err ratio (current/previous) > threshold for K consecutive checks,

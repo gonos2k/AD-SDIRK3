@@ -144,9 +144,19 @@ through Registry + Fortran `set_config` + C++ (env, string setter, dump,
 | Carry FP64 prognostic state across forward steps | `sdirk3_internal_fp64_state_carry` | `WRF_SDIRK3_INTERNAL_FP64_STATE_CARRY` |
 | Stage-2 Krylov restarts | `sdirk3_stage2_max_krylov_restarts` | `WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS` |
 | Stage-2 Krylov tolerance | `sdirk3_stage2_krylov_tol` | `WRF_SDIRK3_STAGE2_KRYLOV_TOL` |
+| Estimate-triggered true residual check | `sdirk3_gmres_estimate_probe` | `WRF_SDIRK3_GMRES_ESTIMATE_PROBE` |
 | W-damping activation (WRF parity) | `w_damping` (standard WRF key) | `WRF_SDIRK3_WRF_W_DAMPING` |
 | IEVA / implicit vertical adv (WRF parity) | `zadvect_implicit` (standard WRF key) | `WRF_SDIRK3_WRF_ZADVECT_IMPLICIT` |
 | W-damping critical CFL (WRF parity) | `w_crit_cfl` (standard WRF key; wired as `wrf_w_crit_cfl` — a separate field from the legacy sdirk3 knob) | `WRF_SDIRK3_WRF_W_CRIT_CFL` |
+
+`sdirk3_gmres_estimate_probe` defaults off. In GMRES and FGMRES it allows one
+additional true-residual check per restart when the Givens estimate first falls
+below the existing linear tolerance. The estimate uses the same weighted
+coordinates and RHS norm as the internal residual check; it never authorizes
+success by itself. An added early exit must also meet the final unweighted
+true-residual criterion. Existing scheduled and final checks, tolerances,
+budgets, and stagnation sampling remain unchanged. This experimental control
+does not enable EW forcing or change the final Newton tolerance.
 
 `sdirk3_internal_fp64` defaults off. It promotes the packed FP32 WRF input before
 ARK stage assembly, retains FP64 stage states and Newton unknowns through the

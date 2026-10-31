@@ -1,0 +1,56 @@
+{
+  "prior_committed_analysis_sha256": "e4fd854966e5a824c13ff725a54cef4eccf35dcaa15a5a3ee0b6fd3807b273f1",
+  "source": "/private/tmp/ark600-noise-ew-pr-20261029/docs/evidence/ark600_noise_ew_screen_20261028/ew_analysis.json",
+  "matched_history_files": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "timestamps": [
+        "0001-01-01_00:00:00"
+      ]
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41",
+      "timestamps": [
+        "0001-01-01_00:10:00"
+      ]
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:20:00",
+      "sha256": "970e3d0576ffe5de398db632bc7b9aa670d686732c82e7dfbba0d77a8b60347e",
+      "timestamps": [
+        "0001-01-01_00:20:00"
+      ]
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:30:00",
+      "sha256": "343c2e7581ee091fe71398ad94d5fa12c5d408df390cf0775363afedb6ec029e",
+      "timestamps": [
+        "0001-01-01_00:30:00"
+      ]
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:40:00",
+      "sha256": "5a0ddadde7921be90e1932f0285f3fcd5d3243a3b22496b673e65d35cdbf68a0",
+      "timestamps": [
+        "0001-01-01_00:40:00"
+      ]
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:50:00",
+      "sha256": "f8672e71899b47e5482ccaaa095fff739ccaa678834116142baff65ce31d4cc5",
+      "timestamps": [
+        "0001-01-01_00:50:00"
+      ]
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/ew-forcing-abba-20261028/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_01:00:00",
+      "sha256": "f80086114114b47df74d474193b1c62ba53800ffb102c3c6fd7d881c94ce5835",
+      "timestamps": [
+        "0001-01-01_01:00:00"
+      ]
+    }
+  ],
+  "scope": "Reused genuine RK3 field-only reference; no new RK3 run or cost claim."
+}

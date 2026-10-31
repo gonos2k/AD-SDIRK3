@@ -1,0 +1,69 @@
+{
+  "timestamp_local": "2026-10-30T01:24:03.063219+09:00",
+  "status": "native_executables_built_no_model_launch",
+  "source": {
+    "commit": "d07db8c5ba911a900259c0e4ad5b109b8d39db25",
+    "assembly_base": "e3d4f98f8964845822b9fc4f57460b6d102c8d49",
+    "initial_patch_sha256": "4d23a181666fb0d9f37cf4a89d6e53bd2006ecebb16589e65a749098d16596ea",
+    "postreview_patch_sha256": "d988d9b097ae486ee0e6c18d8b2fc69023262b028e3ca59de2eb3d692235bb72",
+    "changed_file_hash_comparison": "changed_files_commit_comparison.txt",
+    "archive_comparison": "source_commit_comparison.txt",
+    "archive_comparison_note": "55 differences are generated .f90 outputs overwritten by current build; all other 6543 tracked entries match",
+    "submodule_path": "phys/MYNN-EDMF",
+    "submodule_commit": "90f36c25259ec1960b24325f5b29ac7c5adeac73",
+    "submodule_status_clean": true
+  },
+  "build": {
+    "configure": "NETCDF=/opt/homebrew HDF5=/opt/homebrew ./configure; option 37, nesting 1",
+    "configure_matches_archived": true,
+    "compile": "NETCDF=/opt/homebrew HDF5=/opt/homebrew PATH=/opt/homebrew/bin:/usr/bin:/bin ./compile -j 4 em_b_wave",
+    "initial_log": "logs/wrf-compile.log",
+    "initial_failure": "git archive omitted MYNN-EDMF submodule; make Error 31",
+    "resume_log": "logs/wrf-compile-resume.log",
+    "resume_exit_code": 0,
+    "auxiliary_link_failures": "Both attempts: test_io_idx and diffwrf links ignored by make because ld could not find System; initial log has two diffwrf failures; resume has three. Main wrf.exe and ideal.exe links succeeded.",
+    "cpp_compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+    "fortran_compiler": "GNU Fortran (Homebrew GCC 15.2.0) 15.2.0",
+    "mpi": "/opt/homebrew/opt/open-mpi -> 5.0.9",
+    "torch": "/opt/homebrew/opt/pytorch -> 2.10.0",
+    "netcdf": "4.9.3_2",
+    "netcdf_fortran": "4.6.2",
+    "cxx_abi_flag": "_GLIBCXX_USE_CXX11_ABI=0"
+  },
+  "tests": {
+    "fixture_sha256": "0a019f75fab0adaeb2807e8bc36cee133da2bb148a9d520da0d04c2880ff9599",
+    "postreview_log": "logs/ctest-postreview.log",
+    "passed": [
+      "FGMRES_Contract",
+      "Config_Numeric_Contract",
+      "Krylov_Metric_Coordinate_Contract"
+    ]
+  },
+  "artifacts": {
+    "source/main/wrf.exe": {
+      "sha256": "bd9b64fa2e615247dc23ebaf9c9056c4e99cd5e67e7d8978f9c7cc64434d02af",
+      "bytes": 52692552
+    },
+    "source/main/ideal.exe": {
+      "sha256": "681e8369ea6f6567068ccf635b8c3678baa387a688b9d8d2aeec784fedb37605",
+      "bytes": 38139992
+    },
+    "source/main/libwrflib.a": {
+      "sha256": "49c0c677f6e0c92029d88612f831b398dd881302200c9f1e61ee5b6b359cac86",
+      "bytes": 54872816
+    },
+    "source/external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a": {
+      "sha256": "d3a2a6fdb29bd8dd5fdb0eaccf5ef071eef33704f698112a7a433a0469d791bd",
+      "bytes": 11524904
+    },
+    "source/configure.wrf": {
+      "sha256": "8cdf647666634cdb8cc2624d5d627c6bdd79472b3ed99481831f2a3e27873289",
+      "bytes": 24570
+    }
+  },
+  "dynamic_libraries": [
+    "logs/wrf-otool-L.log",
+    "logs/ideal-otool-L.log"
+  ],
+  "model_run": false
+}

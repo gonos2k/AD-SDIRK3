@@ -1,0 +1,40 @@
+{
+  "source_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:10:00": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:20:00": "970e3d0576ffe5de398db632bc7b9aa670d686732c82e7dfbba0d77a8b60347e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:30:00": "343c2e7581ee091fe71398ad94d5fa12c5d408df390cf0775363afedb6ec029e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:40:00": "5a0ddadde7921be90e1932f0285f3fcd5d3243a3b22496b673e65d35cdbf68a0",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_00:50:00": "f8672e71899b47e5482ccaaa095fff739ccaa678834116142baff65ce31d4cc5",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/rk3_reference/runs/rk3_short/wrfout_d01_0001-01-01_01:00:00": "f80086114114b47df74d474193b1c62ba53800ffb102c3c6fd7d881c94ce5835",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0/wrfout_d01_0001-01-01_00:10:00": "925e71f266ee51aa30bd8053bdd5b58159e0bb56a21f8b2a36accbd456977837",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0/wrfout_d01_0001-01-01_00:20:00": "316d10280e971fbb471e12fdc0b572ffae83be9383ec225da060b66fd1cf9840",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0/wrfout_d01_0001-01-01_00:30:00": "db429bd9d4284fd26318d5b7b207f8574932805d25ce914a0d1bbb359ce436f2",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0/wrfout_d01_0001-01-01_00:40:00": "1b2354257123cc5aa63f1a758c216f9b435b5b222bcbfdc636f9544b9b706d3e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0/wrfout_d01_0001-01-01_00:50:00": "f0cb7a0c8d0151fcd02df16dbb8d8c42dbab291b83a0c77ba60ecbd799693ada",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-probe-20261030/study/runs/A0/wrfout_d01_0001-01-01_01:00:00": "66b67b8af1ff1b66f651ce0a516609dc3351f2a4072665b47ca6b04b0d8e8f69"
+  },
+  "native_W_python_face_index": 41,
+  "W_band_rms": {
+    "Genuine split-explicit RK3": [
+      0.0,
+      8.723146767054712e-05,
+      0.00015066051354128333,
+      0.00020719966125200295,
+      0.0002634807237485428,
+      0.00031452224531916583,
+      0.0003566765326392217
+    ],
+    "ARK EW, probe OFF": [
+      0.0,
+      8.090173365679179e-05,
+      0.00014945371019979523,
+      0.0002015466689848711,
+      0.00025904446360695854,
+      0.0003102740097646924,
+      0.00035239724089346415
+    ]
+  },
+  "scope": "RK3 field-only comparator; actual raw W at one native eta face. DCT-II Y high band reconstructed on all owned points before non-mass-weighted RMS. No ON, long-time noise cure, or accuracy/speedup acceptance."
+}

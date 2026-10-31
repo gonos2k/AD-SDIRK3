@@ -1,0 +1,86 @@
+{
+  "schema": "early_residual_probe_partial_summary_v1",
+  "created_local": "2026-10-30T01:36:10.495438+09:00",
+  "block_status": "failed",
+  "stop_reason": "disk_resource_cap",
+  "no_retry": true,
+  "cases_not_launched": [
+    "B1",
+    "A1"
+  ],
+  "manifest_sha256": "8bf6ab4b61211cd632a74b20b24c8968d902dcbea2d39db30d166b66f581fae1",
+  "block_receipt_sha256": "905943d7cd7835d4198c95c6408d534cdf0c3370b3f0cdf2258a1af01c061dbc",
+  "a0": {
+    "status": "completed",
+    "model_return_code": 0,
+    "completed_steps": 6,
+    "rsl_main_step_sum_seconds": 299.64122,
+    "rsl_step_seconds": [
+      48.5372,
+      53.05571,
+      36.66718,
+      42.83937,
+      79.70431,
+      38.83745
+    ],
+    "effective_estimate_probe": [
+      "off"
+    ],
+    "selected_jvp_total": 790,
+    "selected_jvp_ad_total": 790,
+    "selected_jvp_fd_total": 0,
+    "newton_corrections": 50,
+    "newton_iteration_log_sum_including_convergence_checks": 68,
+    "stage_counts": {
+      "2": 6,
+      "3": 6,
+      "4": 6
+    },
+    "stage_count": 18,
+    "converged_stage_count": 18,
+    "final_scaled_newton_residual_range": [
+      1.31905e-13,
+      9.61489e-10
+    ],
+    "initial_gate": "passed",
+    "receipt_sha256": "9086525b7af4955d9b9a9a0db6d4a4e495e9d3afb164ba4e132851af7c894606"
+  },
+  "b0": {
+    "status": "failed_or_incomplete",
+    "model_return_code": 1,
+    "stop_reason": "disk_resource_cap",
+    "elapsed_seconds": 25.534982083830982,
+    "completed_steps": 0,
+    "effective_estimate_probe": [
+      "on"
+    ],
+    "initial_gate": "passed",
+    "completed_stage_telemetry": [
+      {
+        "stage": 2,
+        "converged": true,
+        "final_scaled_newton_residual": 3.62226e-12
+      }
+    ],
+    "receipt_sha256": "127772dae317a6601b7d8e63d7ae5b0ac6d7a29202435202a9274db501e35eef",
+    "free_disk_sampling": {
+      "first_sample": {
+        "elapsed_seconds": 0.00798762496560812,
+        "free_bytes": 10147401728
+      },
+      "last_sample": {
+        "elapsed_seconds": 22.732018374837935,
+        "free_bytes": 5597405184
+      },
+      "minimum_sampled_free_bytes": 5597405184,
+      "reserved_free_bytes": 5368709120,
+      "note": "Stop followed the last recorded sample when free volume space fell below reserve. Source of the free-space drop is unexplained."
+    }
+  },
+  "study_regular_file_bytes_at_measurement": 36031906,
+  "study_size_note": "Logical bytes, regular files under study, excludes symlinks and this summary; measured when extracted.",
+  "native_on_performance_claim": false,
+  "on_off_field_acceptance_claim": false,
+  "cost_eligible": false,
+  "interpretation": "Incomplete B0 and unlaunched B1/A1 do not support ON performance or field acceptance; no failure of numerical accuracy is inferred."
+}

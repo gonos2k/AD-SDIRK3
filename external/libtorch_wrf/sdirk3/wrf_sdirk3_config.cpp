@@ -184,6 +184,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             } else if (key == "sdirk3_krylov_tol") {
                 krylov_tol = parse_finite_float(value, "krylov_tol");
             // v20.14r48: GMRES performance tuning
+            } else if (key == "sdirk3_gmres_estimate_probe" || key == "gmres_estimate_probe") {
+                gmres_estimate_probe = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_gmres_true_residual_start_j") {
                 gmres_true_residual_start_j = std::clamp(std::stoi(value), 0, 1000);
             } else if (key == "sdirk3_gmres_true_residual_period") {
@@ -943,6 +945,10 @@ void SDIRK3Config::load_from_env() {
         max_krylov_iter = std::atoi(env_val);
     }
     // v20.14r48: GMRES performance tuning env vars
+    if ((env_val = std::getenv("WRF_SDIRK3_GMRES_ESTIMATE_PROBE"))) {
+        gmres_estimate_probe = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] gmres_estimate_probe = " << (gmres_estimate_probe ? "true" : "false") << std::endl;
+    }
     if ((env_val = std::getenv("WRF_SDIRK3_GMRES_TRUE_RESIDUAL_START_J"))) {
         gmres_true_residual_start_j = std::clamp(std::atoi(env_val), 0, 1000);
     }
@@ -2199,6 +2205,7 @@ void SDIRK3Config::load_from_env() {
               << ", retry_handoff_clip=" << (mode3_retry_handoff_clip ? "on" : "off")
               << ", retry_handoff_clip_abs=" << mode3_retry_handoff_clip_abs
               << ", jvp_block_eps=" << (jvp_block_epsilon ? "ON(EXPERIMENTAL)" : "off")
+              << ", estimate_probe=" << (gmres_estimate_probe ? "on" : "off")
               << ", true_res=" << gmres_true_residual_start_j << "+" << gmres_true_residual_period
               << ", arnoldi_stag=" << gmres_arnoldi_stag_window << "/" << gmres_arnoldi_stag_ratio
               << ", mixed_fd=" << jvp_mixed_fd_newton_switch
@@ -2334,6 +2341,7 @@ bool SDIRK3Config::validate() const {
         valid = false;
     }
 
+    // gmres_estimate_probe is boolean, so both values are valid.
     // v20.14r48: GMRES performance params (validate is const → const_cast for clamping)
     {
         auto* self = const_cast<SDIRK3Config*>(this);
@@ -2855,6 +2863,7 @@ void SDIRK3Config::print() const {
     std::cout << "  gmres_restart = " << gmres_restart << std::endl;
     std::cout << "  max_krylov_iter = " << max_krylov_iter << std::endl;
     std::cout << "  krylov_tol = " << krylov_tol << std::endl;
+    std::cout << "  gmres_estimate_probe = " << (gmres_estimate_probe ? "true" : "false") << std::endl;
     std::cout << "  gmres_true_residual_start_j = " << gmres_true_residual_start_j << std::endl;
     std::cout << "  gmres_true_residual_period = " << gmres_true_residual_period << std::endl;
     std::cout << "  gmres_arnoldi_stag_window = " << gmres_arnoldi_stag_window << std::endl;
@@ -4192,6 +4201,10 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.variable_pc_event_log = (value != 0);
         std::cerr << "[CONFIG] variable_pc_event_log = "
                   << (g_sdirk3_config.variable_pc_event_log ? "true" : "false") << std::endl;
+    } else if (key == "gmres_estimate_probe") {
+        g_sdirk3_config.gmres_estimate_probe = (value != 0);
+        std::cerr << "[CONFIG] gmres_estimate_probe = "
+                  << (g_sdirk3_config.gmres_estimate_probe ? "true" : "false") << std::endl;
     } else if (key == "gmres_warmstart") {
         g_sdirk3_config.gmres_warmstart = (value != 0);
         std::cerr << "[CONFIG] gmres_warmstart = "
