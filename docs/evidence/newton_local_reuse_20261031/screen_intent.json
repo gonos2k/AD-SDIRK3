@@ -1,0 +1,67 @@
+{
+  "source_commit": "be66161fa03b50d5b0006b5faec016135517d6da",
+  "pre_registration": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen_preregistration.json",
+    "sha256": "d15cc7a8ccd9ddc13f556d3e7611c59eff1c63d7cca519f593c53fda12d26e3d"
+  },
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/build_receipt.json",
+    "sha256": "c296188897c92a78a67d38f1a0875027a160e6d9e3503f81172f03d2d0c8a65a"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/main/wrf.exe",
+    "sha256": "ce3b78a41ddbac8942fed8debf3d045ef51cd07d7ed53b5d52611a293bee72e6"
+  },
+  "archived_mode3_endpoint": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode3/wrfout_d01_0001-01-01_00:10:00",
+    "sha256": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af"
+  },
+  "reference_rk3_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "max_attempts": 2,
+  "order": [
+    "OFF",
+    "ON"
+  ],
+  "retry": false,
+  "rank_timeout_seconds": 360,
+  "rank_memory_peak_limit_bytes": 4294967296,
+  "rank_memory_scope": "postrun /usr/bin/time -l rank only, not combined launcher tree",
+  "elapsed_cost_scope": "diagnostic only, no performance claim",
+  "cases": {
+    "OFF": {
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf"
+    },
+    "ON": {
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "namelist_sha256": "a43ddbc716a08430e0302be8b30845c568af241a80db24e596bc9cddff81dda6"
+    }
+  }
+}

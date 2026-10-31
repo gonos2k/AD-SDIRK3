@@ -1,0 +1,385 @@
+{
+  "attempts": 2,
+  "case_statuses": [
+    "completed",
+    "completed"
+  ],
+  "disk_free_end": 43639869440,
+  "results": [
+    {
+      "case": "OFF",
+      "return_code": 0,
+      "monotonic_elapsed_seconds": 82.1412701671943,
+      "wall_elapsed_seconds": 82.1408429145813,
+      "command": [
+        "/opt/homebrew/bin/mpirun",
+        "--timeout",
+        "360",
+        "--report-state-on-timeout",
+        "-np",
+        "1",
+        "--bind-to",
+        "none",
+        "/usr/bin/time",
+        "-l",
+        "-o",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/runs/OFF/rank_rusage.log",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/main/wrf.exe"
+      ],
+      "environment_overrides": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "VECLIB_MAXIMUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+        "WRF_SDIRK3_EW_ETA_INITIAL": "0.1",
+        "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0"
+      },
+      "thread_count_actual": "not independently measured",
+      "rss_scope": "one rank process maxrss from /usr/bin/time -l, postrun; excludes launcher",
+      "cost_diagnostic_only": true,
+      "status": "completed",
+      "clock_discrepancy_seconds": -0.0004272526130080223,
+      "timing_eligible": true,
+      "model_completed": true,
+      "failure_class": null,
+      "failure_reason": null,
+      "timing_class": "eligible",
+      "steps": 1,
+      "stage_residuals": [
+        "[Newton] CONVERGED stage=2 iters=3 ||S\u207b\u00b9R||_rms=6.333396e-14 [scaled-RMS] (||R||=6.583852e-11 [unscaled-L2])",
+        "[Newton] CONVERGED stage=3 iters=3 ||S\u207b\u00b9R||_rms=6.321380e-14 [scaled-RMS] (||R||=6.571196e-11 [unscaled-L2])",
+        "[Newton] CONVERGED stage=4 iters=3 ||S\u207b\u00b9R||_rms=6.317310e-14 [scaled-RMS] (||R||=6.566998e-11 [unscaled-L2])"
+      ],
+      "wrapper_rows": [
+        [
+          3,
+          0
+        ]
+      ],
+      "rank_peak_rss_bytes": 2050408448,
+      "reuse_configuration_records": [
+        "0"
+      ],
+      "output_check": {
+        "grid": {
+          "nx": 40,
+          "ny": 80,
+          "nz": 64,
+          "dx_m": 100000.0,
+          "dy_m": 100000.0
+        },
+        "physical_minima_over_all_frames": {
+          "total_theta_K": 258.83935546875,
+          "total_mu_Pa": 89072.1247472763,
+          "layer_depth_m_from_PH_plus_PHB_over_g": 215.13885902459225,
+          "g_m_s2": 9.81
+        },
+        "physical_minimum_total_pressure_Pa": 11079.84334230423,
+        "timestamps": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:10:00"
+        ],
+        "step_logs": {
+          "rsl_main_step_count": 1,
+          "rsl_main_step_sum_seconds": 80.34693,
+          "rsl_main_step_seconds": [
+            80.34693
+          ],
+          "converged_newton_stage_count": 3,
+          "newton_iterations_sum": 9,
+          "rsl_timing_files": {
+            "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/runs/OFF/rsl.out.0000",
+            "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/runs/OFF/rsl.error.0000"
+          },
+          "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+        }
+      },
+      "t0_gate": {
+        "status": "passed",
+        "reference_label": "rk3",
+        "labels": [
+          "rk3",
+          "OFF"
+        ],
+        "timestamp": "0001-01-01_00:00:00",
+        "source_kind": "wrfout",
+        "gate_scope": "post-initialization first history frame",
+        "grid": {
+          "nx": 40,
+          "ny": 80,
+          "nz": 64,
+          "dx_m": 100000.0,
+          "dy_m": 100000.0
+        },
+        "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+        "fields_checked": [
+          "DN",
+          "DNW",
+          "F",
+          "MAPFAC_M",
+          "MAPFAC_MX",
+          "MAPFAC_MY",
+          "MAPFAC_U",
+          "MAPFAC_V",
+          "MU",
+          "MUB",
+          "P",
+          "PB",
+          "PH",
+          "PHB",
+          "QVAPOR",
+          "T",
+          "U",
+          "V",
+          "W",
+          "ZNU",
+          "ZNW"
+        ],
+        "signed_zero_equivalent": true
+      },
+      "archived_off_regression": {
+        "numeric_variables_compared": 174,
+        "bitwise_mismatch_variables": [],
+        "passed": true
+      }
+    },
+    {
+      "case": "ON",
+      "return_code": 0,
+      "monotonic_elapsed_seconds": 58.181151874829084,
+      "wall_elapsed_seconds": 58.18084669113159,
+      "command": [
+        "/opt/homebrew/bin/mpirun",
+        "--timeout",
+        "360",
+        "--report-state-on-timeout",
+        "-np",
+        "1",
+        "--bind-to",
+        "none",
+        "/usr/bin/time",
+        "-l",
+        "-o",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/runs/ON/rank_rusage.log",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/main/wrf.exe"
+      ],
+      "environment_overrides": {
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "VECLIB_MAXIMUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+        "WRF_SDIRK3_EW_ETA_INITIAL": "0.1",
+        "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0"
+      },
+      "thread_count_actual": "not independently measured",
+      "rss_scope": "one rank process maxrss from /usr/bin/time -l, postrun; excludes launcher",
+      "cost_diagnostic_only": true,
+      "status": "completed",
+      "clock_discrepancy_seconds": -0.00030518369749188423,
+      "timing_eligible": true,
+      "model_completed": true,
+      "failure_class": null,
+      "failure_reason": null,
+      "timing_class": "eligible",
+      "steps": 1,
+      "stage_residuals": [
+        "[Newton] CONVERGED stage=2 iters=3 ||S\u207b\u00b9R||_rms=6.382414e-14 [scaled-RMS] (||R||=6.634807e-11 [unscaled-L2])",
+        "[Newton] CONVERGED stage=3 iters=3 ||S\u207b\u00b9R||_rms=6.310479e-14 [scaled-RMS] (||R||=6.559869e-11 [unscaled-L2])",
+        "[Newton] CONVERGED stage=4 iters=3 ||S\u207b\u00b9R||_rms=6.324642e-14 [scaled-RMS] (||R||=6.574618e-11 [unscaled-L2])"
+      ],
+      "wrapper_rows": [
+        [
+          3,
+          0
+        ]
+      ],
+      "rank_peak_rss_bytes": 2117500928,
+      "reuse_work": {
+        "records": [
+          {
+            "status": "enabled",
+            "preparation_ms": 484.984,
+            "krylov_ms": 6433.67,
+            "reference_calls": 1,
+            "preparation_calls": 1,
+            "validation_apply_calls": 1,
+            "prepared_apply_calls": 32
+          },
+          {
+            "status": "enabled",
+            "preparation_ms": 457.739,
+            "krylov_ms": 9526.33,
+            "reference_calls": 1,
+            "preparation_calls": 1,
+            "validation_apply_calls": 1,
+            "prepared_apply_calls": 48
+          },
+          {
+            "status": "enabled",
+            "preparation_ms": 534.721,
+            "krylov_ms": 9059.32,
+            "reference_calls": 1,
+            "preparation_calls": 1,
+            "validation_apply_calls": 1,
+            "prepared_apply_calls": 32
+          },
+          {
+            "status": "enabled",
+            "preparation_ms": 534.353,
+            "krylov_ms": 10618.9,
+            "reference_calls": 1,
+            "preparation_calls": 1,
+            "validation_apply_calls": 1,
+            "prepared_apply_calls": 48
+          },
+          {
+            "status": "enabled",
+            "preparation_ms": 469.255,
+            "krylov_ms": 6643.96,
+            "reference_calls": 1,
+            "preparation_calls": 1,
+            "validation_apply_calls": 1,
+            "prepared_apply_calls": 32
+          },
+          {
+            "status": "enabled",
+            "preparation_ms": 564.202,
+            "krylov_ms": 8757.98,
+            "reference_calls": 1,
+            "preparation_calls": 1,
+            "validation_apply_calls": 1,
+            "prepared_apply_calls": 48
+          }
+        ],
+        "logged_active_linear_solves": 6,
+        "every_logged_reuse_enabled_and_validated": true,
+        "preparation_ms_total": 3045.254,
+        "krylov_ms_total": 51040.16,
+        "reference_calls_total": 6,
+        "preparation_calls_total": 6,
+        "validation_apply_calls_total": 6,
+        "prepared_apply_calls_total": 240
+      },
+      "reuse_configuration_records": [
+        "1"
+      ],
+      "output_check": {
+        "grid": {
+          "nx": 40,
+          "ny": 80,
+          "nz": 64,
+          "dx_m": 100000.0,
+          "dy_m": 100000.0
+        },
+        "physical_minima_over_all_frames": {
+          "total_theta_K": 258.83935546875,
+          "total_mu_Pa": 89072.1247472763,
+          "layer_depth_m_from_PH_plus_PHB_over_g": 215.13885902459225,
+          "g_m_s2": 9.81
+        },
+        "physical_minimum_total_pressure_Pa": 11079.84334230423,
+        "timestamps": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:10:00"
+        ],
+        "step_logs": {
+          "rsl_main_step_count": 1,
+          "rsl_main_step_sum_seconds": 57.18931,
+          "rsl_main_step_seconds": [
+            57.18931
+          ],
+          "converged_newton_stage_count": 3,
+          "newton_iterations_sum": 9,
+          "rsl_timing_files": {
+            "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/runs/ON/rsl.out.0000",
+            "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/runs/ON/rsl.error.0000"
+          },
+          "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+        }
+      },
+      "t0_gate": {
+        "status": "passed",
+        "reference_label": "rk3",
+        "labels": [
+          "rk3",
+          "ON"
+        ],
+        "timestamp": "0001-01-01_00:00:00",
+        "source_kind": "wrfout",
+        "gate_scope": "post-initialization first history frame",
+        "grid": {
+          "nx": 40,
+          "ny": 80,
+          "nz": 64,
+          "dx_m": 100000.0,
+          "dy_m": 100000.0
+        },
+        "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+        "fields_checked": [
+          "DN",
+          "DNW",
+          "F",
+          "MAPFAC_M",
+          "MAPFAC_MX",
+          "MAPFAC_MY",
+          "MAPFAC_U",
+          "MAPFAC_V",
+          "MU",
+          "MUB",
+          "P",
+          "PB",
+          "PH",
+          "PHB",
+          "QVAPOR",
+          "T",
+          "U",
+          "V",
+          "W",
+          "ZNU",
+          "ZNW"
+        ],
+        "signed_zero_equivalent": true
+      },
+      "on_owned_field_comparison": {
+        "U": {
+          "owned_points": 204800,
+          "max_abs_difference": 0.0,
+          "max_limit_fraction": 0.0,
+          "violations": 0
+        },
+        "V": {
+          "owned_points": 207360,
+          "max_abs_difference": 2.3283064365386963e-10,
+          "max_limit_fraction": 0.000244140625,
+          "violations": 0
+        },
+        "W": {
+          "owned_points": 204800,
+          "max_abs_difference": 5.820766091346741e-11,
+          "max_limit_fraction": 6.103515625e-05,
+          "violations": 0
+        },
+        "PH": {
+          "owned_points": 204800,
+          "max_abs_difference": 0.0,
+          "max_limit_fraction": 0.0,
+          "violations": 0
+        },
+        "T": {
+          "owned_points": 204800,
+          "max_abs_difference": 0.0,
+          "max_limit_fraction": 0.0,
+          "violations": 0
+        },
+        "MU": {
+          "owned_points": 3200,
+          "max_abs_difference": 0.0,
+          "max_limit_fraction": 0.0,
+          "violations": 0
+        }
+      }
+    }
+  ]
+}

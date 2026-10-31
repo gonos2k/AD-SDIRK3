@@ -1,0 +1,46 @@
+{
+  "scope": "Completed single-step native screen, not production adoption/noise repair",
+  "at_local": "2026-10-31T18:54:20.144027+09:00",
+  "files": {
+    "analysis.json": {
+      "bytes": 12786,
+      "sha256": "0f8373f1b53f0c9832cbac28cb06e143bc13ff9ac2798e98fbed3002e32f1c88"
+    },
+    "build_receipt.json": {
+      "bytes": 11755,
+      "sha256": "c296188897c92a78a67d38f1a0875027a160e6d9e3503f81172f03d2d0c8a65a"
+    },
+    "ci_be661_success.json": {
+      "bytes": 6532,
+      "sha256": "24301fc3b608e193f8025e2c13582fd2e0bbb9c5a7ed47493e3a33d74ee4b082"
+    },
+    "component_checks.json": {
+      "bytes": 6339,
+      "sha256": "4e84c4facc02113742155cf82040c29b49e1f1e440c6ee5fe7de57ecf9917771"
+    },
+    "field_differences.csv": {
+      "bytes": 912,
+      "sha256": "4e415531738b0a449063a44760fcdc892542e2f900813084f2504bb9289e6a5d"
+    },
+    "native_abi_audit.json": {
+      "bytes": 4040,
+      "sha256": "e63c8da0360d65d01667d415771ee5aedd2545996c27168244ef120650db0246"
+    },
+    "plot_slices.npz": {
+      "bytes": 293027,
+      "sha256": "02ff6ed53bd82123c751e4dc9047fc9be6b425b6633fa9566ded1d559cc7e419"
+    },
+    "screen_intent.json": {
+      "bytes": 2600,
+      "sha256": "04793994072a8ae006620e761044a4b038a6f7b1f58acf07804b0c4b0da86768"
+    },
+    "screen_summary.json": {
+      "bytes": 11998,
+      "sha256": "5a6c8a996df4e1039740d4763a463c1bfe4fc2de20a3969559ca255923ec773b"
+    },
+    "w_yz.png": {
+      "bytes": 221693,
+      "sha256": "ed667606e854bca11d21675da3bc8f649a5ccb02b0e08e9d90d7e54fe95aecfa"
+    }
+  }
+}
