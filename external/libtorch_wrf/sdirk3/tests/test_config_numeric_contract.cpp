@@ -78,6 +78,13 @@ int main() {
     SDIRK3Config mode4_namelist;
     mode4_namelist.load_from_namelist("sdirk3_imex_split_mode = 4\n");
     if (mode4_namelist.imex_split_mode != 4 || !mode4_namelist.validate()) ++failures;
+    auto mode4_fp64 = mode4_namelist;
+    mode4_fp64.internal_fp64 = true;
+    if (!mode4_fp64.validate()) ++failures;
+    mode4_fp64.internal_fp64_state_carry = true;
+    if (!mode4_fp64.validate()) ++failures;
+    mode4_fp64.retain_graph_for_adjoint = true;
+    if (mode4_fp64.validate()) ++failures;
     setenv("WRF_SDIRK3_IMEX_SPLIT_MODE", "4", 1);
     SDIRK3Config mode4_env;
     mode4_env.load_from_env();

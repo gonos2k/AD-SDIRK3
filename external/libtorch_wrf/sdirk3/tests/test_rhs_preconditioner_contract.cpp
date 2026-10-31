@@ -49,6 +49,16 @@ struct FacesTag {
     friend type access(FacesTag);
 };
 template struct Accessor<FacesTag, &TileSDIRK3UnifiedSolver::rhs_theta_faces_>;
+struct RdxTag {
+    using type = std::vector<float> TileSDIRK3UnifiedSolver::*;
+    friend type access(RdxTag);
+};
+template struct Accessor<RdxTag, &TileSDIRK3UnifiedSolver::rdx_>;
+struct RdyTag {
+    using type = std::vector<float> TileSDIRK3UnifiedSolver::*;
+    friend type access(RdyTag);
+};
+template struct Accessor<RdyTag, &TileSDIRK3UnifiedSolver::rdy_>;
 
 } // namespace
 
@@ -110,6 +120,11 @@ int main(int argc, char** argv) {
         for (int j=0; j<nv; ++j)
             v.select(0,j).fill_(2.0*std::sin(M_PI*j/ny));
         transport.checkPhysicalState(state, "transport split state");
+        const auto& rdx_values=transport.solver.*access(RdxTag{});
+        const auto& rdy_values=transport.solver.*access(RdyTag{});
+        TORCH_CHECK(!rdx_values.empty() && !rdy_values.empty(),
+                    "transport fixture must supply the actual RHS grid metrics");
+        const double rdx=rdx_values[0], rdy=rdy_values[0];
         const auto full = transport.rhsAt(state, wrf::sdirk3::RhsMode::Full, 600.0f);
         const auto fast = transport.rhsAt(state, wrf::sdirk3::RhsMode::ImplicitOnly, 600.0f);
         const auto slow = transport.rhsAt(state, wrf::sdirk3::RhsMode::ExplicitOnly, 600.0f);
@@ -123,8 +138,8 @@ int main(int argc, char** argv) {
                 const auto faces = transport.solver.*access(FacesTag{});
                 TORCH_CHECK(faces.adv_x.defined() && faces.adv_y.defined() && faces.adv_z.defined(),
                             "implicit transport lacks actual producer faces");
-                const auto xdiv=-(faces.adv_x.slice(2,1,nu)-faces.adv_x.slice(2,0,nx))/transport.spacing;
-                const auto ydiv=-(faces.adv_y.slice(0,1,nv)-faces.adv_y.slice(0,0,ny))/transport.spacing;
+                const auto xdiv=-(faces.adv_x.slice(2,1,nu)-faces.adv_x.slice(2,0,nx))*rdx;
+                const auto ydiv=-(faces.adv_y.slice(0,1,nv)-faces.adv_y.slice(0,0,ny))*rdy;
                 const auto zdiv=4.0*(faces.adv_z.slice(1,1,nw)-faces.adv_z.slice(1,0,nz));
                 const auto theta_dot=captured.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
                 const auto mu_dot=captured.slice(0,total-sm,total).view({ny,nx}).unsqueeze(1);
@@ -194,8 +209,8 @@ int main(int argc, char** argv) {
                     const auto faces=transport.solver.*access(FacesTag{});
                     TORCH_CHECK(faces.adv_x.defined() && faces.adv_y.defined() && faces.adv_z.defined(),
                                 "nonuniform Fast producer faces unavailable");
-                    const auto xd=-(faces.adv_x.slice(2,1,nu)-faces.adv_x.slice(2,0,nx))/transport.spacing;
-                    const auto yd=-(faces.adv_y.slice(0,1,nv)-faces.adv_y.slice(0,0,ny))/transport.spacing;
+                    const auto xd=-(faces.adv_x.slice(2,1,nu)-faces.adv_x.slice(2,0,nx))*rdx;
+                    const auto yd=-(faces.adv_y.slice(0,1,nv)-faces.adv_y.slice(0,0,ny))*rdy;
                     const auto zd=4.0*(faces.adv_z.slice(1,1,nw)-faces.adv_z.slice(1,0,nz));
                     const auto td=observed.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
                     const auto md=mass_part(observed).view({ny,1,nx});

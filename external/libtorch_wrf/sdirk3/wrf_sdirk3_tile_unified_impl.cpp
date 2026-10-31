@@ -6137,8 +6137,9 @@ vertical_coefficients:
         TORCH_CHECK(U_n.is_cpu() && nprocx_ * nprocy_ == 1 &&
                     its_ <= ids_ && ite_ >= ide_ - 1 &&
                     jts_ <= jds_ && jte_ >= jde_ - 1 &&
-                    wrf::sdirk3::g_sdirk3_config.imex_split_mode == 3,
-                    "internal_fp64 requires ARK mode 3 on one CPU tile covering the domain");
+                    (wrf::sdirk3::g_sdirk3_config.imex_split_mode == 3 ||
+                     wrf::sdirk3::g_sdirk3_config.imex_split_mode == 4),
+                    "internal_fp64 requires ARK mode 3 or 4 on one CPU tile covering the domain");
     }
     if (carry_fp64) {
         TORCH_CHECK(internal_fp64 && rk_step == 1 &&
@@ -15271,8 +15272,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::projectStateBoundaries(const torch::Tenso
 bool TileSDIRK3UnifiedSolver::usesImplicitTransport() const {
     const auto& cfg = wrf::sdirk3::g_sdirk3_config;
     return !g_export_coupled_slow && cfg.imex_split_mode == 4 &&
-        !cfg.hevi_split && !cfg.split_explicit && !cfg.internal_fp64 &&
-        !cfg.internal_fp64_state_carry && !cfg.retain_graph_for_adjoint &&
+        !cfg.hevi_split && !cfg.split_explicit && !cfg.retain_graph_for_adjoint &&
         !fixed_trajectory_open_ && !fixed_trajectory_requested_ &&
         cfg.effective_wrf_omega_ww_cp() &&
         !cfg.enable_ad_halo_exchange && nprocx_ * nprocy_ == 1 &&

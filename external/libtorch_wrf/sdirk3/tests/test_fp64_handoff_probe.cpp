@@ -227,13 +227,15 @@ void check_imported_diagnostic_independence() {
 }
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
     try {
         torch::set_num_threads(1);
         auto& cfg = wrf::sdirk3::g_sdirk3_config;
         cfg = wrf::sdirk3::SDIRK3Config{};
         cfg.internal_fp64 = true;
-        cfg.imex_split_mode = 3;
+        const bool implicit_transport = argc == 2 && std::string(argv[1]) == "--implicit-transport";
+        TORCH_CHECK(argc == 1 || implicit_transport, "unsupported FP64 handoff mode");
+        cfg.imex_split_mode = implicit_transport ? 4 : 3;
         cfg.mass_coordinate_mode = 1;
         cfg.diffusion_option = 2;
         cfg.khdif = 1000.0f;

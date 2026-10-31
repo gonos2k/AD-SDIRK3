@@ -2289,15 +2289,14 @@ void SDIRK3Config::normalize_adaptive_thresholds() {
 
 bool SDIRK3Config::validate() const {
     bool valid = true;
-    if (imex_split_mode == 4 && (internal_fp64 || internal_fp64_state_carry ||
-        retain_graph_for_adjoint || hevi_split || split_explicit || enable_ad_halo_exchange ||
+    if (imex_split_mode == 4 && (retain_graph_for_adjoint || hevi_split || split_explicit || enable_ad_halo_exchange ||
         !effective_wrf_omega_ww_cp() || !effective_mu_horizontal_div_only() ||
         !mu_tend_fortran_parity || wrf_zadvect_implicit != 0)) {
-        std::cerr << "SDIRK3 Config Error: mode 4 requires forward-only WRFParity, no HEVI, split-explicit, AD halo, retained adjoint, or FP64 carry" << std::endl;
+        std::cerr << "SDIRK3 Config Error: mode 4 requires forward-only WRFParity, no HEVI, split-explicit, AD halo, or retained adjoint" << std::endl;
         valid = false;
     }
-    if (internal_fp64 && effective_imex_split_mode() != 3) {
-        std::cerr << "SDIRK3 Config Error: internal_fp64 currently requires effective imex_split_mode=3"
+    if (internal_fp64 && effective_imex_split_mode() != 3 && effective_imex_split_mode() != 4) {
+        std::cerr << "SDIRK3 Config Error: internal_fp64 currently requires effective imex_split_mode=3 or 4"
                   << std::endl;
         valid = false;
     }
@@ -2306,8 +2305,8 @@ bool SDIRK3Config::validate() const {
                   << std::endl;
         valid = false;
     }
-    if (internal_fp64_state_carry && effective_imex_split_mode() != 3) {
-        std::cerr << "SDIRK3 Config Error: internal_fp64_state_carry requires effective imex_split_mode=3"
+    if (internal_fp64_state_carry && effective_imex_split_mode() != 3 && effective_imex_split_mode() != 4) {
+        std::cerr << "SDIRK3 Config Error: internal_fp64_state_carry requires effective imex_split_mode=3 or 4"
                   << std::endl;
         valid = false;
     }

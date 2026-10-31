@@ -117,11 +117,14 @@ This is a changed IMEX partition, not proof that the 36-hour noise is fixed.
 
 Its supported scope is forward-only, single-rank whole-tile WRFParity, periodic X
 and symmetric Y, current diagnosed Omega, no HEVI/split-explicit/AD halo or
-retained adjoint. Internal FP64 integration/state carry are not enabled for mode
-4; unsupported split FullHalo calls fail explicitly. The archived modal and noisy
-mode-3 forecasts used internal FP64 with carry. Therefore a mode-4 FP32 probe
-must be paired with mode-3 FP32 using the same executable, and cannot be called
-an otherwise identical comparison against those archived forecasts.
+retained adjoint. Unsupported split FullHalo calls fail explicitly. The first build excluded
+internal FP64/carry. Its paired FP32 baseline mode 3 reached the 240 s resource
+limit before any stage or step completed (launcher rc 241), so mode 4 was skipped.
+This is inconclusive, not a demonstrated numerical instability. The archived
+mode-3 forecasts used internal FP64/carry. A narrow forward-only FP64/carry
+extension now reuses the existing precision and host-state ownership path;
+adjoint/fixed-trajectory restrictions remain. Its new handoff test and a
+precision-matched native comparison are pending.
 
 The raw vertical principal preconditioner is selected for exact modes {3,4}
 with its other guards unchanged. Its EOS/geopotential/temperature coefficients
@@ -144,3 +147,12 @@ native short-run checks are pending. Native noise suppression, runtime improveme
 completed twin/adjoint results remain tied to their original source and scope.
 
 Latest replacement update: 2026-10-31T15:14:45.173262+09:00.
+
+The first mode-4 CI failure was an oracle metric mismatch: production imported
+rdx=9.99999974737875e-6 as FP32 then widened, while the test divided FP64 faces
+by 100000. The resulting max residual 1.55342535279601e-7 was accounted for by
+the reciprocal difference (1.55342535157398e-7); using the actual imported
+coefficient gave exactly zero in the manufactured fixture. The complete
+corrected standalone contract passed against the frozen 41d3f75 native archive
+with the original 1e-8 bound and actual-operator FGMRES true residual
+1.83613e-16. This is not a physical equation correction or forecast acceptance.

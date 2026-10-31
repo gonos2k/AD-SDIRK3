@@ -130,3 +130,4 @@ Raw_Principal_Factory
 Raw_Principal_Disabled
 Implicit_Transport_RHS_Contract
 Implicit_Transport_Face_Contract
+FP64_Implicit_Transport_Handoff_Contract
