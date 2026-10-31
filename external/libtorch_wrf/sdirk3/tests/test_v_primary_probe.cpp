@@ -4,6 +4,18 @@
 #include "../wrf_sdirk3_acoustic_substep.h"
 #include "../wrf_sdirk3_ww_cp.h"
 #include "../wrf_hydrostatic_pressure.h"
+#include "../wrf_sdirk3_native_pressure_reference.h"
+#include "../wrf_sdirk3_types.h"
+#include "../wrf_sdirk3_unified_rhs.h"
+
+
+#include "../wrf_sdirk3_unified_preconditioner.h"
+#include "../wrf_sdirk3_config.h"
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <cstring>
+#include <unistd.h>
 #include <cmath>
 #include <iostream>
 
@@ -113,6 +125,84 @@ int main() {
     try { (void)v_primary_probe::evaluate(U,z,layout,e,wet); }
     catch(const c10::Error&) { rejected=true; }
     TORCH_CHECK(rejected,"non-unit physical interior cqv accepted as dry");
+    // Exercise the complete observation including raw/action serialization.
+    auto grid=std::make_shared<WRFGridInfo>(); auto& g=*grid;
+    g.nx=nx;g.ny=ny;g.nz=nz;g.nx_u=nx+1;g.ny_v=nv;g.nz_w=nw;
+    g.ids=g.its=g.jds=g.jts=1;g.ide=g.ite=nx;g.jde=g.jte=ny;
+    g.periodic_x=true;g.periodic_y=false;
+    g.p_base=e.p_base;g.mu_base=e.mu_base;g.alb=e.alb;g.c1h=e.c1h;g.c2h=e.c2h;g.rdnw=e.rdnw;
+    g.c1f=torch::tensor({1.0,0.8,0.5},opts);g.c2f=torch::tensor({0.0,16000.0,40000.0},opts);
+    g.rdn=torch::tensor({2.0,2.0},opts);
+    auto& geo=e.geometry;geo.rdx=geo.rdy;geo.gravity=g.g;
+    geo.c1f=g.c1f;geo.c2f=g.c2f;geo.rdn=g.rdn;
+    geo.msftx=geo.msfty=torch::ones({ny,nx},opts);
+    geo.msfux=geo.msfuy=torch::ones({ny,nx+1},opts);
+    geo.ground_phi=torch::zeros({ny,nx},opts);
+    auto& cfg=g_sdirk3_config;cfg=SDIRK3Config{};cfg.imex_split_mode=3;
+    cfg.precond_type=2;cfg.precond_acoustic_4x4=1;
+    auto physics=std::make_shared<PhysicsConfig>();
+    UnifiedPreconditioner raw(grid,physics,600.0f,0.4358665215f);
+    raw.bind_raw_principal_state_or_throw(U,2,"A5 writer fixture");
+    raw.update_time_coefficients(600.0f,0.4358665215f);
+    const double a=600.0*(1767732205903.0/4055673282236.0);
+    const auto P0=NativePressureReference::create(e,raw,layout,U,a);
+    const auto Pz=P0->apply_operator(z);
+    auto Az=Pz.clone();
+    block(Az,1,{nv,nz,nx})[1][0][0]+=1.e-3;
+    char directory[]="/tmp/a5_writer_test_XXXXXX";
+    TORCH_CHECK(mkdtemp(directory),"cannot create A5 test directory");
+    const auto original=std::filesystem::current_path();
+    std::ostringstream captured; auto* previous=std::cout.rdbuf(captured.rdbuf());
+    try {
+        std::filesystem::current_path(directory);
+        v_primary_probe::run(U,Pz,z,Az,Pz,z,Az,torch::Tensor(),a,layout,e,c,*P0);
+        std::cout.rdbuf(previous);
+        const auto output=captured.str();
+        TORCH_CHECK(output.find("[PRESSURE_A5_CAPTURE]")!=std::string::npos &&
+                    output.find("[PRESSURE_A5_DECOMPOSITION]")!=std::string::npos &&
+                    output.find("\"status\":\"observed\"")!=std::string::npos &&
+                    output.find("\"S_diag_provided\":false")!=std::string::npos &&
+                    output.find("\"base_state_branch\":true")!=std::string::npos &&
+                    output.find("\"use_wrf_mass_flux\":true")!=std::string::npos &&
+                    output.find("\"packed_closure_ok\":true")!=std::string::npos &&
+                    output.find("\"ad_pointwise_ok\":true")!=std::string::npos &&
+                    output.find("\"fd_pointwise_ok\":[true,true,true]")!=std::string::npos,
+                    "A5 complete observation receipt invalid: ",output);
+        const auto check_file=[&](const char* path,bool constants) {
+            std::ifstream in(path,std::ios::binary);char magic[8];uint64_t count=0;
+            in.read(magic,8);in.read(reinterpret_cast<char*>(&count),8);
+            TORCH_CHECK(in && std::memcmp(magic,"SDIRKA53",8)==0 && count>0,"bad A5 artifact header");
+            bool found=false;
+            for(uint64_t k=0;k<count;++k) {
+                char name[32];uint32_t item=0,ndim=0;int64_t dims[4];uint64_t bytes=0;
+                in.read(name,32);in.read(reinterpret_cast<char*>(&item),4);in.read(reinterpret_cast<char*>(&ndim),4);
+                in.read(reinterpret_cast<char*>(dims),32);in.read(reinterpret_cast<char*>(&bytes),8);
+                TORCH_CHECK(in && ndim<=4 && bytes>0,"bad A5 artifact record");
+                if(std::string(name)=="constants") {
+                    TORCH_CHECK(item==8 && ndim==1 && dims[0]==9 && bytes==72,"constants must be FP64");
+                    double values[9];in.read(reinterpret_cast<char*>(values),72);
+                    const double expected[9]={static_cast<double>(e.rd),static_cast<double>(e.cv),
+                        static_cast<double>(e.cp),static_cast<double>(e.p0),static_cast<double>(e.t0),
+                        static_cast<double>(geo.rdx),static_cast<double>(c.rdy),
+                        static_cast<double>(c.velocity_eps),a};
+                    for(int i=0;i<9;++i) TORCH_CHECK(values[i]==expected[i],"serialized constant mismatch at ",i);
+                    found=true;
+                } else in.seekg(static_cast<std::streamoff>(bytes),std::ios::cur);
+                TORCH_CHECK(in,"truncated A5 artifact");
+            }
+            TORCH_CHECK(!constants || found,"missing A5 FP64 constants");
+        };
+        check_file("pressure_a5_direction.bin",true);check_file("pressure_a5_actions.bin",false);
+        bool overwrite_rejected=false;
+        try { v_primary_probe::run(U,Pz,z,Az,Pz,z,Az,torch::Tensor(),a,layout,e,c,*P0); }
+        catch(const c10::Error&) { overwrite_rejected=true; }
+        TORCH_CHECK(overwrite_rejected && !std::filesystem::exists("pressure_a5_direction.bin.tmp"),
+                    "existing capture overwritten or temporary file left behind");
+        std::filesystem::current_path(original);std::filesystem::remove_all(directory);
+    } catch (...) {
+        std::cout.rdbuf(previous);std::filesystem::current_path(original);
+        std::filesystem::remove_all(directory);throw;
+    }
     std::cout << "V_PRIMARY_KERNEL ad_relative=" << ad/scale
               << " fd_passes=" << fd_passes << " mass_calls=" << calls
               << " changed_mass=1 bottom_active=1\n";
