@@ -20,7 +20,7 @@
 namespace wrf::sdirk3::pressure_stage_probe {
 namespace {
 thread_local PressureEosContext* active_eos_context=nullptr;
-double norm(const torch::Tensor& x) {
+double tensor_l2(const torch::Tensor& x) {
     return x.to(torch::kCPU,torch::kFloat64).norm().item<double>();
 }
 
@@ -267,11 +267,11 @@ void run(const torch::Tensor& U_eval, const torch::Tensor& F_eval, const torch::
     TORCH_CHECK(torch::isfinite(residual).all().item<bool>() &&
                 torch::isfinite(x0_phys).all().item<bool>(),
                 "pressure probe scaling produced nonfinite data");
-    const double b_scale_error=norm(b_phys-(S_diag.defined() ? S_diag*b_scaled:b_scaled));
-    const double x_scale_error=norm(x_phys-(S_diag.defined() ? S_diag*x_scaled:x_scaled));
-    const double rnorm=norm(residual), bnorm=norm(b_phys);
-    const double srnorm=norm(scaled_residual), sbnorm=norm(b_scaled);
-    const double fnorm=norm(F_eval), knorm=norm(K), x0norm=norm(x0_phys);
+    const double b_scale_error=tensor_l2(b_phys-(S_diag.defined() ? S_diag*b_scaled:b_scaled));
+    const double x_scale_error=tensor_l2(x_phys-(S_diag.defined() ? S_diag*x_scaled:x_scaled));
+    const double rnorm=tensor_l2(residual), bnorm=tensor_l2(b_phys);
+    const double srnorm=tensor_l2(scaled_residual), sbnorm=tensor_l2(b_scaled);
+    const double fnorm=tensor_l2(F_eval), knorm=tensor_l2(K), x0norm=tensor_l2(x0_phys);
     TORCH_CHECK(bnorm>0 && sbnorm>0 && std::isfinite(rnorm) && std::isfinite(bnorm) &&
                 std::isfinite(srnorm) && std::isfinite(sbnorm) &&
                 std::isfinite(fnorm) && std::isfinite(knorm) && std::isfinite(x0norm) &&
@@ -329,7 +329,7 @@ void run(const torch::Tensor& U_eval, const torch::Tensor& F_eval, const torch::
         << std::dec << ",\"physical_block_saved_residual_norms\":[";
     for (size_t k=0;k<layout.blocks.size();++k) {
         if (k) out << ',';
-        const auto& b=layout.blocks[k]; out << norm(residual.slice(0,b.start,b.start+b.size));
+        const auto& b=layout.blocks[k]; out << tensor_l2(residual.slice(0,b.start,b.start+b.size));
     }
     out << "],\"eos_directions\":[";
     const char* names[]={"phi_bottom_unprojected_eos","phi_bottom_adjacent","phi_dynamic_top","theta_mid","mu_column","mixed"};
