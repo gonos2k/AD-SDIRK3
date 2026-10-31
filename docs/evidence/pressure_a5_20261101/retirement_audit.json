@@ -1,0 +1,11 @@
+{
+  "time_local": "2026-11-01T04:16:18.581737+09:00",
+  "rejected_prototype_source": "112f3449b177128bfd71d645cead81606a5708c7",
+  "restored_baseline_source": "05f28d1fccec16e92973213926d20ecf273d331d",
+  "baseline_body_byte_equal": true,
+  "baseline_body_sha256": "683690ed7983973638ddcc22a23cdd824ba6c2edb5dc02b430e2efa0b3bcecba",
+  "only_prefix": "compile-time error for retired prototype macro; default absent",
+  "current_source_sha256": "db3cf5ecfcb7b5d18209363465d955572c0c108945393eeee72fd099131e9983",
+  "retained": "validated PreparedPrimary and same-vector diagnostics, no selected numerical V update",
+  "new_model_run": false
+}

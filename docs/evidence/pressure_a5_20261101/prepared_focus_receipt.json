@@ -1,0 +1,53 @@
+{
+  "commit": "112f3449b177128bfd71d645cead81606a5708c7",
+  "build_receipt_sha256": "d23e6c11841ebab0dfae24c4a43b5b9fc7393277eaf6edfb2ec3dfea428b6067",
+  "archive_sha256": "9aa8992f33e535e5a11f8d37df019c9de024c1773122caea985732d3241b0ec7",
+  "source_sha256": "8a63f26cd620857993f17a7986809ced7fbce0c11fdfba50eee9470968444fde",
+  "headers_sha256": {
+    "/private/tmp/pressure-a5-20261101/external/libtorch_wrf/sdirk3/wrf_sdirk3_v_primary_probe.h": "b49609c0203a592532a8a3db56513f6ff87de621b9bd823dafbd5ae7e070eead",
+    "/private/tmp/pressure-a5-20261101/external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_stage_probe.h": "a9e3490a3a0c1daa28b4a9a891c5a499637274adf1012da698dd1317cf558bf6",
+    "/private/tmp/pressure-a5-20261101/external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_packed_adapter.h": "5ca4c0893e6fab380403f144d53931575b1a724b811d172611ecf67b22c0c42c",
+    "/private/tmp/pressure-a5-20261101/external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.h": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+    "/private/tmp/pressure-a5-20261101/external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+    "/private/tmp/pressure-a5-20261101/external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b"
+  },
+  "build_cmd": [
+    "/usr/bin/g++",
+    "-std=c++17",
+    "-O3",
+    "-DMACOS",
+    "-DDMPARALLEL",
+    "-DUSE_SDIRK3",
+    "-DWRF_SDIRK3_PRESSURE_STAGE_PROBE",
+    "-DWRF_SDIRK3_PRESSURE_A4",
+    "-DWRF_SDIRK3_PRESSURE_A5",
+    "-D_GLIBCXX_USE_CXX11_ABI=0",
+    "-I/private/tmp/pressure-a5-20261101/external/libtorch_wrf/sdirk3",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+    "-I/opt/homebrew/include",
+    "/private/tmp/pressure-a5-20261101/external/libtorch_wrf/sdirk3/tests/test_v_primary_probe.cpp",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/build_control/libwrf_sdirk3_libtorch.a",
+    "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-ltorch",
+    "-ltorch_cpu",
+    "-lc10",
+    "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-L/opt/homebrew/opt/open-mpi/lib",
+    "-lmpi",
+    "-L/opt/homebrew/opt/gcc/lib/gcc/current",
+    "-lgfortran",
+    "-lquadmath",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/focused_test/test_v_primary_probe"
+  ],
+  "build_returncode": 0,
+  "binary_sha256": "9e514a347aabe70707d3c9b1cb416941886cfe7a581e3487391c3f1834a68320",
+  "run_cmd": [
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/focused_test/test_v_primary_probe"
+  ],
+  "run_returncode": 0,
+  "run_seconds": 1.197283583227545,
+  "run_cwd": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/focused_test",
+  "passed": true
+}

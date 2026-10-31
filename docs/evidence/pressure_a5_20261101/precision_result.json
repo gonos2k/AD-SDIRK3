@@ -1,0 +1,16 @@
+{
+  "registration_sha256": "bd9e1a88c7dbfdd13b4b8cfd32e9ae40a56c1b397fd7b12616220c28cd57d8d9",
+  "source_sha256": "366b06d9d56a66d5850e31bc6f2be608b682d8e001239a81c49b0bc110c286df",
+  "binary_sha256": "b67e8eedc12eec3164798d0616b7761ab37f82e5e4bc6f29e0b0b292fe8e4d9f",
+  "cmd": [
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/offline_precision_validation/fd_mpfr",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_direction.bin",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_actions.bin"
+  ],
+  "start_local": "2026-11-01T02:45:20.164012+09:00",
+  "model_run": false,
+  "returncode": 0,
+  "seconds": 20.239248958881944,
+  "log_sha256": "db7a20d408a401f3551312830a735c960b8a2b658415f4ec1149f45485d5d785",
+  "end_local": "2026-11-01T02:45:40.403404+09:00"
+}

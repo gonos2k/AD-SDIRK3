@@ -1,0 +1,12 @@
+{
+  "time_local": "2026-11-01T03:39:16+0900",
+  "sealed_registration_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/registration.json",
+  "sealed_registration_sha256": "8ff5eb40e7c66e63e08062123cfb1e947b6f58ef071550d04d64de9dce9592d3",
+  "original_runner_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/run_pair_case.py",
+  "original_runner_sha256": "e0fd72239ce3ae5ff3de294902e240abe7cabd3ecdaabd11898f4fafdcc34dd5",
+  "corrected_runner_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/run_pair_case_endpoints.py",
+  "corrected_runner_sha256": "c91909cd9ddb00c2b2f45b706a45c75cb5bd4e0ddd5629f367c783c990b72203",
+  "clarification": "A valid candidate 8-epsilon endpoint failure is NO-GO; compute and retain all six-row quality and work assessment. Missing identity/configuration/unsupported data remains INCONCLUSIVE; a control endpoint mismatch stops before candidate. No numerical threshold changes.",
+  "candidate_build_order": "Root enforces and records an eligible-current-control-result SHA tool precheck before invoking candidate builder; the builder is unchanged and this addendum does not claim that precheck has occurred.",
+  "no_model_run": true
+}
