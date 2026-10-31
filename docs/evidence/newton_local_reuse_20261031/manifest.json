@@ -19,8 +19,8 @@
       "sha256": "4e84c4facc02113742155cf82040c29b49e1f1e440c6ee5fe7de57ecf9917771"
     },
     "field_differences.csv": {
-      "bytes": 912,
-      "sha256": "4e415531738b0a449063a44760fcdc892542e2f900813084f2504bb9289e6a5d"
+      "bytes": 893,
+      "sha256": "df05112c0a5a5aadaf87707322c2bba4d322737a4400790a4ba5b72550269d92"
     },
     "native_abi_audit.json": {
       "bytes": 4040,
@@ -41,6 +41,12 @@
     "w_yz.png": {
       "bytes": 221693,
       "sha256": "ed667606e854bca11d21675da3bc8f649a5ccb02b0e08e9d90d7e54fe95aecfa"
+    }
+  },
+  "transforms": {
+    "field_differences.csv": {
+      "operation": "CRLF to LF only; original numeric rows unchanged",
+      "source_sha256": "4e415531738b0a449063a44760fcdc892542e2f900813084f2504bb9289e6a5d"
     }
   }
 }
