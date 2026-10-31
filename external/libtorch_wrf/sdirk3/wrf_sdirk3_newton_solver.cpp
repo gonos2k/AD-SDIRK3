@@ -9164,7 +9164,9 @@ public:
                     comparison_eligible = comparison_eligible && pressure_reference_calls > 0;
 #endif
                     const auto safe_number = [](double x) { return std::isfinite(x) ? x : -1.0; };
-                    std::cerr << "[PRESSURE_LINEAR] {\"flavor\":\""
+                    std::ostringstream linear_receipt;
+                    linear_receipt << std::setprecision(17)
+                              << "[PRESSURE_LINEAR] {\"flavor\":\""
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                               << "reference_p0"
 #else
@@ -9205,7 +9207,8 @@ public:
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                               << ",\"reference_calls\":" << pressure_reference_calls
 #endif
-                              << "}\n";
+                              << "}";
+                    std::cerr << linear_receipt.str() << '\n';
                 }
                 // Frozen observation only: the original Krylov solve and its local
                 // prepared graph have both completed. No production M wrapper is called.
