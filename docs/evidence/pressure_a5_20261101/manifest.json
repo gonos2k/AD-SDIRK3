@@ -1,0 +1,405 @@
+{
+  "created_local": "2026-11-01T04:24:48.757750+09:00",
+  "attribution_source": "05f28d1fccec16e92973213926d20ecf273d331d",
+  "prototype_numerical_source": "112f3449b177128bfd71d645cead81606a5708c7",
+  "prototype_decision": "NO-GO",
+  "numerical_hook_in_final_source": false,
+  "original_native_FP64_FD_outcome": "INCONCLUSIVE preserved",
+  "supplementary_fullfield_precision_check": "PASS; no native-code or tolerance/width change",
+  "forecast_accuracy_or_speed_claim": false,
+  "gate_b_authorized": false,
+  "records": [
+    {
+      "path": "native_registration.json",
+      "bytes": 29513,
+      "sha256": "b8abcbd7cb1c973395553bd74d9b4a4c6265b61949f81c8e35d0e59eb860b0fb",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/native_registration.json",
+      "original_sha256": "b8abcbd7cb1c973395553bd74d9b4a4c6265b61949f81c8e35d0e59eb860b0fb",
+      "normalization": "none"
+    },
+    {
+      "path": "fixture_clarification.json",
+      "bytes": 1003,
+      "sha256": "c6d1c7c8186672038978f0b4fce4509d038af88ed79ef75587a892e04fc2801c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/fixture_clarification.json",
+      "original_sha256": "c6d1c7c8186672038978f0b4fce4509d038af88ed79ef75587a892e04fc2801c",
+      "normalization": "none"
+    },
+    {
+      "path": "first_build_receipt.json",
+      "bytes": 30810,
+      "sha256": "ed653b7abfb17fbc818f08f9209a4b5b14e05732dd83f483ff557c0731d57764",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/native_build/build_receipt.json",
+      "original_sha256": "ed653b7abfb17fbc818f08f9209a4b5b14e05732dd83f483ff557c0731d57764",
+      "normalization": "none"
+    },
+    {
+      "path": "first_result.json",
+      "bytes": 6294,
+      "sha256": "580243f4b813a52bbbe48541e7cd39b368042eb9e2bfc596462636475e811a27",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/native_case/run/result.json",
+      "original_sha256": "580243f4b813a52bbbe48541e7cd39b368042eb9e2bfc596462636475e811a27",
+      "normalization": "none"
+    },
+    {
+      "path": "first_noninterference_postcheck.json",
+      "bytes": 1993,
+      "sha256": "f55d9758bc4af1ded494789f67835d020b4df28c95909e71c80f02f7a1787d43",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/fe1_offline_postcheck.json",
+      "original_sha256": "f55d9758bc4af1ded494789f67835d020b4df28c95909e71c80f02f7a1787d43",
+      "normalization": "none"
+    },
+    {
+      "path": "first_focus_receipt.json",
+      "bytes": 2884,
+      "sha256": "78de40d4399dad2b646b69dde6e88f0d42f5c55c6c85d3e89bd652785d70f62f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/focused_test/receipt.json",
+      "original_sha256": "78de40d4399dad2b646b69dde6e88f0d42f5c55c6c85d3e89bd652785d70f62f",
+      "normalization": "none"
+    },
+    {
+      "path": "serializer_fix_registration.json",
+      "bytes": 30620,
+      "sha256": "7745d243ec598e991cc71264b7ebc96f6b6cc1f4cf5146ce28634c12c967d8e6",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/registration.json",
+      "original_sha256": "7745d243ec598e991cc71264b7ebc96f6b6cc1f4cf5146ce28634c12c967d8e6",
+      "normalization": "none"
+    },
+    {
+      "path": "serializer_fix_build_receipt.json",
+      "bytes": 23989,
+      "sha256": "efa6d01a92e5ac3df9e6cffe67b01d7d3b0b2b7c47b639904c6e46195776f239",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/build/build_receipt.json",
+      "original_sha256": "efa6d01a92e5ac3df9e6cffe67b01d7d3b0b2b7c47b639904c6e46195776f239",
+      "normalization": "none"
+    },
+    {
+      "path": "serializer_fix_focus_receipt.json",
+      "bytes": 3089,
+      "sha256": "1c729e2145043cf817f1117d7237e9c0a29f471c4715dc0fa405603b1a347ab5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/focused_test/receipt.json",
+      "original_sha256": "1c729e2145043cf817f1117d7237e9c0a29f471c4715dc0fa405603b1a347ab5",
+      "normalization": "none"
+    },
+    {
+      "path": "serializer_fix_result.json",
+      "bytes": 17700,
+      "sha256": "61eba7dfc14c4ee448c4dd3ea259ecd7677de067490ab4c2650cb1eb05ef57cf",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/result.json",
+      "original_sha256": "61eba7dfc14c4ee448c4dd3ea259ecd7677de067490ab4c2650cb1eb05ef57cf",
+      "normalization": "none"
+    },
+    {
+      "path": "precision_registration.json",
+      "bytes": 2873,
+      "sha256": "bd9e1a88c7dbfdd13b4b8cfd32e9ae40a56c1b397fd7b12616220c28cd57d8d9",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/offline_precision_validation/registration.json",
+      "original_sha256": "bd9e1a88c7dbfdd13b4b8cfd32e9ae40a56c1b397fd7b12616220c28cd57d8d9",
+      "normalization": "none"
+    },
+    {
+      "path": "precision_result.json",
+      "bytes": 919,
+      "sha256": "64c796167ae9b8e9860aa319fb3f5dfbef3c90edfc8c0bddf12f55323c117370",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/offline_precision_validation/result.json",
+      "original_sha256": "64c796167ae9b8e9860aa319fb3f5dfbef3c90edfc8c0bddf12f55323c117370",
+      "normalization": "none"
+    },
+    {
+      "path": "fd_mpfr.cpp",
+      "bytes": 9653,
+      "sha256": "366b06d9d56a66d5850e31bc6f2be608b682d8e001239a81c49b0bc110c286df",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/offline_precision_validation/fd_mpfr.cpp",
+      "original_sha256": "366b06d9d56a66d5850e31bc6f2be608b682d8e001239a81c49b0bc110c286df",
+      "normalization": "none"
+    },
+    {
+      "path": "precision_run_once.py",
+      "bytes": 1292,
+      "sha256": "b7e1be1df24b1147233f6b111fbb65c792411e9e90dfe8f3bd69e26e3c875f87",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/offline_precision_validation/run_once.py",
+      "original_sha256": "b7e1be1df24b1147233f6b111fbb65c792411e9e90dfe8f3bd69e26e3c875f87",
+      "normalization": "none"
+    },
+    {
+      "path": "descriptive_analysis.json",
+      "bytes": 15489,
+      "sha256": "fb175e54c7a721f15c6f6fb5f1a1844686ffe8d3be3be4675d4636e9de294209",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/descriptive_analysis/analysis.json",
+      "original_sha256": "fb175e54c7a721f15c6f6fb5f1a1844686ffe8d3be3be4675d4636e9de294209",
+      "normalization": "none"
+    },
+    {
+      "path": "descriptive_closure.json",
+      "bytes": 5828,
+      "sha256": "42f89200939027ff95480e400d39b1264fbd40a4898bea4c6dba1b279dbd28c9",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/descriptive_analysis/capture_closure.json",
+      "original_sha256": "42f89200939027ff95480e400d39b1264fbd40a4898bea4c6dba1b279dbd28c9",
+      "normalization": "none"
+    },
+    {
+      "path": "signed_projections.json",
+      "bytes": 513,
+      "sha256": "68534bc771eb2f2246b5adfa2e9147cd37b30604a31bb38bfee8817a66c5dd6f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/descriptive_analysis/signed_projections.json",
+      "original_sha256": "68534bc771eb2f2246b5adfa2e9147cd37b30604a31bb38bfee8817a66c5dd6f",
+      "normalization": "none"
+    },
+    {
+      "path": "signed_components.png",
+      "bytes": 142161,
+      "sha256": "c33448d36f5b3867eedf4fb7b7bf3937c1b66573aac1d203c1ac2ef8a003a7cd",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/descriptive_analysis/signed_components.png",
+      "original_sha256": "c33448d36f5b3867eedf4fb7b7bf3937c1b66573aac1d203c1ac2ef8a003a7cd",
+      "normalization": "none"
+    },
+    {
+      "path": "vertical_rms.png",
+      "bytes": 99046,
+      "sha256": "8e10c5f33248635d5f1321e083af96e49d885e33b9f5418365a18e2c2779f5ee",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/descriptive_analysis/vertical_rms.png",
+      "original_sha256": "8e10c5f33248635d5f1321e083af96e49d885e33b9f5418365a18e2c2779f5ee",
+      "normalization": "none"
+    },
+    {
+      "path": "analyze_a5_offline.py",
+      "bytes": 8884,
+      "sha256": "0a0a4a700f8af335fe1003b21815e11a4acfc93fd68332994001bc12f8cc19b7",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/analyze_a5_offline.py",
+      "original_sha256": "0a0a4a700f8af335fe1003b21815e11a4acfc93fd68332994001bc12f8cc19b7",
+      "normalization": "none"
+    },
+    {
+      "path": "pair_registration.json",
+      "bytes": 35181,
+      "sha256": "8ff5eb40e7c66e63e08062123cfb1e947b6f58ef071550d04d64de9dce9592d3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/registration.json",
+      "original_sha256": "8ff5eb40e7c66e63e08062123cfb1e947b6f58ef071550d04d64de9dce9592d3",
+      "normalization": "none"
+    },
+    {
+      "path": "classification_clarification.json",
+      "bytes": 1267,
+      "sha256": "95aefe0a81b67102a62c5a3eedacb5167e27ab7f5dee9d497bd39c3ac4805bb1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/classification_clarification.json",
+      "original_sha256": "95aefe0a81b67102a62c5a3eedacb5167e27ab7f5dee9d497bd39c3ac4805bb1",
+      "normalization": "none"
+    },
+    {
+      "path": "classification_smoke.json",
+      "bytes": 372,
+      "sha256": "2e522147bea621b23a7bf3b2ceffc1f4d75175e1d635ba22e2e9490ccfd55d08",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/endpoint_classification_smoke.json",
+      "original_sha256": "2e522147bea621b23a7bf3b2ceffc1f4d75175e1d635ba22e2e9490ccfd55d08",
+      "normalization": "none"
+    },
+    {
+      "path": "control_build_receipt.json",
+      "bytes": 70965,
+      "sha256": "d23e6c11841ebab0dfae24c4a43b5b9fc7393277eaf6edfb2ec3dfea428b6067",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/build_control/build_receipt.json",
+      "original_sha256": "d23e6c11841ebab0dfae24c4a43b5b9fc7393277eaf6edfb2ec3dfea428b6067",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_receipt.json",
+      "bytes": 23752,
+      "sha256": "ef33b8687548602a6283b77af6c3233742253dbcbdfdd109d8ea457def70a97a",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/build_candidate/build_receipt.json",
+      "original_sha256": "ef33b8687548602a6283b77af6c3233742253dbcbdfdd109d8ea457def70a97a",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_binding.json",
+      "bytes": 763,
+      "sha256": "28420d741877e2213954ada19e8f7e4736984e92184f6d18716ed842401003e2",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/candidate_build_binding.json",
+      "original_sha256": "28420d741877e2213954ada19e8f7e4736984e92184f6d18716ed842401003e2",
+      "normalization": "none"
+    },
+    {
+      "path": "prepared_focus_receipt.json",
+      "bytes": 3056,
+      "sha256": "6ee71749087f67b248de6ff41a359a70e473468e340d9a3ed0a2b4eeae50a9e3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/focused_test/receipt.json",
+      "original_sha256": "6ee71749087f67b248de6ff41a359a70e473468e340d9a3ed0a2b4eeae50a9e3",
+      "normalization": "none"
+    },
+    {
+      "path": "pair_audit.json",
+      "bytes": 15573,
+      "sha256": "46647e98549e4d696c7309c25966f8447bfa34792411a2dc038bb165876d4e1d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_audit/pair_audit.json",
+      "original_sha256": "46647e98549e4d696c7309c25966f8447bfa34792411a2dc038bb165876d4e1d",
+      "normalization": "none"
+    },
+    {
+      "path": "first_defect_rows.csv",
+      "bytes": 1017,
+      "sha256": "1d75673a36258ffeb1c87752728d5a3c0cec18ee6fb23489ce91a81a38256381",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_audit/first_defect_rows.csv",
+      "original_sha256": "6ab26b8dcebd70d1788ff6c37e381ceefabc5deccc84dc987ed0a8c69bfc3ae0",
+      "normalization": "public LF copy; original SHA retained"
+    },
+    {
+      "path": "mu_actual_check.py",
+      "bytes": 2716,
+      "sha256": "10f7431df66a09b325643024b0f8f4fea7878919acd1de34d4c575f8f01688d2",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/mu_actual_check.py",
+      "original_sha256": "10f7431df66a09b325643024b0f8f4fea7878919acd1de34d4c575f8f01688d2",
+      "normalization": "none"
+    },
+    {
+      "path": "mu_actual_check.json",
+      "bytes": 1800,
+      "sha256": "4538f587a583b643968250ef395b68e2c571d8b57550f923c5590f65d7f8d5bf",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/mu_actual_check.json",
+      "original_sha256": "4538f587a583b643968250ef395b68e2c571d8b57550f923c5590f65d7f8d5bf",
+      "normalization": "none"
+    },
+    {
+      "path": "rate_defects.png",
+      "bytes": 201000,
+      "sha256": "c28f0bde86e51159609fdfcaf63d1087c7253ce0bd408420b547f5762d37b997",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_analysis/rate_defects.png",
+      "original_sha256": "c28f0bde86e51159609fdfcaf63d1087c7253ce0bd408420b547f5762d37b997",
+      "normalization": "none"
+    },
+    {
+      "path": "scaled_blocks.png",
+      "bytes": 36446,
+      "sha256": "306b9e0299e5d377a02105e751fbc1a22c4d23baf56ccb553ffc506f01b7c9f1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_analysis/scaled_blocks.png",
+      "original_sha256": "306b9e0299e5d377a02105e751fbc1a22c4d23baf56ccb553ffc506f01b7c9f1",
+      "normalization": "none"
+    },
+    {
+      "path": "forecast_context.png",
+      "bytes": 127964,
+      "sha256": "e29af17e2ea4a94eee67c0414d432c663f197de52da0772e878ddd2c3e7ce8be",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_analysis/forecast_context.png",
+      "original_sha256": "e29af17e2ea4a94eee67c0414d432c663f197de52da0772e878ddd2c3e7ce8be",
+      "normalization": "none"
+    },
+    {
+      "path": "defect_blocks.csv",
+      "bytes": 985,
+      "sha256": "120c96561a84e299a2765f98598cc6a5da4d0f7e05d9c6167851feade68fccca",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_analysis/defect_blocks.csv",
+      "original_sha256": "b6e033beecb62f7dcab07233397789b3bffca69565ef8fed16fc4671f47172d3",
+      "normalization": "public LF copy; original SHA retained"
+    },
+    {
+      "path": "pair_plot_receipt.json",
+      "bytes": 5817,
+      "sha256": "d313926b81b3c01016fc8a5c0a9ac5853f5840a1b8981dadd1b844f999f30dc9",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_analysis/receipt.json",
+      "original_sha256": "d313926b81b3c01016fc8a5c0a9ac5853f5840a1b8981dadd1b844f999f30dc9",
+      "normalization": "none"
+    },
+    {
+      "path": "retirement_audit.json",
+      "bytes": 641,
+      "sha256": "66fccf5d1ec1919bc944b361869cdc0be4d51296949ffd1132f38222a25dc8a7",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/prototype_retirement_audit.json",
+      "original_sha256": "66fccf5d1ec1919bc944b361869cdc0be4d51296949ffd1132f38222a25dc8a7",
+      "normalization": "none"
+    },
+    {
+      "path": "retirement_syntax_receipt.json",
+      "bytes": 3262,
+      "sha256": "838e57e43347c7aa691a8b9c390807679c5909f9835f7d3616a315a0e86a3633",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/retirement_syntax/receipt.json",
+      "original_sha256": "838e57e43347c7aa691a8b9c390807679c5909f9835f7d3616a315a0e86a3633",
+      "normalization": "none"
+    },
+    {
+      "path": "duplicate_capture_cleanup.json",
+      "bytes": 1782,
+      "sha256": "5001e293e8108abdbfe883873a87c16d2b2bf6bee4fc89dcf6247981059ffbcb",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/duplicate_capture_cleanup.json",
+      "original_sha256": "5001e293e8108abdbfe883873a87c16d2b2bf6bee4fc89dcf6247981059ffbcb",
+      "normalization": "none"
+    },
+    {
+      "path": "duplicate_output_cleanup.json",
+      "bytes": 2780,
+      "sha256": "7a08736a3b13c181ed78d9e79796198678e6021a2778541104318d3e260d3bf5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/duplicate_output_cleanup.json",
+      "original_sha256": "7a08736a3b13c181ed78d9e79796198678e6021a2778541104318d3e260d3bf5",
+      "normalization": "none"
+    },
+    {
+      "path": "control_result.json",
+      "bytes": 19239,
+      "sha256": "7d905e45f3e5c0aacfddbe0d35e0283258b36d0ff75572cc03297babee762d00",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/result.json",
+      "original_sha256": "7d905e45f3e5c0aacfddbe0d35e0283258b36d0ff75572cc03297babee762d00",
+      "normalization": "none"
+    },
+    {
+      "path": "control_intent.json",
+      "bytes": 4282,
+      "sha256": "00c075f6e0842c214a893a0312c3faa7bd8a5aa445d013be687f52d85222909d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/control_intent.json",
+      "original_sha256": "00c075f6e0842c214a893a0312c3faa7bd8a5aa445d013be687f52d85222909d",
+      "normalization": "none"
+    },
+    {
+      "path": "control_pins.json",
+      "bytes": 31522,
+      "sha256": "ca9e174278490132767719a86d8882dd528c65f3d7af22960c4d1e86aacff088",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/control_pins.json",
+      "original_sha256": "ca9e174278490132767719a86d8882dd528c65f3d7af22960c4d1e86aacff088",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_result.json",
+      "bytes": 23837,
+      "sha256": "6f4d705429c87efc9d0b60887a8d5b1d9fb104d031caa33694ec028086142d56",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/result.json",
+      "original_sha256": "6f4d705429c87efc9d0b60887a8d5b1d9fb104d031caa33694ec028086142d56",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_intent.json",
+      "bytes": 5117,
+      "sha256": "a2cb29d8acc0fec6af955bdfa2e87f2ed37cb9cb86a4ccfeb0d5cb6b6f4d0f0b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/candidate_intent.json",
+      "original_sha256": "a2cb29d8acc0fec6af955bdfa2e87f2ed37cb9cb86a4ccfeb0d5cb6b6f4d0f0b",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_pins.json",
+      "bytes": 36070,
+      "sha256": "c44d35a0a631821b1077af4e027995ac9e59c1b8f5715c3a91aa1e67ec8fc7ce",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/candidate_pins.json",
+      "original_sha256": "c44d35a0a631821b1077af4e027995ac9e59c1b8f5715c3a91aa1e67ec8fc7ce",
+      "normalization": "none"
+    },
+    {
+      "path": "first_selected_log.txt",
+      "bytes": 5584,
+      "sha256": "2e5067269203091dce4709aa5bcbbb9c01f6ed8281fa9ba20e84c2d91c53acd3",
+      "derivation": "selected same-call raw labels; trailing whitespace removed; complete original logs retained locally"
+    },
+    {
+      "path": "fixed_selected_log.txt",
+      "bytes": 10700,
+      "sha256": "7e33103c1561cf6eec8e7eeb4f867b314e284a4a31681d72ee1cedb5cddc2baa",
+      "derivation": "selected same-call raw labels; trailing whitespace removed; complete original logs retained locally"
+    },
+    {
+      "path": "control_selected_log.txt",
+      "bytes": 10692,
+      "sha256": "8da569fee20840b6d0c1e6ce9daadd414fd688b3527106a6979e99db019152ef",
+      "derivation": "selected same-call raw labels; trailing whitespace removed; complete original logs retained locally"
+    },
+    {
+      "path": "candidate_selected_log.txt",
+      "bytes": 11060,
+      "sha256": "d4423d800511ea624ca093e4802c06824b02acb6aa1c49ecc2ef8d33ea484d67",
+      "derivation": "selected same-call raw labels; trailing whitespace removed; complete original logs retained locally"
+    }
+  ]
+}

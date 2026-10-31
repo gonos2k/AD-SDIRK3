@@ -1,0 +1,11 @@
+{
+  "control_result_sha256": "7d905e45f3e5c0aacfddbe0d35e0283258b36d0ff75572cc03297babee762d00",
+  "root_gate_sha256": "1b7babca43512064b93e90346897cbabcd3916b495f44b35c7fe1202438ace73",
+  "control_build_receipt_sha256": "d23e6c11841ebab0dfae24c4a43b5b9fc7393277eaf6edfb2ec3dfea428b6067",
+  "candidate_build_receipt_sha256": "ef33b8687548602a6283b77af6c3233742253dbcbdfdd109d8ea457def70a97a",
+  "source_commit": "112f3449b177128bfd71d645cead81606a5708c7",
+  "candidate_executable_sha256": "8f4324887459653c75e3a7588f63a3aa556cc5b05beb05a5dede2faea4caade4",
+  "gate_recorded_before_build_receipt": true,
+  "description": "Root recorded eligible-control precheck before candidate build; source, header and other 29 objects remain identical",
+  "model_run": false
+}

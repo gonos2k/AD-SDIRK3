@@ -1,0 +1,19 @@
+{
+  "aJphi": {
+    "signed_dot_over_m_squared": 0.9835768711902346,
+    "term_l2": 9.52670386298725e-05
+  },
+  "aJp": {
+    "signed_dot_over_m_squared": -0.037448625183915105,
+    "term_l2": 0.000109787594308204
+  },
+  "aJalpha": {
+    "signed_dot_over_m_squared": -2.039093157250453e-06,
+    "term_l2": 8.349197091595722e-09
+  },
+  "minus_V_P0_difference": {
+    "signed_dot_over_m_squared": 0.04024528801384012,
+    "term_l2": 0.00010985890162293952
+  },
+  "sum_signed_dot_over_m_squared": 0.9863714949270024
+}

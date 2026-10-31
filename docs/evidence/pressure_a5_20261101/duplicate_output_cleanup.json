@@ -1,0 +1,42 @@
+{
+  "time_local": "2026-11-01T04:12:21.032439+09:00",
+  "records": [
+    {
+      "duplicate": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/native_case/run/pressure_a4_first_pair.bin",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a4_first_pair.bin",
+      "sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "bytes": 17287872,
+      "action": "verified byte-identical output replaced by read-only hard link; registered paths/content unchanged"
+    },
+    {
+      "duplicate": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/native_case/run/wrfout_d01_0001-01-01_00:00:00",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "bytes": 1989217,
+      "action": "verified byte-identical output replaced by read-only hard link; registered paths/content unchanged"
+    },
+    {
+      "duplicate": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/native_case/run/wrfout_d01_0001-01-01_00:10:00",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+      "bytes": 3444089,
+      "action": "verified byte-identical output replaced by read-only hard link; registered paths/content unchanged"
+    },
+    {
+      "duplicate": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/wrfout_d01_0001-01-01_00:00:00",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:00:00",
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "bytes": 1989217,
+      "action": "verified byte-identical output replaced by read-only hard link; registered paths/content unchanged"
+    },
+    {
+      "duplicate": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/wrfout_d01_0001-01-01_00:10:00",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:10:00",
+      "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+      "bytes": 3444089,
+      "action": "verified byte-identical output replaced by read-only hard link; registered paths/content unchanged"
+    }
+  ],
+  "redundant_logical_bytes": 28154484,
+  "physical_free_space_claim": false
+}

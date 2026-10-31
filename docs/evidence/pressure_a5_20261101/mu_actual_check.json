@@ -1,0 +1,47 @@
+{
+  "scope": "actual same-stage saved control and candidate first vectors, source-derived isolated mu prediction; no extra RHS/JVP; not a full residual prediction",
+  "source": "wrf_sdirk3_ww_cp.h diagnose_wrf_mass_flux; tile_unified_impl.cpp wrf_mass_flux, mu_tend, projectStateBoundaries",
+  "sha256": {
+    "runs/control/pressure_a5_direction.bin": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+    "runs/candidate/pressure_a5_direction.bin": "4ea0639108762501c00d2907ef003030793051841b3fc6d2125ee049b42f0d8b"
+  },
+  "candidate_only_changes_V": true,
+  "native_V_projection_exact": true,
+  "a": 261.5199129050754,
+  "rdy": 9.999999747378752e-06,
+  "deltaV_l2": 9.906644694420658e-05,
+  "checks": {
+    "physical_core": {
+      "count": 3200,
+      "actual_l2": 0.002390310303177475,
+      "pred_l2": 0.002390310303177475,
+      "difference_l2": 9.621807193079643e-19,
+      "difference_max_abs": 1.2197274440461925e-19,
+      "relative_l2": 4.025338124631447e-16
+    },
+    "x_alias": {
+      "count": 80,
+      "actual_l2": 0.000385898254286697,
+      "pred_l2": 0.000385898254286697,
+      "difference_l2": 1.5605846664413477e-19,
+      "difference_max_abs": 5.759824041329242e-20,
+      "relative_l2": 4.0440314230650445e-16
+    },
+    "y_alias": {
+      "count": 41,
+      "actual_l2": 0.0003394208223139939,
+      "pred_l2": 0.0003394208223139939,
+      "difference_l2": 8.159701876572675e-20,
+      "difference_max_abs": 3.3881317890172014e-20,
+      "relative_l2": 2.404007456273333e-16
+    },
+    "all_packed": {
+      "count": 3321,
+      "actual_l2": 0.002444935030375699,
+      "pred_l2": 0.0024449350303756994,
+      "difference_l2": 9.78163613661214e-19,
+      "difference_max_abs": 1.2197274440461925e-19,
+      "relative_l2": 4.000775486908972e-16
+    }
+  }
+}

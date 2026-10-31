@@ -1,0 +1,59 @@
+{
+  "status": "registered",
+  "registered_local": "2026-11-01T02:41:28.749831+09:00",
+  "scope": "Separate offline full-field precision/sensitivity validation of the same frozen primary formula. Original native FD64 result remains INCONCLUSIVE; no native retry or solver/physics/tolerance/step-size change.",
+  "input_files": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_direction.bin": {
+      "sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+      "bytes": 72673488
+    },
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_actions.bin": {
+      "sha256": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+      "bytes": 17251144
+    },
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/result.json": {
+      "sha256": "61eba7dfc14c4ee448c4dd3ea259ecd7677de067490ab4c2650cb1eb05ef57cf",
+      "bytes": 17700
+    }
+  },
+  "source_equations": "calc_p_rho_wrf + horizontal_pgf_primary + actual canonical coupled/physical mass conversion; original source operation order; positive dry/unit-map branch only",
+  "projection": "use actual captured projected EOS base and native Qz; output core V faces j1..79,x0..39,k0..63, unchanged by supported output Q",
+  "precision": {
+    "full_field_bits": 160,
+    "sample_confirmation_bits": 256,
+    "rounding": "MPFR_RNDN",
+    "operands": "exact binary values from stored float32/float64; source cpovcv first rounded as original double(cp)/double(cv), then promoted"
+  },
+  "FD_steps_seconds": [
+    0.01,
+    0.001,
+    0.0001
+  ],
+  "pointwise_tolerance": "same original 1e-12 m/s^3 +1e-5*abs(stored native FWAD)",
+  "required_fullfield": "all physical interior V points, each original width reported; at least2/3 complete widths pass, no subsets selected",
+  "fixed_precision_samples": {
+    "cartesian_j": [
+      1,
+      20,
+      40,
+      60,
+      79
+    ],
+    "k": [
+      0,
+      31,
+      63
+    ],
+    "i": [
+      0,
+      20,
+      39
+    ],
+    "additional": "union argmax abs(FWAD) and minimum nonzero abs(FWAD), deterministic first flat index"
+  },
+  "precision_stability_rule": "160-vs256 FD derivative abs difference <=1e-20 +1e-12*abs(FD256) on all declared samples/widths",
+  "branch_gate": "recompute perturbed mu-dependent face masses/numerators/denominators; no active floor/nonpositive mass/alpha/theta, actual cq/maps consistent or remainINCONCLUSIVE",
+  "interpretation": "higher precision suppresses intermediate FP64 rounding; supports only independent derivative/roundoff analysis on frozen data, cannot relabel original native FD flags or automatically authorize correction/performance",
+  "maximum_native_runs": 0,
+  "no_model_code_changes": true
+}

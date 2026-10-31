@@ -1,0 +1,333 @@
+{
+  "scope": "one fixed instrumented feasibility pair; no adoption, Gate B, general forecast performance or family-impossibility claim",
+  "source_commit": "112f3449b177128bfd71d645cead81606a5708c7",
+  "registration_sha256": "8ff5eb40e7c66e63e08062123cfb1e947b6f58ef071550d04d64de9dce9592d3",
+  "classification_clarification_sha256": "95aefe0a81b67102a62c5a3eedacb5167e27ab7f5dee9d497bd39c3ac4805bb1",
+  "candidate_build_binding_sha256": "28420d741877e2213954ada19e8f7e4736984e92184f6d18716ed842401003e2",
+  "control_build_receipt_sha256": "d23e6c11841ebab0dfae24c4a43b5b9fc7393277eaf6edfb2ec3dfea428b6067",
+  "candidate_build_receipt_sha256": "ef33b8687548602a6283b77af6c3233742253dbcbdfdd109d8ea457def70a97a",
+  "pins": {
+    "control": {
+      "pins_sha256": "ca9e174278490132767719a86d8882dd528c65f3d7af22960c4d1e86aacff088",
+      "pin_count": 186,
+      "result_sha256": "7d905e45f3e5c0aacfddbe0d35e0283258b36d0ff75572cc03297babee762d00",
+      "intent_sha256": "00c075f6e0842c214a893a0312c3faa7bd8a5aa445d013be687f52d85222909d",
+      "executable_sha256": "c503ed3a544c099e797101138a7b93787b92120096e1f7c2567f66711a0fc931"
+    },
+    "candidate": {
+      "pins_sha256": "c44d35a0a631821b1077af4e027995ac9e59c1b8f5715c3a91aa1e67ec8fc7ce",
+      "pin_count": 211,
+      "result_sha256": "6f4d705429c87efc9d0b60887a8d5b1d9fb104d031caa33694ec028086142d56",
+      "intent_sha256": "a2cb29d8acc0fec6af955bdfa2e87f2ed37cb9cb86a4ccfeb0d5cb6b6f4d0f0b",
+      "executable_sha256": "8f4324887459653c75e3a7588f63a3aa556cc5b05beb05a5dede2faea4caade4"
+    }
+  },
+  "case_artifacts_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/result.json": "7d905e45f3e5c0aacfddbe0d35e0283258b36d0ff75572cc03297babee762d00",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/attempt.json": "c561dc95e3d41dc1fc15d97f72a0bf7bbf4f97666e9ad221b8911245ed0eef91",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/rsl.out.0000": "5ff606d4ade91a950e2c320082d77ee30bda1bbba92167187ab11cec04189502",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/rsl.error.0000": "4df6cc743e1828d81cb851d87d1802e065923a58dfb4b016c3eac357d58ef517",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/launcher.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/launcher.stderr.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/rank_rusage.log": "c56e71e783027c2952629ae9f874acbbf7e25251dcddafa5d9622a2ab1b4353a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a4_first_pair.bin": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a5_direction.bin": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a5_actions.bin": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/wrfout_d01_0001-01-01_00:10:00": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/result.json": "6f4d705429c87efc9d0b60887a8d5b1d9fb104d031caa33694ec028086142d56",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/attempt.json": "072f1002917771d2bf8c5f00f769c279fe8106e4c84f08758cebfdab8dc80a87",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/rsl.out.0000": "d94933af8afe1563903ceab384acdeebf1eedff8395fc6037e946504a58817be",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/rsl.error.0000": "27141264fa0567f409f2ddef3686e5465882cd8840449007885b31ba4a7aeb18",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/launcher.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/launcher.stderr.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/rank_rusage.log": "d282edc2b6beced79fa2dee63887e47a2368c9bfa8f5a1bda49b4685b6c76eac",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/pressure_a4_first_pair.bin": "500ffda20931781c909ea03334cb52fea257fcec1b56453386e5e5c29f9724c2",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/pressure_a5_direction.bin": "4ea0639108762501c00d2907ef003030793051841b3fc6d2125ee049b42f0d8b",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/pressure_a5_actions.bin": "10aeae5b69d3dc3d9e327ce7b6545b48060397062bda026d73be07b879a36e63",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/candidate/wrfout_d01_0001-01-01_00:10:00": "c6cad8918f8f5848a9724d287205d60fee2c2d7cc64c0f09714ab708387ed7bd"
+  },
+  "attempt_count": 2,
+  "retries": false,
+  "decision": "NO-GO",
+  "primary_failed_gates": [
+    "full_scaled_not_increased",
+    "first_jvp_strictly_decreased"
+  ],
+  "quality": {
+    "full_scaled_control": 0.002687919855048388,
+    "full_scaled_candidate": 0.0036678370850081188,
+    "full_scaled_not_increased": false,
+    "V_interior_core_control_l2": 9.615210825050719e-05,
+    "V_interior_core_candidate_l2": 1.0368561423649698e-05,
+    "V_interior_core_strictly_decreased": true,
+    "W_top_control_rms": 6.6735333587341275e-06,
+    "W_top_candidate_rms": 6.673532549613121e-06,
+    "W_top_not_increased": true,
+    "W_interior_control_rms": 5.772374250031081e-06,
+    "W_interior_candidate_rms": 5.7723671038413635e-06,
+    "W_interior_not_increased": true,
+    "rows": [
+      {
+        "name": "ru",
+        "unit": "m s-2",
+        "control_physical_l2": 3.430649933260993e-05,
+        "candidate_physical_l2": 3.458460182401109e-05,
+        "control_scaled_l2": 3.430649933260993e-05,
+        "candidate_scaled_l2": 3.458460182401109e-05
+      },
+      {
+        "name": "rv",
+        "unit": "m s-2",
+        "control_physical_l2": 9.97995516024313e-05,
+        "candidate_physical_l2": 1.0388901348755078e-05,
+        "control_scaled_l2": 9.97995516024313e-05,
+        "candidate_scaled_l2": 1.0388901348755078e-05
+      },
+      {
+        "name": "rw",
+        "unit": "m s-2",
+        "control_physical_l2": 0.002678877181104007,
+        "candidate_physical_l2": 0.0026788739368564744,
+        "control_scaled_l2": 0.002678877181104007,
+        "candidate_scaled_l2": 0.0026788739368564744
+      },
+      {
+        "name": "ph",
+        "unit": "m2 s-3",
+        "control_physical_l2": 0.0023502978321065424,
+        "candidate_physical_l2": 0.008457386123748838,
+        "control_scaled_l2": 0.00015156490078551305,
+        "candidate_scaled_l2": 0.0005453959371616595
+      },
+      {
+        "name": "t",
+        "unit": "K s-1",
+        "control_physical_l2": 6.908982912408228e-07,
+        "candidate_physical_l2": 1.39734607987317e-05,
+        "control_scaled_l2": 6.908982912408228e-07,
+        "candidate_scaled_l2": 1.39734607987317e-05
+      },
+      {
+        "name": "mu",
+        "unit": "Pa s-1",
+        "control_physical_l2": 0.00012008710520698969,
+        "candidate_physical_l2": 0.002444935030375699,
+        "control_scaled_l2": 0.00012008710520698969,
+        "candidate_scaled_l2": 0.002444935030375699
+      }
+    ]
+  },
+  "work": {
+    "control_first_jvp_calls": 23,
+    "candidate_first_jvp_calls": 23,
+    "first_jvp_strictly_decreased": false,
+    "control_whole_jvp_calls": 231,
+    "candidate_whole_jvp_calls": 217,
+    "whole_jvp_not_increased": true,
+    "control_first_inclusive_ms": 6044.340875,
+    "candidate_first_inclusive_ms": 3648.4845,
+    "first_inclusive_cost_strictly_decreased": true,
+    "candidate_prepared_phase_ms_included": 29.730792,
+    "candidate_first_base_clone_ms_included": 0.279333,
+    "candidate_first_base_clone_below_one_percent": true,
+    "correction_M_accounting_passed": true,
+    "candidate_correction_calls": 21,
+    "candidate_wrapped_M_calls": 21,
+    "physical_M_nested_not_additive": true,
+    "JVP_nested_in_A_not_additive": true
+  },
+  "control_jvp_records": [
+    [
+      23,
+      3817.7
+    ],
+    [
+      48,
+      7825.93
+    ],
+    [
+      32,
+      5144.81
+    ],
+    [
+      48,
+      7698.35
+    ],
+    [
+      32,
+      5665.31
+    ],
+    [
+      48,
+      8098.89
+    ]
+  ],
+  "candidate_jvp_records": [
+    [
+      23,
+      2024.09
+    ],
+    [
+      34,
+      2868.06
+    ],
+    [
+      32,
+      2696.17
+    ],
+    [
+      48,
+      4052.33
+    ],
+    [
+      32,
+      2689.45
+    ],
+    [
+      48,
+      6011.51
+    ]
+  ],
+  "first_point_raw_timers": {
+    "control": {
+      "linear": {
+        "flavor": "reference_p0",
+        "comparison_eligible": true,
+        "preflight_ms": 163.577,
+        "setup_ms": 16.592291,
+        "linear_with_native_truecheck_ms": 5768.360333,
+        "interval_from_newton_entry_ms": 6044.340875,
+        "iterations": 21,
+        "restarts": 1,
+        "restart_budget": 30,
+        "max_restarts": 50,
+        "tolerance_applied": 1.0000000116860974e-07,
+        "stopping_metric": 1,
+        "stopping_metric_name": "unweighted_scaled_L2",
+        "stopping_relative_norm": 1.2772678470440724e-09,
+        "scaled_relative_norm": 1.2772678470440724e-09,
+        "residual_provenance": "saved_native_checked_raw_not_independent",
+        "saved_native_scaled_residual_norm": 2.573363244729006e-08,
+        "saved_native_physical_residual_norm": 2.8788990210975115e-07,
+        "scaled_rhs_norm": 20.14740542763099,
+        "physical_rhs_norm": 312.3019131227635,
+        "mask_active": false,
+        "refinement_passes": 1,
+        "apinv_probe": false,
+        "jvp_probe": false,
+        "jvp_fd_fallbacks": 0,
+        "success": true,
+        "preconditioner_calls": 21,
+        "guard_events": 0,
+        "reference_calls": 21
+      },
+      "A4": {
+        "eligible": true,
+        "capture": "fgmres_restart0_arnoldi0_raw_A_M_v_before_D_and_orthogonalization",
+        "pair_file": "pressure_a4_first_pair.bin",
+        "pair_written": true,
+        "pair_format": "SDIRKA41,u64le_numel,physical_v_f64le,physical_w_f64le",
+        "physical_transform": "S_times_scaled_krylov_vectors",
+        "S_fnv64": "73dac3183f782879",
+        "full_scaled_A_calls": 23,
+        "full_scaled_A_ms": 3864.9598340000002,
+        "wrapped_M_calls": 21,
+        "wrapped_M_ms": 908.1220000000001,
+        "physical_M_calls": 21,
+        "physical_M_ms_nested": 838.204455,
+        "linear_remainder_ms": 995.2784989999993,
+        "capture_clone_ms_included": 1.4448759999999998,
+        "capture_attempts": 1,
+        "capture_count": 1,
+        "block_scope": "full_packed_block_not_owned_core",
+        "timer_overlap": false,
+        "nested_scope": false,
+        "capture_failed": false
+      }
+    },
+    "candidate": {
+      "linear": {
+        "flavor": "P0_plus_V_primary",
+        "comparison_eligible": true,
+        "preflight_ms": 112.001083,
+        "setup_ms": 41.064209,
+        "linear_with_native_truecheck_ms": 3424.552666,
+        "interval_from_newton_entry_ms": 3648.4845,
+        "iterations": 21,
+        "restarts": 1,
+        "restart_budget": 30,
+        "max_restarts": 50,
+        "tolerance_applied": 1.0000000116860974e-07,
+        "stopping_metric": 1,
+        "stopping_metric_name": "unweighted_scaled_L2",
+        "stopping_relative_norm": 3.2165294872044115e-09,
+        "scaled_relative_norm": 3.2165294872044115e-09,
+        "residual_provenance": "saved_native_checked_raw_not_independent",
+        "saved_native_scaled_residual_norm": 6.480472407924326e-08,
+        "saved_native_physical_residual_norm": 3.444208883165827e-07,
+        "scaled_rhs_norm": 20.14740542763099,
+        "physical_rhs_norm": 312.3019131227635,
+        "mask_active": false,
+        "refinement_passes": 1,
+        "apinv_probe": false,
+        "jvp_probe": false,
+        "jvp_fd_fallbacks": 0,
+        "success": true,
+        "preconditioner_calls": 21,
+        "guard_events": 0,
+        "reference_calls": 21,
+        "cost_class": "instrumented_feasibility_only",
+        "vrow_calls": 21,
+        "vrow_prep_ms": 29.730792,
+        "first_base_capture_attempts": 1,
+        "first_base_capture_count": 1,
+        "first_base_capture_ms_included": 0.279333
+      },
+      "A4": {
+        "eligible": true,
+        "capture": "fgmres_restart0_arnoldi0_raw_A_M_v_before_D_and_orthogonalization",
+        "pair_file": "pressure_a4_first_pair.bin",
+        "pair_written": true,
+        "pair_format": "SDIRKA41,u64le_numel,physical_v_f64le,physical_w_f64le",
+        "physical_transform": "S_times_scaled_krylov_vectors",
+        "S_fnv64": "73dac3183f782879",
+        "full_scaled_A_calls": 23,
+        "full_scaled_A_ms": 2048.870459,
+        "wrapped_M_calls": 21,
+        "wrapped_M_ms": 832.54754,
+        "physical_M_calls": 21,
+        "physical_M_ms_nested": 795.9027120000001,
+        "linear_remainder_ms": 543.1346669999998,
+        "capture_clone_ms_included": 1.16575,
+        "capture_attempts": 1,
+        "capture_count": 1,
+        "block_scope": "full_packed_block_not_owned_core",
+        "timer_overlap": false,
+        "nested_scope": false,
+        "capture_failed": false
+      }
+    }
+  },
+  "timer_scope": "first-point interval includes setup; full scaled A includes JVP and true checks; wrapped M includes physical M; physical M and JVP are nested and not additive. Single-pair times are not reliable generic speed evidence.",
+  "old_native05_outcome": "INCONCLUSIVE, unchanged",
+  "supplementary_MPFR": {
+    "result_sha256": "64c796167ae9b8e9860aa319fb3f5dfbef3c90edfc8c0bddf12f55323c117370",
+    "registration_sha256": "bd9e1a88c7dbfdd13b4b8cfd32e9ae40a56c1b397fd7b12616220c28cd57d8d9",
+    "log_sha256": "db7a20d408a401f3551312830a735c960b8a2b658415f4ec1149f45485d5d785",
+    "returncode": 0,
+    "widths": [
+      0.01,
+      0.001,
+      0.0001
+    ],
+    "full_field_failing_points_each": 0,
+    "scope": "independent full-field frozen 05 direction with original widths and tolerance; does not reclassify native 05"
+  },
+  "old_A4_NO_GO_unchanged": true,
+  "cost_csv_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_audit/first_defect_rows.csv",
+  "cost_csv_sha256": "6ab26b8dcebd70d1788ff6c37e381ceefabc5deccc84dc987ed0a8c69bfc3ae0",
+  "new_model_run": false,
+  "time_local": "2026-11-01T04:00:52+0900"
+}
