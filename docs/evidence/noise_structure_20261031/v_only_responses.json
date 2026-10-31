@@ -1,0 +1,181 @@
+{
+  "qualification": "Dual V/W initialization failed: results are descriptive of V-only initialized forcing. W initial perturbation was zero: W gain is undefined. Method-specific baseline subtracted; no eigenmode, energy, instability, causality or robust speedup claim.",
+  "responses": [
+    {
+      "method": "rk3",
+      "mode": "low",
+      "field": "V",
+      "initial_delta_rms": 0.03999999998384457,
+      "response_rms": 0.03977846095760213,
+      "selected_k_response_rms": 0.03977649193253978,
+      "highband_response_rms": 4.955583382606793e-06,
+      "component_gain": 0.9944615243417021,
+      "signed_projection": 0.9943815135957892
+    },
+    {
+      "method": "rk3",
+      "mode": "low",
+      "field": "W",
+      "initial_delta_rms": 0.0,
+      "response_rms": 9.750314051308826e-05,
+      "selected_k_response_rms": 9.623498973251991e-05,
+      "highband_response_rms": 1.7317864021605855e-06,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "rk3",
+      "mode": "low",
+      "field": "T",
+      "initial_delta_rms": 0.0,
+      "response_rms": 0.0003662463322561783,
+      "selected_k_response_rms": 0.00029108874576526075,
+      "highband_response_rms": 1.700216730423396e-05,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "rk3",
+      "mode": "low",
+      "field": "P",
+      "initial_delta_rms": 0.0,
+      "response_rms": 0.4585043290321647,
+      "selected_k_response_rms": 0.45696966531286776,
+      "highband_response_rms": 0.005288244024701815,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "rk3",
+      "mode": "high",
+      "field": "V",
+      "initial_delta_rms": 0.03999999998384457,
+      "response_rms": 0.03146831773787785,
+      "selected_k_response_rms": 0.03134316276591234,
+      "highband_response_rms": 0.03146831746163654,
+      "component_gain": 0.7867079437646864,
+      "signed_projection": -0.12105429166289074
+    },
+    {
+      "method": "rk3",
+      "mode": "high",
+      "field": "W",
+      "initial_delta_rms": 0.0,
+      "response_rms": 0.0020501235626902816,
+      "selected_k_response_rms": 0.002032217476998977,
+      "highband_response_rms": 0.002050120871876499,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "rk3",
+      "mode": "high",
+      "field": "T",
+      "initial_delta_rms": 0.0,
+      "response_rms": 0.007043664205025751,
+      "selected_k_response_rms": 0.006439818920573682,
+      "highband_response_rms": 0.007042502711957487,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "rk3",
+      "mode": "high",
+      "field": "P",
+      "initial_delta_rms": 0.0,
+      "response_rms": 1.6752638976152705,
+      "selected_k_response_rms": 1.6626328316809011,
+      "highband_response_rms": 1.6752542414218154,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "ark",
+      "mode": "low",
+      "field": "V",
+      "initial_delta_rms": 0.03999999998384457,
+      "response_rms": 0.039739979173468415,
+      "selected_k_response_rms": 0.03973801334507019,
+      "highband_response_rms": 1.3534714992527624e-06,
+      "component_gain": 0.9934994797379707,
+      "signed_projection": 0.993417411133621
+    },
+    {
+      "method": "ark",
+      "mode": "low",
+      "field": "W",
+      "initial_delta_rms": 0.0,
+      "response_rms": 9.958413185818629e-05,
+      "selected_k_response_rms": 9.888897240877529e-05,
+      "highband_response_rms": 5.7618278428399515e-08,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "ark",
+      "mode": "low",
+      "field": "T",
+      "initial_delta_rms": 0.0,
+      "response_rms": 0.00036595821973966743,
+      "selected_k_response_rms": 0.00029113728274501464,
+      "highband_response_rms": 1.657801465460881e-05,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "ark",
+      "mode": "low",
+      "field": "P",
+      "initial_delta_rms": 0.0,
+      "response_rms": 0.45786768440585096,
+      "selected_k_response_rms": 0.4568355601661613,
+      "highband_response_rms": 0.004758214477336754,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "ark",
+      "mode": "high",
+      "field": "V",
+      "initial_delta_rms": 0.03999999998384457,
+      "response_rms": 0.02606111412527005,
+      "selected_k_response_rms": 0.025934881033831226,
+      "highband_response_rms": 0.02606111395880171,
+      "component_gain": 0.651527853394894,
+      "signed_projection": 0.0563608018475104
+    },
+    {
+      "method": "ark",
+      "mode": "high",
+      "field": "W",
+      "initial_delta_rms": 0.0,
+      "response_rms": 0.0015188471277286957,
+      "selected_k_response_rms": 0.0015036941248437023,
+      "highband_response_rms": 0.0015188470669271867,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "ark",
+      "mode": "high",
+      "field": "T",
+      "initial_delta_rms": 0.0,
+      "response_rms": 0.007129012167381374,
+      "selected_k_response_rms": 0.006428652175311611,
+      "highband_response_rms": 0.007127957068138145,
+      "component_gain": null,
+      "signed_projection": null
+    },
+    {
+      "method": "ark",
+      "mode": "high",
+      "field": "P",
+      "initial_delta_rms": 0.0,
+      "response_rms": 1.3855759910075438,
+      "selected_k_response_rms": 1.1698667889113918,
+      "highband_response_rms": 1.3855616238140858,
+      "component_gain": null,
+      "signed_projection": null
+    }
+  ]
+}

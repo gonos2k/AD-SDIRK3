@@ -26007,6 +26007,27 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // Product rule: d(mu*u)/dt = mu*du/dt + u*dmu/dt => du/dt = [d(mu*u)/dt - u*dmu/dt]/mu
     // The dmu/dt term should use the UNSCALED mu_tend.
     torch::Tensor mu_tend_for_conversion = mu_tend;
+    // In the standard ARK transport split, coupled advection is slow while
+    // column continuity is fast. Its product-rule conversion belongs with
+    // the transported quantity, not with the continuity equation itself.
+    // Keep Full and the coupled export untouched; other split configurations
+    // retain their existing ownership until their transport is derived.
+    const auto& split_cfg = wrf::sdirk3::g_sdirk3_config;
+    const bool transport_product_split =
+        (mode == RhsMode::ImplicitOnly || mode == RhsMode::ExplicitOnly) &&
+        !g_export_coupled_slow && canonical_horizontal && !hevi &&
+        split_cfg.effective_imex_split_mode() == 3 &&
+        split_cfg.effective_mu_horizontal_div_only() &&
+        split_cfg.mu_tend_fortran_parity && split_cfg.wrf_zadvect_implicit == 0 &&
+        !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_Z") &&
+        !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_H") &&
+        !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_Z") &&
+        !wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_H");
+    if (transport_product_split && mode == RhsMode::ImplicitOnly) {
+        mu_tend_for_conversion = torch::zeros_like(mu_tend);
+    } else if (transport_product_split && mode == RhsMode::ExplicitOnly) {
+        mu_tend_for_conversion = msfty_ * wrf_mass_flux().mass_tendency_over_map_y;
+    }
     bool mu_scaling_applied = false;
 
     // Convert coupled momentum tendencies to velocity tendencies
@@ -26258,8 +26279,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                   << " / " << conv_factor_min_cpu.item<float>() << std::endl;
     }
 
-    // r50-F1: mu_tend is unscaled (no /88000). Alias kept for downstream compatibility.
-    torch::Tensor mu_tend_scaled = mu_tend_for_conversion;
+    // The continuity tendency retains its partition independently of the
+    // momentum and scalar product-rule conversion above.
+    torch::Tensor mu_tend_scaled = mu_tend;
 
     if (mu_scaling_applied && wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
         // DIAGNOSTIC ONLY: .item() calls are safe here as they're for logging only, not computation

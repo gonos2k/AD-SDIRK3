@@ -46,6 +46,107 @@ int main(int argc, char** argv) {
     TileCase tile;
     // A completed production step establishes the WRF geometry/omega contract.
     tile.step(1.0e-4f);
+    // Constant transported fields must be stationary in each partition, not
+    // merely after cancelling an artificial fast/slow product-rule pair.
+    // Exercise two layer masses and the physical periodic/symmetric layout.
+    for (const auto coefficients : {std::pair<float, float>{1.0f, 0.0f},
+                                    std::pair<float, float>{0.6f, 16000.0f}}) {
+        TileCase transport;
+        std::fill(transport.one.begin(), transport.one.end(), coefficients.first);
+        std::fill(transport.zero.begin(), transport.zero.end(), coefficients.second);
+        transport.step(1.0e-4f);
+        auto state = torch::zeros({total}, torch::kFloat64);
+        state.slice(0, 0, su).fill_(20.0);
+        state.slice(0, su + sv + 2*sw, total-sm).fill_(10.0);
+        state.slice(0, total-sm, total).fill_(4000.0);
+        auto v = state.slice(0, su, su+sv).view({nv,nz,nx});
+        for (int j=0; j<nv; ++j)
+            v.select(0,j).fill_(2.0*std::sin(M_PI*j/ny));
+        transport.checkPhysicalState(state, "transport split state");
+        const auto full = transport.rhsAt(state, wrf::sdirk3::RhsMode::Full, 600.0f);
+        const auto fast = transport.rhsAt(state, wrf::sdirk3::RhsMode::ImplicitOnly, 600.0f);
+        const auto slow = transport.rhsAt(state, wrf::sdirk3::RhsMode::ExplicitOnly, 600.0f);
+        const auto u_core = [](const torch::Tensor& f) {
+            return f.slice(0,0,su).view({ny,nz,nu}).slice(0,1,ny-1)
+                .slice(1,1,nz-1).slice(2,2,nx-1);
+        };
+        const auto t_core = [](const torch::Tensor& f) {
+            return f.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx})
+                .slice(0,1,ny-1).slice(1,1,nz-1).slice(2,1,nx-1);
+        };
+        const auto max_abs = [](const torch::Tensor& f) { return f.abs().max().item<double>(); };
+        TORCH_CHECK(max_abs(full-fast-slow) < 1.0e-9, "transport split RHS closure");
+        const auto mass_part = [](const torch::Tensor& f) {
+            return f.slice(0,total-sm,total);
+        };
+        TORCH_CHECK(max_abs(mass_part(fast)) > 1.0e-3,
+                    "transport test needs a nonzero fast mass tendency");
+        TORCH_CHECK(max_abs(mass_part(full)-mass_part(fast)) < 1.0e-12 &&
+                    max_abs(mass_part(slow)) < 1.0e-12,
+                    "continuity must remain entirely in the fast partition");
+        for (const auto& f : {fast, slow}) {
+            TORCH_CHECK(max_abs(u_core(f)) < 1.0e-9, "constant U split invariant");
+            TORCH_CHECK(max_abs(t_core(f)) < 1.0e-9, "constant theta split invariant");
+        }
+        if (coefficients.first == 1.0f) {
+            // Keep the stage reference fixed across AD and central differences.
+            // Two FP64 directions exercise mass/velocity dependence and theta.
+            auto base = state.clone();
+            auto bu = base.slice(0,0,su).view({ny,nz,nu});
+            auto bt = base.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+            for (int j=0; j<ny; ++j) {
+                bu.select(0,j).add_(0.3*std::cos(M_PI*(j+0.5)/ny));
+                bt.select(0,j).add_(0.2*std::cos(M_PI*(j+0.5)/ny));
+            }
+            auto vm = torch::zeros_like(base);
+            auto dv = vm.slice(0,su,su+sv).view({nv,nz,nx});
+            auto dm = vm.slice(0,total-sm,total).view({ny,nx});
+            for (int j=0; j<nv; ++j)
+                dv.select(0,j).fill_(0.1*std::sin(2.0*M_PI*j/ny));
+            for (int j=0; j<ny; ++j)
+                dm.select(0,j).fill_(100.0*std::cos(M_PI*(j+0.5)/ny));
+            auto td = torch::zeros_like(base);
+            auto dt = td.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+            for (int j=0; j<ny; ++j)
+                dt.select(0,j).fill_(0.5*std::cos(M_PI*(j+0.5)/ny));
+            transport.rhsAt(base, wrf::sdirk3::RhsMode::Full, 600.0f, base);
+            for (int direction_index=0; direction_index<2; ++direction_index) {
+                const auto& direction = direction_index == 0 ? vm : td;
+                std::vector<torch::Tensor> tangents;
+                for (const auto mode : {wrf::sdirk3::RhsMode::Full,
+                                        wrf::sdirk3::RhsMode::ImplicitOnly,
+                                        wrf::sdirk3::RhsMode::ExplicitOnly}) {
+                    const auto F = [&](const torch::Tensor& x) {
+                        return (transport.solver.*access(RhsTag{}))(x, mode);
+                    };
+                    bool used_fd = false;
+                    std::string reason;
+                    auto tangent = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F, base, direction, 0, 0.0f, &used_fd, &reason);
+                    TORCH_CHECK(!used_fd, "transport FWAD fallback: ", reason);
+                    constexpr double step = 1.0e-3;
+                    auto fd = (F(base + step*direction) - F(base - step*direction))/(2*step);
+                    const double scale = std::max(max_abs(tangent), max_abs(fd));
+                    TORCH_CHECK(max_abs(tangent-fd) <= 1.0e-8 + 3.0e-4*scale,
+                                "transport FWAD/central FD mismatch");
+                    tangents.push_back(tangent);
+                }
+                const double scale = std::max({max_abs(tangents[0]),
+                    max_abs(tangents[1]), max_abs(tangents[2])});
+                TORCH_CHECK(max_abs(tangents[0]-tangents[1]-tangents[2]) <=
+                            1.0e-10 + 1.0e-8*scale, "transport tangent split closure");
+                const double mass_scale = max_abs(mass_part(tangents[0]));
+                TORCH_CHECK(max_abs(mass_part(tangents[0])-mass_part(tangents[1])) <=
+                            1.0e-12 + 1.0e-8*mass_scale &&
+                            max_abs(mass_part(tangents[2])) < 1.0e-12,
+                            "continuity tangent must remain in the fast partition");
+                if (direction_index == 0) {
+                    TORCH_CHECK(mass_scale > 1.0e-5,
+                                "V/mass direction must exercise continuity tangent");
+                }
+            }
+        }
+    }
     const auto U = tile.state();
     const auto rhs = [&](const torch::Tensor& x) {
         return (tile.solver.*access(RhsTag{}))(x, wrf::sdirk3::RhsMode::ImplicitOnly);
