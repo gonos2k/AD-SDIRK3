@@ -79,6 +79,12 @@
 #ifdef WRF_SDIRK3_PRESSURE_A5
 #include "wrf_sdirk3_v_primary_probe.h"
 #endif
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+#ifndef WRF_SDIRK3_PRESSURE_A5
+#error "Coupled pressure experiment requires A5 context and original A capture"
+#endif
+#include "wrf_sdirk3_coupled_pressure_inverse.h"
+#endif
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
 #include <iostream>
@@ -118,6 +124,9 @@ struct PressureA4Context {
     torch::Tensor v0, raw_w0;
 #ifdef WRF_SDIRK3_PRESSURE_A5
     torch::Tensor z0;
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+    bool coupled_first_arnoldi=false;
+#endif
     int z_capture_attempts=0, z_capture_count=0;
     bool z_capture_failed=false;
     double z_capture_ms=0;
@@ -3204,6 +3213,15 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             auto jvp_start = std::chrono::high_resolution_clock::now();
             torch::Tensor v_precond = V[j];
             if (M_inv) {
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+                struct CoupledFirstArnoldiScope {
+                    PressureA4Context* context=pressure_a4_active;
+                    explicit CoupledFirstArnoldiScope(bool first) {
+                        if(context) context->coupled_first_arnoldi=first;
+                    }
+                    ~CoupledFirstArnoldiScope() { if(context) context->coupled_first_arnoldi=false; }
+                } coupled_first_scope(iter==0 && j==0);
+#endif
                 v_precond = M_inv(V[j]);
                 // FGMRES: keep the EXACT preconditioned vector used for this
                 // Arnoldi column (not a recomputation — M may differ next call).
@@ -7594,6 +7612,41 @@ public:
             std::unique_ptr<wrf::sdirk3::NativePressureReference> pressure_reference;
             bool pressure_reference_active = false;
             int pressure_reference_calls = 0;
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+            std::unique_ptr<wrf::sdirk3::v_primary_probe::PreparedPrimary> coupled_primary;
+            std::function<torch::Tensor(const torch::Tensor&)> coupled_action;
+            torch::Tensor coupled_base;
+            int coupled_applications=0, coupled_inverse_calls=0, coupled_action_calls=0, coupled_arnoldi=0;
+            double coupled_max_residual=0, coupled_base_clone_ms=0;
+            const auto apply_coupled = [&](const torch::Tensor& r) {
+                ++coupled_applications;
+                auto result=wrf::sdirk3::solve_coupled_pressure(r,dt*gamma,
+                    [&](const torch::Tensor& x) { return pressure_reference->apply(x); }, coupled_action);
+                coupled_inverse_calls+=result.inverse_calls;
+                coupled_action_calls+=result.action_calls;
+                coupled_arnoldi+=result.arnoldi;
+                if (!result.converged) {
+                    std::cerr << "[PRESSURE_COUPLED] {\"status\":\"inner_failure\",\"cap\":4,"
+                              << "\"tolerance\":0.01,\"restarts\":0,\"fallback\":false,"
+                              << "\"applications\":" << coupled_applications
+                              << ",\"arnoldi_iterations\":" << coupled_arnoldi
+                              << ",\"last_true_relative_residual\":"
+                              << (std::isfinite(result.true_relative_residual) ?
+                                  std::to_string(result.true_relative_residual) : "null") << "}\n";
+                    throw std::runtime_error("bounded coupled inverse failed; no usable preconditioned vector");
+                }
+                coupled_max_residual=std::max(coupled_max_residual,result.true_relative_residual);
+                if (pressure_a4_active && pressure_a4_active->coupled_first_arnoldi) {
+                    TORCH_CHECK(coupled_applications==1 && !coupled_base.defined(),
+                                "coupled base must be the actual first Arnoldi M application");
+                    const auto start=std::chrono::steady_clock::now();
+                    coupled_base=result.base.clone();
+                    coupled_base_clone_ms=std::chrono::duration<double,std::milli>(
+                        std::chrono::steady_clock::now()-start).count();
+                }
+                return result.x;
+            };
+#endif
 #endif
             std::function<torch::Tensor(const torch::Tensor&)> precond_func = nullptr;
             if (preconditioner_) {
@@ -7603,6 +7656,9 @@ public:
                 precond_func = [this, variable_pc_event,
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                                 &pressure_reference, &pressure_reference_active, &pressure_reference_calls,
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+                                &apply_coupled,
+#endif
 #endif
                                 fallback_locked = false](const torch::Tensor& r) mutable -> torch::Tensor {
                     torch::NoGradGuard no_grad;
@@ -7623,7 +7679,23 @@ public:
                         PressureA4Timer timer(PressureA4Kind::PhysicalM);
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                         if (pressure_reference_active) {
-                            try { ++pressure_reference_calls; return pressure_reference->apply(r); }
+                            try { ++pressure_reference_calls;
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+                                return apply_coupled(r);
+#else
+                                return pressure_reference->apply(r);
+#endif
+                            }
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+                            catch (const std::bad_alloc&) {
+                                std::cerr << "[PRESSURE_COUPLED] {\"status\":\"allocation_failed\"}\n";
+                                std::abort();
+                            }
+                            catch (const c10::OutOfMemoryError&) {
+                                std::cerr << "[PRESSURE_COUPLED] {\"status\":\"allocation_failed\"}\n";
+                                std::abort();
+                            }
+#endif
                             catch (const std::exception& error) {
                                 std::cerr << "[PRESSURE_REFERENCE_ERROR] " << error.what() << '\n';
                                 std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"apply_failed\"}\n";
@@ -9082,8 +9154,29 @@ public:
                             const auto setup_start = std::chrono::steady_clock::now();
                             pressure_reference = wrf::sdirk3::NativePressureReference::create(
                                 pressure_eos_context, *raw, cached_layout_, U_eval, a);
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+                            coupled_primary=std::make_unique<wrf::sdirk3::v_primary_probe::PreparedPrimary>(
+                                U_eval,cached_layout_,pressure_eos_context,pressure_eos_context.v_primary);
+                            coupled_action=[&](const torch::Tensor& x) {
+                                const auto p0x=pressure_reference->apply_operator(x);
+                                const auto& b=cached_layout_.blocks[1];
+                                const auto ref=(x-p0x).slice(0,b.start,b.start+b.size)/(dt*gamma);
+                                const auto delta=coupled_primary->apply_sum(x).flatten()-ref;
+                                auto out=torch::zeros_like(x);
+                                out.slice(0,b.start,b.start+b.size).copy_(delta);
+                                return out;
+                            };
+#endif
                             pressure_setup_ms = std::chrono::duration<double,std::milli>(
                                 std::chrono::steady_clock::now() - setup_start).count();
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+                        } catch (const std::bad_alloc&) {
+                            std::cerr << "[PRESSURE_COUPLED] {\"status\":\"allocation_failed\"}\n";
+                            std::abort();
+                        } catch (const c10::OutOfMemoryError&) {
+                            std::cerr << "[PRESSURE_COUPLED] {\"status\":\"allocation_failed\"}\n";
+                            std::abort();
+#endif
                         } catch (const std::exception& error) {
                             std::cerr << "[PRESSURE_REFERENCE_ERROR] " << error.what() << '\n';
                             std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"setup_failed\"}\n";
@@ -9312,7 +9405,9 @@ public:
                     std::ostringstream linear_receipt;
                     linear_receipt << std::setprecision(17)
                               << "[PRESSURE_LINEAR] {\"flavor\":\""
-#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+#if defined(WRF_SDIRK3_PRESSURE_COUPLED_INVERSE)
+                              << "reference_coupled_p1"
+#elif defined(WRF_SDIRK3_PRESSURE_REFERENCE_STAGE)
                               << "reference_p0"
 #else
                               << "native_raw"
@@ -9466,11 +9561,38 @@ public:
                             const auto v_phys=scaling_initialized_ ? S_diag_*pressure_a4.v0 : pressure_a4.v0;
                             const auto z_phys=scaling_initialized_ ? S_diag_*pressure_a4.z0 : pressure_a4.z0;
                             const auto az_phys=scaling_initialized_ ? S_diag_*pressure_a4.raw_w0 : pressure_a4.raw_w0;
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+                            TORCH_CHECK(coupled_base.defined(),"missing first coupled base result");
+                            const auto p1z=pressure_reference->apply_operator(z_phys)-(dt*gamma)*coupled_action(z_phys);
+                            const auto residual=v_phys-p1z;
+                            const auto residual_scaled=scaling_initialized_ ? residual/S_diag_ : residual;
+                            const double denominator=std::max(pressure_a4.v0.norm().item<double>(),1.e-300);
+                            auto non_v=residual_scaled.clone();
+                            const auto& vb=cached_layout_.blocks[1];
+                            non_v.slice(0,vb.start,vb.start+vb.size).zero_();
+                            const double non_v_relative=non_v.norm().item<double>()/denominator;
+                            TORCH_CHECK(torch::isfinite(residual_scaled).all().item<bool>() && non_v_relative<=1.e-8,
+                                        "coupled P1 reconstruction failed non-V equations");
+                            std::cerr << "[PRESSURE_COUPLED] {\"status\":\"ok\",\"cap\":4,"
+                                      << "\"tolerance\":0.01,\"restarts\":0,\"fallback\":false,"
+                                      << "\"applications\":" << coupled_applications
+                                      << ",\"inverse_calls\":" << coupled_inverse_calls
+                                      << ",\"action_calls\":" << coupled_action_calls
+                                      << ",\"arnoldi_iterations\":" << coupled_arnoldi
+                                      << ",\"max_true_relative_residual\":" << std::setprecision(17) << coupled_max_residual
+                                      << ",\"base_clone_ms\":" << coupled_base_clone_ms
+                                      << ",\"p1_first_scaled_relative_residual\":" << residual_scaled.norm().item<double>()/denominator
+                                      << ",\"p1_non_v_scaled_relative_residual\":" << non_v_relative << "}\n";
+#endif
                             wrf::sdirk3::v_primary_probe::run(U_eval.detach(),v_phys,z_phys,az_phys,
                                 pressure_a4.v0,pressure_a4.z0,pressure_a4.raw_w0,
                                 scaling_initialized_ ? S_diag_.detach() : torch::Tensor(),
                                 dt*gamma,cached_layout_,pressure_eos_context,pressure_eos_context.v_primary,
-                                *pressure_reference);
+                                *pressure_reference
+#ifdef WRF_SDIRK3_PRESSURE_COUPLED_INVERSE
+                                ,scaling_initialized_ ? coupled_base/S_diag_ : coupled_base
+#endif
+                                );
                         } catch (const std::bad_alloc&) { throw; }
                           catch (const c10::OutOfMemoryError&) { throw; }
                           catch (const std::exception& error) {
