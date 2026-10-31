@@ -743,7 +743,7 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             // IMEX post-solve split mode (2026-02-01)
             } else if (key == "sdirk3_imex_split_mode" || key == "imex_split_mode") {
                 int parsed = parse_config_int(value, "imex_split_mode");
-                if (parsed < 0 || parsed > 3) {
+                if (parsed < 0 || parsed > 4) {
                     std::cerr << "[CONFIG WARNING] imex_split_mode=" << parsed
                               << " (invalid, from namelist) -> clamped to 0;"
                               << " effective may map to 1 if imex_enabled=true" << std::endl;
@@ -1450,12 +1450,12 @@ void SDIRK3Config::load_from_env() {
     }
 
     // IMEX post-solve split mode (2026-02-01) via environment variables
-    // WRF_SDIRK3_IMEX_SPLIT_MODE: integer 0, 1, 2, or 3
+    // WRF_SDIRK3_IMEX_SPLIT_MODE: integer 0, 1, 2, 3, or 4
     // WRF_SDIRK3_IMEX_SLOW_IN_TANGENT: integer 0 or 1 (0=false, non-zero=true)
     // WRF_SDIRK3_IMEX_PHYS_IN_TANGENT: integer 0 or 1 (0=false, non-zero=true)
     if ((env_val = std::getenv("WRF_SDIRK3_IMEX_SPLIT_MODE"))) {
         int val = parse_config_int(env_val, "imex_split_mode");
-        if (val < 0 || val > 3) {
+        if (val < 0 || val > 4) {
             std::cerr << "SDIRK3: imex_split_mode=" << val
                       << " (invalid, from env) -> clamped to 0;"
                       << " effective may map to 1 if imex_enabled=true" << std::endl;
@@ -1468,6 +1468,7 @@ void SDIRK3Config::load_from_env() {
                                 (eff == 1) ? "frozen IMEX" :
                                 (eff == 2) ? "post-solve IMEX SDIRK3" :
                                 (eff == 3) ? "post-solve IMEX ARK324" :
+                                (eff == 4) ? "ARK324 implicit transport (forward only)" :
                                              "UNKNOWN -> baseline (clamped)";
         std::cerr << "[CONFIG ENV] IMEX raw: imex_split_mode=" << imex_split_mode
                   << ", imex_enabled=" << imex_enabled << std::endl;
@@ -2101,6 +2102,9 @@ void SDIRK3Config::load_from_env() {
     std::cerr << "[CONFIG EFFECTIVE] stage_require_convergence="
               << (stage_require_convergence ? "ON (retry-less converged=0 -> fail-close)" : "off (legacy soft-continue)")
               << std::endl;
+    if (effective_imex_split_mode() == 4)
+        std::cerr << "[CONFIG EFFECTIVE] imex_split_mode=4 (ARK324 implicit transport, forward only)"
+                  << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] hevi_split="
               << (hevi_split ? "ON (horizontal-acoustic explicit, vertical implicit)" : "off (full implicit)")
               << std::endl;
@@ -2285,6 +2289,13 @@ void SDIRK3Config::normalize_adaptive_thresholds() {
 
 bool SDIRK3Config::validate() const {
     bool valid = true;
+    if (imex_split_mode == 4 && (internal_fp64 || internal_fp64_state_carry ||
+        retain_graph_for_adjoint || hevi_split || split_explicit || enable_ad_halo_exchange ||
+        !effective_wrf_omega_ww_cp() || !effective_mu_horizontal_div_only() ||
+        !mu_tend_fortran_parity || wrf_zadvect_implicit != 0)) {
+        std::cerr << "SDIRK3 Config Error: mode 4 requires forward-only WRFParity, no HEVI, split-explicit, AD halo, retained adjoint, or FP64 carry" << std::endl;
+        valid = false;
+    }
     if (internal_fp64 && effective_imex_split_mode() != 3) {
         std::cerr << "SDIRK3 Config Error: internal_fp64 currently requires effective imex_split_mode=3"
                   << std::endl;
@@ -2523,7 +2534,7 @@ bool SDIRK3Config::validate() const {
     // Rationale: An invalid mode silently falling through to an unintended code path
     // is worse than mutating state during validation. All setters also clamp, so this
     // is a safety net for direct struct assignment or future code paths.
-    if (imex_split_mode < 0 || imex_split_mode > 3) {
+    if (imex_split_mode < 0 || imex_split_mode > 4) {
         std::cerr << "SDIRK3 Config Warning: imex_split_mode=" << imex_split_mode
                   << " (invalid) -> clamped to 0; effective may map to 1 if imex_enabled=true"
                   << std::endl;
@@ -3126,6 +3137,7 @@ void SDIRK3Config::print() const {
                             (eff == 1) ? "frozen IMEX" :
                             (eff == 2) ? "post-solve IMEX SDIRK3" :
                             (eff == 3) ? "post-solve IMEX ARK324" :
+                                (eff == 4) ? "ARK324 implicit transport (forward only)" :
                                          "UNKNOWN -> baseline (clamped)";
     std::cout << "IMEX Split:" << std::endl;
     std::cout << "  imex_split_mode = " << imex_split_mode
@@ -3615,7 +3627,7 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         std::cerr << "[CONFIG] mass_coordinate_mode = " << value << " ("
                   << g_sdirk3_config.mass_coordinate_mode_name() << ")" << std::endl;
     } else if (key == "imex_split_mode") {
-        if (value < 0 || value > 3) {
+        if (value < 0 || value > 4) {
             std::cerr << "[CONFIG WARNING] imex_split_mode=" << value
                       << " (invalid) -> clamped to 0; effective may map to 1 if imex_enabled=true"
                       << std::endl;
@@ -3629,6 +3641,7 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
                                 (eff == 1) ? "frozen IMEX" :
                                 (eff == 2) ? "post-solve IMEX SDIRK3" :
                                 (eff == 3) ? "post-solve IMEX ARK324" :
+                                (eff == 4) ? "ARK324 implicit transport (forward only)" :
                                              "UNKNOWN -> baseline (clamped)";
         std::cerr << "[CONFIG] IMEX raw: imex_split_mode=" << value
                   << ", imex_enabled=" << g_sdirk3_config.imex_enabled << std::endl;
@@ -4154,6 +4167,7 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
                                 (eff == 1) ? "frozen IMEX" :
                                 (eff == 2) ? "post-solve IMEX SDIRK3" :
                                 (eff == 3) ? "post-solve IMEX ARK324" :
+                                (eff == 4) ? "ARK324 implicit transport (forward only)" :
                                              "UNKNOWN -> baseline (clamped)";
         std::cerr << "[CONFIG] IMEX raw: imex_split_mode=" << g_sdirk3_config.imex_split_mode
                   << ", imex_enabled=" << g_sdirk3_config.imex_enabled << std::endl;

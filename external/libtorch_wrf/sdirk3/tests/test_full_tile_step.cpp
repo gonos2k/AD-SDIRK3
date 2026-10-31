@@ -208,22 +208,9 @@ void check_governing_step_budget(bool stop_after_theta_faces = false) {
     TORCH_CHECK(forward[2].slice(0,0,su).abs().max().item<double>()>1e-4 &&
                 forward[1].slice(0,0,su).abs().max().item<double>()>1e-4,
                 "uninformative zero explicit or implicit U signal");
-    const auto theta_full=forward[static_cast<int>(RhsMode::Full)]
-        .slice(0,su+sv+2*sw,total-sm);
-    const auto theta_fast=forward[static_cast<int>(RhsMode::ImplicitOnly)]
-        .slice(0,su+sv+2*sw,total-sm);
-    const auto theta_slow=forward[static_cast<int>(RhsMode::ExplicitOnly)]
-        .slice(0,su+sv+2*sw,total-sm);
-    const double theta_scale=std::max({1.0,theta_full.abs().max().item<double>(),
-        theta_fast.abs().max().item<double>(),theta_slow.abs().max().item<double>()});
-    const double theta_closure_budget=32.0*std::numeric_limits<float>::epsilon()*theta_scale;
-    const double theta_fast_max=theta_fast.abs().max().item<double>();
-    const double theta_slow_max=theta_slow.abs().max().item<double>();
-    TORCH_CHECK(theta_slow_max>1e-5 && theta_fast_max<=theta_closure_budget &&
-                (theta_full-theta_slow).abs().max().item<double>()<=theta_closure_budget,
-                "theta transport must be informative and owned by the slow partition");
-    std::cout << "GOV_RHS_THETA_OWNERSHIP fast=" << theta_fast_max
-              << " slow=" << theta_slow_max << " budget=" << theta_closure_budget << '\n';
+    TORCH_CHECK(forward[2].slice(0,su+sv+2*sw,total-sm).abs().max().item<double>()>1e-5 &&
+                forward[1].slice(0,su+sv+2*sw,total-sm).abs().max().item<double>()>1e-5,
+                "uninformative zero explicit or implicit theta signal");
 
     // In the map-aware flux form the physical cell area is dx*dy/(mx*my).
     // Use the actual mass-point maps, sigma layer widths and hybrid masses;

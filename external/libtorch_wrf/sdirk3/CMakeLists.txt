@@ -671,6 +671,9 @@ add_executable(test_rhs_preconditioner_contract tests/test_rhs_preconditioner_co
 target_link_libraries(test_rhs_preconditioner_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME RHS_Preconditioner_Contract COMMAND test_rhs_preconditioner_contract)
 set_tests_properties(RHS_Preconditioner_Contract PROPERTIES TIMEOUT 180)
+add_test(NAME Implicit_Transport_RHS_Contract COMMAND test_rhs_preconditioner_contract --implicit-transport)
+add_test(NAME Implicit_Transport_Face_Contract COMMAND test_rhs_preconditioner_contract --implicit-transport-faces)
+set_tests_properties(Implicit_Transport_RHS_Contract Implicit_Transport_Face_Contract PROPERTIES TIMEOUT 180)
 
 add_executable(test_msf_cache_reset_contract tests/test_msf_cache_reset_contract.cpp)
 target_link_libraries(test_msf_cache_reset_contract PRIVATE wrf_sdirk3::core)

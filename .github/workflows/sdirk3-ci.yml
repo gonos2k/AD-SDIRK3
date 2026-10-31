@@ -133,7 +133,7 @@ jobs:
             test_full_tile_step test_native_wave_refinement test_rhs_preconditioner_contract
       - name: selected short numerical regressions
         run: |
-          tests=(Diagnostic_Observer_Noninterference_Contract Fixed_Trajectory_Derivative Fixed_Trajectory_Lifecycle FP64_State_Handoff_Contract Full_Tile_Step_Adjoint RHS_Preconditioner_Contract)
+          tests=(Diagnostic_Observer_Noninterference_Contract Fixed_Trajectory_Derivative Fixed_Trajectory_Lifecycle FP64_State_Handoff_Contract Full_Tile_Step_Adjoint RHS_Preconditioner_Contract Implicit_Transport_RHS_Contract Implicit_Transport_Face_Contract)
           regex="^($(IFS='|'; echo "${tests[*]}"))$"
           ctest --test-dir build/sdirk3-core --show-only=json-v1 -R "$regex" > build/sdirk3-core/selected-tests.json
           python3 -c 'import json,sys; names=[t["name"] for t in json.load(open(sys.argv[1]))["tests"]]; assert sorted(names)==sorted(sys.argv[2:]), names' \

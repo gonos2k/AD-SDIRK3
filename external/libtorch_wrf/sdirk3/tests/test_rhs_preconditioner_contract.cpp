@@ -28,6 +28,27 @@ template<typename Tag, typename Tag::type Member> struct Accessor {
     friend typename Tag::type access(Tag) { return Member; }
 };
 template struct Accessor<RhsTag, &TileSDIRK3UnifiedSolver::computeUnifiedRHS>;
+struct FullHaloTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(const torch::Tensor&, wrf::sdirk3::RhsMode);
+    friend type access(FullHaloTag);
+};
+template struct Accessor<FullHaloTag, &TileSDIRK3UnifiedSolver::computeUnifiedRHSFullHalo>;
+
+struct TransportTag {
+    using type = bool (TileSDIRK3UnifiedSolver::*)() const;
+    friend type access(TransportTag);
+};
+template struct Accessor<TransportTag, &TileSDIRK3UnifiedSolver::usesImplicitTransport>;
+struct CaptureTag {
+    using type = bool TileSDIRK3UnifiedSolver::*;
+    friend type access(CaptureTag);
+};
+template struct Accessor<CaptureTag, &TileSDIRK3UnifiedSolver::capture_theta_faces_now_>;
+struct FacesTag {
+    using type = TileSDIRK3UnifiedSolver::ArkBudgetTrace::ThetaFaces TileSDIRK3UnifiedSolver::*;
+    friend type access(FacesTag);
+};
+template struct Accessor<FacesTag, &TileSDIRK3UnifiedSolver::rhs_theta_faces_>;
 
 } // namespace
 
@@ -35,7 +56,10 @@ int main(int argc, char** argv) {
     auto& cfg = wrf::sdirk3::g_sdirk3_config;
     cfg.debug_level = 0;
     cfg.precond_acoustic_4x4 = 1;
-    cfg.imex_split_mode = 3;
+    const bool face_only = argc > 1 && std::string(argv[1]) == "--implicit-transport-faces";
+    const bool implicit_transport = face_only ||
+        (argc > 1 && std::string(argv[1]) == "--implicit-transport");
+    cfg.imex_split_mode = implicit_transport ? 4 : 3;
     const bool phi_unity = argc > 1 && std::string(argv[1]) == "--phi-unity";
     if (phi_unity) {
         ::setenv("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY", "1", /*overwrite=*/1);
@@ -46,6 +70,29 @@ int main(int argc, char** argv) {
     TileCase tile;
     // A completed production step establishes the WRF geometry/omega contract.
     tile.step(1.0e-4f);
+    if (implicit_transport) {
+    const auto transport_enabled = [&] { return (tile.solver.*access(TransportTag{}))(); };
+    TORCH_CHECK(transport_enabled(), "standard fixture must select implicit transport");
+    for (const auto mode : {wrf::sdirk3::RhsMode::ImplicitOnly,
+                            wrf::sdirk3::RhsMode::ExplicitOnly}) {
+        bool rejected=false;
+        try { (tile.solver.*access(FullHaloTag{}))(tile.state(),mode); }
+        catch (const c10::Error&) { rejected=true; }
+        TORCH_CHECK(rejected, "mode 4 split FullHalo must fail closed");
+    }
+    cfg.hevi_split = true;
+    TORCH_CHECK(!transport_enabled(), "HEVI must retain its original transport ownership");
+    cfg.hevi_split = false;
+    cfg.enable_ad_halo_exchange = true;
+    TORCH_CHECK(!transport_enabled(), "AD halo must retain its original transport ownership");
+    bool rejected_halo=false;
+    try { tile.rhsAt(tile.state(),wrf::sdirk3::RhsMode::ImplicitOnly,0.1f); }
+    catch (const c10::Error&) { rejected_halo=true; }
+    TORCH_CHECK(rejected_halo, "mode 4 AD halo split RHS must fail closed");
+    cfg.enable_ad_halo_exchange = false;
+    cfg.imex_split_mode = 2;
+    TORCH_CHECK(!transport_enabled(), "other IMEX modes must retain transport ownership");
+    cfg.imex_split_mode = 4;
     // Constant transported fields must be stationary in each partition, not
     // merely after cancelling an artificial fast/slow product-rule pair.
     // Exercise two layer masses and the physical periodic/symmetric layout.
@@ -66,6 +113,30 @@ int main(int argc, char** argv) {
         const auto full = transport.rhsAt(state, wrf::sdirk3::RhsMode::Full, 600.0f);
         const auto fast = transport.rhsAt(state, wrf::sdirk3::RhsMode::ImplicitOnly, 600.0f);
         const auto slow = transport.rhsAt(state, wrf::sdirk3::RhsMode::ExplicitOnly, 600.0f);
+        for (const auto mode : {wrf::sdirk3::RhsMode::Full,
+                                wrf::sdirk3::RhsMode::ImplicitOnly,
+                                wrf::sdirk3::RhsMode::ExplicitOnly}) {
+            const auto plain = transport.rhsAt(state, mode, 600.0f, state);
+            transport.solver.*access(CaptureTag{}) = true;
+            const auto captured = transport.rhsAt(state, mode, 600.0f, state);
+            if (mode == wrf::sdirk3::RhsMode::ImplicitOnly) {
+                const auto faces = transport.solver.*access(FacesTag{});
+                TORCH_CHECK(faces.adv_x.defined() && faces.adv_y.defined() && faces.adv_z.defined(),
+                            "implicit transport lacks actual producer faces");
+                const auto xdiv=-(faces.adv_x.slice(2,1,nu)-faces.adv_x.slice(2,0,nx))/transport.spacing;
+                const auto ydiv=-(faces.adv_y.slice(0,1,nv)-faces.adv_y.slice(0,0,ny))/transport.spacing;
+                const auto zdiv=4.0*(faces.adv_z.slice(1,1,nw)-faces.adv_z.slice(1,0,nz));
+                const auto theta_dot=captured.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+                const auto mu_dot=captured.slice(0,total-sm,total).view({ny,nx}).unsqueeze(1);
+                const double layer_mass=coefficients.first*84000.0+coefficients.second;
+                const auto error=layer_mass*theta_dot+10.0*coefficients.first*mu_dot-xdiv-ydiv-zdiv;
+                TORCH_CHECK(error.slice(0,1,ny-1).slice(1,1,nz-1).slice(2,1,nx-1)
+                                .abs().max().item<double>() < 1.0e-8,
+                            "implicit theta producer-face conservation failed");
+            }
+            transport.solver.*access(CaptureTag{}) = false;
+            TORCH_CHECK(torch::equal(plain,captured), "theta face capture changed RHS");
+        }
         const auto u_core = [](const torch::Tensor& f) {
             return f.slice(0,0,su).view({ny,nz,nu}).slice(0,1,ny-1)
                 .slice(1,1,nz-1).slice(2,2,nx-1);
@@ -94,9 +165,99 @@ int main(int argc, char** argv) {
             auto base = state.clone();
             auto bu = base.slice(0,0,su).view({ny,nz,nu});
             auto bt = base.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+            auto bm = base.slice(0,total-sm,total).view({ny,nx});
             for (int j=0; j<ny; ++j) {
                 bu.select(0,j).add_(0.3*std::cos(M_PI*(j+0.5)/ny));
                 bt.select(0,j).add_(0.2*std::cos(M_PI*(j+0.5)/ny));
+                bm.select(0,j).add_(100.0*std::cos(M_PI*(j+0.5)/ny));
+            }
+            transport.checkPhysicalState(base,"nonuniform transport split state");
+            const auto full4=transport.rhsAt(base,wrf::sdirk3::RhsMode::Full,600.0f,base);
+            cfg.imex_split_mode=3;
+            const auto full3=transport.rhsAt(base,wrf::sdirk3::RhsMode::Full,600.0f,base);
+            cfg.imex_split_mode=4;
+            TORCH_CHECK(torch::equal(full3,full4), "mode 3/4 Full RHS must be bit-identical");
+            const auto fast4=transport.rhsAt(base,wrf::sdirk3::RhsMode::ImplicitOnly,600.0f,base);
+            const auto slow4=transport.rhsAt(base,wrf::sdirk3::RhsMode::ExplicitOnly,600.0f,base);
+            TORCH_CHECK(max_abs(full4-fast4-slow4)<1.0e-9 &&
+                        max_abs(mass_part(full4)-mass_part(fast4))<1.0e-12 &&
+                        max_abs(mass_part(slow4))<1.0e-12 &&
+                        max_abs(mass_part(fast4))>1.0e-3,
+                        "nonuniform mode-4 partition/continuity ownership failed");
+            for (const auto mode : {wrf::sdirk3::RhsMode::Full,
+                                    wrf::sdirk3::RhsMode::ImplicitOnly,
+                                    wrf::sdirk3::RhsMode::ExplicitOnly}) {
+                const auto plain=transport.rhsAt(base,mode,600.0f,base);
+                transport.solver.*access(CaptureTag{})=true;
+                const auto observed=transport.rhsAt(base,mode,600.0f,base);
+                if (mode == wrf::sdirk3::RhsMode::ImplicitOnly) {
+                    const auto faces=transport.solver.*access(FacesTag{});
+                    TORCH_CHECK(faces.adv_x.defined() && faces.adv_y.defined() && faces.adv_z.defined(),
+                                "nonuniform Fast producer faces unavailable");
+                    const auto xd=-(faces.adv_x.slice(2,1,nu)-faces.adv_x.slice(2,0,nx))/transport.spacing;
+                    const auto yd=-(faces.adv_y.slice(0,1,nv)-faces.adv_y.slice(0,0,ny))/transport.spacing;
+                    const auto zd=4.0*(faces.adv_z.slice(1,1,nw)-faces.adv_z.slice(1,0,nz));
+                    const auto td=observed.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+                    const auto md=mass_part(observed).view({ny,1,nx});
+                    const auto error=(80000.0+bm.unsqueeze(1))*td+bt*md-xd-yd-zd;
+                    TORCH_CHECK(max_abs(error.slice(0,1,ny-1).slice(1,1,nz-1).slice(2,1,nx-1))<1.0e-8 &&
+                                max_abs(faces.adv_x.slice(2,0,1)-faces.adv_x.slice(2,nx,nu))<1.0e-12 &&
+                                max_abs(faces.adv_y.slice(0,0,1))<1.0e-12 &&
+                                max_abs(faces.adv_y.slice(0,ny,nv))<1.0e-12 &&
+                                max_abs(faces.adv_z.slice(1,0,1))<1.0e-12 &&
+                                max_abs(faces.adv_z.slice(1,nz,nw))<1.0e-12,
+                                "nonuniform Fast producer faces or boundaries failed");
+                }
+                transport.solver.*access(CaptureTag{})=false;
+                TORCH_CHECK(torch::equal(plain,observed), "nonuniform face capture changed RHS");
+            }
+            std::cout << "IMPLICIT_TRANSPORT_FULL_BIT_PARITY mode3_mode4=1\n";
+            // The same approximate raw principal model must be selected for
+            // both ARK partitions; it does not include transport couplings.
+            const auto grid=transport.solver.getGridInfo();
+            const auto physics=std::make_shared<wrf::sdirk3::PhysicsConfig>();
+            cfg.imex_split_mode=3;
+            UnifiedPreconditioner p3(grid,physics,0.1f,0.4358665215f);
+            TORCH_CHECK(p3.raw_principal_enabled(), "mode-3 raw principal selector changed");
+            cfg.imex_split_mode=4;
+            UnifiedPreconditioner p4(grid,physics,0.1f,0.4358665215f);
+            TORCH_CHECK(p4.raw_principal_enabled(), "mode-4 raw principal selector inactive");
+            cfg.hevi_split=true;
+            UnifiedPreconditioner unsupported(grid,physics,0.1f,0.4358665215f);
+            TORCH_CHECK(!unsupported.raw_principal_enabled(), "raw principal ignored HEVI guard");
+            cfg.hevi_split=false;
+            p4.bind_raw_principal_state_or_throw(base,2,"nonuniform mode-4 stage");
+            p4.update(base,0.1f,0.4358665215f);
+            const auto b4=1.0e-3*torch::sin(torch::arange(total,base.options())*0.031);
+            std::function<torch::Tensor(const torch::Tensor&)> m4 =
+                [&](const torch::Tensor& x) { return p4.apply(x); };
+            TORCH_CHECK(torch::isfinite(m4(b4)).all().item<bool>(),
+                        "mode-4 raw principal application is nonfinite");
+            const auto rhs4=[&](const torch::Tensor& x) {
+                return (transport.solver.*access(RhsTag{}))(x,wrf::sdirk3::RhsMode::ImplicitOnly);
+            };
+            transport.rhsAt(base,wrf::sdirk3::RhsMode::ImplicitOnly,0.1f,base);
+            const float stage_h=0.1f*0.4358665215f;
+            const auto a4=[&](const torch::Tensor& x) {
+                bool used_fd=false;
+                std::string reason;
+                auto j=wrf::sdirk3::compute_jvp_fwad_or_fd(rhs4,base,x,0,0.0f,&used_fd,&reason);
+                TORCH_CHECK(!used_fd,"mode-4 JVP fell back to finite differences: ",reason);
+                return x-stage_h*j;
+            };
+            for (int budget : {8,16}) {
+                const auto result=wrf::sdirk3::krylov_methods::solve_fgmres(
+                    a4,b4,torch::zeros_like(b4),0,0.0f,8,1.0e-5f,budget/8,
+                    m4,nullptr,nullptr,false,false);
+                const double relative=(b4-a4(result.x)).norm().item<double>()/b4.norm().item<double>();
+                TORCH_CHECK(std::isfinite(relative),"mode-4 FGMRES true residual is nonfinite");
+                if (result.success)
+                    TORCH_CHECK(relative<=1.0e-5, "mode-4 FGMRES claimed success above true tolerance");
+                if (budget == 16)
+                    TORCH_CHECK(result.success && relative<=1.0e-5,
+                                "mode-4 raw-principal FGMRES failed its true-residual tolerance");
+                std::cout << "MODE4_RAW_PRINCIPAL budget=" << budget
+                          << " success=" << result.success << " true_relative=" << relative << '\n';
             }
             auto vm = torch::zeros_like(base);
             auto dv = vm.slice(0,su,su+sv).view({nv,nz,nx});
@@ -146,6 +307,17 @@ int main(int argc, char** argv) {
                 }
             }
         }
+    }
+    }
+    if (face_only) {
+        for (int j=0; j<nv; ++j)
+            for (int k=0; k<nz; ++k)
+                for (int i=0; i<nx; ++i)
+                    tile.v[(j*nz+k)*nx+i]=0.1f*std::sin(M_PI*j/ny);
+        tile.step(0.001f);
+        TORCH_CHECK(torch::isfinite(tile.state()).all().item<bool>(),
+                    "mode-4 nonuniform forward step is nonfinite");
+        return 0;
     }
     const auto U = tile.state();
     const auto rhs = [&](const torch::Tensor& x) {

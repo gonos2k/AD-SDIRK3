@@ -5247,7 +5247,7 @@ bool UnifiedPreconditioner::raw_principal_profile_supported(std::string* why_not
 
     // These are the actual production call-site conditions: the tile factory
     // constructs UnifiedPreconditioner only for type 2, while the tested RHS
-    // route is ordinary post-solve ARK324 (mode 3), WRFParity, current W,
+    // route is ordinary post-solve ARK324 (mode 3 or 4), WRFParity, current W,
     // omega blend 1, and no split-explicit/HEVI substitution.  This selector
     // only decides whether the existing type-2 owner may use the principal
     // model; it does not claim that the model reproduces the full Jacobian.
@@ -5263,8 +5263,8 @@ bool UnifiedPreconditioner::raw_principal_profile_supported(std::string* why_not
                "omega_w_blend is not the current-W value 1")) return false;
     if (reject(cfg.omega_update_ref_per_newton,
                "omega reference is updated per Newton iteration")) return false;
-    if (reject(cfg.effective_imex_split_mode() != 3,
-               "effective RHS split mode is not existing ARK324 mode 3")) return false;
+    if (reject(cfg.effective_imex_split_mode() != 3 && cfg.effective_imex_split_mode() != 4,
+               "effective RHS split mode is not ARK324 mode 3 or 4")) return false;
     if (reject(cfg.split_explicit,
                "split-explicit RHS route is enabled")) return false;
     if (reject(cfg.hevi_split,

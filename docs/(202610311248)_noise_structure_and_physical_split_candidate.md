@@ -3,9 +3,10 @@
 Report created: 2026-10-31 12:48:50 JST (UTC+09:00).
 
 This is a structural numerical candidate, not a damping/tolerance adjustment.
-The candidate has not yet been built or run in WRF. Native forecast validation
-and late-noise/cost improvement remain open. The local volume fell below safe
-build headroom, so only existing no-cost Linux CI is being used first.
+The initial reaction-only candidate was rejected by an independent producer-face
+contract; it is not a production fix. The replacement below is an opt-in
+whole-transport split. Native forecast validation and late-noise/cost improvement
+remain open. Source is frozen before fresh component build and short validation.
 All new sub-agents use GPT-6.1-Terra with medium reasoning, recorded in AGENTS.md.
 
 ## Actual morphology before prescribing a change
@@ -99,28 +100,47 @@ vanish. Its simplified coefficient retains 300/theta of the conventional term.
 The contrary full-cancellation hypothesis was tested and rejected; it is not a
 basis for the proposed change.
 
-## Restricted structural candidate and checks
+## Rejected precursor and replacement candidate
 
-The patch moves only the transport product-rule conversion to the same Slow
-partition as conservative transport. **Returned continuity remains Fast.** Full
-RHS arithmetic and raw coupled export remain unchanged. No damping, timestep,
-Newton/Krylov criterion or free tuning coefficient changes. The guard is limited
-to the verified WRF-parity/mode-3, HEVI-off, horizontal-continuity/parity-on,
-explicit-vertical-transport, non-ablation case; other configurations retain
-existing ownership until derived. Moving the raw unprocessed mass derivative
-when the legacy mean/clamp path is active would be incorrect and is guarded out.
+The earlier patch moved only the mass product-rule conversion to Slow while
+continuity remained Fast. An independent producer-face reconstruction failed
+(errors about 633 in that fixture), showing that matching constant-component
+invariants alone was insufficient. The candidate was rejected; its failed CI and
+native-controller failure receipts remain. No tolerance was relaxed to accept it.
 
-The existing RHS-preconditioner test target is extended with Full=Fast+Slow,
-constant U/t partition invariants, explicit nonzero Fast mass/zero Slow mass
-ownership and matching tangent checks, and direct FWAD versus centered FD.
-Two positive layer-coefficient cases support local conversion algebra only,
-not a claim of valid general hybrid-column boundary behavior. No new CTest target
-or manager framework is added. The existing Linux workflow selects this affected
-target so the test actually runs.
+The replacement is explicit opt-in `imex_split_mode=4`. Legacy mode 3 is restored.
+Mode 4 uses the same ARK324 tableau and places the existing conservative U/V/W/t
+transport together with continuity in Fast. Slow retains its nontransport terms.
+The original product-rule conversion follows that same continuity. Full RHS,
+spatial stencils, coefficients, timestep and nonlinear tolerances are unchanged.
+This is a changed IMEX partition, not proof that the 36-hour noise is fixed.
 
-Status: source and Red review complete; diff whitespace check passes. Candidate
-build/tests, guard fallback and boundary/stage propagation, same-setup native
-forecast and late-noise/cost validation remain **pending**. This candidate must
-remain draft until those checks provide evidence. Earlier completed twin/adjoint
-results remain tied to their original source; they are not repurposed as forward
-accuracy proof.
+Its supported scope is forward-only, single-rank whole-tile WRFParity, periodic X
+and symmetric Y, current diagnosed Omega, no HEVI/split-explicit/AD halo or
+retained adjoint. Internal FP64 integration/state carry are not enabled for mode
+4; unsupported split FullHalo calls fail explicitly. The archived modal and noisy
+mode-3 forecasts used internal FP64 with carry. Therefore a mode-4 FP32 probe
+must be paired with mode-3 FP32 using the same executable, and cannot be called
+an otherwise identical comparison against those archived forecasts.
+
+The raw vertical principal preconditioner is selected for exact modes {3,4}
+with its other guards unchanged. Its EOS/geopotential/temperature coefficients
+and ARK gamma are shared. Added transport Jacobian couplings are omitted from
+this approximation and are not claimed to be small. Actual-operator FGMRES
+and independent true-residual checks remain required.
+
+Two focused tests reuse the existing RHS-preconditioner executable: pointwise
+Full=Fast+Slow, bit-identical mode-3/mode-4 Full RHS, nonzero Fast/zero Slow mass,
+constant transported-component invariants, actual theta producer faces and
+boundary closure, forward AD versus centered FD, and observation noninterference.
+A nonuniform actual mode-4 operator with the raw principal model must converge
+within the existing 16-iteration test budget at true relative residual 1e-5.
+These manufactured cases are operator checks, not practical timestep validation.
+The actual native comparison remains h=600 s, with fewer steps, not smaller h.
+
+Status: replacement source reviewed and frozen; build, focused tests and paired
+native short-run checks are pending. Native noise suppression, runtime improvement,
+5-day stability and physical accuracy acceptance are not established. Earlier
+completed twin/adjoint results remain tied to their original source and scope.
+
+Latest replacement update: 2026-10-31T15:14:45.173262+09:00.

@@ -2277,6 +2277,7 @@ private:
                                      const torch::Tensor& U_full_exchanged = torch::Tensor());
 
     bool isPackedPeriodicDomain() const;
+    bool usesImplicitTransport() const;
     torch::Tensor projectStateBoundaries(const torch::Tensor& state);
 
     torch::Tensor computeUnifiedRHS(const torch::Tensor& U, wrf::sdirk3::RhsMode mode = wrf::sdirk3::RhsMode::Full);
