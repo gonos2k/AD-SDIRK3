@@ -1,0 +1,21 @@
+{
+  "head": "899517260a5c045f753008216005e64908106d55",
+  "working_tree_changes": "updated tile, factory and test; hashes in prebuild-pins.json",
+  "pre_post_pins_equal": true,
+  "prebuild_pins_sha256": "5deed690e29c4e188c38ab2dd0212f8840820f66ccd9bfc809bebf83f067b600",
+  "archive_899_sha256": "50f86575b6c21ad591f9e171242a4cdb7ac9cbc564ac403f208801eda3b2f37d",
+  "archive_receipt_match": true,
+  "binary_sha256": "8947b4def41df869a0ade134c338a71ac1c0d003ca1e8f229511a1129dd76666",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+  "status": "passed",
+  "scope": "synthetic factory+actual Tile direct RHS EOS capture polar test; no Newton or WRF run",
+  "log_sha256": "5cbf127a27f4945a33d29bcd3eac32f8910210d95369f0b61e207ff39f29e5d0",
+  "checks": [
+    "stale grid symmetry positive",
+    "false live attestation rejection",
+    "inconsistent exact bounds rejection",
+    "actual Tile EOS capture polar false/true",
+    "existing nonunit/nonflat/non-single-rank rejection",
+    "existing reference profile and packed adapter tests"
+  ]
+}

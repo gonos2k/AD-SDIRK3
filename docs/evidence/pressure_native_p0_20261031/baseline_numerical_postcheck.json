@@ -1,0 +1,169 @@
+{
+  "scope": "offline numerical postcheck only; does not change original result, timing eligibility, retry policy or authorize candidate",
+  "source_commit": "899517260a5c045f753008216005e64908106d55",
+  "original_result_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/result.json",
+  "original_result_sha256": "c995d15e83911d0c5683aeea589e72cfe76fabd2eba860110ee5e8882b6eaa3a",
+  "preregistration_sha256": "e1b0c232803b920ad9a34c18f7ff695cc025eea55d91a79f3d4d00125cdab70d",
+  "pins_sha256": "093828cf7485661bf803e527bf4600f97f1d57cc9e4c6646d2c57360c3ce17a0",
+  "all_pins_verified": true,
+  "timing_gate": "failed; baseline remains ineligible",
+  "wall_seconds": 43.701197147369385,
+  "monotonic_seconds": 41.68245099997148,
+  "gap_seconds": 2.0187461473979056,
+  "model_completed": true,
+  "rank_peak_rss_bytes": 2016165888,
+  "rank_rss_scope": "postrun rank maxrss; excludes launcher",
+  "initial_gate": {
+    "status": "passed",
+    "reference_label": "rk3",
+    "labels": [
+      "rk3",
+      "baseline"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "end_numeric_array_parity": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "output_check": {
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "physical_minima_over_all_frames": {
+      "total_theta_K": 258.83935546875,
+      "total_mu_Pa": 89072.1247472763,
+      "layer_depth_m_from_PH_plus_PHB_over_g": 215.13885902459225,
+      "g_m_s2": 9.81
+    },
+    "physical_minimum_total_pressure_Pa": 11079.84334230423,
+    "timestamps": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:10:00"
+    ],
+    "step_logs": {
+      "rsl_main_step_count": 1,
+      "rsl_main_step_sum_seconds": 41.99298,
+      "rsl_main_step_seconds": [
+        41.99298
+      ],
+      "converged_newton_stage_count": 3,
+      "newton_iterations_sum": 9,
+      "rsl_timing_files": {
+        "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/rsl.out.0000",
+        "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/rsl.error.0000"
+      },
+      "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+    }
+  },
+  "preflight": {
+    "status": "ok",
+    "digest_fnv64": "7bdd17f3a694726e",
+    "state_fnv64": "bfc3393acc9791c0",
+    "F_fnv64": "ff7fe0162403c3c0",
+    "K_fnv64": "5d065c0f7df71aa0",
+    "b_fnv64": "beebab996c9f810b",
+    "x0_fnv64": "fdf60492df066d12",
+    "S_fnv64": "73dac3183f782879",
+    "Sinv_fnv64": "70e824aa5bce8528",
+    "mask_fnv64": "af63bd4c8601b7df",
+    "eos_fnv64": "d53e209fb0d78407",
+    "geometry_fnv64": "9e59543442ce1b6f",
+    "raw_grid_fnv64": "a358e8986d95c6c1",
+    "raw_column_0_0_fnv64": "d9b832053aa30223",
+    "raw_full_fnv64": "d88d4c145bbc2d91",
+    "restart": 30,
+    "max_restarts": 50,
+    "tolerance": 1.0000000116860974e-07,
+    "periodic_x": 1,
+    "periodic_y": 0,
+    "scaling": 1,
+    "mask": 0,
+    "block_scale_requested": 0,
+    "refinement_passes": 1,
+    "apinv_probe": 0,
+    "jvp_probe": 0,
+    "identity_scope": "bounded_captured_inputs_not_all_transitive_state",
+    "preflight_ms": 112.3675
+  },
+  "linear": {
+    "flavor": "native_raw",
+    "comparison_eligible": true,
+    "preflight_ms": 112.3675,
+    "setup_ms": 0,
+    "linear_with_native_truecheck_ms": 4043.891083,
+    "interval_from_newton_entry_ms": 4227.159833,
+    "iterations": 29,
+    "restarts": 1,
+    "restart_budget": 30,
+    "max_restarts": 50,
+    "tolerance_applied": 1.0000000116860974e-07,
+    "stopping_metric": 1,
+    "stopping_metric_name": "unweighted_scaled_L2",
+    "stopping_relative_norm": 1.6527321733406097e-08,
+    "scaled_relative_norm": 1.6527321733406097e-08,
+    "residual_provenance": "saved_native_checked_raw_not_independent",
+    "saved_native_scaled_residual_norm": 3.3298265349827417e-07,
+    "saved_native_physical_residual_norm": 1.163601657929733e-06,
+    "scaled_rhs_norm": 20.14740542763099,
+    "physical_rhs_norm": 312.3019131227635,
+    "mask_active": false,
+    "refinement_passes": 1,
+    "apinv_probe": false,
+    "jvp_probe": false,
+    "jvp_fd_fallbacks": 0,
+    "success": true,
+    "preconditioner_calls": 29,
+    "guard_events": 0
+  },
+  "linear_validator": "passed preregistered metric/tolerance, actual stopping norm, guard and fallback gates; timing eligibility remains failed",
+  "artifacts_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/wrfout_d01_0001-01-01_00:10:00": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/rsl.out.0000": "ba0c7f341e547a91a3845c322c0b3243254917aa8865f5ef3e27758525c82206",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/rsl.error.0000": "e8565d9fc9a26245b555707e43a82eefaa833cc20f3a1bcb40d1a2405a0e560f"
+  },
+  "model_run": false,
+  "time_local": "2026-10-31T20:42:10+0900"
+}

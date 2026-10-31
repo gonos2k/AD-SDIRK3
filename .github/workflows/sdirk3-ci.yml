@@ -130,10 +130,10 @@ jobs:
           cmake --build build/sdirk3-core --parallel 2 --target \
             test_probe_noninterference test_fixed_trajectory_derivative \
             test_fixed_trajectory_lifecycle test_fp64_handoff_probe \
-            test_full_tile_step test_native_wave_refinement test_rhs_preconditioner_contract test_config_numeric_contract test_prepared_jvp test_prepared_rhs_jvp test_solver_diagnostics
+            test_full_tile_step test_native_wave_refinement test_rhs_preconditioner_contract test_config_numeric_contract test_prepared_jvp test_prepared_rhs_jvp test_solver_diagnostics test_reference_pressure test_reference_pressure_model test_pressure_packed_adapter
       - name: selected short numerical regressions
         run: |
-          tests=(Solver_Diagnostics_Noninterference Prepared_JVP_Contract Prepared_RHS_JVP_Contract Config_Numeric_Contract Diagnostic_Observer_Noninterference_Contract Fixed_Trajectory_Derivative Fixed_Trajectory_Lifecycle FP64_State_Handoff_Contract FP64_Implicit_Transport_Handoff_Contract Full_Tile_Step_Adjoint RHS_Preconditioner_Contract Implicit_Transport_RHS_Contract Implicit_Transport_Face_Contract)
+          tests=(Reference_Pressure_Solve_Contract Reference_Pressure_Block_Contract Pressure_Packed_Adapter_Contract Solver_Diagnostics_Noninterference Prepared_JVP_Contract Prepared_RHS_JVP_Contract Config_Numeric_Contract Diagnostic_Observer_Noninterference_Contract Fixed_Trajectory_Derivative Fixed_Trajectory_Lifecycle FP64_State_Handoff_Contract FP64_Implicit_Transport_Handoff_Contract Full_Tile_Step_Adjoint RHS_Preconditioner_Contract Implicit_Transport_RHS_Contract Implicit_Transport_Face_Contract)
           regex="^($(IFS='|'; echo "${tests[*]}"))$"
           ctest --test-dir build/sdirk3-core --show-only=json-v1 -R "$regex" > build/sdirk3-core/selected-tests.json
           python3 -c 'import json,sys; names=[t["name"] for t in json.load(open(sys.argv[1]))["tests"]]; assert sorted(names)==sorted(sys.argv[2:]), names' \

@@ -1,19 +1,40 @@
-# AD-SDIRK3 first-stage problem and completion boundary
+# AD-SDIRK3 forward objective and retained completion boundaries
 
 Local timestamp: 2026-10-11 17:47:15 JST (+0900)
 
-Last updated: 2026-10-22 05:16:23 JST (+0900)
+Last updated: 2026-10-31T18:26:15.434614+09:00
 
-This is the single project-level definition of the first-stage research target.
-Case reports retain their own inputs, numerical budgets and completion status.
-This definition does not certify the first-stage target as complete. A named dry `em_b_wave` forward instance now selects a 240 s window and fixed
-field-error budgets with `h=0.9375 s`, Newton `1e-9`. This case-scoped selection
-does not fix broader forecast/assimilation targets or certify their derivatives;
-project-level completion remains withheld. Efficiency is an
-optional acceptance target, not adopted by this definition. If it is selected,
-its same-accuracy cost/timestep criterion must be specified and met.
+## Active project objective
 
-## Main problem, derivative problem and validation problem
+Complete a standard `em_b_wave` forward integrator that produces physically
+acceptable forecast fields at reasonable cost relative to stock split-explicit
+WRF RK3. **Accuracy, stability and computational cost are required together.**
+The main case uses100km spacing,40x80x64 mass cells and h=600s, with h=300/150s
+sensitivity and a final5-day comparison. RK3 is a comparator with uncertainty,
+not exact truth. Same-state spatial-operator checks and whole-path forecast
+comparisons remain separate. Case-specific physical/efficiency budgets must be
+fixed before formal acceptance; no equal-accuracy speed advantage is established.
+
+The current structural priority is pressure Schur preconditioning of the
+existing nonlinear residual and A=I−hγJ_I, reusing the vertical principal solve
+and AD oracle. Time-map/coordinate changes, affine fast splitting, alternative
+tableaux and data-assimilation generalization follow only after this evidence.
+The authoritative active sequence is the [finite three-decision checklist](<(202610311826)_pressure_schur_checklist.md>).
+
+The completed dry240s/two-control E0–E2 and earlier derivative/rotating cases
+remain complete within their original scope. Their small timestep is not a
+practical forward/RK3 cost comparator. They are not prerequisites to repeat.
+Mode3 stays default; mode4 and PR328's local reuse remain bounded candidates,
+not proof that late grid-scale W or practical cost is solved. MPI shutdown
+failures remain separately unresolved engineering records.
+
+## Retained first-stage mathematical and derivative contracts
+
+The following original case records and derivative definitions are preserved
+as historical completion boundaries. Their optional-efficiency wording does
+not apply to the current standard forward objective above.
+
+### Main problem, derivative problem and validation problem
 
 The main problem is to compute a declared WRF dry dynamical configuration with a
 consistent spatial operator and an accepted ARK324L2SA time map. The derivative
@@ -54,7 +75,7 @@ not permission to reuse a value from a previous experiment.
 | Forward accuracy | Evaluation times/window, owned/physical sampling positions, per-field units, physical weights/scales \(s_X\), and budgets \(\epsilon_X\) | Named dry 240 s forward case selected and accepted below; broader targets remain unselected |
 | Derivative accuracy | Directions/cotangents and norms/scales, dot/Taylor/FD budgets, true transpose residual and replay checks for that same map/window | Existing budgets apply to their fixtures only; the selected native two-control VJP/FD window is complete, while full-map JVP and broader directions remain open |
 | Observation/control problem | Observation operator, times, \(R\), control parameterization, any prior and admissible set | Completed rotating and native two-control idealized twin cases retained below. Real-observation assimilation remains separate |
-| Efficiency | Same-accuracy comparator, timestep/stability requirement, whole-run cost definition and required improvement | **Optional target not adopted**; if selected, its criterion must be fixed. No equal-accuracy cost win is established |
+| Efficiency | Same-accuracy comparator, timestep/stability requirement, whole-run cost definition and required improvement | Required for the active standard forward goal above; its physical and efficiency acceptance budgets remain open. Prior narrow cases retain their own scope; no equal-accuracy cost win is established |
 
 The selected case record and this definition together form the completion
 contract. Changing an entry creates a new version/instance; it does not silently
@@ -494,8 +515,9 @@ These earlier probes do not certify a full-map JVP or all directions.
 Do not reopen the completed reference screen or require
 the 15 s candidate to pass first. Declare the observation/control problem and
 derivative budgets before that test. For broader instances, freeze their own
-window and physical error budgets. Adopt an efficiency target only through an
-explicit scope decision; if adopted, fix its same-accuracy cost/timestep criterion too. Do not automatically add another wave, optimizer run, Hessian test,
+window and physical error budgets. For a separately selected broader derivative instance, define any efficiency
+criterion in that instance's scope. The active standard forward objective above
+requires efficiency and its same-accuracy cost/timestep criterion remains open. Do not automatically add another wave, optimizer run, Hessian test,
 moisture, terrain or MPI experiment. No project completion percentage is implied.
 
 This documentation was checked against main

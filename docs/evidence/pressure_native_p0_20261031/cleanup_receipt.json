@@ -1,0 +1,26 @@
+{
+  "time_local": "2026-10-31T20:54:45.043426+09:00",
+  "scope": "user-authorized unnecessary intermediate cleanup; failure logs, receipts, canonical references retained",
+  "files": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/run/runs/candidate/wrfout_d01_0001-01-01_00:00:00",
+      "bytes": 1989217,
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "reason": "0-step failed setup output; canonical initial reference/input and matching context retained"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_numerical_diagnostic/run/runs/candidate/wrfoutReady_d01_0001-01-01_00:00:00",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reason": "0-step failed setup output; canonical initial reference/input and matching context retained"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_clock_power_excerpt.txt",
+      "bytes": 8767,
+      "sha256": "2bf5c97bde3965db6ce847500b6270cd3e4fac5c543c978738326f5559c5fb8a",
+      "reason": "broad power-log excerpt superseded by exact-window excerpt"
+    }
+  ],
+  "logical_bytes": 1997984,
+  "physical_space_reclaimed_claim": false
+}

@@ -268,6 +268,9 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+#include "wrf_sdirk3_pressure_stage_probe.h"
+#endif
 #ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
 #include "tests/native_terminal_adjoint_test.h"
 #endif
@@ -20414,6 +20417,32 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto prho = wrf::sdirk3::calc_p_rho_wrf(ph, t, mu, mu_base_, alb_mass, p_base_,
                                                     rdnw_tensor, c1h_, c2h_,
                                                     rd_, cv_, cp_, p0_, kWrfT0);
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+            if (wrf::sdirk3::pressure_stage_probe::capture_active()) {
+              try {
+                wrf::sdirk3::pressure_stage_probe::PressureGeometryEvidence geometry;
+                geometry.c1f=c1f_; geometry.c2f=c2f_; geometry.rdn=rdn_tensor;
+                geometry.msftx=msftx_; geometry.msfty=msfty_;
+                geometry.msfux=msfux_; geometry.msfuy=msfuy_;
+                geometry.msfvx=msfvx_; geometry.msfvy=msfvy_;
+                geometry.ground_phi=ph_base_.select(1,0).to(ph.device(),ph.scalar_type())+ph.select(1,0);
+                geometry.rdx=rdx; geometry.rdy=rdy;
+                geometry.gravity=(grid_info_ && grid_info_->g>0) ? grid_info_->g : g_;
+                geometry.whole_single_rank=nprocx_*nprocy_==1 &&
+                    its_<=ids_ && ite_>=ide_-1 && jts_<=jds_ && jte_>=jde_-1;
+                geometry.packed_periodic_x_symmetric_y=isPackedPeriodicDomain() && !config_flags_polar_;
+                wrf::sdirk3::pressure_stage_probe::capture_eos(
+                    ph,t,mu,mu_base_,alb_mass,p_base_,c1h_,c2h_,rdnw_tensor,
+                    prho.alt,prho.p_pert,rd_,cv_,cp_,p0_,kWrfT0,geometry);
+              } catch (const std::bad_alloc&) {
+                throw;
+              } catch (const c10::OutOfMemoryError&) {
+                throw;
+              } catch (...) {
+                wrf::sdirk3::pressure_stage_probe::mark_capture_failed();
+              }
+            }
+#endif
             p_pert_mass = prho.p_pert;
             al_pert_mass_fs = prho.al_pert;
             alt_mass_fs = prho.alt;

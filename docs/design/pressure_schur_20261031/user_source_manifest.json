@@ -1,0 +1,18 @@
+{
+  "at_local": "2026-10-31T18:21:23.251857+09:00",
+  "scope": "Immutable user-provided design and independent checks; not WRF-native proof",
+  "files": [
+    {
+      "source_path": "/Users/yhlee/Downloads/설계검토_종합.md",
+      "copy_name": "설계검토_종합.md",
+      "bytes": 24404,
+      "sha256": "e777df36cecd745984e5462909e8c57f4c59df31d35b81c070fcc354cee55fcd"
+    },
+    {
+      "source_path": "/Users/yhlee/Downloads/design_checks.py",
+      "copy_name": "design_checks.py",
+      "bytes": 8135,
+      "sha256": "e1e85221e562579821f27f195804d6b93ac87a647a26155a62b993164ab2158b"
+    }
+  ]
+}
