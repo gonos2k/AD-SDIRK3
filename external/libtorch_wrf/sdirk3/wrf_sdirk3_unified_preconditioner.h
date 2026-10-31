@@ -247,6 +247,16 @@ public:
     // The canonical type-2 profile selects the raw vertical principal model.
     // It consumes a full stage snapshot; mu-only binding is invalid for this model.
     bool raw_principal_enabled() const;
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+    struct PressureProbeColumn {
+        float h;
+        uint64_t generation;
+        std::vector<float> k_left, k_diag, k_right, b_left, b_diag;
+    };
+    const std::shared_ptr<WRFGridInfo>& pressure_probe_grid() const { return grid_info_; }
+    PressureProbeColumn pressure_probe_column(int j, int i, const torch::Tensor& state) const;
+    uint64_t pressure_probe_raw_digest() const;
+#endif
     void bind_raw_principal_state_or_throw(const torch::Tensor& packed_state,
                                            int stage,
                                            const char* state_label);

@@ -1,0 +1,59 @@
+{
+  "source_commit": "70f37dfcd5020d6c7d0263e66973376cfd3913d6",
+  "base_commit": "be66161fa03b50d5b0006b5faec016135517d6da",
+  "pre_registration": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a1_native_preregistration.json",
+    "sha256": "49f8fff2a94413924692820f41ab5221ccf4c69ca0e38228486c7a42408915b9"
+  },
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/native_build_70f/build_receipt.json",
+    "sha256": "5bbf41d0ac3ccc8dbcf585f04c5ba7361b4f1e0a940dc56622c17fbdc8803b15"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/native_build_70f/wrf.exe",
+    "sha256": "2792161cc857818f5a9cdff5663d6534cd286c625a4b504c51c0298133f1e601"
+  },
+  "be661_off_endpoint": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_screen/runs/OFF/wrfout_d01_0001-01-01_00:10:00",
+    "sha256": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af",
+    "prior_case_receipt_sha256": "33854911ac0e30f0c8e94d8e404add1eea206372015c689b8cf7519f987d069a"
+  },
+  "reference_rk3_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/native_case/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "attempts": 1,
+  "retry": false,
+  "mpi_timeout_seconds": 360,
+  "rank_memory_peak_limit_bytes": 4294967296,
+  "rank_memory_scope": "postrun /usr/bin/time -l rank only, not combined launcher tree",
+  "claim_scope": "A1 observer only; not independent A equivalence, A2 replay, pressure preconditioner or timing",
+  "case": {
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf"
+  }
+}

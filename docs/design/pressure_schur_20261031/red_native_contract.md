@@ -1,0 +1,46 @@
+# Red audit: native diagnostic-pressure Schur contract
+
+Scope: read-only source audit, `/private/tmp/pressure-schur-stage-20261031` HEAD `be66161fa03b50d5b0006b5faec016135517d6da`; preserve original nonlinear residual and A = I − a J_I, a = dt gamma. No mode 5, HEVI, coordinate change, tuning, build, or model run. The user’s `design_checks.py` is a synthetic periodic-x/reflecting-y/rigid-z scalar example, not a native pressure operator or top validation.
+
+Graph navigation: reused `newton-local-linearization-20261031/integrated_graphify.json`; all 13 integrated source pins match this worktree by SHA-256, including Newton and tile RHS. Its declared scope excludes C++ closure and Fortran configuration edges and it does not include the raw principal or EOS helper, so absent edges are not evidence of absence; checked those sources directly. Additional current hashes: `wrf_sdirk3_unified_preconditioner.cpp` 1f2dcc492f3c8441efc8b470027687640e8861b309862f6cdc372f7c892b0979; `wrf_hydrostatic_pressure.h` f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b; `wrf_sdirk3_ww_cp.h` 664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7. These extra files are not covered by integrated pins; no claim of complete graph closure.
+
+## Native diagnostic relation
+
+`wrf_hydrostatic_pressure.h:83–117`, called by `wrf_sdirk3_tile_unified_impl.cpp:20404–20423`, defines at mass points H=c1h*(mub+mu)+c2h, N=alb*c1h*mu−|rdnw|*(PH[k+1]−PH[k]), alpha=alb−N/H and p=p0*(Rd*(t+t0)/(p0*alpha))^(cp/cv), where t is theta−t0 and pressure perturbation is p−pb. For smooth valid state, E=dp/dx obeys
+
+    dH=c1h dmu
+    dN=alb c1h dmu−|rdnw| (dPH[k+1]−dPH[k])
+    dα=−dN/H+N dH/H²
+    dp=(cp/cv) p [dt/(t+t0)−dα/α].
+
+Thus pressure is not a stored independent prognostic block, and μ contribution includes the denominator derivative; dropping it or substituting θ for θ−300 in state conversion is not an exact native derivative. EOS casts and admissibility/sanitization branches must match the active path, including base-data source (the RHS reconstructs alb from base thermodynamics). Fixed-coefficient acoustic reductions may deliberately omit terms, but must label them as approximation and not claim full A equivalence.
+
+Current mass-flux diagnosis shares current u,v,mu, hybrid c1h/c2h, map factors and dnw; packed aliases are excluded from independent cells (`tile_unified_impl.cpp:15414–15419,15896–15956`). Omega is diagnosed from those fluxes, so its directional derivative couples vertical levels and the column mass tendency, not a local w divergence. Its use and the active implicit split must be taken from the actual configured callback. Scalar conversion explicitly uses H and c1h*mu_dot and t, not absolute theta (`:26190–26207`); hence derivative of denominator and background state times derivative of mu_dot may matter. Distinguish pressure EOS derivative (absolute t+t0) from this perturbation-t conversion. Do not assume replacing either by the other is equivalent.
+
+## Elimination and reconstruction
+
+For a chosen frozen linear preconditioner P acting on the same packed variable as A, choose a pressure injection B and an invertible base C such that P=C+B E. Introduce q=E x and solve
+
+    C x+B q=r,  −E x+q=0
+    (I+E C⁻¹ B) q=E C⁻¹ r,  x=C⁻¹(r−B q).
+
+Signs may be chosen oppositely only with corresponding consistent changes everywhere. This augmented system exactly reconstructs P, not automatically A; to claim A equivalence require C=A−BE and demonstrate the chosen invertibility. In practice C/B/E approximate selected native derivatives and the Krylov true residual remains evaluated with original A. Any forcing from affine EOS, residual, boundary conditions, and any eliminated fields must appear in the right-hand side and back-substitution, not only in the operator. Declare pressure units, location, aliases, active DOFs, input/output scaling and inner-product norms. In physical-state perturbations dx=a dK for a fixed known a when K is stage rate; derive EOS forcing and injection consistently in whichever coordinate the existing Krylov operator actually uses. The identical numerical matrix I−aJ under constant scaling does not make pressure increments or RHS automatically interchangeable. Prove with a nonzero residual and a not equal to 1.
+
+The horizontal u/v pressure injection must use the exact chosen native PGF stencils, map factors, hybrid mass and stagger, and include terrain/alpha coefficients or explicitly call them dropped approximations. `G=−M_u⁻¹ Dᵀ M_p` is a candidate identity for a separately defined divergence/gradient pair with their actual discrete mass/map weights and boundary terms, not an established identity for the full native PGF and continuity. Verify with weighted dot products over independent cells, including periodic seam, reflecting y face signs, vertical metrics and boundary fluxes. Neither that test nor the synthetic rigid-lid SPD example establishes symmetry/positive definiteness of the full diagnostic Schur; use existing flexible outer Krylov unless proven otherwise.
+
+## Existing raw principal and top
+
+`wrf_sdirk3_unified_preconditioner.cpp:5421–5650` builds at the bound current stage, with strict dry/canonical profile and a=dt gamma. It forms EOS sensitivities q and s_theta, vertical W←PH K and W←theta B, including one-sided top W row, G=gI for active PH←W pairs, and tridiagonal S_W=I−a² K G. Its apply performs the vertical Schur solve and reconstructs PH (`:5652–5730`); coefficient tables/Thomas arithmetic are FP32, with pivot and finite checks. This is a valuable approximate column base/line solve, not an independent scalar pressure factor and not the complete native Jacobian. If pressure injection E/B includes the same vertical W←pressure coupling, taking full raw P as C and adding that coupling again double-counts it. Either partition C to remove the duplicated piece, derive a mathematically consistent correction to the full raw block, or consciously retain an approximate additive scheme without claiming exact reconstruction. Match stage, a, snapshot, generation and admissibility; do not reuse a stale factor under changed state/coefficient. Nonlocal μ/Omega and horizontal PGF are not established by this column block.
+
+The actual W top has a one-sided perturbation-pressure contribution in `tile_unified_impl.cpp:22376–22517`; raw builder includes the physical top W/PH coupling (`unified_preconditioner.cpp:5612–5630`). Omega boundary masks or zero normal mass flux do not imply W=0 or PH=0 at physical top. Preserve the active native top state and one-sided row in any pressure reconstruction. The synthetic rigid-z pressure operator is only an oracle for its own boundary problem.
+
+## Concrete A1 gate before adding a pressure component
+
+1. Freeze and identify one real h600 native stage, all effective flags, exact state/base/map/metric arrays, packed active/ghost mapping, a and rate-vs-state residual coordinates. Require finite admissible H, alpha and absolute theta. No synthetic data as a substitute for this check.
+2. On that snapshot compare analytical E v to the active EOS directional derivative (AD, plus a step-size sweep finite difference) separately for theta, μ, PH including top and bottom faces and mixed perturbations. Check physical units, sign, alpha base source and relative plus absolute errors appropriate to actual dtype. Include nonzero μ and nonuniform column.
+3. Before a numerical pressure solver, construct a tiny native-stencil block with explicit independent DOFs and the proposed C, B, E. For deterministic mixed and boundary-localized right-hand sides compare direct augmented solve to Schur solve plus full reconstruction and the residual of the same P. Exercise a != 1 and coordinate conversion, signs, top row and seams. Report original A residual separately; do not call P exact A without the stronger equality check.
+4. Verify the claimed D/G relation by weighted dot products including native face/mass weights, maps and boundary terms; demonstrate any defect or state which omitted terms make it approximate. Include constant pressure, column μ, nonzero Omega/flux and top-localized probes. Do not assert SPD based on synthetic eigenvalues.
+5. For raw reuse, show algebraically and numerically which vertical pressure term is already present, prove it is counted once in the assembled P, and verify line factor/reconstruction against its own explicit column matrix including top/bottom identity rows and generation. Document FP32 error/conditioning and failure/fallback behavior.
+6. Then evaluate the complete preconditioner against original native A on the frozen h600 stage: original true linear residual, iterations, total setup+solve cost and finite/failure behavior, versus existing raw P at identical tolerance and resources. Repeat with a physically meaningful RHS and directions. Only then consider a model test; same-setup archived RK3 field/runtime comparison, off parity and Stage 3 convergence remain required for promotion.
+
+No new numerical tests, WRF run, or RK3 field/runtime comparison were performed in this audit. The choices of C/B, active implicit transport terms, and actual inner-product weights remain open until measured on the frozen configured h600 snapshot.

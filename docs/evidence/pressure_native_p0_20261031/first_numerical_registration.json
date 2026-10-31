@@ -1,0 +1,42 @@
+{
+  "registered_at_local": "2026-10-31T20:43:50+0900",
+  "scope": "Prospective independent one-attempt candidate numerical and iteration diagnostic; no performance or promotion claims",
+  "source_commit": "899517260a5c045f753008216005e64908106d55",
+  "original_block": "FAILED preregistered timing gate: baseline completed but wall-minus-monotonic gap 2.0187461473979056s >= 1s; no retry, no Gate B, no adoption",
+  "baseline_usage": "numerical postcheck, raw original logs and bounded pre-FGMRES FNV fingerprint are used solely as context, not eligible performance baseline or complete operator identity proof",
+  "expected_preflight_digest_fnv64": "7bdd17f3a694726e",
+  "existing_native_attempts": 1,
+  "new_native_attempts_max": 1,
+  "total_native_attempts_max": 2,
+  "retry": false,
+  "case": "same baseline input and namelist; mode3 reuse OFF FP64 carry ON, h600 one step",
+  "MPI_timeout_seconds": 360,
+  "stopping_conditions": [
+    "return code 0; one step; stages2/3/4 scaled RMS <1e-9; wrapper3/0",
+    "candidate preflight bounded digest equals baseline 7bdd17f3a694726e and all identity fields match except timer",
+    "same actual stopping metric, restart budget, max restarts and FP32 registered tolerance 1.0000000116860974e-7; saved native stopping relative norm < applied tolerance",
+    "no guard/refinement defect or fwAD fallback; actual candidate P0 action calls >0; finite positive residuals and timing fields",
+    "exact shared initial state and input, physically finite and positive fields",
+    "candidate six owned prognostic fields satisfy 8*FP32 epsilon pointwise against baseline; retain RMS/max physical units",
+    "pre/post disk >=5GiB; postrun rank maximum RSS <=4GiB (excludes launcher, no live cap)",
+    "no retries; on any failure preserve cause, terminate this diagnostic"
+  ],
+  "clock_policy": "record wall and monotonic elapsed without subtraction; cost_eligible=false always regardless agreement; no 2x or Gate B decision",
+  "residual_scope": "saved native FGMRES true residual, not independently reevaluated",
+  "reference_constraints": "FNV is bounded fingerprint of captured operands/context, not cryptographic/full operator identity",
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/result.json": "c995d15e83911d0c5683aeea589e72cfe76fabd2eba860110ee5e8882b6eaa3a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/rsl.out.0000": "ba0c7f341e547a91a3845c322c0b3243254917aa8865f5ef3e27758525c82206",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/rsl.error.0000": "e8565d9fc9a26245b555707e43a82eefaa833cc20f3a1bcb40d1a2405a0e560f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/launcher.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/launcher.stderr.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/runs/baseline/wrfout_d01_0001-01-01_00:10:00": "1b0f492bd952f5357fcae74d561a1b9d9b14fd0fa386dd349fce84d29ffc16af",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_case/baseline_numerical_postcheck.json": "8d9025c124ae9f53f2e34134f5b06a78078d062e3d8cba447590c1265ee1287a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_native_preregistration.json": "e1b0c232803b920ad9a34c18f7ff695cc025eea55d91a79f3d4d00125cdab70d",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-schur-stage-20261031/a2_build/baseline_v2/build_receipt.json": "3f7155eb48b014e3320828c4126778e022f44caae2b46a3e140d8eefbfb74e5d"
+  },
+  "model_run": false
+}

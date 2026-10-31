@@ -1,0 +1,36 @@
+{
+  "registered_at_local": "2026-10-31T19:10:07.843493+09:00",
+  "scope": "A1 live EOS/native-column observation only; no pressure inverse/preconditioner candidate/no A2 fixture",
+  "base_core": "be66161fa03b50d5b0006b5faec016135517d6da",
+  "compile_flavor": "WRF_SDIRK3_PRESSURE_STAGE_PROBE, test-only default absent",
+  "native_case": {
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "mode": 3,
+    "reuse_linearization": false,
+    "dt_seconds": 600,
+    "outer_steps": 1,
+    "FP64_carry": true,
+    "Newton_abs_scaled_RMS": 1e-09,
+    "Krylov_relative": 1e-07,
+    "stage_fail_action": 1,
+    "rank": 1,
+    "boundary": "periodic X / symmetric Y / native dynamic upper W/PH",
+    "expected_probe": "first process stage2/newton0, original base RHS capture and saved originalFGMRES residual only"
+  },
+  "max_attempts": 1,
+  "retry": false,
+  "MPI_timeout_seconds": 360,
+  "history_output": "t0 and10min only",
+  "model_acceptance": "rc0,one completed step,stages2/3/4 converge,wrapper3/0,finite/admissible states",
+  "observational_parity": "all174 numeric endpoint arrays bit equal completed be661 OFF reference; metadata differences explicitly excluded",
+  "EOS_observation": {
+    "require": "exactly one complete nonduplicate live capture,CPU/FP64 finite positiveEOS inputs, finite outputs/errors",
+    "primal_reconstruction": "pressure/alt bit equality where same calc_p_rho_wrf inputs; report and investigate otherwise",
+    "AD_tangent": "relative<=5e-12 or absolute<=1e-10 Pa for all declared directions; bottomPH0 is unprojected EOS algebra only",
+    "FD": "at least one of fixed3 widths relative<=1e-4 perdeclared direction; reportallwidths no cherry-pickedrerun",
+    "top": "native one-sided raw K/B top terms reported separately; no rigid lid substitution"
+  },
+  "resource": "pre/post5GiB disk floor,postrun rankRSS4GiB bound notlive cap/excludeslauncher",
+  "timing": "instrumented run ineligible for forecast timing/speedup; no pressure-solve timing claim",
+  "interpretation": "passing these closes only bounded EOS/column observation subchecks, not fullA equivalence,pressurePperformance,A2replay orGateA/B/C"
+}
