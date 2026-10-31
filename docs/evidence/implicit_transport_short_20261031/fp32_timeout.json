@@ -1,0 +1,32 @@
+{
+  "attempts": 1,
+  "case_statuses": [
+    "failed_or_incomplete"
+  ],
+  "disk_free_end": 56359772160,
+  "results": [
+    {
+      "mode": 3,
+      "return_code": 241,
+      "monotonic_elapsed_seconds": 241.13845920888707,
+      "wall_elapsed_seconds": 239.24095678329468,
+      "cost_diagnostic_only": true,
+      "command": [
+        "/opt/homebrew/bin/mpirun",
+        "--timeout",
+        "240",
+        "--report-state-on-timeout",
+        "-np",
+        "1",
+        "--bind-to",
+        "none",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/mode4_native/wrf.exe"
+      ],
+      "status": "failed_or_incomplete",
+      "steps": 0,
+      "stage_residuals": [],
+      "terminal_wrapper_rows": [],
+      "validation_error": "AssertionError()"
+    }
+  ]
+}

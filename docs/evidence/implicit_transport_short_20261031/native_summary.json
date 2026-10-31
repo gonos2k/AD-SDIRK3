@@ -1,0 +1,226 @@
+{
+  "attempts": 2,
+  "case_statuses": [
+    "completed",
+    "completed"
+  ],
+  "disk_free_end": 53747105792,
+  "results": [
+    {
+      "mode": 3,
+      "return_code": 0,
+      "monotonic_elapsed_seconds": 69.06525562517345,
+      "wall_elapsed_seconds": 69.06465792655945,
+      "cost_diagnostic_only": true,
+      "command": [
+        "/opt/homebrew/bin/mpirun",
+        "--timeout",
+        "360",
+        "--report-state-on-timeout",
+        "-np",
+        "1",
+        "--bind-to",
+        "none",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_native/wrf.exe"
+      ],
+      "status": "completed",
+      "steps": 1,
+      "stage_residuals": [
+        "[Newton] CONVERGED stage=2 iters=3 ||S\u207b\u00b9R||_rms=6.333396e-14 [scaled-RMS] (||R||=6.583852e-11 [unscaled-L2])",
+        "[Newton] CONVERGED stage=3 iters=3 ||S\u207b\u00b9R||_rms=6.321380e-14 [scaled-RMS] (||R||=6.571196e-11 [unscaled-L2])",
+        "[Newton] CONVERGED stage=4 iters=3 ||S\u207b\u00b9R||_rms=6.317310e-14 [scaled-RMS] (||R||=6.566998e-11 [unscaled-L2])"
+      ],
+      "terminal_wrapper_rows": [
+        [
+          3,
+          0
+        ]
+      ],
+      "output_check": {
+        "grid": {
+          "nx": 40,
+          "ny": 80,
+          "nz": 64,
+          "dx_m": 100000.0,
+          "dy_m": 100000.0
+        },
+        "physical_minima_over_all_frames": {
+          "total_theta_K": 258.83935546875,
+          "total_mu_Pa": 89072.1247472763,
+          "layer_depth_m_from_PH_plus_PHB_over_g": 215.13885902459225,
+          "g_m_s2": 9.81
+        },
+        "physical_minimum_total_pressure_Pa": 11079.84334230423,
+        "timestamps": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:10:00"
+        ],
+        "step_logs": {
+          "rsl_main_step_count": 1,
+          "rsl_main_step_sum_seconds": 67.17513,
+          "rsl_main_step_seconds": [
+            67.17513
+          ],
+          "converged_newton_stage_count": 3,
+          "newton_iterations_sum": 9,
+          "rsl_timing_files": {
+            "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode3/rsl.out.0000",
+            "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode3/rsl.error.0000"
+          },
+          "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+        }
+      },
+      "t0_gate": {
+        "status": "passed",
+        "reference_label": "rk3",
+        "labels": [
+          "rk3",
+          "mode3"
+        ],
+        "timestamp": "0001-01-01_00:00:00",
+        "source_kind": "wrfout",
+        "gate_scope": "post-initialization first history frame",
+        "grid": {
+          "nx": 40,
+          "ny": 80,
+          "nz": 64,
+          "dx_m": 100000.0,
+          "dy_m": 100000.0
+        },
+        "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+        "fields_checked": [
+          "DN",
+          "DNW",
+          "F",
+          "MAPFAC_M",
+          "MAPFAC_MX",
+          "MAPFAC_MY",
+          "MAPFAC_U",
+          "MAPFAC_V",
+          "MU",
+          "MUB",
+          "P",
+          "PB",
+          "PH",
+          "PHB",
+          "QVAPOR",
+          "T",
+          "U",
+          "V",
+          "W",
+          "ZNU",
+          "ZNW"
+        ],
+        "signed_zero_equivalent": true
+      }
+    },
+    {
+      "mode": 4,
+      "return_code": 0,
+      "monotonic_elapsed_seconds": 125.48343020817265,
+      "wall_elapsed_seconds": 125.48239302635193,
+      "cost_diagnostic_only": true,
+      "command": [
+        "/opt/homebrew/bin/mpirun",
+        "--timeout",
+        "360",
+        "--report-state-on-timeout",
+        "-np",
+        "1",
+        "--bind-to",
+        "none",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_native/wrf.exe"
+      ],
+      "status": "completed",
+      "steps": 1,
+      "stage_residuals": [
+        "[Newton] CONVERGED stage=2 iters=3 ||S\u207b\u00b9R||_rms=6.320018e-14 [scaled-RMS] (||R||=6.570114e-11 [unscaled-L2])",
+        "[Newton] CONVERGED stage=3 iters=2 ||S\u207b\u00b9R||_rms=8.963654e-10 [scaled-RMS] (||R||=9.738288e-07 [unscaled-L2])",
+        "[Newton] CONVERGED stage=4 iters=3 ||S\u207b\u00b9R||_rms=6.306488e-14 [scaled-RMS] (||R||=6.555790e-11 [unscaled-L2])"
+      ],
+      "terminal_wrapper_rows": [
+        [
+          3,
+          0
+        ]
+      ],
+      "output_check": {
+        "grid": {
+          "nx": 40,
+          "ny": 80,
+          "nz": 64,
+          "dx_m": 100000.0,
+          "dy_m": 100000.0
+        },
+        "physical_minima_over_all_frames": {
+          "total_theta_K": 258.83935546875,
+          "total_mu_Pa": 89072.12164020538,
+          "layer_depth_m_from_PH_plus_PHB_over_g": 215.13865992928135,
+          "g_m_s2": 9.81
+        },
+        "physical_minimum_total_pressure_Pa": 11079.992353916168,
+        "timestamps": [
+          "0001-01-01_00:00:00",
+          "0001-01-01_00:10:00"
+        ],
+        "step_logs": {
+          "rsl_main_step_count": 1,
+          "rsl_main_step_sum_seconds": 123.86571,
+          "rsl_main_step_seconds": [
+            123.86571
+          ],
+          "converged_newton_stage_count": 3,
+          "newton_iterations_sum": 8,
+          "rsl_timing_files": {
+            "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode4/rsl.out.0000",
+            "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/runs/mode4/rsl.error.0000"
+          },
+          "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+        }
+      },
+      "t0_gate": {
+        "status": "passed",
+        "reference_label": "rk3",
+        "labels": [
+          "rk3",
+          "mode4"
+        ],
+        "timestamp": "0001-01-01_00:00:00",
+        "source_kind": "wrfout",
+        "gate_scope": "post-initialization first history frame",
+        "grid": {
+          "nx": 40,
+          "ny": 80,
+          "nz": 64,
+          "dx_m": 100000.0,
+          "dy_m": 100000.0
+        },
+        "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+        "fields_checked": [
+          "DN",
+          "DNW",
+          "F",
+          "MAPFAC_M",
+          "MAPFAC_MX",
+          "MAPFAC_MY",
+          "MAPFAC_U",
+          "MAPFAC_V",
+          "MU",
+          "MUB",
+          "P",
+          "PB",
+          "PH",
+          "PHB",
+          "QVAPOR",
+          "T",
+          "U",
+          "V",
+          "W",
+          "ZNU",
+          "ZNW"
+        ],
+        "signed_zero_equivalent": true
+      }
+    }
+  ]
+}

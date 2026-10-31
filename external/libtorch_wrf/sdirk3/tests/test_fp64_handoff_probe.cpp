@@ -254,6 +254,31 @@ int main(int argc, char** argv) {
         check_rhs_dt_invariance();
         check_imported_diagnostic_independence();
 
+        if (implicit_transport) {
+            for (int steps : {2,4}) {
+                cfg.internal_fp64_state_carry = false;
+                const auto isolated=integrate(steps,true,4.0f);
+                cfg.internal_fp64_state_carry = true;
+                const auto owned=integrate_solver_carry(steps,4.0f);
+                TORCH_CHECK(torch::equal(owned.first_internal,isolated.first_internal) &&
+                            torch::equal(owned.internal,isolated.internal),
+                            "mode-4 solver carry differs from isolated FP64 handoff");
+                const double first_roundtrip=(owned.first_internal-
+                    owned.first_internal.to(torch::kFloat32).to(torch::kFloat64)).abs().max().item<double>();
+                const double final_roundtrip=(owned.internal-
+                    owned.internal.to(torch::kFloat32).to(torch::kFloat64)).abs().max().item<double>();
+                TORCH_CHECK(std::isfinite(first_roundtrip) && first_roundtrip>0.0 &&
+                            std::isfinite(final_roundtrip) && final_roundtrip>0.0,
+                            "mode-4 FP64 carry has no sub-FP32 state information");
+                std::cout << std::setprecision(12) << "MODE4_FP64_ROUNDTRIP steps=" << steps
+                          << " first_max=" << first_roundtrip
+                          << " final_max=" << final_roundtrip << '\n';
+            }
+            check_carry_guards();
+            std::cout << "MODE4_FP64_CARRY_SCOPED_PASS counts=2,4 total_time=4\n";
+            return 0;
+        }
+
         // T=4 convergence ladder. Keep n=4 to expose the non-asymptotic coarse
         // interval, and extend through n=64 to establish the fine-step range.
         std::array<int,5> counts{4,8,16,32,64};

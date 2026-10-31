@@ -1,0 +1,68 @@
+{
+  "description": "Paired one-step FP64 diagnostics; no performance claims",
+  "source_revision": "dc2810585f8f8abc98865ece9c2a90414fd40d2b",
+  "native_build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_native/build_receipt.json",
+    "sha256": "076179e4ce764cd1abd18dbfc083cd2ce75129a219b2d92c61547c193ca3031d"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_native/wrf.exe",
+    "sha256": "de5df2b4c97f79eebfd25eb6641228315f9e02321a5ed64a79dd78666c7199a7"
+  },
+  "reference_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_pair/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "case_order": [
+    3,
+    4
+  ],
+  "skip_mode4_if_mode3_fails": true,
+  "max_attempts": 2,
+  "retry": false,
+  "mpi_timeout_seconds_per_case": 360,
+  "precision": "FP64 and FP64 state carry enabled in both; matches archived strict precision",
+  "difference_between_namelists": "imex_split_mode 3 vs 4 only",
+  "strict_solver": {
+    "newton_tol": 1e-09,
+    "newton_rtol": 0,
+    "krylov_tol": 1e-07,
+    "adaptive_ew": false,
+    "estimate_probe": false
+  },
+  "time_interpretation": "Diagnostic only; previous FP32 timeout had -1.9 s wall-minus-monotonic discrepancy, no performance claims",
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "cases": {
+    "mode3": {
+      "namelist_sha256": "64753e17b0b7acbe908d9bda26e28bf5112182a610167165d31d313889c9751b",
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912"
+    },
+    "mode4": {
+      "namelist_sha256": "de5cce111eb2597552b8d65eb86fb2d365ae90915662006afdb684bd384a166b",
+      "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912"
+    }
+  }
+}

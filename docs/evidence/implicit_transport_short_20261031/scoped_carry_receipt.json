@@ -1,0 +1,13 @@
+{
+  "base_commit": "dc2810585f8f8abc98865ece9c2a90414fd40d2b",
+  "source_sha256": "979f73ac426dc78c8d76302b83d4e5ecb90c4303be20d945405ec90d0c06b82c",
+  "executable_sha256": "b614cc0a3d80fd00c4ffcd69df74a59ccdd188695baa97fdf12f71d6ad6aed88",
+  "archive_sha256": "3a5bf189d2b8ca0fae9bed465b907b26db2a4b8fb3ecc4bf6270fba4bc4bcb10",
+  "argv": [
+    "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/split_fix/fp64_contracts/scoped_handoff_final",
+    "--implicit-transport"
+  ],
+  "timeout_s": 180,
+  "returncode": 0,
+  "elapsed_s": 33.35457016713917
+}
