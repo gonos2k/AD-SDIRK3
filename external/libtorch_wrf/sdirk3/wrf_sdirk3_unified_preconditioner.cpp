@@ -5370,6 +5370,22 @@ bool UnifiedPreconditioner::raw_principal_enabled() const {
     return raw_principal_selection_ == RawPrincipalSelection::Canonical;
 }
 
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+UnifiedPreconditioner::PressureProbeColumn UnifiedPreconditioner::pressure_probe_column(
+    int j, int i, const torch::Tensor& state) const {
+    torch::NoGradGuard no_grad;
+    TORCH_CHECK(raw_principal_enabled() && raw_principal_coefficients_valid_ &&
+                !raw_principal_coefficients_dirty_ && raw_principal_state_bound_ && grid_info_,
+                "pressure probe requires bound current raw principal coefficients");
+    TORCH_CHECK(j >= 0 && j < grid_info_->ny && i >= 0 && i < grid_info_->nx,
+                "pressure probe column outside grid");
+    TORCH_CHECK(torch::equal(raw_principal_state_cpu_, state.detach().to(torch::kCPU,torch::kFloat64).contiguous()),
+                "pressure probe linearization point differs from raw principal binding");
+    const auto& b=raw_principal_blocks_[static_cast<size_t>(j)*grid_info_->nx+i];
+    return {raw_principal_h_,raw_principal_generation_,b.k_left,b.k_diag,b.k_right,b.b_left,b.b_diag};
+}
+#endif
+
 void UnifiedPreconditioner::bind_raw_principal_state_or_throw(
     const torch::Tensor& packed_state, int stage, const char* state_label) {
     torch::NoGradGuard no_grad;

@@ -268,6 +268,9 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+#include "wrf_sdirk3_pressure_stage_probe.h"
+#endif
 #ifdef WRF_SDIRK3_NATIVE_TERMINAL_TEST
 #include "tests/native_terminal_adjoint_test.h"
 #endif
@@ -20414,6 +20417,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto prho = wrf::sdirk3::calc_p_rho_wrf(ph, t, mu, mu_base_, alb_mass, p_base_,
                                                     rdnw_tensor, c1h_, c2h_,
                                                     rd_, cv_, cp_, p0_, kWrfT0);
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+            wrf::sdirk3::pressure_stage_probe::capture_eos(
+                ph,t,mu,mu_base_,alb_mass,p_base_,c1h_,c2h_,rdnw_tensor,
+                prho.alt,prho.p_pert,rd_,cv_,cp_,p0_,kWrfT0);
+#endif
             p_pert_mass = prho.p_pert;
             al_pert_mass_fs = prho.al_pert;
             alt_mass_fs = prho.alt;

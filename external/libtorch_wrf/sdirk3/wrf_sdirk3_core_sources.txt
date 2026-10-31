@@ -29,3 +29,4 @@ wrf_sdirk3_halo_exchange.cpp
 wrf_sdirk3_ad_halo_exchange.cpp
 wrf_sdirk3_rhs_run_close.cpp
 wrf_sdirk3_u_slow_diagnostics.cpp
+wrf_sdirk3_pressure_stage_probe.cpp

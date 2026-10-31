@@ -63,6 +63,9 @@
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_halo_c_api.h"
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+#include "wrf_sdirk3_pressure_stage_probe.h"
+#endif
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
 #include <iostream>
@@ -5912,11 +5915,26 @@ public:
             }
             
             torch::Tensor F;
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+            // Claim one real Newton linearization per process; only its existing
+            // base RHS may publish EOS operands into this local context.
+            static std::atomic_flag pressure_probe_fired = ATOMIC_FLAG_INIT;
+            const bool pressure_capture_here = stage == 2 && newton_iter == 0 &&
+                !pressure_probe_fired.test_and_set(std::memory_order_relaxed);
+            wrf::sdirk3::pressure_stage_probe::PressureEosContext pressure_eos_context;
+#endif
 
             // The bounded W-term ledger is armed only for the production base
             // F(U_eval) call. JVPs, determinism probes, and trial RHS calls use
             // compute_rhs directly and remain outside this scope.
             auto compute_base_rhs = [&]() -> torch::Tensor {
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+                std::unique_ptr<wrf::sdirk3::pressure_stage_probe::ScopedEosCapture> eos_capture;
+                if (pressure_capture_here) {
+                    eos_capture = std::make_unique<wrf::sdirk3::pressure_stage_probe::ScopedEosCapture>(
+                        pressure_eos_context);
+                }
+#endif
                 pending_stage2_rw_ledger = {};
                 current_base_rhs_input_digest = 0;
                 const bool capture_rw_terms = stage == 2 &&
@@ -8884,6 +8902,43 @@ public:
                     }
                     return result;
                 }();
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+                // Frozen observation only: the original Krylov solve and its local
+                // prepared graph have both completed. No production M wrapper is called.
+                if (pressure_capture_here) {
+                    const auto* raw_preconditioner =
+                        dynamic_cast<const UnifiedPreconditioner*>(preconditioner_);
+                    if (options_.reuse_linearization || !use_autograd_jvp ||
+                        !gmres_M_inv || !raw_preconditioner || !layout_initialized_ ||
+                        !gmres_result.success || !gmres_result.x.defined() || !gmres_result.r_true.defined()) {
+                        std::cerr << "[PRESSURE_STAGE_PROBE] {\"status\":\"unsupported_context\"}\n";
+                    } else {
+                        try {
+                            torch::NoGradGuard no_grad;
+                            const auto b_phys = scaling_initialized_ ? S_diag_ * gmres_rhs : gmres_rhs;
+                            const auto x_phys = scaling_initialized_ ? S_diag_ * gmres_result.x : gmres_result.x;
+                            // FGMRES returns its raw b_s - A_s*x_s here (not
+                            // halo-zeroed or D-weighted); the helper maps it to
+                            // physical coordinates using S. No extra RHS is called.
+                            wrf::sdirk3::pressure_stage_probe::run(
+                                U_eval.detach(), F.detach(), K.detach(), b_phys.detach(), x_phys.detach(),
+                                gmres_rhs.detach(), gmres_x0.detach(), gmres_result.x.detach(),
+                                gmres_result.r_true.detach(),
+                                scaling_initialized_ ? S_diag_.detach() : torch::Tensor(),
+                                scaling_initialized_ ? S_inv_diag_.detach() : torch::Tensor(),
+                                cached_layout_, dt * gamma, stage, pressure_eos_context,
+                                *raw_preconditioner);
+                        } catch (const std::bad_alloc&) {
+                            throw;
+                        } catch (const c10::OutOfMemoryError&) {
+                            throw;
+                        } catch (const std::exception& error) {
+                            std::cerr << "[PRESSURE_STAGE_PROBE_ERROR] " << error.what() << '\n';
+                            std::cerr << "[PRESSURE_STAGE_PROBE] {\"status\":\"observation_failed\",\"reason\":\"exception_details_in_error_log\"}\n";
+                        }
+                    }
+                }
+#endif
                 variable_pc_event_this_newton = *variable_pc_event;
 
                 // PR 9F.9.1 SHADOW: save r_g = b_s - A_s*x for the exact trust model at

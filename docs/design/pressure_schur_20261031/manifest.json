@@ -1,0 +1,30 @@
+{
+  "at_local": "2026-10-31T18:26:15.434614+09:00",
+  "source_note": "User originals copied without edits; checks rerun independently; native derivations are source audits, not solver acceptance",
+  "files": {
+    "design_checks.py": {
+      "sha256": "e1e85221e562579821f27f195804d6b93ac87a647a26155a62b993164ab2158b",
+      "bytes": 8135
+    },
+    "independent_checks.json": {
+      "sha256": "862d3a7343dd3d29460def05b5256abb98e8d34ed85f233a8958e370697a4728",
+      "bytes": 2208
+    },
+    "native_derivation.md": {
+      "sha256": "fa269716e937bdee1a5819dcd5697fd1520d150f143c7547d7c24a8c461b98fe",
+      "bytes": 10165
+    },
+    "red_native_contract.md": {
+      "sha256": "3875015a033b52c350581bc3015f1227b2b73828f73569901d9c08cdc34a2203",
+      "bytes": 9340
+    },
+    "user_design_review.md": {
+      "sha256": "e777df36cecd745984e5462909e8c57f4c59df31d35b81c070fcc354cee55fcd",
+      "bytes": 24404
+    },
+    "user_source_manifest.json": {
+      "sha256": "d16f8d8e7fda0278e35fb5c75a5ef7e8803cf6d4f52c9c5a4b2aefa1a49b34d3",
+      "bytes": 613
+    }
+  }
+}
