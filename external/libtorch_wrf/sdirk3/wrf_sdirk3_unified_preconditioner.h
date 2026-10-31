@@ -255,6 +255,7 @@ public:
     };
     const std::shared_ptr<WRFGridInfo>& pressure_probe_grid() const { return grid_info_; }
     PressureProbeColumn pressure_probe_column(int j, int i, const torch::Tensor& state) const;
+    uint64_t pressure_probe_raw_digest() const;
 #endif
     void bind_raw_principal_state_or_throw(const torch::Tensor& packed_state,
                                            int stage,

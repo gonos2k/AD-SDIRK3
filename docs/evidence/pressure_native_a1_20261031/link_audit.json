@@ -1,0 +1,27 @@
+{
+  "source_commit": "70f37dfcd5020d6c7d0263e66973376cfd3913d6",
+  "probe_archive_sha256": "63ab3edaf1842c41d6eb6f1a1cb8e44d91ffda74ceb2a98e03e97516dd3872c3",
+  "probe_executable_sha256": "2792161cc857818f5a9cdff5663d6534cd286c625a4b504c51c0298133f1e601",
+  "baseline_cpp_archive_linked": false,
+  "baseline_artifact_hashes_inventory_note": "The 1270-item receipt map verifies baseline native artifacts as a whole; it is not a claim that each is linked. Explicitly reused direct link inputs are listed here. The old C++ archive is never linked.",
+  "direct_reused_native_artifacts_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/main/wrf.o": "e57e22fb3b28cd1ce9001ee7afbf11f4b78ad688f41994b84a2729ea37770f15",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/main/module_wrf_top.o": "f0c48f46ee1ae7269c2d678d47ee36ca8a64a2451c1d4d6efb0dce17c90aa350",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/main/libwrflib.a": "ecc95b86f431f08e7eab34b1a3ac90f80927bcb77b49f34a2da5a0e41ec8993c",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/esmf_time_f90/libesmf_time.a": "db4eccc5d083413105543d11000679b118c9022454a56b626a61c7c37703889f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/io_netcdf/libwrfio_nf.a": "bec4d38e0c045cdfccfe906a386208ea9833ddb967a1c1d2d9d42e3baa62f40f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/fftpack/fftpack5/libfftpack.a": "a21c9f68f31b0a1beceb8ca77430123bf22c800b1a806912fc5b1f3c803fbdf2",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/io_grib1/libio_grib1.a": "3439cba36ac641e670343c1257113ea3b0a76a34dc8b9c62457e451cc6b81c15",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/io_grib_share/libio_grib_share.a": "62ed3bd263526df83cb9d5e69e2a2304e3698bf662bd27c82436546c0c6effc5",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/io_int/libwrfio_int.a": "36f70e582aa884011fe496401ddda6a430eb3d8b80ca9d1dc9f330f4fbd14042",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/RSL_LITE/librsl_lite.a": "1c743fc2d137c20789a136460faf5f44b85bf5312a2b6f88854f9033b66f65ac",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/frame/module_internal_header_util.o": "d51db7a88a3b077d0220843d2dd67ef57a8e450296926ab51b5180e9c5f8d305",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/frame/pack_utils.o": "081320d04b23bb9bd2ccc82c38cbefa3b12786e5b4addc534ccfb0f961a2b113"
+  },
+  "fresh_macro_cpp_object_count": 25,
+  "all_objects_macro_enabled": true,
+  "archive_and_search_both_point_new": true,
+  "baseline_artifacts_unchanged": true,
+  "post_build_free_bytes": 40789016576,
+  "model_run": false
+}

@@ -5384,6 +5384,34 @@ UnifiedPreconditioner::PressureProbeColumn UnifiedPreconditioner::pressure_probe
     const auto& b=raw_principal_blocks_[static_cast<size_t>(j)*grid_info_->nx+i];
     return {raw_principal_h_,raw_principal_generation_,b.k_left,b.k_diag,b.k_right,b.b_left,b.b_diag};
 }
+
+uint64_t UnifiedPreconditioner::pressure_probe_raw_digest() const {
+    torch::NoGradGuard no_grad;
+    TORCH_CHECK(raw_principal_enabled() && raw_principal_coefficients_valid_ &&
+                !raw_principal_coefficients_dirty_ && raw_principal_state_bound_ &&
+                raw_principal_state_cpu_.defined() && raw_principal_state_cpu_.is_cpu() &&
+                raw_principal_state_cpu_.scalar_type()==torch::kFloat64 &&
+                raw_principal_state_cpu_.is_contiguous(),
+                "pressure probe requires a complete immutable raw principal cache");
+    uint64_t h=14695981039346656037ULL;
+    const auto mix=[&](const void* p,size_t n) {
+        const auto* bytes=static_cast<const unsigned char*>(p);
+        for (size_t i=0;i<n;++i) { h^=bytes[i]; h*=1099511628211ULL; }
+    };
+    const auto count=raw_principal_blocks_.size(); mix(&count,sizeof(count));
+    mix(&raw_principal_h_,sizeof(raw_principal_h_));
+    mix(&raw_principal_generation_,sizeof(raw_principal_generation_));
+    mix(&raw_principal_stage_,sizeof(raw_principal_stage_));
+    const auto state_size=raw_principal_state_cpu_.numel(); mix(&state_size,sizeof(state_size));
+    mix(raw_principal_state_cpu_.data_ptr<double>(),static_cast<size_t>(state_size)*sizeof(double));
+    for (const auto& b:raw_principal_blocks_) {
+        for (const auto* v:{&b.k_left,&b.k_diag,&b.k_right,&b.b_left,&b.b_diag,&b.lower,&b.diag,&b.upper}) {
+            const auto n=v->size(); mix(&n,sizeof(n));
+            if (n) mix(v->data(),n*sizeof(float));
+        }
+    }
+    return h;
+}
 #endif
 
 void UnifiedPreconditioner::bind_raw_principal_state_or_throw(

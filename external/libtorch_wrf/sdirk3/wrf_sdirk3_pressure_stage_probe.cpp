@@ -57,12 +57,14 @@ ScopedEosCapture::ScopedEosCapture(PressureEosContext& context) : previous_(acti
     active_eos_context=&context;
 }
 ScopedEosCapture::~ScopedEosCapture() noexcept { active_eos_context=previous_; }
+bool capture_active() noexcept { return active_eos_context != nullptr; }
+void mark_capture_failed() noexcept { if (active_eos_context) active_eos_context->failed=true; }
 
 void capture_eos(const torch::Tensor& ph,const torch::Tensor& t,const torch::Tensor& mu,
                  const torch::Tensor& mu_base,const torch::Tensor& alb,const torch::Tensor& p_base,
                  const torch::Tensor& c1h,const torch::Tensor& c2h,const torch::Tensor& rdnw,
                  const torch::Tensor& alt,const torch::Tensor& p_pert,
-                 float rd,float cv,float cp,float p0,float t0) {
+                 float rd,float cv,float cp,float p0,float t0,const PressureGeometryEvidence& geometry) {
     if (!active_eos_context) return;
     auto& c=*active_eos_context;
     if (c.captured) { c.duplicate=true; return; }
@@ -75,6 +77,16 @@ void capture_eos(const torch::Tensor& ph,const torch::Tensor& t,const torch::Ten
         snapshot.p_base=p_base.detach().clone(); snapshot.c1h=c1h.detach().clone();
         snapshot.c2h=c2h.detach().clone(); snapshot.rdnw=rdnw.detach().clone();
         snapshot.alt=alt.detach().clone(); snapshot.p_pert=p_pert.detach().clone();
+        auto& dst=snapshot.geometry;
+        dst.c1f=geometry.c1f.detach().clone(); dst.c2f=geometry.c2f.detach().clone();
+        dst.rdn=geometry.rdn.detach().clone();
+        dst.msftx=geometry.msftx.detach().clone(); dst.msfty=geometry.msfty.detach().clone();
+        dst.msfux=geometry.msfux.detach().clone(); dst.msfuy=geometry.msfuy.detach().clone();
+        dst.msfvx=geometry.msfvx.detach().clone(); dst.msfvy=geometry.msfvy.detach().clone();
+        dst.ground_phi=geometry.ground_phi.detach().clone();
+        dst.rdx=geometry.rdx; dst.rdy=geometry.rdy; dst.gravity=geometry.gravity;
+        dst.whole_single_rank=geometry.whole_single_rank;
+        dst.packed_periodic_x_symmetric_y=geometry.packed_periodic_x_symmetric_y;
         snapshot.rd=rd; snapshot.cv=cv; snapshot.cp=cp; snapshot.p0=p0; snapshot.t0=t0;
         snapshot.captured=true;
         c=std::move(snapshot);

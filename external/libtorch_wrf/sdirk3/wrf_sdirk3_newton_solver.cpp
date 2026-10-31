@@ -66,6 +66,13 @@
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
 #include "wrf_sdirk3_pressure_stage_probe.h"
 #endif
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+#ifndef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+#error "Pressure reference experiment requires the stage observer"
+#endif
+#include "wrf_sdirk3_native_pressure_reference.h"
+#include "wrf_sdirk3_pressure_reference_expected.h"
+#endif
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
 #include <iostream>
@@ -86,6 +93,31 @@
 #include <cstdlib>  // PR 9F.9.1: std::getenv for the numerical-shadow gate
 
 namespace {
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+// Same ordered, byte-exact preflight in both independently initialized flavors.
+// FNV is an identity check, not a substitute for external SHA/provenance pins.
+struct PressurePreflightHash {
+    uint64_t value = 14695981039346656037ULL;
+    void bytes(const void* data, size_t count) {
+        const auto* p = static_cast<const unsigned char*>(data);
+        for (size_t i = 0; i < count; ++i) { value ^= p[i]; value *= 1099511628211ULL; }
+    }
+    template<class T> void scalar(const T& x) { bytes(&x, sizeof(x)); }
+    void tensor(const torch::Tensor& t) {
+        const uint8_t present = t.defined() ? 1 : 0;
+        scalar(present);
+        if (!present) return;
+        TORCH_CHECK(t.is_cpu(), "pressure preflight requires CPU tensors");
+        auto x = t.detach().contiguous();
+        const int32_t type = static_cast<int32_t>(x.scalar_type());
+        const int64_t ndim = x.dim();
+        scalar(type); scalar(ndim);
+        for (auto size : x.sizes()) scalar(size);
+        const int64_t count = x.numel(); scalar(count);
+        bytes(x.const_data_ptr(), static_cast<size_t>(x.nbytes()));
+    }
+};
+#endif
 // PR 9F.9.1: the numerical shadows (fixed-S0 / block-max / exact-trust) are a very
 // specific experiment -- full-state tensor mults + GPU->CPU syncs. Gate them on their
 // OWN env flag, NOT the broad debug_level, so a general debug run does not pay for them
@@ -5660,6 +5692,17 @@ public:
         stats_.final_residual_measured = false;
         frozen_ab_fired_this_solve_ = false;
         for (int newton_iter = 0; newton_iter < options_.max_newton_iter; ++newton_iter) {
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+            static std::atomic_flag pressure_probe_fired = ATOMIC_FLAG_INIT;
+            const bool pressure_capture_here = stage == 2 && newton_iter == 0 &&
+                !pressure_probe_fired.test_and_set(std::memory_order_relaxed);
+            std::chrono::steady_clock::time_point pressure_interval_start;
+            const int pressure_precond_calls_before = precond_total_calls_;
+            const int pressure_fallback_before = precond_fallback_count_;
+            const auto pressure_fwad_fallback_before =
+                g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
+            if (pressure_capture_here) pressure_interval_start = std::chrono::steady_clock::now();
+#endif
             // R14.2: the one record of this iteration -- see NewtonIterationResult.
             wrf::sdirk3::NewtonIterationResult it;
             actual_newton_iters = newton_iter + 1;
@@ -5916,11 +5959,7 @@ public:
             
             torch::Tensor F;
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
-            // Claim one real Newton linearization per process; only its existing
-            // base RHS may publish EOS operands into this local context.
-            static std::atomic_flag pressure_probe_fired = ATOMIC_FLAG_INIT;
-            const bool pressure_capture_here = stage == 2 && newton_iter == 0 &&
-                !pressure_probe_fired.test_and_set(std::memory_order_relaxed);
+            // Only the claimed existing base RHS may publish EOS operands.
             wrf::sdirk3::pressure_stage_probe::PressureEosContext pressure_eos_context;
 #endif
 
@@ -7448,12 +7487,21 @@ public:
             // at timestep 1). If GMRES fails (rel_error > 0.9), retry with preconditioner
             // (needed at timestep 2+ where temperature-pressure coupling is ill-conditioned).
             auto variable_pc_event = std::make_shared<bool>(false);
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+            std::unique_ptr<wrf::sdirk3::NativePressureReference> pressure_reference;
+            bool pressure_reference_active = false;
+            int pressure_reference_calls = 0;
+#endif
             std::function<torch::Tensor(const torch::Tensor&)> precond_func = nullptr;
             if (preconditioner_) {
                 // v20.14r38: Preconditioner fallback is STICKY per GMRES solve.
                 // Once triggered, the entire remaining GMRES solve uses identity.
                 // This maintains the stationary-M⁻¹ assumption required by GMRES.
-                precond_func = [this, variable_pc_event, fallback_locked = false](const torch::Tensor& r) mutable -> torch::Tensor {
+                precond_func = [this, variable_pc_event,
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                                &pressure_reference, &pressure_reference_active, &pressure_reference_calls,
+#endif
+                                fallback_locked = false](const torch::Tensor& r) mutable -> torch::Tensor {
                     torch::NoGradGuard no_grad;
 
                     // Once locked to identity, stay locked for remainder of this GMRES solve
@@ -7467,7 +7515,21 @@ public:
                         std::cerr << "[PRECOND] Input residual norm: " << r_norm << std::endl;
                     }
 
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                    auto Minv_r = [&]() -> torch::Tensor {
+                        if (!pressure_reference_active) return preconditioner_->apply(r);
+                        try {
+                            ++pressure_reference_calls;
+                            return pressure_reference->apply(r);
+                        } catch (const std::exception& error) {
+                            std::cerr << "[PRESSURE_REFERENCE_ERROR] " << error.what() << '\n';
+                            std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"apply_failed\"}\n";
+                            std::abort();
+                        }
+                    }();
+#else
                     auto Minv_r = preconditioner_->apply(r);
+#endif
 
                     // Over-correction/under-correction fallback guard
                     {
@@ -8762,6 +8824,159 @@ public:
                     return static_cast<int>(v);
                 }();
 
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+                double pressure_preflight_ms = 0.0, pressure_setup_ms = 0.0;
+                bool pressure_preflight_ok = false;
+                std::chrono::steady_clock::time_point pressure_linear_start;
+                const int pressure_refinement = wrf::sdirk3::g_sdirk3_config.precond_refinement_passes;
+                const bool pressure_apinv_probe = apinv_probe_armed();
+                if (pressure_capture_here) {
+                    const auto preflight_start = std::chrono::steady_clock::now();
+                    torch::NoGradGuard no_grad;
+                    const auto* raw = dynamic_cast<const UnifiedPreconditioner*>(preconditioner_);
+                    const bool eligible = !options_.reuse_linearization && use_autograd_jvp &&
+                        gmres_M_inv && raw && layout_initialized_ && !halo_mask_initialized_ &&
+                        pressure_refinement == 1 && !pressure_apinv_probe && !jvp_check_this_iter &&
+                        pressure_eos_context.captured && !pressure_eos_context.failed &&
+                        !pressure_eos_context.duplicate;
+                    if (!eligible) {
+                        std::cerr << "[PRESSURE_PREFLIGHT] {\"status\":\"unsupported_context\"}\n";
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                        std::abort();
+#endif
+                    } else {
+                        try {
+                        const auto tensor_hash = [](const torch::Tensor& t) {
+                            PressurePreflightHash h; h.tensor(t); return h.value;
+                        };
+                        const uint64_t state_hash = tensor_hash(U_eval), f_hash = tensor_hash(F),
+                            k_hash = tensor_hash(K), b_hash = tensor_hash(gmres_rhs),
+                            x0_hash = tensor_hash(gmres_x0),
+                            s_hash = tensor_hash(scaling_initialized_ ? S_diag_ : torch::Tensor()),
+                            sinv_hash = tensor_hash(scaling_initialized_ ? S_inv_diag_ : torch::Tensor()),
+                            mask_hash = tensor_hash(halo_mask_initialized_ ? halo_mask_ : torch::Tensor());
+                        const auto& e = pressure_eos_context;
+                        const auto& g = e.geometry;
+                        PressurePreflightHash eos_hash;
+                        for (const auto& t : {e.ph,e.t,e.mu,e.mu_base,e.alb,e.p_base,e.c1h,e.c2h,
+                                              e.rdnw,e.alt,e.p_pert}) eos_hash.tensor(t);
+                        for (float x : {e.rd,e.cv,e.cp,e.p0,e.t0}) eos_hash.scalar(x);
+                        PressurePreflightHash geometry_hash;
+                        for (const auto& t : {g.c1f,g.c2f,g.rdn,g.msftx,g.msfty,g.msfux,g.msfuy,
+                                              g.msfvx,g.msfvy,g.ground_phi}) geometry_hash.tensor(t);
+                        for (float x : {g.rdx,g.rdy,g.gravity}) geometry_hash.scalar(x);
+                        const uint8_t whole = g.whole_single_rank, packed = g.packed_periodic_x_symmetric_y;
+                        geometry_hash.scalar(whole); geometry_hash.scalar(packed);
+                        const auto& grid = raw->pressure_probe_grid();
+                        TORCH_CHECK(grid, "pressure preflight requires the raw grid");
+                        PressurePreflightHash raw_grid_hash;
+                        for (const auto& t : {grid->p_base,grid->alb,grid->mu_base,grid->c1h,grid->c2h,
+                                              grid->c1f,grid->c2f,grid->rdnw,grid->rdn,grid->qv,grid->qc,
+                                              grid->qr,grid->qi,grid->qs,grid->qg,grid->cqw}) raw_grid_hash.tensor(t);
+                        for (float x : {grid->g,grid->cp,grid->cv,grid->rd,grid->p0,grid->t0})
+                            raw_grid_hash.scalar(x);
+                        for (int x : {grid->nx,grid->ny,grid->nz,grid->nx_u,grid->ny_v,grid->nz_w})
+                            raw_grid_hash.scalar(x);
+                        const auto column = raw->pressure_probe_column(0, 0, U_eval);
+                        PressurePreflightHash raw_column_hash;
+                        raw_column_hash.scalar(column.h); raw_column_hash.scalar(column.generation);
+                        for (const auto* values : {&column.k_left,&column.k_diag,&column.k_right,
+                                                   &column.b_left,&column.b_diag}) {
+                            const uint64_t count = values->size(); raw_column_hash.scalar(count);
+                            raw_column_hash.bytes(values->data(), values->size() * sizeof(float));
+                        }
+                        const uint64_t raw_full_hash = raw->pressure_probe_raw_digest();
+                        PressurePreflightHash combined;
+                        for (uint64_t x : {state_hash,f_hash,k_hash,b_hash,x0_hash,s_hash,sinv_hash,
+                                           mask_hash,eos_hash.value,geometry_hash.value,
+                                           raw_grid_hash.value,raw_column_hash.value,raw_full_hash}) combined.scalar(x);
+                        const double a = dt * gamma;
+                        combined.scalar(a); combined.scalar(stage); combined.scalar(newton_iter);
+                        combined.scalar(effective_restart); combined.scalar(effective_max_restarts);
+                        combined.scalar(krylov_tol_adaptive);
+                        const uint8_t px = options_.periodic_x, py = options_.periodic_y;
+                        const uint8_t scaled = scaling_initialized_, masked = halo_mask_initialized_;
+                        combined.scalar(px); combined.scalar(py); combined.scalar(scaled); combined.scalar(masked);
+                        combined.scalar(pressure_refinement);
+                        const int block_scale = wrf::sdirk3::g_sdirk3_config.gmres_block_scale;
+                        combined.scalar(block_scale);
+                        const uint8_t apinv = pressure_apinv_probe, jvp_probe = jvp_check_this_iter;
+                        combined.scalar(apinv); combined.scalar(jvp_probe);
+                        combined.scalar(cached_layout_.total_size);
+                        for (const auto& block : cached_layout_.blocks) {
+                            combined.bytes(block.name.data(), block.name.size());
+                            combined.scalar(block.start); combined.scalar(block.size);
+                        }
+                        pressure_preflight_ms = std::chrono::duration<double,std::milli>(
+                            std::chrono::steady_clock::now() - preflight_start).count();
+                        std::ostringstream receipt;
+                        receipt << "[PRESSURE_PREFLIGHT] {\"status\":\"ok\",\"digest_fnv64\":\""
+                                << std::hex << combined.value << "\",\"state_fnv64\":\"" << state_hash
+                                << "\",\"F_fnv64\":\"" << f_hash << "\",\"K_fnv64\":\"" << k_hash
+                                << "\",\"b_fnv64\":\"" << b_hash << "\",\"x0_fnv64\":\"" << x0_hash
+                                << "\",\"S_fnv64\":\"" << s_hash << "\",\"Sinv_fnv64\":\"" << sinv_hash
+                                << "\",\"mask_fnv64\":\"" << mask_hash << "\",\"eos_fnv64\":\"" << eos_hash.value
+                                << "\",\"geometry_fnv64\":\"" << geometry_hash.value
+                                << "\",\"raw_grid_fnv64\":\"" << raw_grid_hash.value
+                                << "\",\"raw_column_0_0_fnv64\":\"" << raw_column_hash.value
+                                << "\",\"raw_full_fnv64\":\"" << raw_full_hash
+                                << "\"" << std::dec
+                                << ",\"restart\":" << effective_restart
+                                << ",\"max_restarts\":" << effective_max_restarts
+                                << ",\"tolerance\":" << std::setprecision(17) << krylov_tol_adaptive
+                                << ",\"periodic_x\":" << int(px) << ",\"periodic_y\":" << int(py)
+                                << ",\"scaling\":" << int(scaled) << ",\"mask\":" << int(masked)
+                                << ",\"block_scale_requested\":" << block_scale
+                                << ",\"refinement_passes\":" << pressure_refinement
+                                << ",\"apinv_probe\":" << int(apinv)
+                                << ",\"jvp_probe\":" << int(jvp_probe)
+                                << ",\"identity_scope\":\"bounded_captured_inputs_not_all_transitive_state\""
+                                << ",\"preflight_ms\":" << pressure_preflight_ms << "}";
+                        std::cerr << receipt.str() << '\n';
+                        pressure_preflight_ok = true;
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                        if (combined.value != wrf::sdirk3::pressure_stage_probe::kExpectedPreflightDigest) {
+                            std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"preflight_mismatch\"}\n";
+                            std::abort();
+                        }
+                        try {
+                            const auto setup_start = std::chrono::steady_clock::now();
+                            pressure_reference = wrf::sdirk3::NativePressureReference::create(
+                                pressure_eos_context, *raw, cached_layout_, U_eval, a);
+                            pressure_setup_ms = std::chrono::duration<double,std::milli>(
+                                std::chrono::steady_clock::now() - setup_start).count();
+                        } catch (const std::exception& error) {
+                            std::cerr << "[PRESSURE_REFERENCE_ERROR] " << error.what() << '\n';
+                            std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"setup_failed\"}\n";
+                            std::abort();
+                        }
+#endif
+                        } catch (const std::bad_alloc&) {
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                            std::cerr << "[PRESSURE_PREFLIGHT] {\"status\":\"allocation_failed\"}\n";
+                            std::abort();
+#else
+                            throw;
+#endif
+                        } catch (const c10::OutOfMemoryError&) {
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                            std::cerr << "[PRESSURE_PREFLIGHT] {\"status\":\"allocation_failed\"}\n";
+                            std::abort();
+#else
+                            throw;
+#endif
+                        } catch (const std::exception& error) {
+                            std::cerr << "[PRESSURE_PREFLIGHT_ERROR] " << error.what() << '\n';
+                            std::cerr << "[PRESSURE_PREFLIGHT] {\"status\":\"failed\"}\n";
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                            std::abort();
+#endif
+                        }
+                    }
+                    pressure_linear_start = std::chrono::steady_clock::now();
+                }
+#endif
+
                 // FGMRES ROUTING (full-repo review P1-1, mandatory — not a knob):
                 // any right-preconditioned solve MUST use FGMRES, because the
                 // production preconditioner wrapper can change mid-solve (ratio-guard
@@ -8834,6 +9049,14 @@ public:
                             : slot(s), previous(s) { slot = value; }
                         ~ActivePreparedScope() noexcept { slot = previous; }
                     } active_scope(active_prepared, &prepared);
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                    struct PressureReferenceScope {
+                        bool& active;
+                        explicit PressureReferenceScope(bool& flag, bool enable) : active(flag) { active = enable; }
+                        ~PressureReferenceScope() noexcept { active = false; }
+                    } pressure_scope(pressure_reference_active,
+                                     pressure_capture_here && pressure_reference != nullptr);
+#endif
                     auto result = gmres_M_inv
                     ? krylov_methods::solve_fgmres(
                           gmres_op,
@@ -8903,6 +9126,87 @@ public:
                     return result;
                 }();
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+                if (pressure_capture_here) {
+                    const auto pressure_end = std::chrono::steady_clock::now();
+                    const double interval_ms = std::chrono::duration<double,std::milli>(
+                        pressure_end - pressure_interval_start).count();
+                    const double linear_ms = std::chrono::duration<double,std::milli>(
+                        pressure_end - pressure_linear_start).count();
+                    torch::NoGradGuard no_grad;
+                    double residual_scaled = -1.0, residual_physical = -1.0;
+                    double rhs_scaled_norm = -1.0, rhs_physical_norm = -1.0;
+                    if (gmres_result.r_true.defined()) {
+                        const auto r = gmres_result.r_true.detach();
+                        residual_scaled = r.norm().item<double>();
+                        residual_physical = (scaling_initialized_ ? S_diag_ * r : r).norm().item<double>();
+                        rhs_scaled_norm = gmres_rhs.norm().item<double>();
+                        rhs_physical_norm = (scaling_initialized_ ? S_diag_ * gmres_rhs : gmres_rhs).norm().item<double>();
+                    }
+                    const int metric = gmres_result.stopping_metric;
+                    const bool metric_supported =
+                        metric == static_cast<int>(wrf::sdirk3::KrylovStoppingMetric::IdentityS) ||
+                        metric == static_cast<int>(wrf::sdirk3::KrylovStoppingMetric::BlockD);
+                    const auto fw_fallbacks = g_jvp_fd_fallback_count.load(std::memory_order_relaxed) -
+                                              pressure_fwad_fallback_before;
+                    bool comparison_eligible = pressure_preflight_ok && gmres_result.success && metric_supported &&
+                        std::isfinite(interval_ms) && interval_ms > 0 &&
+                        std::isfinite(linear_ms) && linear_ms > 0 &&
+                        std::isfinite(residual_scaled) && residual_scaled > 0 &&
+                        std::isfinite(residual_physical) && residual_physical > 0 &&
+                        std::isfinite(rhs_scaled_norm) && rhs_scaled_norm > 0 &&
+                        std::isfinite(rhs_physical_norm) && rhs_physical_norm > 0 &&
+                        std::isfinite(gmres_result.rho_D_final) && gmres_result.rho_D_final >= 0 &&
+                        std::isfinite(gmres_result.rho_S_final) && gmres_result.rho_S_final >= 0 &&
+                        std::isfinite(gmres_result.tolerance_applied) && gmres_result.tolerance_applied > 0 &&
+                        gmres_result.rho_D_final < gmres_result.tolerance_applied &&
+                        precond_fallback_count_ == pressure_fallback_before && fw_fallbacks == 0;
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                    comparison_eligible = comparison_eligible && pressure_reference_calls > 0;
+#endif
+                    const auto safe_number = [](double x) { return std::isfinite(x) ? x : -1.0; };
+                    std::cerr << "[PRESSURE_LINEAR] {\"flavor\":\""
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                              << "reference_p0"
+#else
+                              << "native_raw"
+#endif
+                              << "\",\"comparison_eligible\":" << (comparison_eligible ? "true" : "false")
+                              << ",\"preflight_ms\":" << safe_number(pressure_preflight_ms)
+                              << ",\"setup_ms\":" << safe_number(pressure_setup_ms)
+                              << ",\"linear_with_native_truecheck_ms\":" << safe_number(linear_ms)
+                              << ",\"interval_from_newton_entry_ms\":" << safe_number(interval_ms)
+                              << ",\"iterations\":" << gmres_result.iterations
+                              << ",\"restarts\":" << gmres_result.restarts
+                              << ",\"restart_budget\":" << effective_restart
+                              << ",\"max_restarts\":" << effective_max_restarts
+                              << ",\"tolerance_applied\":" << safe_number(gmres_result.tolerance_applied)
+                              << ",\"stopping_metric\":" << metric
+                              << ",\"stopping_metric_name\":\""
+                              << (metric == static_cast<int>(wrf::sdirk3::KrylovStoppingMetric::IdentityS)
+                                  ? "unweighted_scaled_L2"
+                                  : metric == static_cast<int>(wrf::sdirk3::KrylovStoppingMetric::BlockD)
+                                      ? "block_D_weighted_scaled_L2" : "unsupported")
+                              << "\""
+                              << ",\"stopping_relative_norm\":" << safe_number(gmres_result.rho_D_final)
+                              << ",\"scaled_relative_norm\":" << safe_number(gmres_result.rho_S_final)
+                              << ",\"residual_provenance\":\"saved_native_checked_raw_not_independent\""
+                              << ",\"saved_native_scaled_residual_norm\":" << safe_number(residual_scaled)
+                              << ",\"saved_native_physical_residual_norm\":" << safe_number(residual_physical)
+                              << ",\"scaled_rhs_norm\":" << safe_number(rhs_scaled_norm)
+                              << ",\"physical_rhs_norm\":" << safe_number(rhs_physical_norm)
+                              << ",\"mask_active\":" << (halo_mask_initialized_ ? "true" : "false")
+                              << ",\"refinement_passes\":" << pressure_refinement
+                              << ",\"apinv_probe\":" << (pressure_apinv_probe ? "true" : "false")
+                              << ",\"jvp_probe\":" << (jvp_check_this_iter ? "true" : "false")
+                              << ",\"jvp_fd_fallbacks\":" << fw_fallbacks
+                              << ",\"success\":" << (gmres_result.success ? "true" : "false")
+                              << ",\"preconditioner_calls\":" << precond_total_calls_ - pressure_precond_calls_before
+                              << ",\"guard_events\":" << precond_fallback_count_ - pressure_fallback_before
+#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+                              << ",\"reference_calls\":" << pressure_reference_calls
+#endif
+                              << "}\n";
+                }
                 // Frozen observation only: the original Krylov solve and its local
                 // prepared graph have both completed. No production M wrapper is called.
                 if (pressure_capture_here) {
