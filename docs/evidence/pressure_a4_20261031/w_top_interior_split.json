@@ -1,0 +1,31 @@
+{
+  "scope": "post-hoc diagnostic partition; no acceptance threshold changes; one common first direction, not forecast noise",
+  "time_local": "2026-10-31T22:42:06.254857+09:00",
+  "records": [
+    {
+      "case": "A0",
+      "raw_file_sha256": "cf2f62183cefe1968ce71a5f2f1753a90b790dbf63e59b262a8a4a3d1678d3e0",
+      "complete_owned_W_points": 204800,
+      "fixed_bottom_excluded": true,
+      "dynamic_top_in_total": true,
+      "all_owned_rms": 4.833764796676732e-05,
+      "top_face_rms": 0.00038629068381432956,
+      "top_squared_share": 0.9978780409503955,
+      "remaining63_faces_rms": 2.244262878391951e-06,
+      "rate_units": "m s^-2; arbitrary normalized first direction"
+    },
+    {
+      "case": "B0",
+      "raw_file_sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "complete_owned_W_points": 204800,
+      "fixed_bottom_excluded": true,
+      "dynamic_top_in_total": true,
+      "all_owned_rms": 5.787534057516849e-06,
+      "top_face_rms": 6.6735333587341275e-06,
+      "top_squared_share": 0.02077516960710019,
+      "remaining63_faces_rms": 5.772374250031081e-06,
+      "rate_units": "m s^-2; arbitrary normalized first direction"
+    }
+  ],
+  "interior_P0_over_raw": 2.5720579819807368
+}

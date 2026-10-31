@@ -1,0 +1,24 @@
+{
+  "time_local": "2026-10-31T22:43:25.557056+09:00",
+  "scope": "user-authorized unnecessary duplicate output cleanup; canonical A/B samples, all registered paths and bytes retained",
+  "records": [
+    {
+      "duplicate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A1/pressure_a4_first_pair.bin",
+      "canonical_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/pressure_a4_first_pair.bin",
+      "bytes": 17287872,
+      "sha256": "cf2f62183cefe1968ce71a5f2f1753a90b790dbf63e59b262a8a4a3d1678d3e0",
+      "action": "verified identical bytes; duplicate inode replaced atomically by read-only hard link",
+      "path_and_content_preserved": true
+    },
+    {
+      "duplicate_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B1/pressure_a4_first_pair.bin",
+      "canonical_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B0/pressure_a4_first_pair.bin",
+      "bytes": 17287872,
+      "sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "action": "verified identical bytes; duplicate inode replaced atomically by read-only hard link",
+      "path_and_content_preserved": true
+    }
+  ],
+  "redundant_logical_bytes": 34575744,
+  "physical_free_space_claim": false
+}

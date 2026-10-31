@@ -1,0 +1,270 @@
+{
+  "created_local": "2026-10-31T22:47:14.842385+09:00",
+  "source_commit": "b0be4a94578739db91c77ee4d80dcc739483e03c",
+  "main_integration_commit": "ed18858887846cdb2afa28cbc6b465f12b73d270",
+  "cost_screen_completed": true,
+  "first_point_cost_samples_eligible": true,
+  "preregistered_performance_acceptance": false,
+  "decision": "NO-GO",
+  "forecast_speed_claim": false,
+  "gate_b_authorized": false,
+  "snapshot_retention": "canonical local A/B binary data; duplicate A1/B1 share read-only hard links, unchanged bytes/pins",
+  "records": [
+    {
+      "path": "integration_audit.json",
+      "bytes": 655,
+      "sha256": "88b56b0763d57e6612931d95b6e8689c20688e83803604fdb322fd3f36d12999",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/integration_audit.json",
+      "original_sha256": "88b56b0763d57e6612931d95b6e8689c20688e83803604fdb322fd3f36d12999",
+      "normalization": "none"
+    },
+    {
+      "path": "registration.json",
+      "bytes": 30709,
+      "sha256": "a5a6e2c3b8143aac70e48e0084c5bdebad03455df599f0ca6230acfc081215b7",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_registration.json",
+      "original_sha256": "a5a6e2c3b8143aac70e48e0084c5bdebad03455df599f0ca6230acfc081215b7",
+      "normalization": "none"
+    },
+    {
+      "path": "build_A_receipt.json",
+      "bytes": 66397,
+      "sha256": "e196a7793b64398657e519fbcaa71d193f090686a2085f463d3d753ae7e886a1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/A0/build_receipt.json",
+      "original_sha256": "e196a7793b64398657e519fbcaa71d193f090686a2085f463d3d753ae7e886a1",
+      "normalization": "none"
+    },
+    {
+      "path": "build_B_receipt.json",
+      "bytes": 9937,
+      "sha256": "ecae0dee84368ab9b1f647adf2f44c2c4fdfc0106a636a5ffc49358325aaa82b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/B/build_receipt.json",
+      "original_sha256": "ecae0dee84368ab9b1f647adf2f44c2c4fdfc0106a636a5ffc49358325aaa82b",
+      "normalization": "none"
+    },
+    {
+      "path": "cost_audit.json",
+      "bytes": 6699,
+      "sha256": "abebfd26113d0eaa44c2e207a2b09c4aeb2f85fb30fa04bd30da91678f95d350",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_analysis/cost_audit.json",
+      "original_sha256": "abebfd26113d0eaa44c2e207a2b09c4aeb2f85fb30fa04bd30da91678f95d350",
+      "normalization": "none"
+    },
+    {
+      "path": "costs.csv",
+      "bytes": 1713,
+      "sha256": "7294a63b32451d0b0874ea9fd2047bfad8deec94870650f3489dc266d0a0a623",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_analysis/first_point_cost.csv",
+      "original_sha256": "6edd35c3f2539c367c6cdba5c8033d96ab3c49d7625ed80b9eefe59bd3611ae0",
+      "normalization": "LF public copy; original hash retained"
+    },
+    {
+      "path": "defect_receipt.json",
+      "bytes": 10042,
+      "sha256": "23e1ec8f60d51d97ab1fa0a66f4f65d301b918c1880fd7202df9d0279b6ba778",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_defect_analysis/receipt.json",
+      "original_sha256": "23e1ec8f60d51d97ab1fa0a66f4f65d301b918c1880fd7202df9d0279b6ba778",
+      "normalization": "none"
+    },
+    {
+      "path": "defect_blocks.csv",
+      "bytes": 3409,
+      "sha256": "131310a3dc09aab371cd2280d5fc5a3e80bf05375ac2826c52ada2a3f196c06f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_defect_analysis/defect_blocks.csv",
+      "original_sha256": "9fd240d8514bc1b120c7d30dd15abdbecd6f6b5e135410ad77a5af7fab43dd00",
+      "normalization": "LF public copy; original hash retained"
+    },
+    {
+      "path": "first_defect.png",
+      "bytes": 194493,
+      "sha256": "f2c9ad301eebc66cbcc0caacfc7f968493c9438a28fe8ceb393573f4bdb9aabe",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_defect_analysis/first_defect.png",
+      "original_sha256": "f2c9ad301eebc66cbcc0caacfc7f968493c9438a28fe8ceb393573f4bdb9aabe",
+      "normalization": "none"
+    },
+    {
+      "path": "forecast_context.png",
+      "bytes": 127527,
+      "sha256": "319ac5136f6d2aade86429abfcf53f6c9374bb823af1dcd63f8b1db714695c94",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_defect_analysis/forecast_context.png",
+      "original_sha256": "319ac5136f6d2aade86429abfcf53f6c9374bb823af1dcd63f8b1db714695c94",
+      "normalization": "none"
+    },
+    {
+      "path": "vertical_rms_profiles.png",
+      "bytes": 172650,
+      "sha256": "017f341224ec27b0efc4bacb90340d0b70bf19f9dedfad4235bb6e7030d0f8f8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_defect_analysis/vertical_rms_profiles.png",
+      "original_sha256": "017f341224ec27b0efc4bacb90340d0b70bf19f9dedfad4235bb6e7030d0f8f8",
+      "normalization": "none"
+    },
+    {
+      "path": "vertical_rms_profiles_receipt.json",
+      "bytes": 660,
+      "sha256": "68ce65277e826381b89230193374a177270b1982661301dc2efd9a9f4df698a2",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_defect_analysis/vertical_rms_profiles_receipt.json",
+      "original_sha256": "68ce65277e826381b89230193374a177270b1982661301dc2efd9a9f4df698a2",
+      "normalization": "none"
+    },
+    {
+      "path": "w_top_interior_split.json",
+      "bytes": 1246,
+      "sha256": "c90d8126acab6ac1dd6a5b101f23ee362c6918b10cc3e61a76807f35c66d832b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_defect_analysis/w_top_interior_split.json",
+      "original_sha256": "c90d8126acab6ac1dd6a5b101f23ee362c6918b10cc3e61a76807f35c66d832b",
+      "normalization": "none"
+    },
+    {
+      "path": "native_vrow_audit.md",
+      "bytes": 7871,
+      "sha256": "ed54e730dfa6775d36be4abc41d81795bada5f121b63b21309a83f8f9cde2f92",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_defect_analysis/native_vrow_audit.md",
+      "original_sha256": "ed54e730dfa6775d36be4abc41d81795bada5f121b63b21309a83f8f9cde2f92",
+      "normalization": "none"
+    },
+    {
+      "path": "snapshot_dedup_receipt.json",
+      "bytes": 1360,
+      "sha256": "2ab4299647e32ea086f137cd6c7aca61d1ae849dcb2b1e7fd41839326b8e086f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/snapshot_dedup_receipt.json",
+      "original_sha256": "2ab4299647e32ea086f137cd6c7aca61d1ae849dcb2b1e7fd41839326b8e086f",
+      "normalization": "none"
+    },
+    {
+      "path": "analyze_first_defect.py",
+      "bytes": 9532,
+      "sha256": "0337b4273ffa538f31f541a8b2a0d410db5bad996b4e5bb496e90d45fbf2126c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/analyze_first_defect.py",
+      "original_sha256": "0337b4273ffa538f31f541a8b2a0d410db5bad996b4e5bb496e90d45fbf2126c",
+      "normalization": "none"
+    },
+    {
+      "path": "profile_first_defect.py",
+      "bytes": 3416,
+      "sha256": "1fd72165588e2508f277410b27e033b84ad84ba0161ab684c48549a99995f156",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/profile_first_defect.py",
+      "original_sha256": "1fd72165588e2508f277410b27e033b84ad84ba0161ab684c48549a99995f156",
+      "normalization": "none"
+    },
+    {
+      "path": "A0_result.json",
+      "bytes": 11279,
+      "sha256": "830369070c3bbcc495ba11b0bb46ce98d77a3a8db6cd6721a9e03b7fd52dc891",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A0/result.json",
+      "original_sha256": "830369070c3bbcc495ba11b0bb46ce98d77a3a8db6cd6721a9e03b7fd52dc891",
+      "normalization": "none"
+    },
+    {
+      "path": "A0_intent.json",
+      "bytes": 2126,
+      "sha256": "598936d79339d7a02b46a4add6173744ae66ffd473e2bb7cceb9badc64bb2fde",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/A0_intent.json",
+      "original_sha256": "598936d79339d7a02b46a4add6173744ae66ffd473e2bb7cceb9badc64bb2fde",
+      "normalization": "none"
+    },
+    {
+      "path": "A0_pins.json",
+      "bytes": 28347,
+      "sha256": "691cb5d1bd94fc7e0d404d2cb06c83a1e3d15754d0f88168d58383608f759264",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/A0_pins.json",
+      "original_sha256": "691cb5d1bd94fc7e0d404d2cb06c83a1e3d15754d0f88168d58383608f759264",
+      "normalization": "none"
+    },
+    {
+      "path": "B0_result.json",
+      "bytes": 12122,
+      "sha256": "dcd43acd1d4ddf4593539604b1ee52d79a9e443e7781ba9c0311dfbe4badbe5c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B0/result.json",
+      "original_sha256": "dcd43acd1d4ddf4593539604b1ee52d79a9e443e7781ba9c0311dfbe4badbe5c",
+      "normalization": "none"
+    },
+    {
+      "path": "B0_intent.json",
+      "bytes": 2648,
+      "sha256": "9bc74dd4b514129ae103bac6b3a38cb154aca20b8356479ef778798427cab0ab",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/B0_intent.json",
+      "original_sha256": "9bc74dd4b514129ae103bac6b3a38cb154aca20b8356479ef778798427cab0ab",
+      "normalization": "none"
+    },
+    {
+      "path": "B0_pins.json",
+      "bytes": 30988,
+      "sha256": "62097eb2deb9bd3898b0fe321d54404d9e63bf72cd91595137b7ad52ebe7557b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/B0_pins.json",
+      "original_sha256": "62097eb2deb9bd3898b0fe321d54404d9e63bf72cd91595137b7ad52ebe7557b",
+      "normalization": "none"
+    },
+    {
+      "path": "B1_result.json",
+      "bytes": 12166,
+      "sha256": "5018f95391d475761ca8720c5b3645e2227787249104ba3dfe10e112c17e4804",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/B1/result.json",
+      "original_sha256": "5018f95391d475761ca8720c5b3645e2227787249104ba3dfe10e112c17e4804",
+      "normalization": "none"
+    },
+    {
+      "path": "B1_intent.json",
+      "bytes": 2860,
+      "sha256": "db95f4890bed53c5c9568856fc5dc101314d7a3a67bcf00e51121b6664d515d3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/B1_intent.json",
+      "original_sha256": "db95f4890bed53c5c9568856fc5dc101314d7a3a67bcf00e51121b6664d515d3",
+      "normalization": "none"
+    },
+    {
+      "path": "B1_pins.json",
+      "bytes": 33935,
+      "sha256": "fd14e68548747f3fc468bbeeea29d3fa9a66d9a50863db8e8c72b38a46d2e58d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/B1_pins.json",
+      "original_sha256": "fd14e68548747f3fc468bbeeea29d3fa9a66d9a50863db8e8c72b38a46d2e58d",
+      "normalization": "none"
+    },
+    {
+      "path": "A1_result.json",
+      "bytes": 11667,
+      "sha256": "3cbae53f8ee80ea95394e867848530293f07930331ed7f40c13e67438ca067a8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/runs/A1/result.json",
+      "original_sha256": "3cbae53f8ee80ea95394e867848530293f07930331ed7f40c13e67438ca067a8",
+      "normalization": "none"
+    },
+    {
+      "path": "A1_intent.json",
+      "bytes": 2550,
+      "sha256": "5d787bd7dc3f1a56049c257c876d5939f6b120f3d84393ab83061b489811d0d3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/A1_intent.json",
+      "original_sha256": "5d787bd7dc3f1a56049c257c876d5939f6b120f3d84393ab83061b489811d0d3",
+      "normalization": "none"
+    },
+    {
+      "path": "A1_pins.json",
+      "bytes": 36882,
+      "sha256": "34692063a8a52f61417a0113576a44df5a4161cec9a44147193a283f20bfa6d8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_case_draft/A1_pins.json",
+      "original_sha256": "34692063a8a52f61417a0113576a44df5a4161cec9a44147193a283f20bfa6d8",
+      "normalization": "none"
+    },
+    {
+      "path": "A0_selected_log.txt",
+      "bytes": 5324,
+      "sha256": "b5221f603f9f685c599e838d32c897a6a1e3e589e9d641d6333e78ae2d061652",
+      "derivation": "selected raw records, trailing whitespace removed; full original logs retained locally"
+    },
+    {
+      "path": "B0_selected_log.txt",
+      "bytes": 5363,
+      "sha256": "e112c4da1e4eef24800fca362873460d3e16dbd16569b46938773f41a09a57ff",
+      "derivation": "selected raw records, trailing whitespace removed; full original logs retained locally"
+    },
+    {
+      "path": "B1_selected_log.txt",
+      "bytes": 5379,
+      "sha256": "d2bd3c90c63033e206b50f81843325621e3c72d4ca89286e7acde8a9bda87088",
+      "derivation": "selected raw records, trailing whitespace removed; full original logs retained locally"
+    },
+    {
+      "path": "A1_selected_log.txt",
+      "bytes": 5337,
+      "sha256": "efbfb328b68936963ae2903af22c511273bdc99e2a92c495c4de85d556e80bb7",
+      "derivation": "selected raw records, trailing whitespace removed; full original logs retained locally"
+    }
+  ]
+}
