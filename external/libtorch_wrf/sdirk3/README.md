@@ -147,6 +147,7 @@ a validated convergence or performance improvement.
 | Stage-2 GMRES restart | `sdirk3_stage2_gmres_restart` | `WRF_SDIRK3_STAGE2_GMRES_RESTART` |
 | Stage-2 rejected-trial snapshot | `sdirk3_stage2_rejection_snapshot_diag` | `WRF_SDIRK3_STAGE2_REJECTION_SNAPSHOT_DIAG` |
 | Internal FP64 ARK state and RHS | `sdirk3_internal_fp64` | `WRF_SDIRK3_INTERNAL_FP64` |
+| Reuse exact JVP linearization within a Newton iteration (experimental, default off) | `sdirk3_reuse_linearization` | `WRF_SDIRK3_REUSE_LINEARIZATION` |
 | Carry FP64 prognostic state across forward steps | `sdirk3_internal_fp64_state_carry` | `WRF_SDIRK3_INTERNAL_FP64_STATE_CARRY` |
 | Stage-2 Krylov restarts | `sdirk3_stage2_max_krylov_restarts` | `WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS` |
 | Stage-2 Krylov tolerance | `sdirk3_stage2_krylov_tol` | `WRF_SDIRK3_STAGE2_KRYLOV_TOL` |
@@ -163,6 +164,13 @@ success by itself. An added early exit must also meet the final unweighted
 true-residual criterion. Existing scheduled and final checks, tolerances,
 budgets, and stagnation sampling remain unchanged. This experimental control
 does not enable EW forcing or change the final Newton tolerance.
+
+`sdirk3_reuse_linearization` defaults off. It reuses an exact autograd JVP
+linearization only within a Newton iteration. The experimental forward profile
+requires ARK mode 3 or 4, FP64 state carry, WRF mass-coordinate parity, fixed
+omega reference, and `diff_opt=1` with `khdif=kvdif=0`. It excludes retained
+adjoints, strict AD, AD halo exchange, HEVI and split-explicit mode; topology and
+other runtime restrictions are checked separately.
 
 `sdirk3_internal_fp64` defaults off. It promotes the packed FP32 WRF input before
 ARK stage assembly, retains FP64 stage states and Newton unknowns through the
@@ -555,3 +563,7 @@ Dated evidence and design history live in the repository `doc/` directory and
 `external/sdirk3_lib/docs_archive_2025_08_16/` (historical). The
 `external/sdirk3_lib/docs/` design-spec tree referenced by older notes is a
 local working archive that is **not tracked in this repository**.
+
+The prepared path also requires `sdirk3_stage_fail_action=1`; allocation or cleanup
+failures therefore remain failed stages. Cleanup is checked for ordinary and injected
+RHS exceptions, not guaranteed to finish after allocator exhaustion.

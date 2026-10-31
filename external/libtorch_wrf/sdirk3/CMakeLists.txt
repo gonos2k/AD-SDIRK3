@@ -500,6 +500,14 @@ add_executable(test_config_numeric_contract tests/test_config_numeric_contract.c
 target_link_libraries(test_config_numeric_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Config_Numeric_Contract COMMAND test_config_numeric_contract)
 
+add_executable(test_prepared_jvp tests/test_prepared_jvp.cpp)
+target_link_libraries(test_prepared_jvp PRIVATE wrf_sdirk3::core)
+add_test(NAME Prepared_JVP_Contract COMMAND test_prepared_jvp)
+add_executable(test_prepared_rhs_jvp tests/test_prepared_rhs_jvp.cpp)
+target_link_libraries(test_prepared_rhs_jvp PRIVATE wrf_sdirk3::core)
+add_test(NAME Prepared_RHS_JVP_Contract COMMAND test_prepared_rhs_jvp)
+set_tests_properties(Prepared_JVP_Contract Prepared_RHS_JVP_Contract PROPERTIES TIMEOUT 180)
+
 add_executable(test_scalar_advection_contract tests/test_scalar_advection_contract.cpp)
 target_link_libraries(test_scalar_advection_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Scalar_Advection_Contract COMMAND test_scalar_advection_contract)

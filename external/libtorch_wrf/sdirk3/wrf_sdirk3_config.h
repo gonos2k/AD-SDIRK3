@@ -944,6 +944,7 @@ struct SDIRK3Config {
     // Retain the internal FP64 prognostic state across forward tile steps.
     // Default OFF; requires internal_fp64. Retained adjoints require an open fixed trajectory.
     bool internal_fp64_state_carry = false;
+    bool reuse_linearization = false;  // Reuse exact JVP tape within one Newton iteration
     bool obs_aware_4dvar = false;          // Enable observation-aware terminal forcing path
     int obs_source_mode = 0;               // 0=off,1=FDDA,2=WRFDA-compatible payload
     int obs_window_sync_mode = 0;          // 0=off,1=strict endpoint sync,2=relaxed sync

@@ -2184,6 +2184,9 @@ CONTAINS
       config_name = "internal_fp64"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_internal_fp64))
 
+      config_name = "reuse_linearization"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_reuse_linearization))
+
       config_name = "internal_fp64_state_carry"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_internal_fp64_state_carry))
 

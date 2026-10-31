@@ -20,6 +20,7 @@ void clear_knobs() {
     unsetenv("WRF_SDIRK3_ADAPTIVE_HIGH_THRESHOLD");
     unsetenv("WRF_SDIRK3_ADAPTIVE_LOW_THRESHOLD");
     unsetenv("WRF_SDIRK3_IMEX_SPLIT_MODE");
+    unsetenv("WRF_SDIRK3_REUSE_LINEARIZATION");
     unsetenv("WRF_SDIRK3_INTERNAL_FP64");
     unsetenv("WRF_SDIRK3_INTERNAL_FP64_STATE_CARRY");
     unsetenv("WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND");
@@ -72,6 +73,53 @@ void expect_invalid_direct(float& field, const char* name, float value) {
 int main() {
     using wrf::sdirk3::SDIRK3Config;
     using wrf::sdirk3::g_sdirk3_config;
+
+    // Prepared linearization is opt-in and limited to the validated forward profile.
+    clear_knobs();
+    SDIRK3Config reuse;
+    if (reuse.reuse_linearization) ++failures;
+    reuse.imex_split_mode = 3;
+    reuse.use_autograd = true;
+    reuse.internal_fp64 = true;
+    reuse.internal_fp64_state_carry = true;
+    reuse.stage_fail_action = 1;
+    reuse.diffusion_option = 1;
+    reuse.khdif = reuse.kvdif = 0.0f;
+    reuse.load_from_namelist("sdirk3_reuse_linearization = .true.\n");
+    if (!reuse.reuse_linearization || !reuse.validate()) ++failures;
+    auto rejected = reuse;
+    rejected.internal_fp64 = false;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.internal_fp64_state_carry = false;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.retain_graph_for_adjoint = true;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.stage_fail_action = 0;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.save_trajectory = true;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.mass_coordinate_mode = 0;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.diffusion_option = 0;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.khdif = 1.0f;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.ad_strict_mode = true;
+    if (rejected.validate()) ++failures;
+    rejected = reuse; rejected.use_autograd = false;
+    if (rejected.validate()) ++failures;
+    setenv("WRF_SDIRK3_REUSE_LINEARIZATION", "true", 1);
+    reuse.reuse_linearization = false;
+    reuse.load_from_env();
+    if (!reuse.reuse_linearization || !reuse.validate()) ++failures;
+    clear_knobs();
+    g_sdirk3_config = reuse;
+    g_sdirk3_config.reuse_linearization = false;
+    wrf::sdirk3::wrf_sdirk3_set_config_bool("reuse_linearization", 1);
+    if (!g_sdirk3_config.reuse_linearization || !g_sdirk3_config.validate()) ++failures;
+    expect_throw("WRF_SDIRK3_REUSE_LINEARIZATION", "ture");
+    expect_namelist_throw("sdirk3_reuse_linearization", "ture");
+    clear_knobs();
 
     // Mode 4 is opt-in and must survive each existing configuration route.
     clear_knobs();

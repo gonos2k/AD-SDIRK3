@@ -2,6 +2,7 @@
 #include "wrf_sdirk3_jvp_autograd.h"
 #include "wrf_sdirk3_config.h"
 #include <torch/torch.h>
+#include <c10/core/InferenceMode.h>
 #include <torch/csrc/autograd/anomaly_mode.h>  // OPT 2025-01-25: For AnomalyMode
 #include <iostream>
 #include <chrono>
@@ -9,6 +10,54 @@
 
 namespace wrf {
 namespace sdirk3 {
+
+PreparedJvp::PreparedJvp(
+    const std::function<torch::Tensor(const torch::Tensor&)>& F,
+    const torch::Tensor& point) {
+    TORCH_CHECK(!c10::InferenceMode::is_enabled(), "PreparedJvp: inference mode is unsupported");
+    TORCH_CHECK(static_cast<bool>(F), "PreparedJvp: empty callback");
+    TORCH_CHECK(point.defined() && point.is_floating_point(),
+                "PreparedJvp: point must be a defined floating-point tensor");
+    torch::AutoGradMode enable_grad(true);
+    point_ = point.detach().clone().set_requires_grad(true);
+    auto output = F(point_);
+    TORCH_CHECK(output.defined() && output.is_floating_point() &&
+                output.scalar_type() == point_.scalar_type() &&
+                output.device() == point_.device(),
+                "PreparedJvp: output must match point dtype and device");
+    primal_ = output.detach();
+    if (!output.requires_grad()) return;
+
+    cotangent_ = torch::zeros_like(output).set_requires_grad(true);
+    auto gradients = torch::autograd::grad({output}, {point_}, {cotangent_},
+                                            /*retain_graph=*/true,
+                                            /*create_graph=*/true,
+                                            /*allow_unused=*/true);
+    gradient_ = gradients[0];
+}
+
+torch::Tensor PreparedJvp::primal() const {
+    TORCH_CHECK(primal_.defined(), "PreparedJvp: object has been moved from");
+    return primal_.detach();
+}
+
+torch::Tensor PreparedJvp::apply(const torch::Tensor& direction) const {
+    TORCH_CHECK(!c10::InferenceMode::is_enabled(), "PreparedJvp: inference mode is unsupported");
+    TORCH_CHECK(point_.defined() && primal_.defined(),
+                "PreparedJvp: object has been moved from");
+    TORCH_CHECK(direction.defined() && direction.sizes() == point_.sizes() &&
+                direction.scalar_type() == point_.scalar_type() &&
+                direction.device() == point_.device(),
+                "PreparedJvp: direction must match point shape, dtype and device");
+    if (!gradient_.defined()) return torch::zeros_like(primal_);
+    torch::AutoGradMode enable_grad(true);
+    auto products = torch::autograd::grad({gradient_}, {cotangent_},
+                                          {direction.detach()},
+                                          /*retain_graph=*/true,
+                                          /*create_graph=*/false,
+                                          /*allow_unused=*/true);
+    return products[0].defined() ? products[0].detach() : torch::zeros_like(primal_);
+}
 
 // Global flag to control JVP method for performance
 // Full-repo review P1-3: these were unsynchronized process-globals — a data
