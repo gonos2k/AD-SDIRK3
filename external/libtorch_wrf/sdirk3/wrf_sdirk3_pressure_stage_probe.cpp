@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -26,6 +27,13 @@ double tensor_l2(const torch::Tensor& x) {
 
 double maxabs(const torch::Tensor& x) {
     return x.to(torch::kCPU,torch::kFloat64).abs().max().item<double>();
+}
+bool same_bits(const torch::Tensor& a, const torch::Tensor& b) {
+    if (a.sizes()!=b.sizes() || a.scalar_type()!=b.scalar_type()) return false;
+    const auto ac=a.detach().to(torch::kCPU).contiguous();
+    const auto bc=b.detach().to(torch::kCPU).contiguous();
+    return std::memcmp(ac.data_ptr(),bc.data_ptr(),
+                       static_cast<size_t>(ac.numel())*ac.element_size())==0;
 }
 struct EosErrors { double ad_abs, ad_rel; std::array<double,3> fd_abs, fd_rel; };
 uint64_t tensor_digest(const torch::Tensor& x) {
@@ -305,6 +313,8 @@ void run(const torch::Tensor& U_eval, const torch::Tensor& F_eval, const torch::
         << ",\"live_vs_imported_alb_relative\":" << alb_rel
         << ",\"eos_primal_pressure_max_abs\":" << primal_p_error
         << ",\"eos_primal_alpha_max_abs\":" << primal_alpha_error
+        << ",\"eos_primal_pressure_bit_equal\":" << (same_bits(state.p_pert,live.p_pert.to(opts)) ? "true" : "false")
+        << ",\"eos_primal_alpha_bit_equal\":" << (same_bits(state.alt,live.alt.to(opts)) ? "true" : "false")
         << ",\"projected_phi_vs_Ueval_max\":" << projected_phi_diff
         << ",\"projected_theta_vs_Ueval_max\":" << projected_theta_diff
         << ",\"projected_mu_vs_Ueval_max\":" << projected_mu_diff
