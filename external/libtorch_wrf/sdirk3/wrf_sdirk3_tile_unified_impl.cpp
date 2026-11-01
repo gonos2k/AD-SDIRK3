@@ -268,6 +268,9 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+#include "wrf_sdirk3_linear_delay_audit.h"
+#endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
 #include "wrf_sdirk3_pressure_stage_probe.h"
 #endif
@@ -14013,6 +14016,57 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
 
     // AD halo path: lambda to compute RHS via full-halo combine when available
     auto compute_rhs_inner = [&](const torch::Tensor& U_interior, RhsMode rhs_mode) -> torch::Tensor {
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+        if (auto* f=wrf::sdirk3::linear_delay_audit::current) {
+            try {
+                ++f->rhs_all; if (f->in_linear) ++f->rhs_linear;
+                if (f->fast_rhs) ++f->rhs_fast;
+                const int mode=static_cast<int>(rhs_mode);
+                if (mode>=0 && mode<3) { ++f->rhs_modes[mode]; if (f->in_linear) ++f->linear_rhs_modes[mode]; }
+                else f->invalid=true;
+                if (f->selected && f->base_call && !f->have_base) {
+                    f->ref_base.set(U_ref_stage_); f->Fphys.set(F_phys); f->Fexp.set(F_exp);
+                    f->full_halo.set(U_full_exchanged); f->dt_stage=dt_stage_; f->split=split_mode;
+                    f->n_moist=n_moist_; f->has_physics=has_physics; f->prepared=prepared_rhs_enabled_;
+                    f->topology={nx_,ny_,nz_,nx_u_,ny_v_,nz_w_,its_,ite_,ids_,ide_,
+                                 jts_,jte_,jds_,jde_,nprocx_,nprocy_,mypx_,mypy_,
+                                 grid_info_ ? grid_info_->halo_width : -1,
+                                 static_cast<int>(wdamp_contract_.y_policy)};
+                    f->flags={config_flags_periodic_x_,config_flags_periodic_y_,config_flags_symmetric_xs_,
+                              config_flags_symmetric_xe_,config_flags_symmetric_ys_,config_flags_symmetric_ye_,
+                              config_flags_open_xs_,config_flags_open_xe_,config_flags_open_ys_,config_flags_open_ye_,
+                              config_flags_specified_,config_flags_nested_,config_flags_polar_,
+                              wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange,
+                              wrf::sdirk3::g_sdirk3_config.omega_update_ref_per_newton,
+                              isPackedPeriodicDomain()};
+                    const auto add=[&](const char* name,const torch::Tensor& x) {
+                        wrf::sdirk3::linear_delay_audit::Handle h; h.set_owner(x); f->context.emplace_back(name,std::move(h));
+                    };
+                    add("p_base",p_base_); add("th_base",th_base_); add("mu_base",mu_base_); add("ph_base",ph_base_);
+                    add("c1h",c1h_); add("c2h",c2h_); add("c1f",c1f_); add("c2f",c2f_);
+                    add("msftx",msftx_); add("msfty",msfty_); add("msfux",msfux_); add("msfuy",msfuy_);
+                    add("msfvx",msfvx_); add("msfvy",msfvy_); add("cqu",cqu_); add("cqv",cqv_); add("cqw",cqw_);
+                    add("zx",zx_); add("zy",zy_); add("p_pert_work",p_pert_); add("dpx_work",dpx_work_);
+                    add("cqv_at_v_work",cqv_at_v_work_); add("ru_tend",ru_tend_); add("rv_tend",rv_tend_);
+                    add("rw_tend",rw_tend_); add("t_tend",t_tend_); add("mu_tend",mu_tend_); add("ph_tend",ph_tend_);
+                    add("qv_tend",qv_tend_); add("ru_adv_z_work",ru_adv_z_work_); add("rv_adv_z_work",rv_adv_z_work_);
+                    add("rw_adv_z_work",rw_adv_z_work_); add("t_adv_z_work",t_adv_z_work_);
+                    add("div_x_work",div_x_work_); add("div_y_work",div_y_work_); add("div_z_work",div_z_work_);
+                    add("cqu_at_u_work",cqu_at_u_work_); add("cqw_at_w_work",cqw_at_w_work_);
+                    f->have_base=true;
+                }
+                if (f->selected && f->in_linear) {
+                    if (!f->have_first_ref) { f->ref_first.set(U_ref_stage_); f->have_first_ref=true; }
+                    if (f->have_last_ref) {
+                        if (!f->ref_last.value.is_same(U_ref_stage_)) ++f->ref_handle_changes;
+                        else if (!f->ref_last.unchanged()) ++f->ref_version_changes;
+                    }
+                    f->ref_last.set(U_ref_stage_); f->have_last_ref=true;
+                    if (f->sample_active && !f->raw_ref.defined()) f->capture(f->raw_ref,U_ref_stage_);
+                }
+            } catch (...) { f->invalid=true; }
+        }
+#endif
         if (U_full_exchanged.defined()) {
             // AD path: combine ghost from exchanged state + current Newton interior
             auto U_combined = combineGhostAndInterior(U_full_exchanged, U_interior);
@@ -14100,6 +14154,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // Fast-only RHS for predictor refinement in Newton solver.
     // Intentionally excludes F_exp/F_phys so predictor targets stiff acoustic coupling.
     auto compute_rhs_fast = [&](const torch::Tensor& U) -> torch::Tensor {
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+        auto* audit=wrf::sdirk3::linear_delay_audit::current;
+        wrf::sdirk3::linear_delay_audit::BoolScope fast(audit ? &audit->fast_rhs : nullptr,true);
+#endif
         return compute_rhs_inner(U, RhsMode::ImplicitOnly);
     };
 
@@ -20435,9 +20493,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     ph,t,mu,mu_base_,alb_mass,p_base_,c1h_,c2h_,rdnw_tensor,
                     prho.alt,prho.p_pert,rd_,cv_,cp_,p0_,kWrfT0,geometry);
               } catch (const std::bad_alloc&) {
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                if (wrf::sdirk3::linear_delay_audit::capture_failure())
+                    wrf::sdirk3::pressure_stage_probe::mark_capture_failed();
+                else throw;
+#else
                 throw;
+#endif
               } catch (const c10::OutOfMemoryError&) {
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                if (wrf::sdirk3::linear_delay_audit::capture_failure())
+                    wrf::sdirk3::pressure_stage_probe::mark_capture_failed();
+                else throw;
+#else
                 throw;
+#endif
               } catch (...) {
                 wrf::sdirk3::pressure_stage_probe::mark_capture_failed();
               }
@@ -21333,7 +21403,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             const auto alpha_v = (canonical_horizontal ? level_mass_v : c1 * muv_3d + c2) / msfvx_3d;
             rv_tend_pgf = rv_tend_pgf * (velocity_mass_v / alpha_v);
 #ifdef WRF_SDIRK3_PRESSURE_A5
-            if (wrf::sdirk3::pressure_stage_probe::capture_active()) {
+            if (wrf::sdirk3::pressure_stage_probe::capture_active()
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                && !wrf::sdirk3::linear_delay_audit::selected_base()
+#endif
+                ) {
                 try {
                     torch::NoGradGuard guard;
                     wrf::sdirk3::pressure_stage_probe::PressureVPrimaryContext cap;
