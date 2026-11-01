@@ -1,0 +1,6 @@
+{
+  "script": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run_terminal.py",
+  "sha256": "2e1e3c55d4acb47fcb8367cf674ede2d20a168c7b7a5a3fd7db54c6b8a943650",
+  "ast_parse": "passed",
+  "model_run": false
+}

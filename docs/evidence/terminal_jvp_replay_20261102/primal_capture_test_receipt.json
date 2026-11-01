@@ -1,0 +1,40 @@
+{
+  "worktree": "/private/tmp/terminal-jvp-replay-20261102",
+  "sources_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_fwad_or_fd.h": "8bec584eb3a746e20f4fb6a6fee7152b8cdfd03e8bd984bd5e9839964c80cd8a",
+    "external/libtorch_wrf/sdirk3/tests/test_terminal_primal_capture.cpp": "534eba444421fa0b4f64f76433e4dcc4409dc7f91a980a64283150da9efabb97",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_autograd.cpp": "4be339829439ab5ab5714ebfae6be5b9380ec310b6a17a5e9a2f8e773eb58436"
+  },
+  "compiler": "Apple clang version 21.0.0 (clang-2100.4.1.1)",
+  "compile_argv": [
+    "clang++",
+    "-std=c++17",
+    "-O0",
+    "-w",
+    "-I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include",
+    "-I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include/torch/csrc/api/include",
+    "external/libtorch_wrf/sdirk3/tests/test_terminal_primal_capture.cpp",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_autograd.cpp",
+    "-L/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib",
+    "-Wl,-dead_strip",
+    "-Wl,-rpath,/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib",
+    "-ltorch",
+    "-ltorch_cpu",
+    "-lc10",
+    "-o",
+    "/tmp/test_terminal_primal_capture"
+  ],
+  "compile_exit_code": 0,
+  "run_argv": [
+    "/tmp/test_terminal_primal_capture"
+  ],
+  "run_exit_code": 0,
+  "stdout": "native primal capture and fallback clearing passed\n",
+  "binary_sha256": "d3410abf05c54df2ac9c119642cd7f1f55722b802cc725cd0136cb62bcf6b1aa",
+  "coverage": "Native primal and analytic tangent captured with exactly one RHS; detached RHS forces finite-difference fallback and clears stale primal. Uses actual finite-difference implementation.",
+  "development_link_attempts": [
+    "Test alone failed to link due to missing compute_jvp_finite_diff.",
+    "Adding wrf_sdirk3_jvp_autograd.cpp without dead stripping failed to link due to unrelated g_sdirk3_config references."
+  ],
+  "model_run": false
+}

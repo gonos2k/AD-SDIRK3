@@ -1,8 +1,8 @@
 # 표준 em_b_wave 전방 코어 체크리스트
 
 작성: 2026-10-31T18:26:15.434614+09:00.
-마지막 갱신: 2026-11-01T23:35:12.599072+09:00.
-현재 개발 기준: main0c3f2fa6(PR335 병합); A9 관측 소스5dc7fc7c, current SDK 별도 binding. A4/A7/A8 판정 유지.
+마지막 갱신: 2026-11-02T00:44:24.662975+09:00.
+현재 개발 기준: main036748f2(PR336 병합); A10 종료형 소스08b21c11. A4/A7/A8/A9 원판정 유지.
 Green·Red: GPT-6.1-Terra, medium.
 
 ## 완료 목표와 운영 원칙
@@ -127,12 +127,15 @@ A0–A3의 제한된 기능·첫 단계 수치 검증에 이어 A4 비용 선별
   원래51개 manifest 항목은 이미지까지 크기·SHA256을 확인했고 수정하지 않았다.
 - [x] A9 CSV12행을 원시 로그와 대조해 여섯 선형계 모두 ON의 CPU·wall이 증가함을 확인했다.
   JVP는231→208회이나 가중 호출당 CPU137.50→258.74ms다. 한 쌍의 관측이며 원인은 미확정이다.
-- [ ] 같은 실제 전체 문맥에서의 forward-AD 반복 JVP는 **아직 실행하지 않았다**.
-  ref/U/v 고정만으로 복원을 가정할 수 없다. A9에서는 ref 갱신OFF·ref 변경0이지만,
-  pressure·scratch 갱신이 관측됐고 소스상 cache도 변경될 수 있다.
-  격리 evaluator 또는 terminal 진단의 의미를 먼저 고정한다.
-  [소스 경계](design/pressure_schur_20261031/frozen_tile_replay_boundary.md)를 참조한다.
-- [ ] 위 문맥·경로·출력 조건이 성립한 뒤 같은 A,b,x0,S에서 P0/P1의 준비 포함 비용을 판정한다.
+- [x] A10 **종료형** native forward-AD 반복 코드를 구현하고 h600 단일 시도에서
+  stage4/Newton0 첫 Arnoldi의 원래1회+추가5회 값을 확보했다. primal/JVP 바이트 일치,
+  RHS각1회·FD/fallback0·관측 고정 문맥 일치다. 원래 solve는 재개하지 않고86으로 종료했다.
+  완료 스텝0이며 전체 상태 복원/계속되는 예보의 비간섭성 증명이 아니다.
+  추가5회 CPU243.64–291.43ms, steady wall277.56–442.81ms로 변동이 남았다.
+  등록된 전체 clock 차이−1.7938초가1초 조건을 실패해 runner **INCONCLUSIVE**와
+  cost_eligible=false를 유지한다. 재시도/과거 판정 변경은 없다.
+  [실제 결과](evidence/terminal_jvp_replay_20261102/manifest.json).
+- [ ] 적격 시간 비교가 가능한 별도 규약에서 같은 A,b,x0,S의 P0/P1 준비 포함 비용을 판정한다.
   아직 Gate B를 승인하거나 전체 가속·후반 W·5일 정확도를 완료로 올리지 않는다.
 
 **A 종료 산출물:** source/exe/input/context가 고정된 native600초 단계의 기존/압력 P 비교표,

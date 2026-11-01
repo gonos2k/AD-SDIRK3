@@ -1,0 +1,64 @@
+{
+  "registered_run_outcome": "inconclusive",
+  "registered_errors": [
+    "clock_gap"
+  ],
+  "new_forecast_complete": false,
+  "cost_eligible": false,
+  "within_run_value_path_block": "terminal_diagnostic_passed",
+  "run_result_sha256": "c3336e3838e2e829791528c38a713d302306bc30233c67b55661db3c302ab14c",
+  "terminal_json_sha256": "ea2d0ac2ebe7a22f25902ec84c6d64c0fc324335c1082e2a8cf25e5808498afc",
+  "source_commit": "08b21c1117bf52c93ac3bf1793831f4300dcdc56",
+  "all_six": {
+    "wall_seconds": {
+      "n": 6,
+      "mean_ms": 345.48084716666665,
+      "median_ms": 336.710479,
+      "min_ms": 242.933292,
+      "max_ms": 442.80875,
+      "max_over_min": 1.822758611446306,
+      "sample_cv": 0.2350746985325549
+    },
+    "cpu_seconds": {
+      "n": 6,
+      "mean_ms": 263.8449999999999,
+      "median_ms": 267.20650000000035,
+      "min_ms": 242.34200000000072,
+      "max_ms": 291.4309999999958,
+      "max_over_min": 1.2025608437662267,
+      "sample_cv": 0.07017349482135689
+    }
+  },
+  "five_additional": {
+    "wall_seconds": {
+      "n": 5,
+      "mean_ms": 365.9903582,
+      "median_ms": 336.96612500000003,
+      "min_ms": 277.561916,
+      "max_ms": 442.80875,
+      "max_over_min": 1.5953512512862174,
+      "sample_cv": 0.19493096039700564
+    },
+    "cpu_seconds": {
+      "n": 5,
+      "mean_ms": 268.1455999999997,
+      "median_ms": 268.7969999999993,
+      "min_ms": 243.6399999999992,
+      "max_ms": 291.4309999999958,
+      "max_over_min": 1.1961541618781675,
+      "sample_cv": 0.06348491848630096
+    }
+  },
+  "global_clock_gap_seconds": -1.7937879022210836,
+  "qualification": "One fixed observed context and direction. Values are exact within this sample. First selected call is not process-cold; intercall validation conditions caches. Process CPU and steady elapsed have matched call scopes; global registered clock gate failed. No reproducible performance, waiting-cause, P0/P1 or continuation claim.",
+  "artifacts": {
+    "samples.csv": {
+      "bytes": 557,
+      "sha256": "ebbf8372b73e89b66fedc46afdf8a5649cda6798f7ce324a0a406598c013d285"
+    },
+    "terminal_jvp_timing.png": {
+      "bytes": 93404,
+      "sha256": "57e28a773299afff991ee6c2aa1e90ba72f9c4020b5ebe298b44b96a52cd5745"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "one_attempt": true,
+  "retry": false,
+  "source_commit": "08b21c1117bf52c93ac3bf1793831f4300dcdc56",
+  "registration_sha256": "636ac82c0447e55e48a4a32916b30d3927dc4360a0e8141f88a1442ef30bb971",
+  "build_receipt_sha256": "e88f16d369b26c5615894ece3f5a9e9dc90a554fd79e1c450af682d255cc79f8",
+  "executable_sha256": "7abf57195691f3cdac309bd9a2fad474add9c34489ea4211630b11ac9cd8ec9d",
+  "inputs": {
+    "wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf"
+  },
+  "rk3_t0_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+  "disk_free_start": 86572675072,
+  "command": [
+    "/opt/homebrew/bin/mpirun",
+    "--timeout",
+    "360",
+    "--report-state-on-timeout",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/rank_rusage.log",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/native_terminal/wrf.exe"
+  ],
+  "effective_environment": {
+    "HOME": "/Users/yhlee",
+    "USER": "yhlee",
+    "LOGNAME": "yhlee",
+    "TMPDIR": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/",
+    "LANG": "ko_KR.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+    "WRF_SDIRK3_EW_ETA_INITIAL": "0.1",
+    "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0"
+  },
+  "start_epoch": 1793547144.784566
+}

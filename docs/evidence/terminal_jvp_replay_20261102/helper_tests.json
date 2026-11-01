@@ -1,0 +1,73 @@
+{
+  "cwd": "/private/tmp/terminal-jvp-replay-20261102",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "89884fd62d992e2608eee2c95564b38a1a805bd0de0e901be5af2718b69d4a11",
+    "external/libtorch_wrf/sdirk3/tests/test_terminal_jvp_probe.cpp": "22d4f617eaa2157945edde7ef4fb8f816051ee196dbf586247d6985eef52836c"
+  },
+  "binary_sha256": "d9c9a8c27128d15de1875e2986886ec04c8f1643420ab8ab1b357155b0bf8331",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.4.1.1)",
+  "compile_argv": [
+    "clang++",
+    "-std=c++17",
+    "-O0",
+    "-Wno-c++20-extensions",
+    "-I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include",
+    "-I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include/torch/csrc/api/include",
+    "external/libtorch_wrf/sdirk3/tests/test_terminal_jvp_probe.cpp",
+    "-L/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib",
+    "-Wl,-rpath,/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib",
+    "-ltorch",
+    "-ltorch_cpu",
+    "-lc10",
+    "-o",
+    "/tmp/test_terminal_jvp_probe"
+  ],
+  "compile_exit": 0,
+  "run_argv": [
+    "/tmp/test_terminal_jvp_probe"
+  ],
+  "run_exit": 0,
+  "run_output": "",
+  "json_validation": {
+    "focused_test": "passed; asserts NaN timing serialized null and clock_valid false",
+    "normal": "covered by passing focused test"
+  },
+  "note": "Probe helper test only; primal capture test and model run are separate.",
+  "previous_receipt": {
+    "cwd": "/private/tmp/terminal-jvp-replay-20261102",
+    "source_sha256": {
+      "external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "efc61dc9d1b1859b80587f965b4e14f890dc6efd6e17ca09f77e39395e46b01e",
+      "external/libtorch_wrf/sdirk3/tests/test_terminal_jvp_probe.cpp": "3aa874be19bfa73eeac140fc066dc7d0811a308179e2a03db3cdc376195bb88a"
+    },
+    "binary_sha256": "9bbaf0a52adac32dba053116a9d58af6cb350fd7e4ddcb6bc578a3b7e31f2341",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.4.1.1)",
+    "compile_argv": [
+      "clang++",
+      "-std=c++17",
+      "-O0",
+      "-Wno-c++20-extensions",
+      "-I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include",
+      "-I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include/torch/csrc/api/include",
+      "external/libtorch_wrf/sdirk3/tests/test_terminal_jvp_probe.cpp",
+      "-L/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib",
+      "-Wl,-rpath,/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib",
+      "-ltorch",
+      "-ltorch_cpu",
+      "-lc10",
+      "-o",
+      "/tmp/test_terminal_jvp_probe"
+    ],
+    "compile_exit": 0,
+    "run_argv": [
+      "/tmp/test_terminal_jvp_probe"
+    ],
+    "run_exit": 0,
+    "run_output": "",
+    "json_validation": {
+      "method": "temporary test source copied reports, Python json.load",
+      "normal": "passed",
+      "bad_nan_timing": "passed, reason=invalid_timing; serialized numeric 0"
+    },
+    "note": "Probe helper test only; primal capture test and model run are separate."
+  }
+}

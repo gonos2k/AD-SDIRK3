@@ -1,0 +1,48 @@
+{
+  "status": "fingerprints_consistent",
+  "comparison_plan_sha256": "ccbee1d0b15053e54d2c4cdbad838c407571011689f9ac504b45a7574e53e264",
+  "terminal_json_sha256": "ea2d0ac2ebe7a22f25902ec84c6d64c0fc324335c1082e2a8cf25e5808498afc",
+  "arrays": [
+    {
+      "prior_file": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/linear_delay_u_eval.npy",
+      "prior_sha256": "092738fe432a746017daa63e7c939bfde51b4718916a7e4f7760661a91cc041b",
+      "shape": [
+        1080491
+      ],
+      "fingerprint_prior": "16843471997060784018",
+      "fingerprint_terminal": "16843471997060784018",
+      "fingerprints_match": true
+    },
+    {
+      "prior_file": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/linear_delay_u_ref_first_jvp.npy",
+      "prior_sha256": "f9443812fb68d03cfff58a4055b12695e571dafbfbcb8fdf2f991fdc0e53d62f",
+      "shape": [
+        1080491
+      ],
+      "fingerprint_prior": "a5bf14b1ece62904",
+      "fingerprint_terminal": "a5bf14b1ece62904",
+      "fingerprints_match": true
+    },
+    {
+      "prior_file": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/linear_delay_first_tangent.npy",
+      "prior_sha256": "ed1d587cfdf983e83c118b582512961421a13df9c1d6c90d41d1b6b648ba9183",
+      "shape": [
+        1080491
+      ],
+      "fingerprint_prior": "11624815574303539179",
+      "fingerprint_terminal": "11624815574303539179",
+      "fingerprints_match": true
+    },
+    {
+      "prior_file": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/linear_delay_first_jvp.npy",
+      "prior_sha256": "3c38beb34dfcca7765e32bde32b87d3095b488a25528e2a74bc5a500587205ad",
+      "shape": [
+        1080491
+      ],
+      "fingerprint_prior": "2839479856787972396",
+      "fingerprint_terminal": "2839479856787972396",
+      "fingerprints_match": true
+    }
+  ],
+  "scope": "A9 captured U/reference/v/Jv vs new selected sample. Hash agreement is a bounded fingerprint, not independent direct byte equality without new arrays; within-run C++ memcmp is separate. No endpoint or continuation claim."
+}
