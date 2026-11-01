@@ -1,0 +1,356 @@
+{
+  "created_local": "2026-11-01T09:23:07.707334+09:00",
+  "native_source": "e05ab44a01886ce493f39cc928134793db56615c",
+  "retired_source": "ee5914e96574cfbe94a5cd3c123b946697cfbdb6",
+  "native_attempts": 2,
+  "actual_model_completion": "both rc0, independent one initial h600 step, 3 converged stages",
+  "original_screen": "INCONCLUSIVE preserved: strict recorded base-z bytes differ",
+  "offline_replay": "same actual P0 reconstructs both operation orders byte-for-byte; no tolerance change or model retry; hidden physical base bytes were not captured",
+  "candidate_disposition": "NOT_ADOPTED; descriptive first-point cost increased; no valid positive paired screen or performance promotion",
+  "forecast_accuracy_or_noise_resolution_claim": false,
+  "gate_B_authorized": false,
+  "records": [
+    {
+      "path": "registration.json",
+      "bytes": 9242,
+      "sha256": "d32cf03aa915e173473c2d3c29708c47ebd488d073a057518661c75c964d3a1f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/registration.json",
+      "original_sha256": "d32cf03aa915e173473c2d3c29708c47ebd488d073a057518661c75c964d3a1f",
+      "normalization": "none"
+    },
+    {
+      "path": "control_intent.json",
+      "bytes": 3500,
+      "sha256": "1d6d9b35d7a558cfc769390ba3c7f1c41172a580b66fab9abec50a09bc39749e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/control_intent.json",
+      "original_sha256": "1d6d9b35d7a558cfc769390ba3c7f1c41172a580b66fab9abec50a09bc39749e",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_intent.json",
+      "bytes": 4382,
+      "sha256": "8f8a6131e0678a1b8d5e1667efc8e05cb8159c64cee38bbc2106d39beb2798f8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/candidate_intent.json",
+      "original_sha256": "8f8a6131e0678a1b8d5e1667efc8e05cb8159c64cee38bbc2106d39beb2798f8",
+      "normalization": "none"
+    },
+    {
+      "path": "control_pins.json",
+      "bytes": 36497,
+      "sha256": "c783f60ac926d9c96f61d40810c40c8194f2086834d986c8ffd87b0369ec946b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/control_pins.json",
+      "original_sha256": "c783f60ac926d9c96f61d40810c40c8194f2086834d986c8ffd87b0369ec946b",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_pins.json",
+      "bytes": 40974,
+      "sha256": "bcda04f2f07b2ccfdd144a9081f472bfca766bbf87315e085e779ce67d74041c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/candidate_pins.json",
+      "original_sha256": "bcda04f2f07b2ccfdd144a9081f472bfca766bbf87315e085e779ce67d74041c",
+      "normalization": "none"
+    },
+    {
+      "path": "control_build_receipt.json",
+      "bytes": 69014,
+      "sha256": "786c4d3e8e79a2688dd969bd8a7befad325cde6fe17707922b1e5e3630792139",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/native_control/build_receipt.json",
+      "original_sha256": "786c4d3e8e79a2688dd969bd8a7befad325cde6fe17707922b1e5e3630792139",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_receipt.json",
+      "bytes": 23920,
+      "sha256": "a7d81b18cde250a046769bc95fd14c19c9a77b706e16d54259e556755c69560f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/native_candidate/build_receipt.json",
+      "original_sha256": "a7d81b18cde250a046769bc95fd14c19c9a77b706e16d54259e556755c69560f",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_control_gate.json",
+      "bytes": 373,
+      "sha256": "57118b987e6981d7a3972602f39018a57669ba49c5ab5a966b9f38093e606eb8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/candidate_build_control_gate.json",
+      "original_sha256": "57118b987e6981d7a3972602f39018a57669ba49c5ab5a966b9f38093e606eb8",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_binding.json",
+      "bytes": 701,
+      "sha256": "b640b4c372835c9011202b2992b098f6975849489df88b13d9a78165a998c930",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/candidate_build_binding.json",
+      "original_sha256": "b640b4c372835c9011202b2992b098f6975849489df88b13d9a78165a998c930",
+      "normalization": "none"
+    },
+    {
+      "path": "control_result.json",
+      "bytes": 19211,
+      "sha256": "86e5110af0b7a754b4c6f06f4ea964657ca05cf55fdc420d090d85c4042bc31e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/result.json",
+      "original_sha256": "86e5110af0b7a754b4c6f06f4ea964657ca05cf55fdc420d090d85c4042bc31e",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_result.json",
+      "bytes": 21106,
+      "sha256": "3ecc17ebbc7093993c03db6e4d5c62051361f07ad5a4bba0a33ff5408476a4f4",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/result.json",
+      "original_sha256": "3ecc17ebbc7093993c03db6e4d5c62051361f07ad5a4bba0a33ff5408476a4f4",
+      "normalization": "none"
+    },
+    {
+      "path": "schema_smoke.json",
+      "bytes": 737,
+      "sha256": "b94f861651c7c4e0cef7ab1aceeb08a2b2c5dfb3b997d206fb54bac62f8840ee",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/schema_smoke.json",
+      "original_sha256": "b94f861651c7c4e0cef7ab1aceeb08a2b2c5dfb3b997d206fb54bac62f8840ee",
+      "normalization": "none"
+    },
+    {
+      "path": "packed_receipt.json",
+      "bytes": 1798,
+      "sha256": "9eea88aa82cf2d495fdad1064227420fa56be8067398a7d7e2032a25967fd8a7",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/packed_receipt.json",
+      "original_sha256": "9eea88aa82cf2d495fdad1064227420fa56be8067398a7d7e2032a25967fd8a7",
+      "normalization": "none"
+    },
+    {
+      "path": "packed_run.log",
+      "bytes": 287,
+      "sha256": "8eab36c5ff0826b04924532fc70feaaab17aed4845441d45075795b15a093687",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/packed_run.log",
+      "original_sha256": "8eab36c5ff0826b04924532fc70feaaab17aed4845441d45075795b15a093687",
+      "normalization": "none"
+    },
+    {
+      "path": "native_pair_audit.json",
+      "bytes": 17414,
+      "sha256": "ed5cc1726dc12c033f4ae7db23ef47a539febf726791e062fb5328642c85adad",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/native_pair_audit.json",
+      "original_sha256": "ed5cc1726dc12c033f4ae7db23ef47a539febf726791e062fb5328642c85adad",
+      "normalization": "none"
+    },
+    {
+      "path": "base_coordinate_replay.json",
+      "bytes": 3387,
+      "sha256": "372a688e22357061e4dd363cf3800cb3531c755b2146a1e4c561119d8de7def3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/base_coordinate_replay/result.json",
+      "original_sha256": "372a688e22357061e4dd363cf3800cb3531c755b2146a1e4c561119d8de7def3",
+      "normalization": "none"
+    },
+    {
+      "path": "base_coordinate_replay.cpp",
+      "bytes": 2948,
+      "sha256": "fea2ea052c52dc16da7be5aa00960b7b9a59d92ecfaca609c1a6f7866a85eb5b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/base_coordinate_replay/replay.cpp",
+      "original_sha256": "fea2ea052c52dc16da7be5aa00960b7b9a59d92ecfaca609c1a6f7866a85eb5b",
+      "normalization": "none"
+    },
+    {
+      "path": "run_base_coordinate_replay.py",
+      "bytes": 2580,
+      "sha256": "c63bf5475116a84541bb9e632ad3033344f346c2cb7947aba64c997f79247bdd",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/base_coordinate_replay/execute.py",
+      "original_sha256": "c63bf5475116a84541bb9e632ad3033344f346c2cb7947aba64c997f79247bdd",
+      "normalization": "none"
+    },
+    {
+      "path": "base_coordinate_replay.log",
+      "bytes": 233,
+      "sha256": "4405a72fb005a010d2b91b5824831414c47b321640d09d78c3e19223f6ccf934",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/base_coordinate_replay/run.log",
+      "original_sha256": "4405a72fb005a010d2b91b5824831414c47b321640d09d78c3e19223f6ccf934",
+      "normalization": "none"
+    },
+    {
+      "path": "retirement_audit.json",
+      "bytes": 875,
+      "sha256": "fa6a3e59a5b75ec3cd4e578ebf6c5a6d31ae4b68f3e5feb180e75c9161b0ab0c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/retirement_audit.json",
+      "original_sha256": "fa6a3e59a5b75ec3cd4e578ebf6c5a6d31ae4b68f3e5feb180e75c9161b0ab0c",
+      "normalization": "none"
+    },
+    {
+      "path": "retirement_syntax_receipt.json",
+      "bytes": 4163,
+      "sha256": "bcaaae5bc9a5c974e7b29ad1b0ea848c7c556dd6fd336845925e86dffdcd3501",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/retirement_syntax/receipt.json",
+      "original_sha256": "bcaaae5bc9a5c974e7b29ad1b0ea848c7c556dd6fd336845925e86dffdcd3501",
+      "normalization": "none"
+    },
+    {
+      "path": "control_duplicate_receipt.json",
+      "bytes": 5386,
+      "sha256": "d118d4b9bea8f740e9f2b78bcf8eb4b3d8a833527f9b071b90d975410cfad221",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/control_duplicate_receipt.json",
+      "original_sha256": "d118d4b9bea8f740e9f2b78bcf8eb4b3d8a833527f9b071b90d975410cfad221",
+      "normalization": "none"
+    },
+    {
+      "path": "pr332_review_recalculation.json",
+      "bytes": 379,
+      "sha256": "ccc28cf4f7582851ea15006e167326a69d16b5a9e36cd2e633dd558591f79184",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/pr332_review_recalculation.json",
+      "original_sha256": "ccc28cf4f7582851ea15006e167326a69d16b5a9e36cd2e633dd558591f79184",
+      "normalization": "none"
+    },
+    {
+      "path": "graph_receipt.json",
+      "bytes": 271,
+      "sha256": "193abebd8d9ac8becaa6d23a3836b7143f8d7ae6c7c67c83a6be33b81b59d25e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/graph_receipt.json",
+      "original_sha256": "193abebd8d9ac8becaa6d23a3836b7143f8d7ae6c7c67c83a6be33b81b59d25e",
+      "normalization": "none"
+    },
+    {
+      "path": "rate_defects.png",
+      "bytes": 194397,
+      "sha256": "0df2038368e899c403a0f321a2feea31ed3b90978db1e99a197fafed8aab1fc5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/comparison_analysis/rate_defects.png",
+      "original_sha256": "0df2038368e899c403a0f321a2feea31ed3b90978db1e99a197fafed8aab1fc5",
+      "normalization": "none"
+    },
+    {
+      "path": "scaled_blocks.png",
+      "bytes": 39459,
+      "sha256": "dd6c0e477c81516077087e16b8fc1ee20a34590fda30796a9ba465bbcdf73ac7",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/comparison_analysis/scaled_blocks.png",
+      "original_sha256": "dd6c0e477c81516077087e16b8fc1ee20a34590fda30796a9ba465bbcdf73ac7",
+      "normalization": "none"
+    },
+    {
+      "path": "forecast_context.png",
+      "bytes": 132014,
+      "sha256": "1e7c8499574629ab3b16ed26c0ba5ecdc30fce0cde99d64a882d13ae9e202fab",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/comparison_analysis/forecast_context.png",
+      "original_sha256": "1e7c8499574629ab3b16ed26c0ba5ecdc30fce0cde99d64a882d13ae9e202fab",
+      "normalization": "none"
+    },
+    {
+      "path": "defect_blocks.csv",
+      "bytes": 991,
+      "sha256": "4fe5dad76eee5256d9c5663a1cc59a929b99e953b5a4f2b7f19ed6ad860d22a5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/comparison_analysis/defect_blocks.csv",
+      "original_sha256": "242fcfc23d70f888bf0485949bd56dc4a9b4767184f84bfab1f470610a6c9320",
+      "normalization": "CRLF to LF"
+    },
+    {
+      "path": "plot_receipt.json",
+      "bytes": 5650,
+      "sha256": "f8cd88df7daed97a2fd1d50698b87a1a228cc6e813d5fc7dfd6a720e9c17fcc5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/comparison_analysis/receipt.json",
+      "original_sha256": "f8cd88df7daed97a2fd1d50698b87a1a228cc6e813d5fc7dfd6a720e9c17fcc5",
+      "normalization": "none"
+    },
+    {
+      "path": "analyze_pair.py",
+      "bytes": 8387,
+      "sha256": "282430da3ba7199e12c5fb3d7c501fae28d60586ddd21116e70df68f2f2d4804",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/analyze_pair.py",
+      "original_sha256": "eea6444dfebb970490cd5ab28e6824f5e9dc0d4757fb8556bfa3a96fe2d4a0c3",
+      "normalization": "trailing whitespace removed; executed original hash retained"
+    },
+    {
+      "path": "run_packed.py",
+      "bytes": 2128,
+      "sha256": "3aa1ec33c60f157b2aefbbbfb6b30f2de207d6548008e9fe1a2a19889977d2e0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/run_packed.py",
+      "original_sha256": "3aa1ec33c60f157b2aefbbbfb6b30f2de207d6548008e9fe1a2a19889977d2e0",
+      "normalization": "none"
+    },
+    {
+      "path": "build_control.py",
+      "bytes": 7078,
+      "sha256": "0794f6e53fe510d7c6379a0e22053ab123040865408072ada68f50525c4a843e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/build_control.draft.py",
+      "original_sha256": "0794f6e53fe510d7c6379a0e22053ab123040865408072ada68f50525c4a843e",
+      "normalization": "none"
+    },
+    {
+      "path": "build_candidate.py",
+      "bytes": 5285,
+      "sha256": "d8f4e632ebc05bef06e063fec198753bf21bb8812a3d31f64f518239eb70f7bb",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/build_candidate.draft.py",
+      "original_sha256": "d8f4e632ebc05bef06e063fec198753bf21bb8812a3d31f64f518239eb70f7bb",
+      "normalization": "none"
+    },
+    {
+      "path": "run_pair_case.py",
+      "bytes": 16824,
+      "sha256": "536ca50132f6fac2f35d36cdf11ebceacc297fe026e2caa07701b26e9de62b25",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/run_pair_case.draft.py",
+      "original_sha256": "536ca50132f6fac2f35d36cdf11ebceacc297fe026e2caa07701b26e9de62b25",
+      "normalization": "none"
+    },
+    {
+      "path": "pair_checks.py",
+      "bytes": 5915,
+      "sha256": "0aaf9393c7aad40ecd8e3fd33e4e260df3b076927ec67dd7f2061f3aeaf5a005",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/pair_checks.py",
+      "original_sha256": "0aaf9393c7aad40ecd8e3fd33e4e260df3b076927ec67dd7f2061f3aeaf5a005",
+      "normalization": "none"
+    },
+    {
+      "path": "coupled_checks.py",
+      "bytes": 3950,
+      "sha256": "0b8d279153d12a0ad3e05c9e8fba5edcd90b25f3963cca3d104afeff2c0490a1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/coupled_checks.py",
+      "original_sha256": "0b8d279153d12a0ad3e05c9e8fba5edcd90b25f3963cca3d104afeff2c0490a1",
+      "normalization": "none"
+    },
+    {
+      "path": "run_a4.py",
+      "bytes": 20422,
+      "sha256": "eef8c435509651877f3e00e1a569732902aeef4f6bed18dcf26980a71dc4a50f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/run_a4.py",
+      "original_sha256": "eef8c435509651877f3e00e1a569732902aeef4f6bed18dcf26980a71dc4a50f",
+      "normalization": "none"
+    },
+    {
+      "path": "run_a5.py",
+      "bytes": 19966,
+      "sha256": "cb0e01cab846bf08500fe61a2419e2a549a992e0c96c9e7c9589594445f16897",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/run_a5.py",
+      "original_sha256": "cb0e01cab846bf08500fe61a2419e2a549a992e0c96c9e7c9589594445f16897",
+      "normalization": "none"
+    },
+    {
+      "path": "base_screen_reference.py",
+      "bytes": 11277,
+      "sha256": "bbd270ec6cc58df7fdc4d1aa6e2dd53731af49f7b42bf4898690c1583b04193b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/base_screen_reference.py",
+      "original_sha256": "bbd270ec6cc58df7fdc4d1aa6e2dd53731af49f7b42bf4898690c1583b04193b",
+      "normalization": "none"
+    },
+    {
+      "path": "benchmark_wrf_accuracy_cost.py",
+      "bytes": 55688,
+      "sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/benchmark_wrf_accuracy_cost.py",
+      "original_sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+      "normalization": "none"
+    },
+    {
+      "path": "control_selected_log.txt",
+      "bytes": 4295,
+      "sha256": "faab5236c445a5661d0930c893c4d6115194dfc94b1fbf3ac4495ff63d12ca47",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control",
+      "normalization": "selected original text lines, deduplicated; raw logs retained locally"
+    },
+    {
+      "path": "candidate_selected_log.txt",
+      "bytes": 4725,
+      "sha256": "be018dea4d1d765e979b25da7a1bfd9d62d18ccb45a56e1a56f15a29c2fe674a",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate",
+      "normalization": "selected original text lines, deduplicated; raw logs retained locally"
+    },
+    {
+      "path": "final_pin_audit.json",
+      "bytes": 638,
+      "sha256": "7798bffcad9c42ff10de835fc0362de68982c5a397125b904870ad577bbb7b27",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/final_pin_audit.json",
+      "original_sha256": "7798bffcad9c42ff10de835fc0362de68982c5a397125b904870ad577bbb7b27",
+      "normalization": "none"
+    }
+  ]
+}

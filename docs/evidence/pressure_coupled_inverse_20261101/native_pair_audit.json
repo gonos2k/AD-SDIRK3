@@ -1,0 +1,427 @@
+{
+  "scope": "offline descriptive audit only; original candidate status remains INCONCLUSIVE, no gate override, no promotion, no cost or forecast claim",
+  "registration_sha256": "d32cf03aa915e173473c2d3c29708c47ebd488d073a057518661c75c964d3a1f",
+  "source_commit": "e05ab44a01886ce493f39cc928134793db56615c",
+  "original_control_status": "completed",
+  "original_candidate_status": "failed_or_incomplete",
+  "original_candidate_decision": "INCONCLUSIVE",
+  "original_candidate_failure_class": "paired_quality_and_work",
+  "original_candidate_failure_reason": "captured candidate base z differs from control z",
+  "control_and_candidate_pins": {
+    "control": {
+      "pins_sha256": "c783f60ac926d9c96f61d40810c40c8194f2086834d986c8ffd87b0369ec946b",
+      "pinned_paths": 202,
+      "intent_sha256": "1d6d9b35d7a558cfc769390ba3c7f1c41172a580b66fab9abec50a09bc39749e",
+      "result_sha256": "86e5110af0b7a754b4c6f06f4ea964657ca05cf55fdc420d090d85c4042bc31e",
+      "executable_sha256": "f2d3da698b02e7d0fe01903e4bf979e74e21af9516abeb34046a34589e0e10f2"
+    },
+    "candidate": {
+      "pins_sha256": "bcda04f2f07b2ccfdd144a9081f472bfca766bbf87315e085e779ce67d74041c",
+      "pinned_paths": 227,
+      "intent_sha256": "8f8a6131e0678a1b8d5e1667efc8e05cb8159c64cee38bbc2106d39beb2798f8",
+      "result_sha256": "3ecc17ebbc7093993c03db6e4d5c62051361f07ad5a4bba0a33ff5408476a4f4",
+      "executable_sha256": "f4c629241dd9b951ff76c123f3f708dd6117d5f178133e9bafe096da3c5b115d"
+    }
+  },
+  "native_attempt_count": 2,
+  "control_baseline_parity_174_numeric_arrays": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "candidate_owned_8eps": {
+    "U": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "V": {
+      "unit": "m s-1",
+      "owned_points": 207360,
+      "max_abs": 2.3283064365386963e-10,
+      "rms": 6.36335702731927e-13,
+      "violations": 0
+    },
+    "W": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 5.820766091346741e-11,
+      "rms": 1.5277303167951684e-13,
+      "violations": 0
+    },
+    "PH": {
+      "unit": "m2 s-2",
+      "owned_points": 204800,
+      "max_abs": 3.725290298461914e-09,
+      "rms": 8.23180634978399e-12,
+      "violations": 0
+    },
+    "T": {
+      "unit": "K",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "MU": {
+      "unit": "Pa",
+      "owned_points": 3200,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    }
+  },
+  "candidate_t0_gate": {
+    "status": "passed",
+    "reference_label": "rk3",
+    "labels": [
+      "rk3",
+      "candidate"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "preflight_fnv64": "7bdd17f3a694726e",
+  "preflight_scope": "bounded_captured_inputs_not_all_transitive_state",
+  "first_base_z_strict_bitwise_identity": false,
+  "first_base_z_different_fp64_words": 1735,
+  "first_base_z_max_abs_difference": 2.710505431213761e-20,
+  "first_base_z_nonzero_numeric_difference_count": 1735,
+  "base_z_note": "Observer paths differ in algebraically equivalent FP64 operations; strict original byte gate remains failed; independent P0 replay pending",
+  "descriptive_quality": {
+    "full_scaled_control": 0.002687919855048388,
+    "full_scaled_candidate": 0.0026235236140549857,
+    "V_core_control_physical_l2": 9.615210825050719e-05,
+    "V_core_candidate_physical_l2": 1.0367780774474107e-05,
+    "W_top_control_rms": 6.6735333587341275e-06,
+    "W_top_candidate_rms": 6.530013859232627e-06,
+    "W_interior_control_rms": 5.772374250031081e-06,
+    "W_interior_candidate_rms": 5.6140670443087e-06,
+    "rows": [
+      {
+        "name": "ru",
+        "unit": "m s-2",
+        "control_physical_l2": 3.430649933260993e-05,
+        "candidate_physical_l2": 3.4123731746430334e-05,
+        "control_scaled_l2": 3.430649933260993e-05,
+        "candidate_scaled_l2": 3.4123731746430334e-05
+      },
+      {
+        "name": "rv",
+        "unit": "m s-2",
+        "control_physical_l2": 9.97995516024313e-05,
+        "candidate_physical_l2": 1.0388040254514778e-05,
+        "control_scaled_l2": 9.97995516024313e-05,
+        "candidate_scaled_l2": 1.0388040254514778e-05
+      },
+      {
+        "name": "rw",
+        "unit": "m s-2",
+        "control_physical_l2": 0.002678877181104007,
+        "candidate_physical_l2": 0.0026049534727230978,
+        "control_scaled_l2": 0.002678877181104007,
+        "candidate_scaled_l2": 0.0026049534727230978
+      },
+      {
+        "name": "ph",
+        "unit": "m2 s-3",
+        "control_physical_l2": 0.0023502978321065424,
+        "candidate_physical_l2": 0.004429925875441287,
+        "control_scaled_l2": 0.00015156490078551305,
+        "candidate_scaled_l2": 0.0002856749755824144
+      },
+      {
+        "name": "t",
+        "unit": "K s-1",
+        "control_physical_l2": 6.908982912408228e-07,
+        "candidate_physical_l2": 1.6257423727069025e-06,
+        "control_scaled_l2": 6.908982912408228e-07,
+        "candidate_scaled_l2": 1.6257423727069025e-06
+      },
+      {
+        "name": "mu",
+        "unit": "Pa s-1",
+        "control_physical_l2": 0.00012008710520698969,
+        "candidate_physical_l2": 0.00011919892319586956,
+        "control_scaled_l2": 0.00012008710520698969,
+        "candidate_scaled_l2": 0.00011919892319586956
+      }
+    ],
+    "qualification": "descriptive only; strict base-z identity failed, registered paired assessment did not complete"
+  },
+  "coupled_inner": {
+    "status": "ok",
+    "cap": 4,
+    "tolerance": 0.01,
+    "restarts": 0,
+    "fallback": false,
+    "applications": 13,
+    "inverse_calls": 60,
+    "action_calls": 73,
+    "arnoldi_iterations": 47,
+    "max_true_relative_residual": 0.009699981852485497,
+    "base_clone_ms": 1.873,
+    "p1_first_scaled_relative_residual": 3.3952673409372794e-07,
+    "p1_non_v_scaled_relative_residual": 3.798347568538243e-14
+  },
+  "first_point": {
+    "control": {
+      "linear": {
+        "flavor": "reference_p0",
+        "comparison_eligible": true,
+        "preflight_ms": 351.621125,
+        "setup_ms": 37.434708,
+        "linear_with_native_truecheck_ms": 13063.966167,
+        "interval_from_newton_entry_ms": 13761.37825,
+        "iterations": 21,
+        "restarts": 1,
+        "restart_budget": 30,
+        "max_restarts": 50,
+        "tolerance_applied": 1.0000000116860974e-07,
+        "stopping_metric": 1,
+        "stopping_metric_name": "unweighted_scaled_L2",
+        "stopping_relative_norm": 1.2772678470440724e-09,
+        "scaled_relative_norm": 1.2772678470440724e-09,
+        "residual_provenance": "saved_native_checked_raw_not_independent",
+        "saved_native_scaled_residual_norm": 2.573363244729006e-08,
+        "saved_native_physical_residual_norm": 2.8788990210975115e-07,
+        "scaled_rhs_norm": 20.14740542763099,
+        "physical_rhs_norm": 312.3019131227635,
+        "mask_active": false,
+        "refinement_passes": 1,
+        "apinv_probe": false,
+        "jvp_probe": false,
+        "jvp_fd_fallbacks": 0,
+        "success": true,
+        "preconditioner_calls": 21,
+        "guard_events": 0,
+        "reference_calls": 21
+      },
+      "A4": {
+        "eligible": true,
+        "capture": "fgmres_restart0_arnoldi0_raw_A_M_v_before_D_and_orthogonalization",
+        "pair_file": "pressure_a4_first_pair.bin",
+        "pair_written": true,
+        "pair_format": "SDIRKA41,u64le_numel,physical_v_f64le,physical_w_f64le",
+        "physical_transform": "S_times_scaled_krylov_vectors",
+        "S_fnv64": "73dac3183f782879",
+        "full_scaled_A_calls": 23,
+        "full_scaled_A_ms": 8865.100582,
+        "wrapped_M_calls": 21,
+        "wrapped_M_ms": 2092.3084139999996,
+        "physical_M_calls": 21,
+        "physical_M_ms_nested": 1915.009166,
+        "linear_remainder_ms": 2106.5571710000017,
+        "capture_clone_ms_included": 2.598583,
+        "capture_attempts": 1,
+        "capture_count": 1,
+        "block_scope": "full_packed_block_not_owned_core",
+        "timer_overlap": false,
+        "nested_scope": false,
+        "capture_failed": false
+      },
+      "existing_jvp_summaries": {
+        "first_linear_solve": {
+          "calls": 23,
+          "time_ms": 8772.55
+        },
+        "whole_step_records": [
+          {
+            "calls": 23,
+            "time_ms": 8772.55
+          },
+          {
+            "calls": 48,
+            "time_ms": 16526.2
+          },
+          {
+            "calls": 32,
+            "time_ms": 11601.6
+          },
+          {
+            "calls": 48,
+            "time_ms": 28108.1
+          },
+          {
+            "calls": 32,
+            "time_ms": 17639.1
+          },
+          {
+            "calls": 48,
+            "time_ms": 27981.8
+          }
+        ],
+        "whole_step_calls_sum": 231,
+        "whole_step_jvp_time_ms_sum": 110629.34999999999,
+        "scope": "existing JVP summaries: first-solve JVP is nested in first-point scaled A; whole-step sum spans six solves. Never add either to A time; JVP counts need not equal A calls"
+      },
+      "clock_gap_seconds": -0.00219230679795146,
+      "stage_residual_scaled_rms": {
+        "2": 6.296993e-14,
+        "3": 6.345785e-14,
+        "4": 6.344006e-14
+      },
+      "rank_peak_rss_bytes": 2112241664,
+      "postrun_disk_floor_met": true
+    },
+    "candidate": {
+      "linear": {
+        "flavor": "reference_coupled_p1",
+        "comparison_eligible": true,
+        "preflight_ms": 378.813125,
+        "setup_ms": 150.861292,
+        "linear_with_native_truecheck_ms": 18527.449167,
+        "interval_from_newton_entry_ms": 19312.823292,
+        "iterations": 13,
+        "restarts": 1,
+        "restart_budget": 30,
+        "max_restarts": 50,
+        "tolerance_applied": 1.0000000116860974e-07,
+        "stopping_metric": 1,
+        "stopping_metric_name": "unweighted_scaled_L2",
+        "stopping_relative_norm": 1.924459258617617e-09,
+        "scaled_relative_norm": 1.924459258617617e-09,
+        "residual_provenance": "saved_native_checked_raw_not_independent",
+        "saved_native_scaled_residual_norm": 3.877286268607991e-08,
+        "saved_native_physical_residual_norm": 5.375560553777868e-07,
+        "scaled_rhs_norm": 20.14740542763099,
+        "physical_rhs_norm": 312.3019131227635,
+        "mask_active": false,
+        "refinement_passes": 1,
+        "apinv_probe": false,
+        "jvp_probe": false,
+        "jvp_fd_fallbacks": 0,
+        "success": true,
+        "preconditioner_calls": 13,
+        "guard_events": 0,
+        "reference_calls": 13
+      },
+      "A4": {
+        "eligible": true,
+        "capture": "fgmres_restart0_arnoldi0_raw_A_M_v_before_D_and_orthogonalization",
+        "pair_file": "pressure_a4_first_pair.bin",
+        "pair_written": true,
+        "pair_format": "SDIRKA41,u64le_numel,physical_v_f64le,physical_w_f64le",
+        "physical_transform": "S_times_scaled_krylov_vectors",
+        "S_fnv64": "73dac3183f782879",
+        "full_scaled_A_calls": 14,
+        "full_scaled_A_ms": 4607.396209999999,
+        "wrapped_M_calls": 13,
+        "wrapped_M_ms": 13012.54875,
+        "physical_M_calls": 13,
+        "physical_M_ms_nested": 12930.707124999997,
+        "linear_remainder_ms": 907.504207,
+        "capture_clone_ms_included": 6.922625,
+        "capture_attempts": 1,
+        "capture_count": 1,
+        "block_scope": "full_packed_block_not_owned_core",
+        "timer_overlap": false,
+        "nested_scope": false,
+        "capture_failed": false
+      },
+      "existing_jvp_summaries": {
+        "first_linear_solve": {
+          "calls": 14,
+          "time_ms": 4559.976
+        },
+        "whole_step_records": [
+          {
+            "calls": 14,
+            "time_ms": 4559.976
+          },
+          {
+            "calls": 48,
+            "time_ms": 27081.003999999994
+          },
+          {
+            "calls": 32,
+            "time_ms": 17748.203
+          },
+          {
+            "calls": 48,
+            "time_ms": 28651.194
+          },
+          {
+            "calls": 32,
+            "time_ms": 17769.927999999996
+          },
+          {
+            "calls": 48,
+            "time_ms": 28104.826000000005
+          }
+        ],
+        "whole_step_calls_sum": 222,
+        "whole_step_jvp_time_ms_sum": 123915.131,
+        "scope": "existing JVP summaries: first-solve JVP is nested in first-point scaled A; whole-step sum spans six solves. Never add either to A time; JVP counts need not equal A calls"
+      },
+      "clock_gap_seconds": -0.0025891922414302826,
+      "stage_residual_scaled_rms": {
+        "2": 6.32792632854727e-14,
+        "3": 6.329400165875493e-14,
+        "4": 6.308510300517128e-14
+      },
+      "rank_peak_rss_bytes": 2080129024,
+      "postrun_disk_floor_met": true
+    }
+  },
+  "timing_scope": "raw one-pair instrumented diagnostic only: no timing qualification, adoption, speedup or forecast claim; physical M nested in wrapped M; first JVP nested in full scaled A",
+  "artifacts_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/result.json": "86e5110af0b7a754b4c6f06f4ea964657ca05cf55fdc420d090d85c4042bc31e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/attempt.json": "42b9f74f461fe47e9964ccaadeac8db101499a8843a1028ed1e42a8dec4977b9",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/rsl.error.0000": "705a589e4fd005f82d5a3616ae2776f65a5a485b94fdb638f1e0d3d22d2f7139",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/rsl.out.0000": "b1b8cb4f7ae112d757e49b248096f220be67b96f9ee0ffb9ae6ebb6eb7a85c23",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/rank_rusage.log": "cb15d196dbdd2a41db76897057e459648c09d2bea35780307d9c14f1b9c17951",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/pressure_a4_first_pair.bin": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/pressure_a5_direction.bin": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/pressure_a5_actions.bin": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/wrfout_d01_0001-01-01_00:10:00": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/result.json": "3ecc17ebbc7093993c03db6e4d5c62051361f07ad5a4bba0a33ff5408476a4f4",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/attempt.json": "f345f5f772b522ffa921b68dc6c2f422a7a3370ccbf3f31fbee38a90dc433d28",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/rsl.error.0000": "5a3536ee15cdf7c6fa7e7462e3b7249460efbb905f16c067ce8d3b261021e923",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/rsl.out.0000": "34236e99729322703fbacbdf626e2996214d24ee5836835231cb36fa6e350055",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/rank_rusage.log": "36b03f5d3b118db84337e30ffc15feba86841b275ddb10ebbefef99a6bc1eb15",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/pressure_a4_first_pair.bin": "69fc3e08378c04dd45a35442a3e89aa6131fedcfc281813a392284ce5c5df2bb",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/pressure_a5_direction.bin": "219c4838fc15b51ec13caa9f26e01c2d97c586b84cab10655703404fb3ca424c",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/pressure_a5_actions.bin": "b217e9a90c070e674eaebce277decaea4f1a7211291e5bcb0f07a1a909e96a6e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/candidate/wrfout_d01_0001-01-01_00:10:00": "86f36da904ed6f2b9310f483c56b427d813b2e06f742310d25db9d6d712ac96d"
+  },
+  "new_model_run": false,
+  "time_local": "2026-11-01T09:20:00+0900"
+}

@@ -1,0 +1,140 @@
+{
+  "source_commit": "e05ab44a01886ce493f39cc928134793db56615c",
+  "pair_decision": "INCONCLUSIVE",
+  "candidate_original_status": "failed_or_incomplete",
+  "candidate_failure_reason": "captured candidate base z differs from control z",
+  "common_v_and_S_exact": true,
+  "candidate_base_z_equals_control_z": false,
+  "control_174_bitwise_parity": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "candidate_six_fields_8eps": {
+    "U": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "V": {
+      "unit": "m s-1",
+      "owned_points": 207360,
+      "max_abs": 2.3283064365386963e-10,
+      "rms": 6.36335702731927e-13,
+      "violations": 0
+    },
+    "W": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 5.820766091346741e-11,
+      "rms": 1.5277303167951684e-13,
+      "violations": 0
+    },
+    "PH": {
+      "unit": "m2 s-2",
+      "owned_points": 204800,
+      "max_abs": 3.725290298461914e-09,
+      "rms": 8.23180634978399e-12,
+      "violations": 0
+    },
+    "T": {
+      "unit": "K",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "MU": {
+      "unit": "Pa",
+      "owned_points": 3200,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    }
+  },
+  "first_scaled_norms": {
+    "control": 0.002687919855048388,
+    "candidate": 0.0026235236140549857
+  },
+  "block_rows": [
+    {
+      "field": "ru",
+      "control_physical_owned_l2": 3.408029886313854e-05,
+      "control_scaled_fullblock_l2": 3.430649933260993e-05,
+      "control_physical_owned_rms": 7.53075325968427e-08,
+      "candidate_physical_owned_l2": 3.3895249733627874e-05,
+      "candidate_scaled_fullblock_l2": 3.4123731746430334e-05,
+      "candidate_physical_owned_rms": 7.489862792706161e-08
+    },
+    {
+      "field": "rv",
+      "control_physical_owned_l2": 9.615210825050719e-05,
+      "control_scaled_fullblock_l2": 9.97995516024313e-05,
+      "control_physical_owned_rms": 2.111525443740781e-07,
+      "candidate_physical_owned_l2": 1.0367780774474107e-05,
+      "candidate_scaled_fullblock_l2": 1.0388040254514778e-05,
+      "candidate_physical_owned_rms": 2.2767917728224065e-08
+    },
+    {
+      "field": "rw",
+      "control_physical_owned_l2": 0.0026191389301876856,
+      "control_scaled_fullblock_l2": 0.002678877181104007,
+      "control_physical_owned_rms": 5.787534057516849e-06,
+      "candidate_physical_owned_l2": 0.0025476321580732773,
+      "candidate_scaled_fullblock_l2": 0.0026049534727230978,
+      "candidate_physical_owned_rms": 5.629524921695394e-06
+    },
+    {
+      "field": "ph",
+      "control_physical_owned_l2": 0.0023459348663544817,
+      "control_scaled_fullblock_l2": 0.00015156490078551305,
+      "control_physical_owned_rms": 5.18383266319129e-06,
+      "candidate_physical_owned_l2": 0.004347400823281499,
+      "candidate_scaled_fullblock_l2": 0.0002856749755824144,
+      "candidate_physical_owned_rms": 9.606489383369775e-06
+    },
+    {
+      "field": "t",
+      "control_physical_owned_l2": 6.904043728200362e-07,
+      "control_scaled_fullblock_l2": 6.908982912408228e-07,
+      "control_physical_owned_rms": 1.5255925430684085e-09,
+      "candidate_physical_owned_l2": 1.5841295274968357e-06,
+      "candidate_scaled_fullblock_l2": 1.6257423727069025e-06,
+      "candidate_physical_owned_rms": 3.500464784908915e-09
+    },
+    {
+      "field": "mu",
+      "control_physical_owned_l2": 0.00012008653847336854,
+      "control_scaled_fullblock_l2": 0.00012008710520698969,
+      "control_physical_owned_rms": 2.122850142093454e-06,
+      "candidate_physical_owned_l2": 0.00011919844792418137,
+      "candidate_scaled_fullblock_l2": 0.00011919892319586956,
+      "candidate_physical_owned_rms": 2.107150770852505e-06
+    }
+  ],
+  "source_hashes": {
+    "control": {
+      "result": "86e5110af0b7a754b4c6f06f4ea964657ca05cf55fdc420d090d85c4042bc31e",
+      "a4": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "direction": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+      "actions": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+      "intent": "1d6d9b35d7a558cfc769390ba3c7f1c41172a580b66fab9abec50a09bc39749e",
+      "pins": "c783f60ac926d9c96f61d40810c40c8194f2086834d986c8ffd87b0369ec946b"
+    },
+    "candidate": {
+      "result": "3ecc17ebbc7093993c03db6e4d5c62051361f07ad5a4bba0a33ff5408476a4f4",
+      "a4": "69fc3e08378c04dd45a35442a3e89aa6131fedcfc281813a392284ce5c5df2bb",
+      "direction": "219c4838fc15b51ec13caa9f26e01c2d97c586b84cab10655703404fb3ca424c",
+      "actions": "b217e9a90c070e674eaebce277decaea4f1a7211291e5bcb0f07a1a909e96a6e",
+      "intent": "8f8a6131e0678a1b8d5e1667efc8e05cb8159c64cee38bbc2106d39beb2798f8",
+      "pins": "bcda04f2f07b2ccfdd144a9081f472bfca766bbf87315e085e779ce67d74041c"
+    },
+    "RK3_forecast": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41",
+    "control_forecast": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+    "candidate_forecast": "86f36da904ed6f2b9310f483c56b427d813b2e06f742310d25db9d6d712ac96d"
+  },
+  "scope": "DESCRIPTIVE ONLY; original candidate failed base-z exact identity: INCONCLUSIVE, candidate not adopted. One instrumented first direction; rate-coordinate vectors arbitrary normalized. Legacy A5 FD and inverse gates not candidate eligibility; coupled P1 inner work nested, no promotion or longer-term forecast claim.",
+  "script_sha256": "eea6444dfebb970490cd5ab28e6824f5e9dc0d4757fb8556bfa3a96fe2d4a0c3"
+}

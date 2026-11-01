@@ -1,0 +1,123 @@
+{
+  "time_local": "2026-11-01T09:10:50.964196+09:00",
+  "scope": "exact equal control outputs only; existing canonical mode 0444 required",
+  "records": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/pressure_a4_first_pair.bin",
+      "bytes": 17287872,
+      "sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "prior_inode": 451086100,
+      "prior_mode": "0o644",
+      "equal_candidates": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a4_first_pair.bin",
+          "mode": "0o444",
+          "inode": 450995829
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a4_first_pair.bin",
+          "mode": "0o444",
+          "inode": 450995829
+        }
+      ],
+      "action": "hardlinked",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a4_first_pair.bin",
+      "new_inode": 450995829,
+      "new_mode": "0o444"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/pressure_a5_actions.bin",
+      "bytes": 17251144,
+      "sha256": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+      "prior_inode": 451086105,
+      "prior_mode": "0o644",
+      "equal_candidates": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_actions.bin",
+          "mode": "0o444",
+          "inode": 450995831
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a5_actions.bin",
+          "mode": "0o444",
+          "inode": 450995831
+        }
+      ],
+      "action": "hardlinked",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_actions.bin",
+      "new_inode": 450995831,
+      "new_mode": "0o444"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/pressure_a5_direction.bin",
+      "bytes": 72673488,
+      "sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+      "prior_inode": 451086101,
+      "prior_mode": "0o644",
+      "equal_candidates": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_direction.bin",
+          "mode": "0o444",
+          "inode": 450995830
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/pressure_a5_direction.bin",
+          "mode": "0o444",
+          "inode": 450995830
+        }
+      ],
+      "action": "hardlinked",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_direction.bin",
+      "new_inode": 450995830,
+      "new_mode": "0o444"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/wrfout_d01_0001-01-01_00:00:00",
+      "bytes": 1989217,
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "prior_inode": 451086072,
+      "prior_mode": "0o644",
+      "equal_candidates": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:00:00",
+          "mode": "0o444",
+          "inode": 450995815
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/wrfout_d01_0001-01-01_00:00:00",
+          "mode": "0o444",
+          "inode": 450995815
+        }
+      ],
+      "action": "hardlinked",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:00:00",
+      "new_inode": 450995815,
+      "new_mode": "0o444"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/wrfout_d01_0001-01-01_00:10:00",
+      "bytes": 3444089,
+      "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+      "prior_inode": 451086493,
+      "prior_mode": "0o644",
+      "equal_candidates": [
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:10:00",
+          "mode": "0o444",
+          "inode": 450995918
+        },
+        {
+          "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/runs/control/wrfout_d01_0001-01-01_00:10:00",
+          "mode": "0o444",
+          "inode": 450995918
+        }
+      ],
+      "action": "hardlinked",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:10:00",
+      "new_inode": 450995918,
+      "new_mode": "0o444"
+    }
+  ],
+  "logical_redundant_bytes": 112645810,
+  "physical_free_space_claim": false
+}

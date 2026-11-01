@@ -1,0 +1,9 @@
+{
+  "commit": "e05ab44a01886ce493f39cc928134793db56615c",
+  "files": 23,
+  "before_after_graph_pins_equal": true,
+  "nodes": 720,
+  "edges": 2343,
+  "semantic_llm_tokens": 0,
+  "gaps": "AST navigation only; closures, thread-local and Fortran call edges may be missing"
+}

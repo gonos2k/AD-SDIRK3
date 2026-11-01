@@ -1,0 +1,9 @@
+{
+  "source": "PR332 committed defect_blocks.csv",
+  "V_fraction_original_squared": 0.0013785564334370141,
+  "W_fraction_original_squared": 0.9932829371460167,
+  "MU_fraction_squared_growth": 0.9574784162105962,
+  "total_squared_growth": 0.8620333017348294,
+  "perfect_V_only_max_norm_decrease": 0.0006895159328292877,
+  "scope": "one old A5 direction; not forecast or energy"
+}

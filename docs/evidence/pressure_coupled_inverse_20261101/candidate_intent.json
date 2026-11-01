@@ -1,0 +1,90 @@
+{
+  "case": "candidate",
+  "source_commit": "e05ab44a01886ce493f39cc928134793db56615c",
+  "registration": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/registration.json",
+    "sha256": "d32cf03aa915e173473c2d3c29708c47ebd488d073a057518661c75c964d3a1f"
+  },
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/native_candidate/build_receipt.json",
+    "sha256": "a7d81b18cde250a046769bc95fd14c19c9a77b706e16d54259e556755c69560f"
+  },
+  "packed_component_test_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/packed_receipt.json",
+    "sha256": "9eea88aa82cf2d495fdad1064227420fa56be8067398a7d7e2032a25967fd8a7"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/native_candidate/wrf.exe",
+    "sha256": "f4c629241dd9b951ff76c123f3f708dd6117d5f178133e9bafe096da3c5b115d"
+  },
+  "old05_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/result.json",
+    "sha256": "61eba7dfc14c4ee448c4dd3ea259ecd7677de067490ab4c2650cb1eb05ef57cf",
+    "attribution_outcome": "INCONCLUSIVE"
+  },
+  "old05_direction": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a5_direction.bin",
+    "sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6"
+  },
+  "old05_pair": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/pressure_a4_first_pair.bin",
+    "sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1"
+  },
+  "old05_endpoint": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/serializer_fix_validation/native_case/run/wrfout_d01_0001-01-01_00:10:00",
+    "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e"
+  },
+  "expected_header": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/B/wrf_sdirk3_pressure_reference_expected.h",
+    "sha256": "91acfb9ec88905e7e5f762bc84211ec9ae57a78c375771aa36995fbd0c64b845"
+  },
+  "expected_preflight_digest_fnv64": "7bdd17f3a694726e",
+  "reference_rk3_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "case_attempt_limit": 1,
+  "pair_attempt_limit": 2,
+  "retry": false,
+  "scope": "coupled inverse control; prior A4 and V-row NO-GO and old native A5 INCONCLUSIVE unchanged",
+  "case_input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "case_namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+  "control_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/runs/control/result.json",
+    "sha256": "86e5110af0b7a754b4c6f06f4ea964657ca05cf55fdc420d090d85c4042bc31e"
+  },
+  "candidate_build_control_gate": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/candidate_build_control_gate.json",
+    "sha256": "57118b987e6981d7a3972602f39018a57669ba49c5ab5a966b9f38093e606eb8"
+  },
+  "expected_linear_flavor": "reference_coupled_p1",
+  "candidate_build_difference": "Newton compilation adds only WRF_SDIRK3_PRESSURE_COUPLED_INVERSE; other 29 objects reused",
+  "candidate_build_binding": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/candidate_build_binding.json",
+    "sha256": "b640b4c372835c9011202b2992b098f6975849489df88b13d9a78165a998c930"
+  }
+}
