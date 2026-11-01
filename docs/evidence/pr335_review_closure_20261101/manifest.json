@@ -1,0 +1,18 @@
+{
+  "created_local": "2026-11-01T23:34:42.496863+09:00",
+  "base_main": "0c3f2fa6db7fe500e17550e90d966d7ba074098f",
+  "new_native_runs": 0,
+  "production_source_changes": false,
+  "records": [
+    {
+      "path": "review_checks.json",
+      "bytes": 3093,
+      "sha256": "392b0efafd30246251a4cdeec965b26bf81b58b8993a7986151227b77afe8190"
+    },
+    {
+      "path": "graph_reuse_receipt.json",
+      "bytes": 771,
+      "sha256": "8ad48166d7e5b81b5093c0b8fa0017c133fb2a20324c3da66ef51730be4642db"
+    }
+  ]
+}

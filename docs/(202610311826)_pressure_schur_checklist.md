@@ -1,8 +1,8 @@
 # 표준 em_b_wave 전방 코어 체크리스트
 
 작성: 2026-10-31T18:26:15.434614+09:00.
-마지막 갱신: 2026-11-01T18:18:26.346413+09:00.
-현재 개발 기준: mainfe906dee; A9 관측 소스5dc7fc7c, current SDK 별도 binding. A4/A7/A8 판정 유지.
+마지막 갱신: 2026-11-01T23:35:12.599072+09:00.
+현재 개발 기준: main0c3f2fa6(PR335 병합); A9 관측 소스5dc7fc7c, current SDK 별도 binding. A4/A7/A8 판정 유지.
 Green·Red: GPT-6.1-Terra, medium.
 
 ## 완료 목표와 운영 원칙
@@ -117,6 +117,23 @@ A0–A3의 제한된 기능·첫 단계 수치 검증에 이어 A4 비용 선별
   다섯 번째32JVP·FD/fallback0은 같고 CPU7.72→11.67초, wall7.72→14.30초였다.
   state/reference가 미세하게 다르고 old45s JVP는 재현되지 않았다. 단일 원인/전체 가속은 미확정.
   [근거](evidence/linear_delay_audit_20261101/manifest.json). SDK27.2 새 관측 block을 과거와 혼동하지 않는다.
+
+### PR335 검토 후속
+
+- [x] README에도 표준100km·40×80×64·600초·최종5일 및 정확도·안정성·비용 필수를
+  명시했다. 과거 제한 사례의 선택적 효율 문구는 현재 목표에 적용하지 않는다.
+- [x] A9 공개 스크립트의 원래 파일명·경로·누락 자료를
+  [복원 안내](evidence/linear_delay_audit_20261101/REPRODUCING.md)에 기록했다.
+  원래51개 manifest 항목은 이미지까지 크기·SHA256을 확인했고 수정하지 않았다.
+- [x] A9 CSV12행을 원시 로그와 대조해 여섯 선형계 모두 ON의 CPU·wall이 증가함을 확인했다.
+  JVP는231→208회이나 가중 호출당 CPU137.50→258.74ms다. 한 쌍의 관측이며 원인은 미확정이다.
+- [ ] 같은 실제 전체 문맥에서의 forward-AD 반복 JVP는 **아직 실행하지 않았다**.
+  ref/U/v 고정만으로 복원을 가정할 수 없다. A9에서는 ref 갱신OFF·ref 변경0이지만,
+  pressure·scratch 갱신이 관측됐고 소스상 cache도 변경될 수 있다.
+  격리 evaluator 또는 terminal 진단의 의미를 먼저 고정한다.
+  [소스 경계](design/pressure_schur_20261031/frozen_tile_replay_boundary.md)를 참조한다.
+- [ ] 위 문맥·경로·출력 조건이 성립한 뒤 같은 A,b,x0,S에서 P0/P1의 준비 포함 비용을 판정한다.
+  아직 Gate B를 승인하거나 전체 가속·후반 W·5일 정확도를 완료로 올리지 않는다.
 
 **A 종료 산출물:** source/exe/input/context가 고정된 native600초 단계의 기존/압력 P 비교표,
 원래 A의 저장된 실제 잔차, 경계·좌표 복원 검증, 준비 포함 총비용을 확보했다.

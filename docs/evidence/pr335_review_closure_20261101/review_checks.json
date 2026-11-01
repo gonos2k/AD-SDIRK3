@@ -1,0 +1,109 @@
+{
+  "created_local": "2026-11-01T23:33:24.183141+09:00",
+  "source_main": "0c3f2fa6db7fe500e17550e90d966d7ba074098f",
+  "native_runs_added": 0,
+  "prior_manifest_sha256": "4f4daf5efd72f7154737fe4747dbb18a17096683d3b801eb9e562f14d745a08f",
+  "prior_all_51_files_bytes_sha256_pass": true,
+  "images_included": 3,
+  "timing_csv_sha256": "617ff9fe85d8e21fa7cd02c20dba12f262ac1ed9ee85dc0074c22e0506a0b6d1",
+  "rows_checked_against_original_log_json": 12,
+  "same_scope_sums": {
+    "control": {
+      "solve_wall_seconds": 44.980661999,
+      "solve_cpu_seconds": 44.960774,
+      "jvp_wall_seconds": 31.773726504,
+      "jvp_cpu_seconds": 31.76178,
+      "jvp_calls": 231,
+      "weighted_jvp_wall_ms_per_call": 137.54859958441557,
+      "weighted_jvp_cpu_ms_per_call": 137.49688311688314
+    },
+    "candidate": {
+      "solve_wall_seconds": 100.577446666,
+      "solve_cpu_seconds": 76.433816,
+      "jvp_wall_seconds": 70.646177872,
+      "jvp_cpu_seconds": 53.81770200000006,
+      "jvp_calls": 208,
+      "weighted_jvp_wall_ms_per_call": 339.6450859230769,
+      "weighted_jvp_cpu_ms_per_call": 258.73895192307725
+    }
+  },
+  "six_pairs": [
+    {
+      "stage": 2,
+      "newton": 0,
+      "wall_ratio": 3.0128431150770982,
+      "process_cpu_ratio": 2.1584834347132817
+    },
+    {
+      "stage": 2,
+      "newton": 1,
+      "wall_ratio": 2.9952849264477273,
+      "process_cpu_ratio": 2.198843711546204
+    },
+    {
+      "stage": 3,
+      "newton": 0,
+      "wall_ratio": 2.764349958385615,
+      "process_cpu_ratio": 2.0564243441143315
+    },
+    {
+      "stage": 3,
+      "newton": 1,
+      "wall_ratio": 2.2302571143660987,
+      "process_cpu_ratio": 1.544050570192699
+    },
+    {
+      "stage": 4,
+      "newton": 0,
+      "wall_ratio": 1.8518207922159082,
+      "process_cpu_ratio": 1.5114572059318012
+    },
+    {
+      "stage": 4,
+      "newton": 1,
+      "wall_ratio": 1.639936288125466,
+      "process_cpu_ratio": 1.4283194205459904
+    }
+  ],
+  "selected_context": {
+    "control": {
+      "omega_ref_update": 0,
+      "reference_handle_changes": 0,
+      "reference_version_changes": 0,
+      "changed_observed_work": [
+        "p_pert_work",
+        "dpx_work",
+        "cqv_at_v_work",
+        "ru_tend",
+        "rv_tend",
+        "rw_tend",
+        "t_tend",
+        "mu_tend",
+        "ph_tend",
+        "qv_tend",
+        "cqu_at_u_work",
+        "cqw_at_w_work"
+      ]
+    },
+    "candidate": {
+      "omega_ref_update": 0,
+      "reference_handle_changes": 0,
+      "reference_version_changes": 0,
+      "changed_observed_work": [
+        "p_pert_work",
+        "dpx_work",
+        "cqv_at_v_work",
+        "ru_tend",
+        "rv_tend",
+        "rw_tend",
+        "t_tend",
+        "mu_tend",
+        "ph_tend",
+        "qv_tend",
+        "cqu_at_u_work",
+        "cqw_at_w_work"
+      ]
+    }
+  },
+  "interpretation": "One sequential pair. JVP count falls but CPU and elapsed rise in all six scopes; this is not reproducible performance/cause acceptance. wall minus CPU is arithmetic, not measured wait. Work mutations do not prove changed mathematical operator."
+}
