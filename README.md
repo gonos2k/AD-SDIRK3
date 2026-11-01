@@ -6,13 +6,14 @@ Its current principal path is the four-stage, third-order **ARK324L2SA IMEX**
 method (mode 3). JVP and VJP are contract-tested on supported paths; HVP remains
 a design goal.
 
-The [first-stage problem and completion boundary](docs/PROBLEM_DEFINITION.md)
-sets the forward map and its matched tangent/adjoint as the target, while
-identifying the completed two-control rotating-wave run as one restricted
-validation instance. It is the project-level target
-reference; case-specific budgets do not automatically become project completion
-criteria. The integrated forecast window and physical error budgets still need
-to be fixed. Efficiency is a separate optional acceptance target.
+The active goal is an accurate, stable, and computationally competitive five-day
+forecast at 100 km resolution on the 40 × 80 × 64 grid with a 600-second
+timestep. Accuracy, stability, and cost comparisons against the matched RK3
+reference are all required. The [active problem definition](docs/PROBLEM_DEFINITION.md) fixes this scope;
+physical error and efficiency budgets must still be declared before acceptance.
+Its retained derivative and two-control cases keep their original completion
+boundaries. Optional efficiency in those historical cases does not apply to
+the active forward goal.
 
 - **IMEX split** (mode 3 = ARK324L2SA): slow advection/Coriolis/diffusion terms explicit,
   acoustic/gravity terms implicit. The optional HEVI split also moves horizontal acoustic terms explicit.

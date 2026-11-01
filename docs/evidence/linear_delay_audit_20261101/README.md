@@ -7,3 +7,5 @@ The fifth solve has32 AD JVP/RHS calls, FD/fallback0 in both. OFF7.723/7.721 s w
 The entire rank retires fewer instructions in ON despite greater CPU/elapsed time and more involuntary context switches. These are aggregate counters, not fifth-solve hardware counters or a core/frequency/scheduler/app/swap diagnosis. A current-SDK binding was approved before models: SDK27.2 vs historical27.0, unchanged linked paths/compatibility and minOS26.0 <= host26.7. Exact historical compiler binary is not established. No backward causal claim is made.
 
 Large raw first-point artifacts and the four additional fifth-point FP64 NPY files remain local, pinned by original paths/hashes. This public set has summaries, scripts, figures and receipts, not complete restart/Tile-operator replay state. Reproduction requires the pinned raw fixtures and current stack. Public scripts use readable names/whitespace-only normalization; executed original hashes remain. Existing diagnostics were preserved; no giant graph or per-iteration dump was added.
+
+See [REPRODUCING.md](REPRODUCING.md) for the archived filenames, hashes, and local prerequisites.

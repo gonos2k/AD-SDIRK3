@@ -1,0 +1,14 @@
+{
+  "created_local": "2026-11-01T23:34:42.491755+09:00",
+  "target_worktree": "/private/tmp/frozen-jvp-cost-20261101",
+  "target_head": "0c3f2fa6db7fe500e17550e90d966d7ba074098f",
+  "reused_graph_sha256": "ca2ad0eb351700c45703d3e30c7cf788b1e506988cc4352cb4251ae26ea21f62",
+  "reused_pins_sha256": "cba1437849e33f3b0df82e6d4f09b5d45e5872c0577ed0ed6c90f5db2c9e6228",
+  "all_27_source_sha256_match": true,
+  "nodes": 786,
+  "edges": 2532,
+  "source_edited": false,
+  "semantic_llm_tokens": 0,
+  "limitations": "AST navigation only; original source paths refer to previous worktree with identical file hashes. TLS, callback, Fortran and mutable-cache extraction gaps. Source audit supplies details; graph is not numerical proof.",
+  "bounded_rhs_navigation_edge_count": 84
+}
