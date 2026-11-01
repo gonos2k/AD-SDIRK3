@@ -1,0 +1,12 @@
+{
+  "created_local": "2026-11-01T09:20:37.057377+09:00",
+  "reason": "Single bounded coupled candidate not adopted: original screen INCONCLUSIVE due diagnostic coordinate operation order; descriptive setup-inclusive first-point cost increased. No numerical rerun or further candidate.",
+  "base_main": "356b08c532ad228f0fd38af0f7f59c3e1dcceffc",
+  "prototype_source": "e05ab44a01886ce493f39cc928134793db56615c",
+  "prototype_newton_sha256": "feb66ed0f39a744e5f9266ad3d5d7422a18b12ef34d0fcca46305a02ca5f0ed8",
+  "baseline_body_sha256": "db3cf5ecfcb7b5d18209363465d955572c0c108945393eeee72fd099131e9983",
+  "final_body_after_prefix_sha256": "db3cf5ecfcb7b5d18209363465d955572c0c108945393eeee72fd099131e9983",
+  "retired_macro": "WRF_SDIRK3_PRESSURE_COUPLED_INVERSE",
+  "numerical_hook_in_current_newton": false,
+  "standalone_coupled_inverse_helper_and_tests_retained": true
+}

@@ -1,0 +1,20 @@
+{
+  "native_source": "e05ab44a01886ce493f39cc928134793db56615c",
+  "final_code_source": "ee5914e96574cfbe94a5cd3c123b946697cfbdb6",
+  "cases": {
+    "control": {
+      "pinned_paths": 202,
+      "all_verified_live_or_native_git_blob": true,
+      "source_paths_verified_against_archived_native_commit": [
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp"
+      ]
+    },
+    "candidate": {
+      "pinned_paths": 227,
+      "all_verified_live_or_native_git_blob": true,
+      "source_paths_verified_against_archived_native_commit": [
+        "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp"
+      ]
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "source_commit": "e05ab44a01886ce493f39cc928134793db56615c",
+  "schema_validator_sha256": "0b8d279153d12a0ad3e05c9e8fba5edcd90b25f3963cca3d104afeff2c0490a1",
+  "runner_sha256": "536ca50132f6fac2f35d36cdf11ebceacc297fe026e2caa07701b26e9de62b25",
+  "test_script_sha256": "8102a50ae5d2e512cbf24d653b5a2c5f03216aca451d40b7cd58cfd3a560db24",
+  "checks": [
+    "valid receipt",
+    "inverse/action/cap accounting mismatches",
+    "no fallback",
+    "actual tolerance",
+    "P1 reconstruction bound",
+    "explicit inner failure with unavailable residual",
+    "allocation inconclusive",
+    "missing inconclusive",
+    "explicit P1 error no-go"
+  ],
+  "status": "passed",
+  "model_run": false,
+  "time_local": "2026-11-01T09:01:51+0900"
+}

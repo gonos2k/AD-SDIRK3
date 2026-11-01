@@ -1,0 +1,41 @@
+{
+  "archive_sha256": "9aa8992f33e535e5a11f8d37df019c9de024c1773122caea985732d3241b0ec7",
+  "source_sha256": "171f0000bedcf2081f55d38afc69b137f6ca71eaa8822498f76570bea688d8bc",
+  "header_sha256": "33f1480d37a4e302fecbe838d62e3ad74712c3e78232cfb9390074c19b6f625a",
+  "build_cmd": [
+    "/usr/bin/g++",
+    "-std=c++17",
+    "-O3",
+    "-DMACOS",
+    "-DDMPARALLEL",
+    "-DUSE_SDIRK3",
+    "-D_GLIBCXX_USE_CXX11_ABI=0",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+    "-I/opt/homebrew/include",
+    "/private/tmp/pressure-coupled-inverse-20261101/external/libtorch_wrf/sdirk3/tests/test_coupled_pressure_inverse.cpp",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a5-20261101/vrow_pair_draft/build_control/libwrf_sdirk3_libtorch.a",
+    "-L/opt/homebrew/opt/open-mpi/lib",
+    "-lmpi",
+    "-L/opt/homebrew/opt/gcc/lib/gcc/current",
+    "-lgfortran",
+    "-lquadmath",
+    "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-ltorch",
+    "-ltorch_cpu",
+    "-lc10",
+    "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/test_coupled_pressure_packed"
+  ],
+  "model_run": false,
+  "build_returncode": 0,
+  "binary_sha256": "3f7db0dcb5bf4e27d96df919d9652f465ff72852dd3e22d03f31a5770525a2f0",
+  "run_cmd": [
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-coupled-inverse-20261101/test_coupled_pressure_packed"
+  ],
+  "run_returncode": 0,
+  "run_seconds": 3.0360147077590227,
+  "run_log_sha256": "8eab36c5ff0826b04924532fc70feaaab17aed4845441d45075795b15a093687",
+  "passed": true
+}

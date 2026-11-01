@@ -1,0 +1,2 @@
+packed fixture arnoldi=1 reduced_rel=0.00278727 actual_p1_over_a_g=0.00278727 phi0_alias_walls=passed
+coupled pressure inverse tests passed arnoldi=2 reduced_rel=0 full_rel=1.83992e-16 dense_error=6.66134e-16 budget_rel=0.471659 nan_and_singular_rejected=1 alloc_exceptions_propagated=1

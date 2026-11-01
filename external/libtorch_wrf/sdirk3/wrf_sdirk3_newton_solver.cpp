@@ -1,3 +1,6 @@
+#if defined(WRF_SDIRK3_PRESSURE_COUPLED_INVERSE)
+#error "Unadopted coupled inverse is archived at e05ab44a; current source keeps A5 diagnostics only"
+#endif
 #if defined(WRF_SDIRK3_PRESSURE_A5_VROW)
 #error "Rejected V-row prototype is archived at 112f3449; current source keeps A5 diagnostics only"
 #endif
