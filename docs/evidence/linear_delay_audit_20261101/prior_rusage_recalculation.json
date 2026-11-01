@@ -1,0 +1,52 @@
+{
+  "scope": "existing PR334 rank whole-process counters only; no per-solve inference",
+  "new_model_run": false,
+  "cases": {
+    "control": {
+      "raw_sha256": "22d12a328e222b76da0c98ae78ef45185d4a3221ac8105ce912bd79790245cca",
+      "real_seconds": 161.46,
+      "user_seconds": 91.82,
+      "sys_seconds": 5.05,
+      "maximum resident set size": 2061008896,
+      "average shared memory size": 0,
+      "average unshared data size": 0,
+      "average unshared stack size": 0,
+      "page reclaims": 169296,
+      "page faults": 2847,
+      "swaps": 0,
+      "block input operations": 0,
+      "block output operations": 0,
+      "messages sent": 13,
+      "messages received": 24,
+      "signals received": 0,
+      "voluntary context switches": 2344,
+      "involuntary context switches": 169925,
+      "instructions retired": 345413590564,
+      "cycles elapsed": 112370052838,
+      "peak memory footprint": 1821690376
+    },
+    "candidate": {
+      "raw_sha256": "850e0d233f869f865b60c838c8146b234a1ae52e614c6e7567a721278d1cb284",
+      "real_seconds": 206.32,
+      "user_seconds": 88.86,
+      "sys_seconds": 4.25,
+      "maximum resident set size": 1935998976,
+      "average shared memory size": 0,
+      "average unshared data size": 0,
+      "average unshared stack size": 0,
+      "page reclaims": 183454,
+      "page faults": 2701,
+      "swaps": 0,
+      "block input operations": 0,
+      "block output operations": 0,
+      "messages sent": 13,
+      "messages received": 24,
+      "signals received": 0,
+      "voluntary context switches": 690,
+      "involuntary context switches": 133329,
+      "instructions retired": 317837247447,
+      "cycles elapsed": 115108050369,
+      "peak memory footprint": 1953335744
+    }
+  }
+}

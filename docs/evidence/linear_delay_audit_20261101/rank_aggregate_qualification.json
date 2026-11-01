@@ -1,0 +1,42 @@
+{
+  "time_local": "2026-11-01T18:12:13.373593+09:00",
+  "scope": "one rank-process aggregate for each of two independently initialized instrumented one-step runs; not per-fifth-solve counters",
+  "data": {
+    "control": {
+      "rank_real_s": 50.65,
+      "rank_user_s": 48.0,
+      "rank_system_s": 1.69,
+      "rank_cpu_s": 49.69,
+      "instructions_retired": 343262476142,
+      "cycles_elapsed": 100216842870,
+      "involuntary_context_switches": 978,
+      "maximum_rss_bytes": 2032926720,
+      "peak_footprint_bytes": 1496172728,
+      "rank_rusage_sha256": "132f576cfec972e849d05ec083596d83d124fd43ada40d2ea793cbdd6fa8b6a7",
+      "build_receipt_sha256": "3c530b60087929ce52a7923568452457cab427caa00603599eac2d874dde06b6",
+      "tile_object_sha256": "22f8ad2b726b411bba1a46f452a905b1e79348793d6b2741140e01708e409369"
+    },
+    "candidate": {
+      "rank_real_s": 120.0,
+      "rank_user_s": 83.53,
+      "rank_system_s": 2.76,
+      "rank_cpu_s": 86.29,
+      "instructions_retired": 317047047237,
+      "cycles_elapsed": 104747395002,
+      "involuntary_context_switches": 59119,
+      "maximum_rss_bytes": 2150039552,
+      "peak_footprint_bytes": 1662552296,
+      "rank_rusage_sha256": "194f9c3f841d8a2aa3f745f1a9935f53fb52eb9e7233c0288f9aefbd1b5c29af",
+      "build_receipt_sha256": "68571443927a477ffbae9dde59f736cdaf4d139722b1e90ea519c1c188f3a309",
+      "tile_object_sha256": "22f8ad2b726b411bba1a46f452a905b1e79348793d6b2741140e01708e409369"
+    }
+  },
+  "derived": {
+    "instructions_candidate_over_control": 0.9236286202918513,
+    "rank_cpu_candidate_over_control": 1.736566713624472,
+    "rank_elapsed_candidate_over_control": 2.3692003948667324,
+    "involuntary_switch_ratio": 60.44887525562372
+  },
+  "interpretation": "Candidate aggregate retired fewer instructions despite greater process CPU and elapsed time, with more involuntary context switches; this contradicts an explanation based solely on more aggregate retired instructions. Same Tile object bytes do not establish equal later inputs or execution paths. These aggregate counters do not identify a particular scheduler, application, processor, swap or fifth-solve cause. Cycles divided by CPU time is not a measured operating frequency. Historical A8 used a different SDK; no causal explanation of that run is established.",
+  "model_run": false
+}

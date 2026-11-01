@@ -1,0 +1,24 @@
+{
+  "status": "approved_for_control_receipt",
+  "registration_sha256": "b6f25d7a602c82c9e0930ef27a40e8bba462257af0e5b50bcaadff6fcdcabfcf",
+  "finalizer_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/finalize_control_current_sdk.draft.py",
+  "finalizer_sha256": "b5333eb72ec65b17086f87ef03641dc9722b49996688396c003c136d6f362e2b",
+  "current_sdk_provenance_sha256": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1",
+  "allowlisted_dylib_differences": [
+    {
+      "old": "/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "new": "/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.40.3)"
+    },
+    {
+      "old": "/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)",
+      "new": "/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.32.0)"
+    }
+  ],
+  "scope": "Permit finalizer to bind previously compiled and linked control if reviewed; no recompilation or relink. Candidate must be built using the same current SDK and toolchain, then compare its complete otool dylib rows and LC_BUILD_VERSION exactly against current control, not archived A8. Preserve prior A8 endpoint 174-array numerical gates. Treat any other library/path/compatibility or compiler/SDK change as blocking. No model is authorized by this draft.",
+  "prior_stop_preserved": true,
+  "model_run": false,
+  "decision": "Current-SDK controlled pair may continue before any model. Both minOS26.0 <= host26.7; only two allowlisted current-version load metadata changes, unchanged paths/compatibility. Historical exact compiler binary not established; do not attribute past delay or claim byte-identical executable stack. Numerical parity remains prospective.",
+  "source_commit": "5dc7fc7c8c064f71dc2a272099852f4a529bb73f",
+  "candidate_model_authorized": false,
+  "control_model_authorized": false
+}

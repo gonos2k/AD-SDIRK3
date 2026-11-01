@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "nonzero_fd_and_fallback_accepted_and_reported": true,
+  "rejections": {
+    "missing": "expected six distinct ordered observer records",
+    "bad_identity": "registered solve identity sequence mismatch",
+    "bad_rhs_sum": "inconsistent RHS mode counters",
+    "bad_rhs_subset": "inconsistent RHS mode counters",
+    "bad_sample_fallback": "invalid sample fallback count",
+    "bad_count": "AD+FD count differs from JVP count",
+    "sample_hash": "NPY context hash mismatch linear_delay_first_jvp.npy"
+  },
+  "parser_sha256": "316f9daac28e06bcc0616bb83dfcade27bcfeabcefe287e62ce44254ccacbf95",
+  "smoke_source_sha256": "77734d83229b75d151d5f2fc06e9f29c168971d9814574b8e8cc384c768529cf",
+  "generated_files": [
+    {
+      "name": "linear_delay_u_eval.npy",
+      "sha256": "479213e148910afc2c3051f42c225c4088fd167d00aff579da6d408b7f5d62f8",
+      "bytes": 8644056
+    },
+    {
+      "name": "linear_delay_u_ref_first_jvp.npy",
+      "sha256": "479213e148910afc2c3051f42c225c4088fd167d00aff579da6d408b7f5d62f8",
+      "bytes": 8644056
+    },
+    {
+      "name": "linear_delay_first_tangent.npy",
+      "sha256": "479213e148910afc2c3051f42c225c4088fd167d00aff579da6d408b7f5d62f8",
+      "bytes": 8644056
+    },
+    {
+      "name": "linear_delay_first_jvp.npy",
+      "sha256": "479213e148910afc2c3051f42c225c4088fd167d00aff579da6d408b7f5d62f8",
+      "bytes": 8644056
+    }
+  ],
+  "cleanup": "TemporaryDirectory removed only four generated NPY files and three tiny local smoke markers after success; no native artifacts touched.",
+  "no_model_run": true
+}

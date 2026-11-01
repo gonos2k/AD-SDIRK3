@@ -1,0 +1,86 @@
+{
+  "status": "registered",
+  "source_commit": "5dc7fc7c8c064f71dc2a272099852f4a529bb73f",
+  "observer_header_sha256": "5d1866fc9296154b9522f391254c7f7c60f0b9c8fa1a848c52a6b5e3a8ee44bb",
+  "observer_test_receipt_sha256": "bf63b976c134cf4cc4fe0be3bc6e6e1ab5229dce59cae943fd4da77b05e78923",
+  "scope": "Diagnostic timing and same-call context for six real solves; no performance acceptance, 2x goal, Gate B or adoption. Cross-arm state/path differences are findings, not equality failures.",
+  "order": [
+    "control",
+    "candidate"
+  ],
+  "maximum_native_attempts": 2,
+  "retry": false,
+  "case": {
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "mode": 3,
+    "FP64_carry": true,
+    "reuse_linearization": false,
+    "dt_seconds": 600,
+    "steps": 1
+  },
+  "validity": "Each arm 174 endpoint numerical arrays byte equal to its own archived A8 arm; preflight first-point gates, initial state, physics, distinct converged stages 2/3/4 and old guard checks; each of six LINEAR_DELAY real-solve records valid, identity stage/newton/ordinal, timer/JVP/RHS/fallback coverage and actual torch threads 1/1. Require fifth stable context and sample; no cross-arm equality of later state, JVP count or timing.",
+  "capture": {
+    "selected_ordinal": 5,
+    "four_npy": [
+      "linear_delay_u_eval.npy",
+      "linear_delay_u_ref_first_jvp.npy",
+      "linear_delay_first_tangent.npy",
+      "linear_delay_first_jvp.npy"
+    ],
+    "dtype": "float64",
+    "shape": [
+      1080491
+    ],
+    "four_npy_total_limit_bytes": 67108864,
+    "clone_fraction_max_exclusive": 0.01,
+    "scope": "hash and NPY writes outside solve; cloning included in measured solve; validate fifth context and first actual Arnoldi sample",
+    "combined_old_three_and_four_npy_limit_bytes": 201326592
+  },
+  "resources": {
+    "MPI_timeout_seconds": 360,
+    "postrun_rank_RSS_limit_bytes": 4294967296,
+    "pre_post_disk_floor_bytes": 5368709120,
+    "absolute_wall_minus_monotonic_limit_seconds": 1,
+    "scope": "single rank; postrun rank RSS only; no polling/global process inspection"
+  },
+  "failure": "Context or evidence failures INCONCLUSIVE; retain all output and actual numerical/model status. No retry.",
+  "base_receipt_sha256": "d55053f60a31958c93ce4623583eae77d0a839e3e430032273e5259c07866046",
+  "old_candidate_receipt_sha256": "0a44c9a7410938dcc5fcd07a7ee5dd3ec7bf9a6e6a6bf1daded1a7816869e30d",
+  "no_model_run": true,
+  "registered_at_local": "2026-11-01T17:44:13.472224+09:00",
+  "observer_coverage": "Solve and selected-JVP wall and process-CPU share scope. Actual FD/fallback, input/reference/path differences are findings; do not reject merely because they differ. Frozen context missing/mutated makes matched identity ineligible; clocks and raw observations retained.",
+  "interpretation": "No timing threshold, rerun until slow, A4/A7/A8 reclassification or speed promotion. A past slowdown not reproduced remains not reproduced; no scheduler/app/swap attribution from elapsed-minus-CPU.",
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/build_pair.draft.py": "a5d3794ac7ecb74c12fb5bd04e656de4881a4764d48038e91fa6e5479590d824",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/run_pair_case.draft.py": "f05501c71dcf182bdfc092d3b99a91d9a9d8ad10874b34e2e6e57b489262baeb",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/observer_checks.draft.py": "316f9daac28e06bcc0616bb83dfcade27bcfeabcefe287e62ce44254ccacbf95",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/pin_case.draft.py": "766378d873c3ffaa184d854a83a94dd8857776e83d144d7015a12503e877754d",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/observer_smoke_v5.draft.json": "ddd78f5b8c578db531c2a715b7f9e3784472fc37488152577c4ae511b55317dd",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/observer_smoke_v5.draft.py": "77734d83229b75d151d5f2fc06e9f29c168971d9814574b8e8cc384c768529cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/benchmark_wrf_accuracy_cost.py": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/base_screen_reference.py": "bbd270ec6cc58df7fdc4d1aa6e2dd53731af49f7b42bf4898690c1583b04193b",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/run_a4.py": "eef8c435509651877f3e00e1a569732902aeef4f6bed18dcf26980a71dc4a50f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/run_a5.py": "cb0e01cab846bf08500fe61a2419e2a549a992e0c96c9e7c9589594445f16897",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/pair_checks.py": "aad1c2b9618a87a22bb9ea677f0a2bef3a0128edab4800072ce4ef2f0486e395",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/direct_checks.py": "79dc046ee25a85dee913517d3c63cf5a1c0c8d57896e492b41af0e97e7dd47d0",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/receipt.json": "bf63b976c134cf4cc4fe0be3bc6e6e1ab5229dce59cae943fd4da77b05e78923",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/observer_main.cpp": "a8108a0d0a374142ba54091815140a3cc478ce8aa1e74cc1d94dc990ae265af4",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/observer_peer.cpp": "c0fd61c105f129a63d6ea3f69ca7a3e0e39323051bee310b97ec6d1c2b8498f7",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/run.py": "29c19a5e5768df4d9d9c91ca27bf24df344c4a6e005db1b56ed696ed23899a24",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/result.json": "2aa4126e3981ed1e93c6892fa89994d9ae7b8d3eedba4cf3ab20008d1b31ce1a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/wrfout_d01_0001-01-01_00:10:00": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/result.json": "c91763134db5d06a572a74bf37e34041429d68e52c5cbe2d016e626c847addb3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/wrfout_d01_0001-01-01_00:10:00": "386b5c94ccf326b763ff2f04a4bf66f4336ac49d01c73150efd34cae8b027e00",
+    "/private/tmp/linear-delay-audit-20261101/external/libtorch_wrf/sdirk3/tests/linear_delay_audit_peer.cpp": "c0fd61c105f129a63d6ea3f69ca7a3e0e39323051bee310b97ec6d1c2b8498f7",
+    "/private/tmp/linear-delay-audit-20261101/external/libtorch_wrf/sdirk3/tests/test_linear_delay_audit.cpp": "a8108a0d0a374142ba54091815140a3cc478ce8aa1e74cc1d94dc990ae265af4",
+    "/private/tmp/linear-delay-audit-20261101/external/libtorch_wrf/sdirk3/wrf_sdirk3_linear_delay_audit.h": "5d1866fc9296154b9522f391254c7f7c60f0b9c8fa1a848c52a6b5e3a8ee44bb",
+    "/private/tmp/linear-delay-audit-20261101/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "1d8c1f975c2076e30c25f06f54c74876089a14e8afebbe76d9c865cd3d3f64f2",
+    "/private/tmp/linear-delay-audit-20261101/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "fe650f4ffab29d69f53776c04ae8cd8192a5d95aece0accb3e6837bc42b95629",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/B/wrf_sdirk3_pressure_reference_expected.h": "91acfb9ec88905e7e5f762bc84211ec9ae57a78c375771aa36995fbd0c64b845"
+  }
+}

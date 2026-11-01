@@ -1,0 +1,425 @@
+{
+  "created_local": "2026-11-01T18:18:26.343565+09:00",
+  "native_source": "5dc7fc7c8c064f71dc2a272099852f4a529bb73f",
+  "base_main": "fe906dee3c6fb19ab6fd33dd090c251cb41ee8a3",
+  "native_attempts": 2,
+  "retry": false,
+  "experiment": "diagnostic observation only, no performance acceptance",
+  "original_control_result": "INCONCLUSIVE preserved: missing Python positive import after model completed",
+  "control_offline_same_gate_validation": "PASSED, separate receipt, no model rerun",
+  "candidate_result": "DIAGNOSTIC_COMPLETED",
+  "SDK_binding": "new current SDK27.2 both arms/minOS26.0 <= host26.7; historical A8 SDK27.0 differed; no historical cause claim",
+  "historical_45s_spike": "not reproduced in new JVP scope",
+  "whole_operator_identity_claim": false,
+  "specific_external_cause_claim": false,
+  "new_solver_or_tuning": false,
+  "long_forecast_or_speed_promotion": false,
+  "records": [
+    {
+      "path": "registration.json",
+      "bytes": 8220,
+      "sha256": "b6f25d7a602c82c9e0930ef27a40e8bba462257af0e5b50bcaadff6fcdcabfcf",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/registration.json",
+      "original_sha256": "b6f25d7a602c82c9e0930ef27a40e8bba462257af0e5b50bcaadff6fcdcabfcf",
+      "normalization": "none"
+    },
+    {
+      "path": "current_sdk_provenance.json",
+      "bytes": 2701,
+      "sha256": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/current_sdk_provenance.json",
+      "original_sha256": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1",
+      "normalization": "none"
+    },
+    {
+      "path": "current_sdk_binding_addendum.json",
+      "bytes": 1935,
+      "sha256": "1f9af05712027832a0aeb10548c09842cb437a4f7c205a055be760cf38b27a5d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/current_sdk_binding_addendum.json",
+      "original_sha256": "1f9af05712027832a0aeb10548c09842cb437a4f7c205a055be760cf38b27a5d",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_association_addendum.json",
+      "bytes": 2358,
+      "sha256": "cb8b50beb8dd4d9b909eeeaa2194ab489f7eb7e1127c7f2073ddbfaea6164460",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/candidate_association_addendum.json",
+      "original_sha256": "cb8b50beb8dd4d9b909eeeaa2194ab489f7eb7e1127c7f2073ddbfaea6164460",
+      "normalization": "none"
+    },
+    {
+      "path": "offline_validation_clarification.json",
+      "bytes": 4866,
+      "sha256": "7d11cce7369d67a0068cfe61bf3e3c6d7c80bfa609acf39cf82f0ebc8bdc7745",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/offline_validation_clarification.json",
+      "original_sha256": "7d11cce7369d67a0068cfe61bf3e3c6d7c80bfa609acf39cf82f0ebc8bdc7745",
+      "normalization": "none"
+    },
+    {
+      "path": "control_postvalidation.json",
+      "bytes": 54359,
+      "sha256": "86b51c0465a85a54e301bdfa3a44c2c0a4607032061c0d58906f35d902768c58",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/control_postvalidation.json",
+      "original_sha256": "86b51c0465a85a54e301bdfa3a44c2c0a4607032061c0d58906f35d902768c58",
+      "normalization": "none"
+    },
+    {
+      "path": "control_intent.json",
+      "bytes": 4059,
+      "sha256": "e2f6a18f10c7cec29a02427fac3f6c43c9b12f2f9f24e16f95d53f0fc4e16a0e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/control_intent.json",
+      "original_sha256": "e2f6a18f10c7cec29a02427fac3f6c43c9b12f2f9f24e16f95d53f0fc4e16a0e",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_intent.json",
+      "bytes": 3482,
+      "sha256": "d581184935e384c488c35b0c992e3856d1772e259c6b4fd73cbc33ad82c5d278",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/candidate_intent.json",
+      "original_sha256": "d581184935e384c488c35b0c992e3856d1772e259c6b4fd73cbc33ad82c5d278",
+      "normalization": "none"
+    },
+    {
+      "path": "control_pins.json",
+      "bytes": 36543,
+      "sha256": "5da5accee2fb28af81a7b6832fac424cc223cc20237afe79f4f064406a5d68ff",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/control_pins.json",
+      "original_sha256": "5da5accee2fb28af81a7b6832fac424cc223cc20237afe79f4f064406a5d68ff",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_pins.json",
+      "bytes": 37501,
+      "sha256": "1d6ba6d536ea613827a3ffdb121664e22d3fcc77f40cb1c4d8f0ae9b4ed9f224",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/candidate_pins.json",
+      "original_sha256": "1d6ba6d536ea613827a3ffdb121664e22d3fcc77f40cb1c4d8f0ae9b4ed9f224",
+      "normalization": "none"
+    },
+    {
+      "path": "control_build_receipt.json",
+      "bytes": 66678,
+      "sha256": "3c530b60087929ce52a7923568452457cab427caa00603599eac2d874dde06b6",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_control/build_receipt.json",
+      "original_sha256": "3c530b60087929ce52a7923568452457cab427caa00603599eac2d874dde06b6",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_receipt.json",
+      "bytes": 66947,
+      "sha256": "68571443927a477ffbae9dde59f736cdaf4d139722b1e90ea519c1c188f3a309",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_candidate/build_receipt.json",
+      "original_sha256": "68571443927a477ffbae9dde59f736cdaf4d139722b1e90ea519c1c188f3a309",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_control_gate.json",
+      "bytes": 915,
+      "sha256": "6f93506d5753630aa7af69a0767877fcbb083d55e48853ce06546500f0388b16",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/candidate_build_control_gate.json",
+      "original_sha256": "6f93506d5753630aa7af69a0767877fcbb083d55e48853ce06546500f0388b16",
+      "normalization": "none"
+    },
+    {
+      "path": "original_control_result.json",
+      "bytes": 72495,
+      "sha256": "d3fc1ed2bd6acbdb74a9b2835a461527f9a2cf73b740bd9999fbb0c9746a6bd4",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/result.json",
+      "original_sha256": "d3fc1ed2bd6acbdb74a9b2835a461527f9a2cf73b740bd9999fbb0c9746a6bd4",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_result.json",
+      "bytes": 85429,
+      "sha256": "40293f6924a8ff2110d16e1f09fc1a606f1ee5f7ea7d2d26a9e1c87a5cd72c19",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/candidate/result.json",
+      "original_sha256": "40293f6924a8ff2110d16e1f09fc1a606f1ee5f7ea7d2d26a9e1c87a5cd72c19",
+      "normalization": "none"
+    },
+    {
+      "path": "observer_test_receipt.json",
+      "bytes": 2704,
+      "sha256": "bf63b976c134cf4cc4fe0be3bc6e6e1ab5229dce59cae943fd4da77b05e78923",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/receipt.json",
+      "original_sha256": "bf63b976c134cf4cc4fe0be3bc6e6e1ab5229dce59cae943fd4da77b05e78923",
+      "normalization": "none"
+    },
+    {
+      "path": "observer_test_log.txt",
+      "bytes": 28024,
+      "sha256": "500683280defef41d72ace8558a2b20e94e128c1e4c57def38b3a400a21660c6",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/run.log",
+      "original_sha256": "500683280defef41d72ace8558a2b20e94e128c1e4c57def38b3a400a21660c6",
+      "normalization": "none"
+    },
+    {
+      "path": "parser_smoke.json",
+      "bytes": 1577,
+      "sha256": "ddd78f5b8c578db531c2a715b7f9e3784472fc37488152577c4ae511b55317dd",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/observer_smoke_v5.draft.json",
+      "original_sha256": "ddd78f5b8c578db531c2a715b7f9e3784472fc37488152577c4ae511b55317dd",
+      "normalization": "none"
+    },
+    {
+      "path": "prior_rusage_recalculation.json",
+      "bytes": 1751,
+      "sha256": "9bfbbce236b28bf6af3f0501973451e3bc5f44a2619e55191a468bffc9437533",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/prior_rusage_recalculation.json",
+      "original_sha256": "9bfbbce236b28bf6af3f0501973451e3bc5f44a2619e55191a468bffc9437533",
+      "normalization": "none"
+    },
+    {
+      "path": "native_pair_audit.json",
+      "bytes": 67493,
+      "sha256": "5601fb5408c9bb3af66b4309d3bf647e39b0b9727f02b0824be401aa266015aa",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_pair_audit.json",
+      "original_sha256": "5601fb5408c9bb3af66b4309d3bf647e39b0b9727f02b0824be401aa266015aa",
+      "normalization": "none"
+    },
+    {
+      "path": "rank_aggregate_qualification.json",
+      "bytes": 2340,
+      "sha256": "813312639116f2e6f6f69379a40f0f6b16e6d11cfba32cd80fbf2274cd1a9d7f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/audit/rank_aggregate_qualification.json",
+      "original_sha256": "813312639116f2e6f6f69379a40f0f6b16e6d11cfba32cd80fbf2274cd1a9d7f",
+      "normalization": "none"
+    },
+    {
+      "path": "duplicate_cleanup_receipt.json",
+      "bytes": 6791,
+      "sha256": "d2bad274b597cb74096cf24eb339cd802813f0b407552a260518cd84f708bcd1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/duplicate_cleanup_receipt.json",
+      "original_sha256": "d2bad274b597cb74096cf24eb339cd802813f0b407552a260518cd84f708bcd1",
+      "normalization": "none"
+    },
+    {
+      "path": "graph_source_pins.json",
+      "bytes": 3915,
+      "sha256": "cba1437849e33f3b0df82e6d4f09b5d45e5872c0577ed0ed6c90f5db2c9e6228",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/graph_after_pins.json",
+      "original_sha256": "cba1437849e33f3b0df82e6d4f09b5d45e5872c0577ed0ed6c90f5db2c9e6228",
+      "normalization": "none"
+    },
+    {
+      "path": "solve_timing.png",
+      "bytes": 104135,
+      "sha256": "7fcca575f934ec9f70685ab37b7ec30a61c2cb234a1d38b6218286279308e9db",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/analysis/solve_timing.png",
+      "original_sha256": "7fcca575f934ec9f70685ab37b7ec30a61c2cb234a1d38b6218286279308e9db",
+      "normalization": "none"
+    },
+    {
+      "path": "fifth_W_states.png",
+      "bytes": 178326,
+      "sha256": "9dc5328bead645c42884f49ab81023c3dac9aa25a42d2cddbf05694fada29347",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/analysis/fifth_W_states.png",
+      "original_sha256": "9dc5328bead645c42884f49ab81023c3dac9aa25a42d2cddbf05694fada29347",
+      "normalization": "none"
+    },
+    {
+      "path": "aggregate_runtime.png",
+      "bytes": 106266,
+      "sha256": "ccd5585df52729bfa56ee78d5b1ceced289fd4864611feb3f439760dfd341614",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/analysis/aggregate_runtime.png",
+      "original_sha256": "ccd5585df52729bfa56ee78d5b1ceced289fd4864611feb3f439760dfd341614",
+      "normalization": "none"
+    },
+    {
+      "path": "timing.csv",
+      "bytes": 2125,
+      "sha256": "617ff9fe85d8e21fa7cd02c20dba12f262ac1ed9ee85dc0074c22e0506a0b6d1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/analysis/timing.csv",
+      "original_sha256": "ed1f882ddc738d92bbad59622285cc3dda3876c5b693a28674126118a84c5454",
+      "normalization": "CRLF to LF"
+    },
+    {
+      "path": "fifth_state_blocks.csv",
+      "bytes": 2741,
+      "sha256": "9b8c60d19170eae8b9c75dbeea0b2812514edfbea8a43f826666d6489a729f83",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/analysis/fifth_state_blocks.csv",
+      "original_sha256": "09e34230a7f655a4868a176d5db8ae269e6e3b2fb4a7842d7a9ac310f66041b1",
+      "normalization": "CRLF to LF"
+    },
+    {
+      "path": "plot_receipt.json",
+      "bytes": 18609,
+      "sha256": "620e371c82584edb887dedbb1f0e4c21fe22e3f7cae6cd08b56aecab73999ea1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/analysis/receipt.json",
+      "original_sha256": "620e371c82584edb887dedbb1f0e4c21fe22e3f7cae6cd08b56aecab73999ea1",
+      "normalization": "none"
+    },
+    {
+      "path": "aggregate_plot_receipt.json",
+      "bytes": 1249,
+      "sha256": "57156b106c96d1946a30d10fe5e2f6b11dc6443940841f22d50839ed65733ced",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/analysis/aggregate_runtime_receipt.json",
+      "original_sha256": "57156b106c96d1946a30d10fe5e2f6b11dc6443940841f22d50839ed65733ced",
+      "normalization": "none"
+    },
+    {
+      "path": "analyze_delay.py",
+      "bytes": 7043,
+      "sha256": "e7d221fc14bcfe87a43a55a91a262d7921e37b34324f30456d9c55ee432b2186",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/analyze_delay.py",
+      "original_sha256": "e7d221fc14bcfe87a43a55a91a262d7921e37b34324f30456d9c55ee432b2186",
+      "normalization": "none"
+    },
+    {
+      "path": "plot_aggregate.py",
+      "bytes": 2695,
+      "sha256": "7aef5b7633996723cf7d3b4a9899ad675531f8c32e3789c4a4aeeabf82136e82",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/plot_aggregate.py",
+      "original_sha256": "7aef5b7633996723cf7d3b4a9899ad675531f8c32e3789c4a4aeeabf82136e82",
+      "normalization": "none"
+    },
+    {
+      "path": "original_build_pair.py",
+      "bytes": 7065,
+      "sha256": "a5d3794ac7ecb74c12fb5bd04e656de4881a4764d48038e91fa6e5479590d824",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/build_pair.draft.py",
+      "original_sha256": "a5d3794ac7ecb74c12fb5bd04e656de4881a4764d48038e91fa6e5479590d824",
+      "normalization": "none"
+    },
+    {
+      "path": "build_candidate_current_sdk.py",
+      "bytes": 8292,
+      "sha256": "b4e0bf5b943abd6e0ed545fa3a1135054c5e43b75dc20f70e70d0ff27f55c1d1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/build_candidate_current_sdk.draft.py",
+      "original_sha256": "b4e0bf5b943abd6e0ed545fa3a1135054c5e43b75dc20f70e70d0ff27f55c1d1",
+      "normalization": "none"
+    },
+    {
+      "path": "finalize_control_current_sdk.py",
+      "bytes": 4898,
+      "sha256": "b5333eb72ec65b17086f87ef03641dc9722b49996688396c003c136d6f362e2b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/finalize_control_current_sdk.draft.py",
+      "original_sha256": "b5333eb72ec65b17086f87ef03641dc9722b49996688396c003c136d6f362e2b",
+      "normalization": "none"
+    },
+    {
+      "path": "original_run_pair_case.py",
+      "bytes": 18057,
+      "sha256": "f05501c71dcf182bdfc092d3b99a91d9a9d8ad10874b34e2e6e57b489262baeb",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/run_pair_case.draft.py",
+      "original_sha256": "f05501c71dcf182bdfc092d3b99a91d9a9d8ad10874b34e2e6e57b489262baeb",
+      "normalization": "none"
+    },
+    {
+      "path": "run_candidate_current_sdk.py",
+      "bytes": 18323,
+      "sha256": "77ac33d3ab532c7c88b1c82bdc0e027224df12cb56669e8fe4ad7cb0cf827edd",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/run_candidate_current_sdk.py",
+      "original_sha256": "77ac33d3ab532c7c88b1c82bdc0e027224df12cb56669e8fe4ad7cb0cf827edd",
+      "normalization": "none"
+    },
+    {
+      "path": "validate_saved_case.py",
+      "bytes": 11809,
+      "sha256": "bb548a1c304f820f69e41a899ed212d0e08a62d524d11b9480ef53c761d5066d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/validate_saved_case.draft.py",
+      "original_sha256": "bb548a1c304f820f69e41a899ed212d0e08a62d524d11b9480ef53c761d5066d",
+      "normalization": "none"
+    },
+    {
+      "path": "observer_checks.py",
+      "bytes": 4728,
+      "sha256": "316f9daac28e06bcc0616bb83dfcade27bcfeabcefe287e62ce44254ccacbf95",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/observer_checks.draft.py",
+      "original_sha256": "316f9daac28e06bcc0616bb83dfcade27bcfeabcefe287e62ce44254ccacbf95",
+      "normalization": "none"
+    },
+    {
+      "path": "original_pin_case.py",
+      "bytes": 4649,
+      "sha256": "766378d873c3ffaa184d854a83a94dd8857776e83d144d7015a12503e877754d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/pin_case.draft.py",
+      "original_sha256": "766378d873c3ffaa184d854a83a94dd8857776e83d144d7015a12503e877754d",
+      "normalization": "none"
+    },
+    {
+      "path": "pin_candidate_current_sdk.py",
+      "bytes": 5074,
+      "sha256": "1c034abfee125ac97d337dafc43115952257c580534c70762fca521d5562d340",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/pin_candidate_current_sdk.py",
+      "original_sha256": "1c034abfee125ac97d337dafc43115952257c580534c70762fca521d5562d340",
+      "normalization": "none"
+    },
+    {
+      "path": "benchmark_wrf_accuracy_cost.py",
+      "bytes": 55688,
+      "sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/benchmark_wrf_accuracy_cost.py",
+      "original_sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+      "normalization": "none"
+    },
+    {
+      "path": "base_screen_reference.py",
+      "bytes": 11277,
+      "sha256": "bbd270ec6cc58df7fdc4d1aa6e2dd53731af49f7b42bf4898690c1583b04193b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/base_screen_reference.py",
+      "original_sha256": "bbd270ec6cc58df7fdc4d1aa6e2dd53731af49f7b42bf4898690c1583b04193b",
+      "normalization": "none"
+    },
+    {
+      "path": "run_a4.py",
+      "bytes": 20422,
+      "sha256": "eef8c435509651877f3e00e1a569732902aeef4f6bed18dcf26980a71dc4a50f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/run_a4.py",
+      "original_sha256": "eef8c435509651877f3e00e1a569732902aeef4f6bed18dcf26980a71dc4a50f",
+      "normalization": "none"
+    },
+    {
+      "path": "run_a5.py",
+      "bytes": 19966,
+      "sha256": "cb0e01cab846bf08500fe61a2419e2a549a992e0c96c9e7c9589594445f16897",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/run_a5.py",
+      "original_sha256": "cb0e01cab846bf08500fe61a2419e2a549a992e0c96c9e7c9589594445f16897",
+      "normalization": "none"
+    },
+    {
+      "path": "pair_checks.py",
+      "bytes": 5640,
+      "sha256": "aad1c2b9618a87a22bb9ea677f0a2bef3a0128edab4800072ce4ef2f0486e395",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/pair_checks.py",
+      "original_sha256": "aad1c2b9618a87a22bb9ea677f0a2bef3a0128edab4800072ce4ef2f0486e395",
+      "normalization": "none"
+    },
+    {
+      "path": "direct_checks.py",
+      "bytes": 4045,
+      "sha256": "79dc046ee25a85dee913517d3c63cf5a1c0c8d57896e492b41af0e97e7dd47d0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/direct_checks.py",
+      "original_sha256": "79dc046ee25a85dee913517d3c63cf5a1c0c8d57896e492b41af0e97e7dd47d0",
+      "normalization": "none"
+    },
+    {
+      "path": "control_selected_log.txt",
+      "bytes": 26944,
+      "sha256": "5c77f1d777a2931faef9a4952b0f906a4dae11293695d80e65661de7b24ae955",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control",
+      "normalization": "selected original lines, deduplicated; full logs local"
+    },
+    {
+      "path": "control_rank_rusage.txt",
+      "bytes": 777,
+      "sha256": "132f576cfec972e849d05ec083596d83d124fd43ada40d2ea793cbdd6fa8b6a7",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/rank_rusage.log",
+      "original_sha256": "132f576cfec972e849d05ec083596d83d124fd43ada40d2ea793cbdd6fa8b6a7",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_selected_log.txt",
+      "bytes": 27832,
+      "sha256": "f1120c33033cede8282dd19b0245521418f4a7321e0d5e2a0f8011a11567ebd8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/candidate",
+      "normalization": "selected original lines, deduplicated; full logs local"
+    },
+    {
+      "path": "candidate_rank_rusage.txt",
+      "bytes": 777,
+      "sha256": "194f9c3f841d8a2aa3f745f1a9935f53fb52eb9e7233c0288f9aefbd1b5c29af",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/candidate/rank_rusage.log",
+      "original_sha256": "194f9c3f841d8a2aa3f745f1a9935f53fb52eb9e7233c0288f9aefbd1b5c29af",
+      "normalization": "none"
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 # 표준 em_b_wave 전방 코어 체크리스트
 
 작성: 2026-10-31T18:26:15.434614+09:00.
-마지막 갱신: 2026-11-01T12:22:28.830176+09:00.
-현재 개발 기준: main6d84ae9b; A8 native baacbb4b, default-off 제한 연구 후보. A4/A7 판정 유지.
+마지막 갱신: 2026-11-01T18:18:26.346413+09:00.
+현재 개발 기준: mainfe906dee; A9 관측 소스5dc7fc7c, current SDK 별도 binding. A4/A7/A8 판정 유지.
 Green·Red: GPT-6.1-Terra, medium.
 
 ## 완료 목표와 운영 원칙
@@ -108,6 +108,15 @@ A0–A3의 제한된 기능·첫 단계 수치 검증에 이어 A4 비용 선별
   전체 JVP231→208과 달리 **전체 RSL152.37→194.94초로 증가**했으며 원인 미분리다.
   코드 default-off 연구 범위를 유지하고 전체 전방 가속/생산/B 승인으로 올리지 않는다.
   [근거](evidence/pressure_v_direct_20261101/manifest.json). A7 INCONCLUSIVE와 A4 NO-GO는 유지한다.
+
+
+- [x] A9 새 solver 없이6개 선형계의 같은 scope CPU/wall/JVP/RHS/fallback·다섯 번째
+  실제 state/reference 입력을 포착하는 기본OFF 관측기와 고정2-run 진단을 완료했다.
+  각 arm174숫자 배열은 자기 A8 archive와 동일했다. OFF원판정INCONCLUSIVE(import 누락)는
+  보존하고 같은 gate의 offline PASSED를 별도로 연결했다. ON DIAGNOSTIC_COMPLETED.
+  다섯 번째32JVP·FD/fallback0은 같고 CPU7.72→11.67초, wall7.72→14.30초였다.
+  state/reference가 미세하게 다르고 old45s JVP는 재현되지 않았다. 단일 원인/전체 가속은 미확정.
+  [근거](evidence/linear_delay_audit_20261101/manifest.json). SDK27.2 새 관측 block을 과거와 혼동하지 않는다.
 
 **A 종료 산출물:** source/exe/input/context가 고정된 native600초 단계의 기존/압력 P 비교표,
 원래 A의 저장된 실제 잔차, 경계·좌표 복원 검증, 준비 포함 총비용을 확보했다.

@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Pin staged diagnostic case after registered build; never runs WRF."""
+import hashlib,json,pathlib,subprocess,sys
+R=pathlib.Path(__file__).resolve().parent;W=pathlib.Path('/private/tmp/linear-delay-audit-20261101');OLD=pathlib.Path('/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101'); A4=pathlib.Path('/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031');TARGET='5dc7fc7c8c064f71dc2a272099852f4a529bb73f'; C=W/'external/libtorch_wrf/sdirk3'
+def sha(p):
+ h=hashlib.sha256()
+ with open(p,'rb') as f:
+  for b in iter(lambda:f.read(4*1024*1024),b''):h.update(b)
+ return h.hexdigest()
+if len(sys.argv)!=4 or sys.argv[1] not in ('control','candidate'):raise SystemExit('usage: pin_case control|candidate registration_path registration_sha256')
+case=sys.argv[1];reg=pathlib.Path(sys.argv[2]).resolve();regsha=sys.argv[3];assert sha(reg)==regsha;policy=json.loads(reg.read_text());assert policy['status']=='registered' and policy['source_commit']==TARGET and policy['order']==['control','candidate'] and policy['maximum_native_attempts']==2 and not policy['retry']
+for p,h in policy['immutable_inputs'].items():assert sha(p)==h,p
+assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=W,text=True).strip()==TARGET and not subprocess.check_output(['git','status','--porcelain'],cwd=W,text=True).strip()
+b=R/('native_'+case);bp=b/'build_receipt.json';receipt=json.loads(bp.read_text());exe=b/'wrf.exe';archive=b/'libwrf_sdirk3_libtorch.a';assert receipt['source_commit']==TARGET and receipt['registration_sha256']==regsha and receipt['model_run'] is False and len(receipt['archive_members'])==31 and sha(exe)==receipt['executable_sha256'] and sha(archive)==receipt['archive_sha256']
+run=R/'runs'/case; assert run.is_dir() and not (run/'attempt.json').exists() and sha(run/'wrfinput_d01')==policy['case']['input_sha256'] and sha(run/'namelist.input')==policy['case']['namelist_sha256']
+old=OLD/'runs'/case;oldresult=old/'result.json';oldendpoint=old/'wrfout_d01_0001-01-01_00:10:00';olddirection=old/'pressure_a5_direction.bin';assert json.loads(oldresult.read_text())['model_completed'] is True
+ref=R/'reference'; ready=ref/'wrfoutReady_d01_0001-01-01_00:00:00';t0=ref/'wrfout_d01_0001-01-01_00:00:00'; assert all((ref/n).is_file() for n in ('wrfinput_d01',t0.name,ready.name))
+def pin(p):return {'path':str(p),'sha256':sha(p)}
+intent={'case':case,'source_commit':TARGET,'registration':pin(reg),'build_receipt':pin(bp),'executable':pin(exe),'archived_arm_result':pin(oldresult),'archived_arm_endpoint':pin(oldendpoint),'archived_arm_direction':pin(olddirection),'expected_preflight_digest_fnv64':'7bdd17f3a694726e','reference_rk3_t0':{'path':str(t0),'sha256':sha(t0),'ready_sha256':sha(ready)},'analysis_contract':json.loads((A4/'a4_case_draft/B0_intent.json').read_text())['analysis_contract'],'case_attempt_limit':1,'pair_attempt_limit':2,'retry':False,'scope':'diagnostic only; no timing acceptance or Gate B','actual_torch_intra_op_threads_required':1,'actual_torch_inter_op_threads_required':1}
+paths=[reg,bp,exe,archive,oldresult,oldendpoint,olddirection,run/'wrfinput_d01',run/'namelist.input',ref/'wrfinput_d01',t0,ready,R/'tests_v7/receipt.json',R/'observer_smoke_v5.draft.json']+[R/x for x in ('build_pair.draft.py','pin_case.draft.py','run_pair_case.draft.py','observer_checks.draft.py','observer_smoke_v5.draft.py','benchmark_wrf_accuracy_cost.py','base_screen_reference.py','run_a4.py','run_a5.py','pair_checks.py','direct_checks.py')]+[pathlib.Path(x) for x in policy['immutable_inputs']]+[C/x['source'] for x in receipt['source_objects']]+[pathlib.Path(x['object']) for x in receipt['source_objects']]+list(C.glob('*.h'))
+if case=='candidate':
+ result=R/'runs/control/result.json';prior=json.loads(result.read_text());assert prior['status']=='completed' and prior['decision']=='CONTROL_COMPLETED' and prior['model_completed'] and prior['preflight']['digest_fnv64']=='7bdd17f3a694726e';gate=R/'candidate_build_control_gate.json';g=json.loads(gate.read_text());assert g['eligible'] is True and g['control_result_sha256']==sha(result) and receipt['control_gate_sha256']==sha(gate);intent['control_result']=pin(result);intent['candidate_build_control_gate']=pin(gate);paths.extend([result,gate,R/'native_control/build_receipt.json',R/'control_pins.json'])
+intentpath=R/(case+'_intent.json');pins=R/(case+'_pins.json');assert not intentpath.exists() and not pins.exists();intentpath.write_text(json.dumps(intent,indent=2)+'\n');paths.append(intentpath);pins.write_text(json.dumps({str(x):sha(x) for x in dict.fromkeys(paths)},indent=2)+'\n');print('intent',sha(intentpath),'pins',sha(pins))
