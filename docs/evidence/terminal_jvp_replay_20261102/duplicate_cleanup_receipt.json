@@ -1,0 +1,41 @@
+{
+  "created_local": "2026-11-02T00:42:48.480471+09:00",
+  "method": "exact SHA256 duplicate replaced with hardlink to already-readonly archived canonical; no unique bytes discarded",
+  "files": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/pressure_a4_first_pair.bin",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/pressure_a4_first_pair.bin",
+      "bytes": 17287872,
+      "sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "same_inode": true,
+      "canonical_readonly": true
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/pressure_a5_actions.bin",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/pressure_a5_actions.bin",
+      "bytes": 17251144,
+      "sha256": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+      "same_inode": true,
+      "canonical_readonly": true
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/pressure_a5_direction.bin",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/pressure_a5_direction.bin",
+      "bytes": 72673488,
+      "sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+      "same_inode": true,
+      "canonical_readonly": true
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/wrfout_d01_0001-01-01_00:00:00",
+      "canonical": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/wrfout_d01_0001-01-01_00:00:00",
+      "bytes": 1989217,
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "same_inode": true,
+      "canonical_readonly": true
+    }
+  ],
+  "logical_duplicate_bytes": 109201721,
+  "physical_APFS_savings_claim": false,
+  "original_run_verdict_unchanged": true
+}

@@ -1,0 +1,46 @@
+{
+  "review": "independent_red_result_audit",
+  "result": "INCONCLUSIVE as preregistered; do not retry",
+  "checks": {
+    "registration_hash_matches_receipt": true,
+    "head_matches_registered": true,
+    "registered_source_hashes_match": true,
+    "build_receipt_executable_hash_matches": true,
+    "diagnostic_hash_matches_result": true,
+    "original_status_inconclusive_clock_gap_only": true,
+    "whole_run_clock_gate_failed": true,
+    "terminal_exit_and_marker": true,
+    "six_native_observations": true,
+    "repeat_bitwise_and_observed_context": true,
+    "local_clocks_finite_nonnegative": true,
+    "four_prior_successful_linear_solves": true,
+    "one_torch_thread_prior": true,
+    "no_completed_model_step_or_forecast": true
+  },
+  "whole_run_wall_seconds": 50.27292513847351,
+  "whole_run_monotonic_seconds": 52.066713040694594,
+  "whole_run_clock_gap_seconds": -1.7937879022210836,
+  "source_commit": "08b21c1117bf52c93ac3bf1793831f4300dcdc56",
+  "source_hashes": {
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "945e8adacd9ea3303645194856f9890cbf59f24dbe161e0efd7477f68d33ae44",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_fwad_or_fd.h": "8bec584eb3a746e20f4fb6a6fee7152b8cdfd03e8bd984bd5e9839964c80cd8a",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "89884fd62d992e2608eee2c95564b38a1a805bd0de0e901be5af2718b69d4a11",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/tests/test_terminal_jvp_probe.cpp": "22d4f617eaa2157945edde7ef4fb8f816051ee196dbf586247d6985eef52836c",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/tests/test_terminal_primal_capture.cpp": "534eba444421fa0b4f64f76433e4dcc4409dc7f91a980a64283150da9efabb97"
+  },
+  "evidence_sha256": {
+    "registration.json": "636ac82c0447e55e48a4a32916b30d3927dc4360a0e8141f88a1442ef30bb971",
+    "native_terminal/build_receipt.json": "e88f16d369b26c5615894ece3f5a9e9dc90a554fd79e1c450af682d255cc79f8",
+    "run/result.json": "c3336e3838e2e829791528c38a713d302306bc30233c67b55661db3c302ab14c",
+    "run/terminal_jvp_probe.json": "ea2d0ac2ebe7a22f25902ec84c6d64c0fc324335c1082e2a8cf25e5808498afc",
+    "run/rsl.out.0000": "12bd2e202fe52bf7ce7ebafaf37f8e4dd24b6ba44454fcb15457f456b51613b7",
+    "run/rsl.error.0000": "574dd7d1c34743e6472dd93b88b720ad74cc7db244210861be5c2e34a149b342"
+  },
+  "interpretation": [
+    "Local per-call wall and process CPU intervals use matched code boundaries and are finite and nonnegative; they are descriptive observations only and do not override the preregistered whole-run clock gate.",
+    "The original sample follows four completed linear solves and is not backend or process cold; cache resets were not performed. Hashes, clones, comparisons and context validation between calls may condition caches and consume CPU outside individual timers.",
+    "Context equality covers observed handles only; this does not establish complete closure-state equality. The selected fifth linear solve was interrupted at its first Arnoldi JVP and did not complete; zero model steps completed.",
+    "No P0/P1, forecast runtime, numerical convergence or general cost conclusion follows from this attempt."
+  ],
+  "next_work": "Preserve one-attempt inconclusive result and original files; separately complete the already-planned prior-point comparison if evidence permits. Any future attempt requires a new explicit protocol and registration; do not relax the old gate."
+}

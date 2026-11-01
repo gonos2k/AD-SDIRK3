@@ -1,0 +1,25 @@
+{
+  "created_local": "2026-11-02T00:29:58.048807+09:00",
+  "purpose": "separate comparison of selected-point fingerprints to archived A9 control; no endpoint or full-operator equality claim",
+  "affects_registered_within_run_gate": false,
+  "mismatch_policy": "report difference and do not repeat native run; within-run block verdict stays separate",
+  "files": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/linear_delay_u_eval.npy": {
+      "sha256": "092738fe432a746017daa63e7c939bfde51b4718916a7e4f7760661a91cc041b",
+      "bytes": 8644008
+    },
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/linear_delay_u_ref_first_jvp.npy": {
+      "sha256": "f9443812fb68d03cfff58a4055b12695e571dafbfbcb8fdf2f991fdc0e53d62f",
+      "bytes": 8644008
+    },
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/linear_delay_first_tangent.npy": {
+      "sha256": "ed1d587cfdf983e83c118b582512961421a13df9c1d6c90d41d1b6b648ba9183",
+      "bytes": 8644008
+    },
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/linear_delay_first_jvp.npy": {
+      "sha256": "3c38beb34dfcca7765e32bde32b87d3095b488a25528e2a74bc5a500587205ad",
+      "bytes": 8644008
+    }
+  },
+  "comparison": "plain FNV1a64 of little-endian FP64 values for U/v/Jv; reference uses metadata-aware audit fingerprint from fixed context; fingerprint agreement is not independent direct-byte comparison without new raw arrays"
+}

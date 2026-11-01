@@ -1,0 +1,218 @@
+{
+  "created_local": "2026-11-02T00:49:07.501472+09:00",
+  "source_commit": "08b21c1117bf52c93ac3bf1793831f4300dcdc56",
+  "base_main": "036748f28b8fdb4ba529374b4cb3d8882e887bc6",
+  "native_attempts": 1,
+  "retry": false,
+  "registered_runner_outcome": "inconclusive",
+  "reason": [
+    "clock_gap"
+  ],
+  "within_run_block": "terminal_diagnostic_passed",
+  "forecast_complete": false,
+  "cost_eligible": false,
+  "same_A_b_comparison": false,
+  "records": [
+    {
+      "path": "registration.json",
+      "bytes": 4359,
+      "sha256": "636ac82c0447e55e48a4a32916b30d3927dc4360a0e8141f88a1442ef30bb971",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/registration.json",
+      "normalization": "none"
+    },
+    {
+      "path": "source_commit.txt",
+      "bytes": 41,
+      "sha256": "dc2545582d0fbbeab8d7a40d5cc0a14873b0703afd3b7cf3079b7226f6572930",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/source_commit.txt",
+      "normalization": "none"
+    },
+    {
+      "path": "build_terminal.py",
+      "bytes": 8928,
+      "sha256": "607a9e50b8e17ec053c9d6dc9c35da9c5d3889371d808b41456dec45b4093867",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/build_terminal.py",
+      "normalization": "none"
+    },
+    {
+      "path": "run_terminal.py",
+      "bytes": 11254,
+      "sha256": "2e1e3c55d4acb47fcb8367cf674ede2d20a168c7b7a5a3fd7db54c6b8a943650",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run_terminal.py",
+      "normalization": "none"
+    },
+    {
+      "path": "run_terminal_ast.json",
+      "bytes": 229,
+      "sha256": "108226b749b1f814c53a33788e18f36b1aafb909581a1494cb7a934892b8afe2",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run_terminal_ast.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_terminal/build_receipt.json",
+      "bytes": 87642,
+      "sha256": "e88f16d369b26c5615894ece3f5a9e9dc90a554fd79e1c450af682d255cc79f8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/native_terminal/build_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_terminal/otool.txt",
+      "bytes": 2083,
+      "sha256": "e314a20684de57da43ed6106f28a2693f91574a3a99d82a21cb97794ee501140",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/native_terminal/otool.txt",
+      "normalization": "none"
+    },
+    {
+      "path": "helper_tests.json",
+      "bytes": 3085,
+      "sha256": "8b1d0cda9cc846b88d43f76f4cbdc85c7ed4a31e07cbb1242713fab6f59d7d76",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/helper_tests.json",
+      "normalization": "none"
+    },
+    {
+      "path": "primal_capture_test_receipt.json",
+      "bytes": 1966,
+      "sha256": "8faee16266801f60b2aafb44c3cc4df7b379a4af07dde98b6271159f3bfbba5b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/primal_capture_test_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_audit.json",
+      "bytes": 2151,
+      "sha256": "d186a7700eede5a209f12ed05fc681041b8c899708b2354c258de7c6fc6ca515",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/native_audit.json",
+      "normalization": "none"
+    },
+    {
+      "path": "red_result_audit.json",
+      "bytes": 3597,
+      "sha256": "ce8c75263d5d93270072503b629e7b1eb94084df2572afb130230fa14cdc22cf",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/red_result_audit.json",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_state_validation.json",
+      "bytes": 1761,
+      "sha256": "2285de198bcfd27bd6337e4cde3e7d0aa1e07d91488e0847357a8f1d31bc0078",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/initial_state_validation.json",
+      "normalization": "none"
+    },
+    {
+      "path": "prior_point_comparison_plan.json",
+      "bytes": 1525,
+      "sha256": "ccbee1d0b15053e54d2c4cdbad838c407571011689f9ac504b45a7574e53e264",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/prior_point_comparison_plan.json",
+      "normalization": "none"
+    },
+    {
+      "path": "prior_point_comparison.json",
+      "bytes": 2134,
+      "sha256": "015b3554d4ffad5d6a84a3658b14c4bf0da1005dd0e69bb7ec6b830818fdab6e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/prior_point_comparison.json",
+      "normalization": "none"
+    },
+    {
+      "path": "duplicate_cleanup_receipt.json",
+      "bytes": 2027,
+      "sha256": "a43c10c3f626882815adc600c2b6c93378d894fee546ba61ea2554da03bcf988",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/duplicate_cleanup_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "graph_after_pins.json",
+      "bytes": 4547,
+      "sha256": "f1ef21fe68c741614bbbae7702d7183008ba9667e43942c7ccc618aabfc789dc",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/graph_after_pins.json",
+      "normalization": "none"
+    },
+    {
+      "path": "analyze_terminal.py",
+      "bytes": 4717,
+      "sha256": "eedf294dda31155bbb1adcf77aad3ad4a0ef231495cf214a9055ba821a957382",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/analyze_terminal.py",
+      "normalization": "none"
+    },
+    {
+      "path": "compare_prior_point.py",
+      "bytes": 1871,
+      "sha256": "29ebd5ba9ed75f3ff9994648ba666d6e71afe887c4b838abd97e54461c661644",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/compare_prior_point.py",
+      "normalization": "none"
+    },
+    {
+      "path": "analysis/samples.csv",
+      "bytes": 557,
+      "sha256": "ebbf8372b73e89b66fedc46afdf8a5649cda6798f7ce324a0a406598c013d285",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/analysis/samples.csv",
+      "normalization": "none"
+    },
+    {
+      "path": "analysis/summary.json",
+      "bytes": 2236,
+      "sha256": "478f30234f72e5506cb4e29239c85c24945efe40075696c01bb248bb226d8db2",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/analysis/summary.json",
+      "normalization": "none"
+    },
+    {
+      "path": "analysis/terminal_jvp_timing.png",
+      "bytes": 93404,
+      "sha256": "57e28a773299afff991ee6c2aa1e90ba72f9c4020b5ebe298b44b96a52cd5745",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/analysis/terminal_jvp_timing.png",
+      "normalization": "none"
+    },
+    {
+      "path": "run/attempt.json",
+      "bytes": 1672,
+      "sha256": "fc8f043349602021cfbe6928cb7253574170d2f87d68fa51d1c2634d65b5c8f6",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/attempt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "run/result.json",
+      "bytes": 10534,
+      "sha256": "c3336e3838e2e829791528c38a713d302306bc30233c67b55661db3c302ab14c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/result.json",
+      "normalization": "none"
+    },
+    {
+      "path": "run/terminal_jvp_probe.json",
+      "bytes": 6724,
+      "sha256": "ea2d0ac2ebe7a22f25902ec84c6d64c0fc324335c1082e2a8cf25e5808498afc",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/terminal_jvp_probe.json",
+      "normalization": "none"
+    },
+    {
+      "path": "run/rank_rusage.log",
+      "bytes": 777,
+      "sha256": "79c96772fdb8239b2dacd797ff2ed52845506407caf753aacdb37b891985ca11",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/rank_rusage.log",
+      "normalization": "none"
+    },
+    {
+      "path": "build_driver.log",
+      "bytes": 65,
+      "sha256": "87edb29a1bee3fc6f4ec5e0ef91c837060055277d328b7c0da10544578636a0f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/build_driver.log",
+      "normalization": "none"
+    },
+    {
+      "path": "run_driver.log",
+      "bytes": 80,
+      "sha256": "12964c7c45f069d9fa5aa61a5f8e8a83927e50f6003e9bbd81f316a81a13616f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run_driver.log",
+      "normalization": "none"
+    },
+    {
+      "path": "run/selected_log.txt",
+      "bytes": 7890,
+      "sha256": "65e809513648586b1e4ca33cd0987448db14f3d985279958b4ad07586e1f5de3",
+      "original_paths": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/rsl.out.0000",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/rsl.error.0000",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/launcher.stdout.log",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/launcher.stderr.log"
+      ],
+      "normalization": "selected original lines grouped by file, deduplicated; not a chronological merge; full raw logs local"
+    }
+  ]
+}

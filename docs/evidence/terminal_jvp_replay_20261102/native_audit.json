@@ -1,0 +1,52 @@
+{
+  "scope": "read-only audit of retained evidence; no model run or cost eligibility claim",
+  "original_result_sha256": "c3336e3838e2e829791528c38a713d302306bc30233c67b55661db3c302ab14c",
+  "attempt_sha256": "fc8f043349602021cfbe6928cb7253574170d2f87d68fa51d1c2634d65b5c8f6",
+  "registration_sha256": "636ac82c0447e55e48a4a32916b30d3927dc4360a0e8141f88a1442ef30bb971",
+  "build_receipt_sha256": "e88f16d369b26c5615894ece3f5a9e9dc90a554fd79e1c450af682d255cc79f8",
+  "executable_sha256": "7abf57195691f3cdac309bd9a2fad474add9c34489ea4211630b11ac9cd8ec9d",
+  "probe_sha256": "ea2d0ac2ebe7a22f25902ec84c6d64c0fc324335c1082e2a8cf25e5808498afc",
+  "source_commit": "08b21c1117bf52c93ac3bf1793831f4300dcdc56",
+  "checks": {
+    "one_attempt_registered": true,
+    "identity_registration_build_executable": true,
+    "git_clean": true,
+    "registration_immutable_inputs": true,
+    "build_source_hashes": true,
+    "recorded_artifacts": true,
+    "result_json_matches_probe": true,
+    "launcher_marker_exit": true,
+    "not_forecast": true,
+    "two_completed_stages_in_stderr": true,
+    "four_prior_solve_guards": true,
+    "preflight_p0": true,
+    "no_recorded_stage_abort": true,
+    "fixed_six_sample_path": true,
+    "rank_rss": true,
+    "disk_pre_post": true,
+    "original_clock_gap_gate": false
+  },
+  "failed_checks": [
+    "original_clock_gap_gate"
+  ],
+  "original_status": "inconclusive",
+  "original_errors": [
+    "clock_gap"
+  ],
+  "clock_gap_seconds": -1.7937879022210836,
+  "rss_bytes": 1963294720,
+  "disk_free_pre_bytes": 86572675072,
+  "disk_free_post_bytes": 86459363328,
+  "stderr_converged_stages": [
+    2,
+    3
+  ],
+  "runner_converged_stages": [],
+  "stage_count_note": "Runner read stdout only; Newton convergence records are in rsl.error.0000.",
+  "limitations": [
+    "Timing gate failure remains inconclusive; no cost eligibility.",
+    "No completed forecast or endpoint comparison; numerical initial state comparison is separate.",
+    "Context identity covers the recorded observed subset only.",
+    "One attempt supported by registered limit and retained attempt receipt; no external process history inferred."
+  ]
+}

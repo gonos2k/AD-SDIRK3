@@ -1,0 +1,66 @@
+{
+  "status": "registered",
+  "created_local": "2026-11-02T00:27:02.970486+09:00",
+  "source_commit": "08b21c1117bf52c93ac3bf1793831f4300dcdc56",
+  "base_main": "036748f28b8fdb4ba529374b4cb3d8882e887bc6",
+  "purpose": "terminal native fixed-point FWAD value/path/cost observation, not forecast or P0/P1 acceptance",
+  "maximum_native_attempts": 1,
+  "retry": false,
+  "capture": {
+    "stage": 4,
+    "newton": 0,
+    "selected_ordinal": 5,
+    "timestep": 0,
+    "original_count": 1,
+    "repeat_count": 5,
+    "pass_exit_code": 86,
+    "failure_exit_code": 87,
+    "unsafe_context_or_exception_aborts_remaining": true,
+    "comparison": "CPU FP64 finite exact bytes primal and tangent; original prelinear U and pre-JVP v snapshots equal; fixed observed context unchanged; one implicit RHS per call; zero FD/fallback",
+    "cost_acceptance": "descriptive distributions only; no speed/cause/general stable-cost claim",
+    "cache_policy": "no cache reset; validation/clones outside call timers can condition caches; original sample is not process-cold; no continuation"
+  },
+  "setup": {
+    "grid": [
+      40,
+      80,
+      64
+    ],
+    "dx_m": 100000,
+    "dt_seconds": 600,
+    "mpi_ranks": 1,
+    "torch_threads": [
+      1,
+      1
+    ],
+    "source_profile": "existing A9 control namelist and original initial state; DirectP1 absent",
+    "environment": "minimal allowlist plus fixed thread/WRF overrides, no inherited debug flags"
+  },
+  "resources": {
+    "disk_floor_bytes": 5368709120,
+    "rank_post_maxrss_cap_bytes": 4294967296,
+    "mpi_timeout_seconds": 360,
+    "launcher_wait_seconds": 390,
+    "global_polling": false
+  },
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/build_terminal.py": "607a9e50b8e17ec053c9d6dc9c35da9c5d3889371d808b41456dec45b4093867",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run_terminal.py": "2e1e3c55d4acb47fcb8367cf674ede2d20a168c7b7a5a3fd7db54c6b8a943650",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/helper_tests.json": "8b1d0cda9cc846b88d43f76f4cbdc85c7ed4a31e07cbb1242713fab6f59d7d76",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/primal_capture_test_receipt.json": "8faee16266801f60b2aafb44c3cc4df7b379a4af07dde98b6271159f3bfbba5b",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/graph_after_pins.json": "f1ef21fe68c741614bbbae7702d7183008ba9667e43942c7ccc618aabfc789dc",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_control/build_receipt.json": "3c530b60087929ce52a7923568452457cab427caa00603599eac2d874dde06b6",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/current_sdk_provenance.json": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/reference/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "945e8adacd9ea3303645194856f9890cbf59f24dbe161e0efd7477f68d33ae44",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_fwad_or_fd.h": "8bec584eb3a746e20f4fb6a6fee7152b8cdfd03e8bd984bd5e9839964c80cd8a",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "89884fd62d992e2608eee2c95564b38a1a805bd0de0e901be5af2718b69d4a11",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/tests/test_terminal_jvp_probe.cpp": "22d4f617eaa2157945edde7ef4fb8f816051ee196dbf586247d6985eef52836c",
+    "/private/tmp/terminal-jvp-replay-20261102/external/libtorch_wrf/sdirk3/tests/test_terminal_primal_capture.cpp": "534eba444421fa0b4f64f76433e4dcc4409dc7f91a980a64283150da9efabb97"
+  },
+  "normal_forecast_complete": false,
+  "same_A_b_comparison": false,
+  "old_verdicts_unchanged": true
+}
