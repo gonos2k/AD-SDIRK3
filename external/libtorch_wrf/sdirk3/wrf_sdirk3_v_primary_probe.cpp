@@ -118,7 +118,7 @@ Primal primary(const torch::Tensor& x,const StateLayout& layout,
 }
 
 struct PreparedPrimary::Impl {
-    torch::Tensor U,c1,R,H,T,p,alt_v,bg_grad;
+    torch::Tensor U,c1,R,H,T,p,alt,alt_v,bg_grad,factor;
     StateLayout layout;
     pressure_stage_probe::PressureEosContext e;
     pressure_stage_probe::PressureVPrimaryContext c;
@@ -199,39 +199,59 @@ PreparedPrimary::PreparedPrimary(const torch::Tensor& U_eval,const StateLayout& 
     d.T=(e.t+e.t0).detach().clone();d.p=(e.p_pert+e.p_base).detach().clone();
     TORCH_CHECK((d.H>0).all().item<bool>() && (d.T>0).all().item<bool>() && (e.alt>0).all().item<bool>(),
                 "A5 analytic EOS requires positive state");
-    d.alt_v=c.avg_y_3d(d.e.alt).detach().clone();
-    d.bg_grad=(ydiff(d.e.p_pert)+ydiff(d.e.p_base)).detach().clone();
+    // The action only needs physical mass cells and interior V faces.
+    d.H=d.H.slice(0,0,m).slice(2,0,n).contiguous();
+    d.T=d.T.slice(0,0,m).slice(2,0,n).contiguous();
+    d.p=d.p.slice(0,0,m).slice(2,0,n).contiguous();
+    d.alt=d.e.alt.slice(0,0,m).slice(2,0,n).contiguous();
+    d.alt_v=c.avg_y_3d(d.e.alt).slice(0,1,m).slice(2,0,n).contiguous();
+    d.bg_grad=(ydiff(d.e.p_pert)+ydiff(d.e.p_base)).slice(0,1,m).slice(2,0,n).contiguous();
+    d.factor=(-d.c.cqv_at_v.slice(0,1,m).slice(2,0,n)*
+              d.e.geometry.msfvy.slice(0,1,m).slice(1,0,n).unsqueeze(1)*c.rdy).contiguous();
 }
 PreparedPrimary::~PreparedPrimary()=default;
 PreparedPrimary::PreparedPrimary(PreparedPrimary&&) noexcept=default;
 PreparedPrimary& PreparedPrimary::operator=(PreparedPrimary&&) noexcept=default;
-Actions PreparedPrimary::compute(const torch::Tensor& z,bool summed) const {
+Actions PreparedPrimary::compute_core(const torch::Tensor& ph,const torch::Tensor& t,
+                                      const torch::Tensor& mu,bool summed) const {
+    const auto& d=*impl_;const auto m=d.ny-1,n=d.nx-1,nz=d.nz;
+    TORCH_CHECK(ph.defined() && t.defined() && mu.defined() && ph.is_cpu() && t.is_cpu() && mu.is_cpu() &&
+                ph.scalar_type()==torch::kFloat64 && t.scalar_type()==torch::kFloat64 && mu.scalar_type()==torch::kFloat64 &&
+                ph.sizes()==torch::IntArrayRef({m,nz+1,n}) && t.sizes()==torch::IntArrayRef({m,nz,n}) &&
+                mu.sizes()==torch::IntArrayRef({m,n}),"A5 physical core direction mismatch");
+    const auto ydiff_core=[&](const torch::Tensor& x) {return x.slice(0,1,m)-x.slice(0,0,m-1);};
+    const auto dphi=ph.slice(1,1,nz+1)-ph.slice(1,0,nz);
+    const auto dalpha=d.R*dphi/d.H-d.alt*d.c1*mu.unsqueeze(1)/d.H;
+    const double kappa=static_cast<double>(d.e.cp)/d.e.cv;
+    const auto dp=kappa*d.p*(t/d.T-dalpha/d.alt);
+    const auto yphi=0.5*(ydiff_core(ph.slice(1,1,nz+1))+ydiff_core(ph.slice(1,0,nz)));
+    const auto phi=d.factor*yphi;
+    const auto pressure=d.factor*d.alt_v*ydiff_core(dp);
+    const auto alpha=d.factor*(0.5*(dalpha.slice(0,0,m-1)+dalpha.slice(0,1,m)))*d.bg_grad;
     Actions result;
-    const auto& d=*impl_; const auto& c=d.c;const auto& e=d.e;
-    const auto& layout=d.layout;const auto& U_eval=d.U;
-    const auto ny=d.ny,nz=d.nz,nx=d.nx,nv=ny+1;
-    finite(z,"z");TORCH_CHECK(z.scalar_type()==torch::kFloat64 && z.sizes()==U_eval.sizes(),"A5 direction mismatch");
-    const auto dz=c.project_native(z);
-    const auto df=fields(dz,layout,ny,nz,nx);
-    const auto& c1=d.c1;const auto& R=d.R;const auto& H=d.H;
-    const auto& T=d.T;const auto& p=d.p;
-    const auto dphi=df.ph.slice(1,1,nz+1)-df.ph.slice(1,0,nz);
-    const auto dalpha=R*dphi/H-e.alt*c1*df.mu.unsqueeze(1)/H;
-    const double kappa=static_cast<double>(e.cp)/e.cv;
-    const auto dp=kappa*p*(df.t/T-dalpha/e.alt);
-    const auto yphi=0.5*(ydiff(df.ph.slice(1,1,nz+1))+ydiff(df.ph.slice(1,0,nz)));
-    const auto vy=e.geometry.msfvy.to(U_eval.options()).unsqueeze(1).expand({nv,nz,nx});
-    const auto factor=-c.cqv_at_v*vy*c.rdy;
-    const auto phi=factor*yphi;
-    const auto pressure=factor*d.alt_v*ydiff(dp);
-    const auto alpha=factor*c.avg_y_3d(dalpha)*d.bg_grad;
-    // Private carrier for apply_sum: only this branch uses phi for the total.
-    if(summed) { result.phi=project_v(phi+pressure+alpha,U_eval,layout,c); return result; }
-    result.phi=project_v(phi,U_eval,layout,c);result.pressure=project_v(pressure,U_eval,layout,c);
-    result.alpha=project_v(alpha,U_eval,layout,c);return result;
+    if(summed) {result.phi=phi+pressure+alpha;return result;}
+    result.phi=phi;result.pressure=pressure;result.alpha=alpha;return result;
 }
-Actions PreparedPrimary::apply_terms(const torch::Tensor& z) const { return compute(z,false); }
-torch::Tensor PreparedPrimary::apply_sum(const torch::Tensor& z) const { return compute(z,true).phi; }
+Actions PreparedPrimary::compute(const torch::Tensor& z,bool summed) const {
+    const auto& d=*impl_;const auto m=d.ny-1,n=d.nx-1,nz=d.nz;
+    finite(z,"z");TORCH_CHECK(z.scalar_type()==torch::kFloat64 && z.sizes()==d.U.sizes(),"A5 direction mismatch");
+    const auto df=fields(d.c.project_native(z),d.layout,d.ny,nz,d.nx);
+    auto core=compute_core(df.ph.slice(0,0,m).slice(2,0,n),df.t.slice(0,0,m).slice(2,0,n),
+                           df.mu.slice(0,0,m).slice(1,0,n),summed);
+    const auto expand=[&](const torch::Tensor& x) {
+        auto carrier=torch::zeros({d.ny+1,nz,d.nx},d.U.options());
+        carrier.slice(0,1,m).slice(2,0,n).copy_(x);
+        return project_v(carrier,d.U,d.layout,d.c);
+    };
+    core.phi=expand(core.phi);
+    if(!summed) {core.pressure=expand(core.pressure);core.alpha=expand(core.alpha);}
+    return core;
+}
+Actions PreparedPrimary::apply_terms(const torch::Tensor& z) const {return compute(z,false);}
+torch::Tensor PreparedPrimary::apply_sum(const torch::Tensor& z) const {return compute(z,true).phi;}
+torch::Tensor PreparedPrimary::apply_core(const torch::Tensor& ph,const torch::Tensor& t,const torch::Tensor& mu) const {
+    return compute_core(ph,t,mu,true).phi;
+}
 Actions evaluate(const torch::Tensor& U_eval,const torch::Tensor& z,const StateLayout& layout,
                  const pressure_stage_probe::PressureEosContext& e,
                  const pressure_stage_probe::PressureVPrimaryContext& c) {

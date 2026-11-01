@@ -41,15 +41,25 @@ void ReferencePressureModel::check(const ReferencePressureFields& x) const {
             field(x.theta,{ny_,nz_,nx_}) && field(x.mu,{ny_,nx_}),
             "reference P0 fields must be finite CPU FP64 with physical staggered shapes");
 }
-torch::Tensor ReferencePressureModel::divergence(const torch::Tensor& u,const torch::Tensor& v) const {
-    auto walls=torch::zeros({1,nz_,nx_},u.options());
+torch::Tensor ReferencePressureModel::divergence_x(const torch::Tensor& u) const {
+    return (torch::roll(u,{-1},{2})-u)/dx_;
+}
+torch::Tensor ReferencePressureModel::divergence_y(const torch::Tensor& v) const {
+    auto walls=torch::zeros({1,nz_,nx_},v.options());
     auto faces=torch::cat({walls,v,walls},0);
-    return (torch::roll(u,{-1},{2})-u)/dx_ +
-           (faces.slice(0,1,ny_+1)-faces.slice(0,0,ny_))/dy_;
+    return (faces.slice(0,1,ny_+1)-faces.slice(0,0,ny_))/dy_;
+}
+torch::Tensor ReferencePressureModel::divergence(const torch::Tensor& u,const torch::Tensor& v) const {
+    return divergence_x(u)+divergence_y(v);
+}
+torch::Tensor ReferencePressureModel::horizontal_x_pressure(const torch::Tensor& p) const {
+    return -alpha_*(p-torch::roll(p,{1},{2}))/dx_;
+}
+torch::Tensor ReferencePressureModel::horizontal_y_pressure(const torch::Tensor& p) const {
+    return -alpha_*(p.slice(0,1,ny_)-p.slice(0,0,ny_-1))/dy_;
 }
 std::pair<torch::Tensor,torch::Tensor> ReferencePressureModel::horizontal_pressure(const torch::Tensor& p) const {
-    return {-alpha_*(p-torch::roll(p,{1},{2}))/dx_,
-            -alpha_*(p.slice(0,1,ny_)-p.slice(0,0,ny_-1))/dy_};
+    return {horizontal_x_pressure(p),horizontal_y_pressure(p)};
 }
 torch::Tensor ReferencePressureModel::vertical_pressure(const torch::Tensor& p) const {
     auto upper=torch::cat({p.slice(1,1,nz_),torch::zeros_like(p.slice(1,0,1))},1);
@@ -68,17 +78,32 @@ torch::Tensor ReferencePressureModel::pressure(const ReferencePressureFields& x)
 torch::Tensor ReferencePressureModel::cmu(const torch::Tensor& div) const {
     return (dnw_*H_*div).sum(1);
 }
+torch::Tensor ReferencePressureModel::pressure_row(const torch::Tensor& p, const torch::Tensor& div,
+                                                     const torch::Tensor& w) const {
+    return p+a_*beta_*div-a_*g_*ephi(w);
+}
+ReferencePressureModel::Thermodynamics ReferencePressureModel::recover_thermo(
+    const torch::Tensor& p, const torch::Tensor& div, const ReferencePressureFields& b) const {
+    auto md=cmu(div);
+    auto mu=b.mu+a_*md;
+    auto theta=b.theta-a_*nu_*md.unsqueeze(1);
+    auto phi=inverse_ephi(p-et_*theta-em_*mu.unsqueeze(1));
+    return {phi,theta,mu};
+}
+ReferencePressureFields ReferencePressureModel::recover_pv(const torch::Tensor& p, const torch::Tensor& v,
+                                                              const ReferencePressureFields& b, torch::Tensor* div_out) const {
+    auto u=b.u+a_*horizontal_x_pressure(p), w=b.w+a_*vertical_pressure(p);
+    auto div=divergence(u,v);
+    if (div_out) *div_out=div;
+    auto t=recover_thermo(p,div,b);
+    return {u,v,w,t.phi,t.theta,t.mu};
+}
 ReferencePressureFields ReferencePressureModel::solve(const ReferencePressureFields& b) const {
     torch::NoGradGuard guard; check(b);
     const auto rhs=pressure(b)-a_*beta_*divergence(b.u,b.v)+a_*g_*ephi(b.w);
     const auto p=schur_->solve(rhs);
-    const auto h=horizontal_pressure(p);
-    auto u=b.u+a_*h.first, v=b.v+a_*h.second, w=b.w+a_*vertical_pressure(p);
-    auto md=cmu(divergence(u,v));
-    auto mu=b.mu+a_*md;
-    auto theta=b.theta-a_*nu_*md.unsqueeze(1);
-    auto phi=inverse_ephi(p-et_*theta-em_*mu.unsqueeze(1));
-    ReferencePressureFields result{u,v,w,phi,theta,mu}; check(result); return result;
+    auto v=b.v+a_*horizontal_y_pressure(p);
+    auto result=recover_pv(p,v,b); check(result); return result;
 }
 ReferencePressureFields ReferencePressureModel::apply(const ReferencePressureFields& x) const {
     torch::NoGradGuard guard; check(x);
@@ -89,7 +114,7 @@ ReferencePressureFields ReferencePressureModel::apply(const ReferencePressureFie
     auto bmu=x.mu-a_*md;
     auto bt=x.theta+a_*nu_*md.unsqueeze(1);
     // Pressure row p-a(Bh Dv+g Ephi w), with Bh=-beta.
-    auto bp=p+a_*beta_*div-a_*g_*ephi(x.w);
+    auto bp=pressure_row(p,div,x.w);
     auto bphi=inverse_ephi(bp-et_*bt-em_*bmu.unsqueeze(1));
     ReferencePressureFields result{bu,bv,bw,bphi,bt,bmu}; check(result); return result;
 }

@@ -82,8 +82,17 @@
 #ifdef WRF_SDIRK3_PRESSURE_A5
 #include "wrf_sdirk3_v_primary_probe.h"
 #endif
+#ifdef WRF_SDIRK3_PRESSURE_V_DIRECT
+#ifndef WRF_SDIRK3_PRESSURE_A5
+#error "Direct pressure/V experiment requires the A5 capture and native reference context"
+#endif
+#include "wrf_sdirk3_pressure_v_direct.h"
+#endif
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
+#ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
+#include <ATen/Parallel.h>
+#endif
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -7597,6 +7606,34 @@ public:
             std::unique_ptr<wrf::sdirk3::NativePressureReference> pressure_reference;
             bool pressure_reference_active = false;
             int pressure_reference_calls = 0;
+#ifdef WRF_SDIRK3_PRESSURE_V_DIRECT
+            std::unique_ptr<wrf::sdirk3::v_primary_probe::PreparedPrimary> direct_primary;
+            std::unique_ptr<wrf::sdirk3::DirectPressureV> direct_pressure;
+            int direct_apps=0,direct_inner=0,direct_subsolves=0,direct_primary_calls=0,direct_extensions=0;
+            double direct_max_residual=0;
+            const auto apply_direct=[&](const torch::Tensor& r) {
+                ++direct_apps;
+                auto result=direct_pressure->solve(r);
+                direct_inner+=result.arnoldi;direct_subsolves+=result.pressure_subsolves;
+                direct_primary_calls+=result.primary_core_calls;direct_extensions+=result.full_packed_extensions;
+                if (!result.converged) {
+                    std::cerr << "[PRESSURE_V_DIRECT_REASON] " << result.reason << '\n';
+                    const char* failure=result.failure==wrf::sdirk3::DirectPressureV::Failure::Budget
+                        ? "inner_budget_exhausted" : "evaluation_failed";
+                    std::cerr << "[PRESSURE_V_DIRECT] {\"status\":\"" << failure << "\",\"cap\":4,"
+                              << "\"tolerance\":0.01,\"restarts\":0,\"fallback\":false,"
+                              << "\"applications\":" << direct_apps
+                              << ",\"arnoldi_iterations\":" << direct_inner
+                              << ",\"pressure_xz_subsolves\":" << direct_subsolves
+                              << ",\"last_true_relative_residual\":"
+                              << (std::isfinite(result.true_rel) && result.true_rel>=0 ? std::to_string(result.true_rel) : "null")
+                              << "}\n";
+                    throw std::runtime_error("bounded direct pressure/V inverse failed; no fallback");
+                }
+                direct_max_residual=std::max(direct_max_residual,result.true_rel);
+                return result.x;
+            };
+#endif
 #endif
             std::function<torch::Tensor(const torch::Tensor&)> precond_func = nullptr;
             if (preconditioner_) {
@@ -7606,6 +7643,9 @@ public:
                 precond_func = [this, variable_pc_event,
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                                 &pressure_reference, &pressure_reference_active, &pressure_reference_calls,
+#ifdef WRF_SDIRK3_PRESSURE_V_DIRECT
+                                &apply_direct,
+#endif
 #endif
                                 fallback_locked = false](const torch::Tensor& r) mutable -> torch::Tensor {
                     torch::NoGradGuard no_grad;
@@ -7626,7 +7666,21 @@ public:
                         PressureA4Timer timer(PressureA4Kind::PhysicalM);
 #ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
                         if (pressure_reference_active) {
-                            try { ++pressure_reference_calls; return pressure_reference->apply(r); }
+                            try { ++pressure_reference_calls;
+#ifdef WRF_SDIRK3_PRESSURE_V_DIRECT
+                                return apply_direct(r);
+#else
+                                return pressure_reference->apply(r);
+#endif
+                            }
+#ifdef WRF_SDIRK3_PRESSURE_V_DIRECT
+                            catch (const std::bad_alloc&) {
+                                std::cerr << "[PRESSURE_V_DIRECT] {\"status\":\"allocation_failed\"}\n";std::abort();
+                            }
+                            catch (const c10::OutOfMemoryError&) {
+                                std::cerr << "[PRESSURE_V_DIRECT] {\"status\":\"allocation_failed\"}\n";std::abort();
+                            }
+#endif
                             catch (const std::exception& error) {
                                 std::cerr << "[PRESSURE_REFERENCE_ERROR] " << error.what() << '\n';
                                 std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"apply_failed\"}\n";
@@ -9068,6 +9122,8 @@ public:
                                 << ",\"tolerance\":" << std::setprecision(17) << krylov_tol_adaptive
                                 << ",\"periodic_x\":" << int(px) << ",\"periodic_y\":" << int(py)
                                 << ",\"scaling\":" << int(scaled) << ",\"mask\":" << int(masked)
+                                << ",\"torch_intra_op_threads\":" << at::get_num_threads()
+                                << ",\"torch_inter_op_threads\":" << at::get_num_interop_threads()
                                 << ",\"block_scale_requested\":" << block_scale
                                 << ",\"refinement_passes\":" << pressure_refinement
                                 << ",\"apinv_probe\":" << int(apinv)
@@ -9085,8 +9141,24 @@ public:
                             const auto setup_start = std::chrono::steady_clock::now();
                             pressure_reference = wrf::sdirk3::NativePressureReference::create(
                                 pressure_eos_context, *raw, cached_layout_, U_eval, a);
+#ifdef WRF_SDIRK3_PRESSURE_V_DIRECT
+                            direct_primary=std::make_unique<wrf::sdirk3::v_primary_probe::PreparedPrimary>(
+                                U_eval,cached_layout_,pressure_eos_context,pressure_eos_context.v_primary);
+                            direct_pressure=std::make_unique<wrf::sdirk3::DirectPressureV>(
+                                pressure_reference->model_for_direct(),
+                                scaling_initialized_ ? S_diag_ : torch::ones_like(U_eval),
+                                [&](const torch::Tensor& phi,const torch::Tensor& t,const torch::Tensor& mu) {
+                                    return direct_primary->apply_core(phi,t,mu);
+                                });
+#endif
                             pressure_setup_ms = std::chrono::duration<double,std::milli>(
                                 std::chrono::steady_clock::now() - setup_start).count();
+#ifdef WRF_SDIRK3_PRESSURE_V_DIRECT
+                        } catch (const std::bad_alloc&) {
+                            std::cerr << "[PRESSURE_V_DIRECT] {\"status\":\"allocation_failed\"}\n";std::abort();
+                        } catch (const c10::OutOfMemoryError&) {
+                            std::cerr << "[PRESSURE_V_DIRECT] {\"status\":\"allocation_failed\"}\n";std::abort();
+#endif
                         } catch (const std::exception& error) {
                             std::cerr << "[PRESSURE_REFERENCE_ERROR] " << error.what() << '\n';
                             std::cerr << "[PRESSURE_REFERENCE] {\"status\":\"setup_failed\"}\n";
@@ -9315,7 +9387,9 @@ public:
                     std::ostringstream linear_receipt;
                     linear_receipt << std::setprecision(17)
                               << "[PRESSURE_LINEAR] {\"flavor\":\""
-#ifdef WRF_SDIRK3_PRESSURE_REFERENCE_STAGE
+#if defined(WRF_SDIRK3_PRESSURE_V_DIRECT)
+                              << "reference_direct_p1"
+#elif defined(WRF_SDIRK3_PRESSURE_REFERENCE_STAGE)
                               << "reference_p0"
 #else
                               << "native_raw"
@@ -9469,6 +9543,38 @@ public:
                             const auto v_phys=scaling_initialized_ ? S_diag_*pressure_a4.v0 : pressure_a4.v0;
                             const auto z_phys=scaling_initialized_ ? S_diag_*pressure_a4.z0 : pressure_a4.z0;
                             const auto az_phys=scaling_initialized_ ? S_diag_*pressure_a4.raw_w0 : pressure_a4.raw_w0;
+#ifdef WRF_SDIRK3_PRESSURE_V_DIRECT
+                            const auto p0z=pressure_reference->apply_operator(z_phys);
+                            const auto jv=direct_primary->apply_sum(z_phys).flatten();
+                            auto p1z=p0z.clone();const auto& vb=cached_layout_.blocks[1];
+                            p1z.slice(0,vb.start,vb.start+vb.size).copy_(
+                                z_phys.slice(0,vb.start,vb.start+vb.size)-(dt*gamma)*jv);
+                            const auto error=v_phys-p1z;
+                            const auto scaled_error=scaling_initialized_ ? error*S_inv_diag_ : error;
+                            const double denominator=std::max(pressure_a4.v0.norm().item<double>(),1.e-300);
+                            auto non_v=scaled_error.clone();non_v.slice(0,vb.start,vb.start+vb.size).zero_();
+                            const double non_v_relative=non_v.norm().item<double>()/denominator;
+                            const double full_relative=scaled_error.norm().item<double>()/denominator;
+                            TORCH_CHECK(torch::isfinite(scaled_error).all().item<bool>() &&
+                                        non_v_relative<=1.e-8 && full_relative<=0.01,
+                                        "direct P1 first reconstruction residual failed");
+                            std::cerr << "[PRESSURE_V_DIRECT] {\"status\":\"ok\",\"cap\":4,"
+                                      << "\"tolerance\":0.01,\"restarts\":0,\"fallback\":false,"
+                                      << "\"residual_metric\":\"V_schur_rhs_with_exact_packed_alias_S_weights\","
+                                      << "\"applications\":" << direct_apps
+                                      << ",\"arnoldi_iterations\":" << direct_inner
+                                      << ",\"pressure_xz_subsolves\":" << direct_subsolves
+                                      << ",\"primary_core_calls\":" << direct_primary_calls
+                                      << ",\"full_packed_extensions\":" << direct_extensions
+                                      << ",\"full_P0_inverse_calls\":0,\"full_P0_apply_calls_in_inner\":0"
+                                      << ",\"V_basis_elements\":" << (pressure_eos_context.t.size(0)-2)*
+                                          pressure_eos_context.t.size(1)*(pressure_eos_context.t.size(2)-1)
+                                      << ",\"pressure_cache_elements\":" << (pressure_eos_context.t.size(0)-1)*
+                                          pressure_eos_context.t.size(1)*(pressure_eos_context.t.size(2)-1)
+                                      << ",\"max_true_relative_residual\":" << std::setprecision(17) << direct_max_residual
+                                      << ",\"p1_first_scaled_relative_residual\":" << full_relative
+                                      << ",\"p1_non_v_scaled_relative_residual\":" << non_v_relative << "}\n";
+#endif
                             wrf::sdirk3::v_primary_probe::run(U_eval.detach(),v_phys,z_phys,az_phys,
                                 pressure_a4.v0,pressure_a4.z0,pressure_a4.raw_w0,
                                 scaling_initialized_ ? S_diag_.detach() : torch::Tensor(),
