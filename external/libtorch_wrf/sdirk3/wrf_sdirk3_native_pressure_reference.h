@@ -35,6 +35,7 @@ public:
     torch::Tensor apply(const torch::Tensor& rhs) const;
 #ifdef WRF_SDIRK3_PRESSURE_A5
     torch::Tensor apply_operator(const torch::Tensor& physical_direction) const;
+    const ReferencePressureModel& model_for_direct() const { return model_; }
 #endif
     const NativePressureProfileReceipt& receipt() const { return receipt_; }
 private:

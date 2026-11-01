@@ -1,0 +1,183 @@
+{
+  "source_commit": "baacbb4bd76f5e9ec93bfa13baf2e47877c29178",
+  "pair_decision": "SCREEN_POSITIVE",
+  "common_v_and_S_exact": true,
+  "candidate_base_z_scope": "not captured or used for direct-V",
+  "control_174_bitwise_parity": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "candidate_six_fields_8eps": {
+    "U": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "V": {
+      "unit": "m s-1",
+      "owned_points": 207360,
+      "max_abs": 7.450580596923828e-09,
+      "rms": 2.785301720103867e-11,
+      "violations": 0
+    },
+    "W": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 5.820766091346741e-11,
+      "rms": 3.109773174473121e-13,
+      "violations": 0
+    },
+    "PH": {
+      "unit": "m2 s-2",
+      "owned_points": 204800,
+      "max_abs": 1.4901161193847656e-08,
+      "rms": 3.3940607069789554e-11,
+      "violations": 0
+    },
+    "T": {
+      "unit": "K",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "MU": {
+      "unit": "Pa",
+      "owned_points": 3200,
+      "max_abs": 2.384185791015625e-07,
+      "rms": 4.214684851089403e-09,
+      "violations": 0
+    }
+  },
+  "first_scaled_norms": {
+    "control": 0.002687919855048388,
+    "candidate": 0.0026234597802721827
+  },
+  "block_rows": [
+    {
+      "field": "ru",
+      "control_physical_owned_l2": 3.408029886313854e-05,
+      "control_scaled_fullblock_l2": 3.430649933260993e-05,
+      "control_physical_owned_rms": 7.53075325968427e-08,
+      "candidate_physical_owned_l2": 3.389503324993982e-05,
+      "candidate_scaled_fullblock_l2": 3.412351832157538e-05,
+      "candidate_physical_owned_rms": 7.489814956117525e-08
+    },
+    {
+      "field": "rv",
+      "control_physical_owned_l2": 9.615210825050719e-05,
+      "control_scaled_fullblock_l2": 9.97995516024313e-05,
+      "control_physical_owned_rms": 2.111525443740781e-07,
+      "candidate_physical_owned_l2": 1.03475897467326e-05,
+      "candidate_scaled_fullblock_l2": 1.0367975219502123e-05,
+      "candidate_physical_owned_rms": 2.27235777032499e-08
+    },
+    {
+      "field": "rw",
+      "control_physical_owned_l2": 0.0026191389301876856,
+      "control_scaled_fullblock_l2": 0.002678877181104007,
+      "control_physical_owned_rms": 5.787534057516849e-06,
+      "candidate_physical_owned_l2": 0.0025475823215167486,
+      "candidate_scaled_fullblock_l2": 0.0026049021418592536,
+      "candidate_physical_owned_rms": 5.629414797423331e-06
+    },
+    {
+      "field": "ph",
+      "control_physical_owned_l2": 0.0023459348663544817,
+      "control_scaled_fullblock_l2": 0.00015156490078551305,
+      "control_physical_owned_rms": 5.18383266319129e-06,
+      "candidate_physical_owned_l2": 0.004345648547524028,
+      "candidate_scaled_fullblock_l2": 0.00028555797226341434,
+      "candidate_physical_owned_rms": 9.602617364399129e-06
+    },
+    {
+      "field": "t",
+      "control_physical_owned_l2": 6.904043728200362e-07,
+      "control_scaled_fullblock_l2": 6.908982912408228e-07,
+      "control_physical_owned_rms": 1.5255925430684085e-09,
+      "candidate_physical_owned_l2": 1.584082777466553e-06,
+      "candidate_scaled_fullblock_l2": 1.6256703290537915e-06,
+      "candidate_physical_owned_rms": 3.500361480960688e-09
+    },
+    {
+      "field": "mu",
+      "control_physical_owned_l2": 0.00012008653847336854,
+      "control_scaled_fullblock_l2": 0.00012008710520698969,
+      "control_physical_owned_rms": 2.122850142093454e-06,
+      "candidate_physical_owned_l2": 0.00011919743430956328,
+      "candidate_scaled_fullblock_l2": 0.00011919791232591884,
+      "candidate_physical_owned_rms": 2.107132852508256e-06
+    }
+  ],
+  "source_hashes": {
+    "control": {
+      "result": "2aa4126e3981ed1e93c6892fa89994d9ae7b8d3eedba4cf3ab20008d1b31ce1a",
+      "a4": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+      "direction": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+      "actions": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+      "intent": "f5a9e084fe0a3e7419978dab324350f74cfecff048e8a0caebaad0575c27e679",
+      "pins": "8d402f0280d31c8d1dd22035c8723d43b7b68ba0952457de63760a501757011d"
+    },
+    "candidate": {
+      "result": "c91763134db5d06a572a74bf37e34041429d68e52c5cbe2d016e626c847addb3",
+      "a4": "fcc9f5a8239302ea0e725912802e93f4266817285ef010bff1780d5adc3f015d",
+      "direction": "c03f7d165b48fc30ebfadf500aaf59b9acd4e122e1bcc6708a3714227823a6c8",
+      "actions": "3d3560146d81bb27a50b0b7b41d6cccbb5f1ac4a9cfb1452817846f5889f99a1",
+      "intent": "8f486644f962551c54dd0cf0f3bb68d449b42954a4fe08a082e6c6ddb5f4b49e",
+      "pins": "6efb429f9a7e30bd96583f7514e477d54b8a872c5d17fe622f0f750c507216ad"
+    },
+    "RK3_forecast": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41",
+    "control_forecast": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e",
+    "candidate_forecast": "386b5c94ccf326b763ff2f04a4bf66f4336ac49d01c73150efd34cae8b027e00"
+  },
+  "scope": "one instrumented first direction; rate-coordinate vectors arbitrary normalized. Direct-V has no captured base-z; no promotion, general performance or longer-term forecast claim.",
+  "script_sha256": "71e51f064e82ef4d2d93a2f7d5ac58538a283984a2a1ad3b5f905b1129a1ddc0",
+  "first_interval_disjoint_accounting": {
+    "control": {
+      "full_scaled_A_ms": 8687.290710000001,
+      "wrapped_M_ms": 2124.779208,
+      "other_including_setup_ms": 3596.7004149999993,
+      "inclusive_ms": 14408.770333,
+      "outer_JVP_calls": 23
+    },
+    "candidate": {
+      "full_scaled_A_ms": 5760.884832000001,
+      "wrapped_M_ms": 3456.5715849999997,
+      "other_including_setup_ms": 2499.943666,
+      "inclusive_ms": 11717.400083,
+      "outer_JVP_calls": 14
+    }
+  },
+  "direct_work": {
+    "status": "ok",
+    "cap": 4,
+    "tolerance": 0.01,
+    "restarts": 0,
+    "fallback": false,
+    "residual_metric": "V_schur_rhs_with_exact_packed_alias_S_weights",
+    "applications": 13,
+    "arnoldi_iterations": 52,
+    "pressure_xz_subsolves": 65,
+    "primary_core_calls": 78,
+    "full_packed_extensions": 13,
+    "full_P0_inverse_calls": 0,
+    "full_P0_apply_calls_in_inner": 0,
+    "V_basis_elements": 202240,
+    "pressure_cache_elements": 204800,
+    "max_true_relative_residual": 0.003877208277958008,
+    "p1_first_scaled_relative_residual": 4.1836970846169543e-07,
+    "p1_non_v_scaled_relative_residual": 8.123127004552033e-14
+  },
+  "work_qualification": "Full-P0 and XZ subsolve calls are different work; physical M is nested in wrapped M, JVP nested in A. No cross-experiment timing ratio.",
+  "provenance": {
+    "registration_sha256": "bdde318ab89280938ef025823f734c5b30e6aeea89ad08906c19128ea96d573c",
+    "protocol_sha256": "7980b9f78ed19d3ef7f361d330c7daf46afdc023af3dda78ae36017cfeea7611",
+    "control_input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "candidate_input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "control_executable_sha256": "2d2060f859451268effc162a2856e33d0e880728296f7b214282ed20cd7bd4dd",
+    "candidate_executable_sha256": "8861d40ac464d853ce573f042823a38a215f14e3701f73587cde3f008bae0dc2"
+  }
+}

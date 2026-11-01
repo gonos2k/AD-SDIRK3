@@ -27,14 +27,26 @@ public:
     ReferencePressureFields solve(const ReferencePressureFields& b) const;
     ReferencePressureFields apply(const ReferencePressureFields& x) const;
 private:
+    friend class DirectPressureV;
     void check(const ReferencePressureFields& x) const;
+    torch::Tensor divergence_x(const torch::Tensor& u) const;
+    torch::Tensor divergence_y(const torch::Tensor& v) const;
     torch::Tensor divergence(const torch::Tensor& u, const torch::Tensor& v) const;
+    torch::Tensor horizontal_x_pressure(const torch::Tensor& p) const;
+    torch::Tensor horizontal_y_pressure(const torch::Tensor& p) const;
     std::pair<torch::Tensor,torch::Tensor> horizontal_pressure(const torch::Tensor& p) const;
     torch::Tensor vertical_pressure(const torch::Tensor& p) const;
     torch::Tensor ephi(const torch::Tensor& phi) const;
     torch::Tensor inverse_ephi(const torch::Tensor& pressure) const;
     torch::Tensor pressure(const ReferencePressureFields& x) const;
     torch::Tensor cmu(const torch::Tensor& div) const;
+    torch::Tensor pressure_row(const torch::Tensor& p, const torch::Tensor& div,
+                               const torch::Tensor& w) const;
+    struct Thermodynamics { torch::Tensor phi, theta, mu; };
+    Thermodynamics recover_thermo(const torch::Tensor& p, const torch::Tensor& div,
+                                  const ReferencePressureFields& b) const;
+    ReferencePressureFields recover_pv(const torch::Tensor& p, const torch::Tensor& v,
+                                       const ReferencePressureFields& b, torch::Tensor* div_out=nullptr) const;
     int64_t nx_,ny_,nz_;
     double a_,g_,dx_,dy_;
     torch::Tensor q_,et_,em_,edge_,alpha_,beta_,H_,nu_,dnw_;

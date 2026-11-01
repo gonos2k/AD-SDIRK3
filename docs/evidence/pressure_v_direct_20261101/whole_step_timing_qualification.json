@@ -1,0 +1,99 @@
+{
+  "scope": "existing-data qualification, one sequential instrumented h600 step per case; no new run, no general performance or causal claim",
+  "original_pair_audit_sha256": "a3c5620e64d063e17df672e4c09816eacb81604fadc83d6db517af80bd0c970a",
+  "source_commit": "baacbb4bd76f5e9ec93bfa13baf2e47877c29178",
+  "newton_git_blob_sha256": "72e6467f3c113a7aaffbaba19d18c3608ac7cdaf9eff6af28b0adb741f539a7c",
+  "registered_first_point_result": "SCREEN_POSITIVE remains valid within its one-point scope; the separately reported 2x goal is false; no automatic Gate B",
+  "whole_step_qualification": "Observed candidate RSL main step is slower in this one pair; this is not a reproducible or general performance result.",
+  "direct_hook_scope": "The Direct reference is active only for selected original first linear point. The fifth 32-JVP solve is later; no evidence establishes identical later linearization points between independently evolved runs.",
+  "clock_accounting": "rank time real and aggregate user/system CPU are distinct measures; real-minus-CPU is an arithmetic accounting gap, not an attribution to idleness or a specific cause. No external application, swap, scheduler or hardware cause is established.",
+  "cases": {
+    "control": {
+      "RSL_main_step_seconds": 152.3707,
+      "JVP_summaries_calls_and_ms": [
+        [
+          23,
+          8598.78
+        ],
+        [
+          48,
+          17593.7
+        ],
+        [
+          32,
+          12267.8
+        ],
+        [
+          48,
+          22010.3
+        ],
+        [
+          32,
+          12718.9
+        ],
+        [
+          48,
+          21126.2
+        ]
+      ],
+      "fifth_linear_JVP_calls": 32,
+      "fifth_linear_JVP_time_ms": 12718.9,
+      "rank_time_real_seconds": 161.46,
+      "rank_time_user_seconds": 91.82,
+      "rank_time_system_seconds": 5.05,
+      "rank_time_user_plus_system_seconds": 96.86999999999999,
+      "rank_time_real_minus_user_plus_system_arithmetic_seconds": 64.59000000000002,
+      "source_sha256": {
+        "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/rsl.out.0000": "005d70d414b87beb3d12fa0e365fa7b0f6079d7594e6f8a9ca07f58d1bb5f1d4",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/rsl.error.0000": "3de9561d3dc7958696f408429380cb7eaa488b26287a83289e8f274a5116096e",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/rank_rusage.log": "22d12a328e222b76da0c98ae78ef45185d4a3221ac8105ce912bd79790245cca",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/result.json": "2aa4126e3981ed1e93c6892fa89994d9ae7b8d3eedba4cf3ab20008d1b31ce1a"
+      }
+    },
+    "candidate": {
+      "RSL_main_step_seconds": 194.93518,
+      "JVP_summaries_calls_and_ms": [
+        [
+          14,
+          5686.464999999999
+        ],
+        [
+          34,
+          12571.309000000001
+        ],
+        [
+          32,
+          12778.676
+        ],
+        [
+          48,
+          21466.941000000003
+        ],
+        [
+          32,
+          45072.030999999995
+        ],
+        [
+          48,
+          22215.154000000006
+        ]
+      ],
+      "fifth_linear_JVP_calls": 32,
+      "fifth_linear_JVP_time_ms": 45072.030999999995,
+      "rank_time_real_seconds": 206.32,
+      "rank_time_user_seconds": 88.86,
+      "rank_time_system_seconds": 4.25,
+      "rank_time_user_plus_system_seconds": 93.11,
+      "rank_time_real_minus_user_plus_system_arithmetic_seconds": 113.21,
+      "source_sha256": {
+        "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/rsl.out.0000": "391468ab0a067d0e29b771dd45fa43cbd70210fb51f7a2fa144ae6cd70f672ac",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/rsl.error.0000": "d36bd6cf92fb9ef100ea5152ecfd91d197d033c06dcf6f3739e51b6afc04a5de",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/rank_rusage.log": "850e0d233f869f865b60c838c8146b234a1ae52e614c6e7567a721278d1cb284",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/result.json": "c91763134db5d06a572a74bf37e34041429d68e52c5cbe2d016e626c847addb3"
+      }
+    }
+  },
+  "new_model_run": false,
+  "new_test_run": false,
+  "time_local": "2026-11-01T12:15:59+0900"
+}

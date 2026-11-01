@@ -123,6 +123,25 @@ int main() {
     TORCH_CHECK((core(sum1-out.fwad)).norm().item<double>()<=1.e-9*scale+1.e-12 &&
                 (core(sum2-t2.fwad)).norm().item<double>()<=1.e-9*core(t2.fwad).norm().item<double>()+1.e-12,
                 "prepared primary differs from source FWAD");
+    int projection_calls=0;
+    auto counted_context=c;
+    counted_context.project_native=[&](const torch::Tensor& x) {++projection_calls;return project(x);};
+    v_primary_probe::PreparedPrimary direct(U,layout,e,counted_context);
+    const auto direct_from_packed=[&](const torch::Tensor& direction,const torch::Tensor& oracle) {
+        const auto q=project(direction); // canonical physical inputs, even for non-Q direction
+        const auto ph=block(q,3,{ny,nw,nx}).slice(0,0,m).slice(2,0,n);
+        const auto tt=block(q,4,{ny,nz,nx}).slice(0,0,m).slice(2,0,n);
+        const auto mm=block(q,5,{ny,nx}).slice(0,0,m).slice(1,0,n);
+        const int before_calls=projection_calls;
+        const auto result=direct.apply_core(ph,tt,mm);
+        TORCH_CHECK(projection_calls==before_calls,"physical core called packed projector");
+        TORCH_CHECK((result-core(oracle)).norm().item<double>()<=1.e-9*core(oracle).norm().item<double>()+1.e-12,
+                    "physical core differs from packed FWAD");
+    };
+    TORCH_CHECK(!torch::equal(z,project(z)) && !torch::equal(z2,project(z2)),"directions unexpectedly canonical");
+    direct_from_packed(z,out.fwad);direct_from_packed(z2,t2.fwad);
+    TORCH_CHECK(torch::allclose(sum1,out.fwad,1.e-9,1.e-12) && torch::allclose(sum2,t2.fwad,1.e-9,1.e-12),
+                "packed action disagrees on aliases or walls");
     TORCH_CHECK((prepared.apply_sum(0.3*z-0.7*z2)-(0.3*sum1-0.7*sum2)).abs().max().item<double>()<1.e-12,
                 "prepared primary is not linear");
     auto only_v=torch::zeros_like(z);block(only_v,1,{nv,nz,nx}).copy_(sum1);

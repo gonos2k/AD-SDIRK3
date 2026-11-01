@@ -13,9 +13,12 @@ class ReferencePressure {
                     const std::vector<double>& horizontal_coeff,
                     double a, double gravity, double dx, double dy);
   torch::Tensor solve(const torch::Tensor& rhs) const;
+  // Invert the X-plus-vertical block independently on each physical Y row.
+  torch::Tensor solve_x_vertical(const torch::Tensor& rhs) const;
   torch::Tensor apply_operator(const torch::Tensor& p) const;
  private:
   void check_field(const torch::Tensor& p) const;
+  torch::Tensor solve_modes(const torch::Tensor& x, bool zero_y_mode) const;
   int64_t nx_, ny_, nz_;
   double a2g_, a2_, dx2_, dy2_;
   std::vector<double> q_, edge_, horizontal_;

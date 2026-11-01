@@ -50,16 +50,29 @@ torch::Tensor ReferencePressure::solve(const torch::Tensor& rhs) const {
   torch::NoGradGuard guard; check_field(rhs);
   auto x = at::fft_fft(rhs, nx_, 2, "ortho");
   x = torch::matmul(cosine_, x.reshape({ny_,nz_*nx_})).reshape({ny_,nz_,nx_});
+  x=solve_modes(x,false);
+  x=torch::matmul(cosine_.transpose(0,1), x.reshape({ny_,nz_*nx_})).reshape({ny_,nz_,nx_});
+  return torch::real(at::fft_ifft(x,nx_,2,"ortho"));
+}
+torch::Tensor ReferencePressure::solve_x_vertical(const torch::Tensor& rhs) const {
+  torch::NoGradGuard guard; check_field(rhs);
+  auto x=at::fft_fft(rhs,nx_,2,"ortho");
+  x=solve_modes(x,true);
+  return torch::real(at::fft_ifft(x,nx_,2,"ortho"));
+}
+torch::Tensor ReferencePressure::solve_modes(const torch::Tensor& x, bool zero_y_mode) const {
   std::vector<torch::Tensor> d; d.reserve(nz_);
   for (int64_t k=0;k<nz_;++k) {
     auto r=x.select(1,k);
     if(k) r=r-(-a2g_*q_[k]*edge_[k-1])*d.back();
-    d.push_back(r*inverse_pivot_[k]);
+    auto pivot=zero_y_mode ? inverse_pivot_[k].select(0,0) : inverse_pivot_[k];
+    d.push_back(r*pivot);
   }
-  for(int64_t k=nz_-1;k-->0;) d[k]=d[k]-upper_factor_[k]*d[k+1];
-  x=torch::stack(d,1);
-  x=torch::matmul(cosine_.transpose(0,1), x.reshape({ny_,nz_*nx_})).reshape({ny_,nz_,nx_});
-  return torch::real(at::fft_ifft(x,nx_,2,"ortho"));
+  for(int64_t k=nz_-1;k-->0;) {
+    auto upper=zero_y_mode ? upper_factor_[k].select(0,0) : upper_factor_[k];
+    d[k]=d[k]-upper*d[k+1];
+  }
+  return torch::stack(d,1);
 }
 torch::Tensor ReferencePressure::apply_operator(const torch::Tensor& p) const {
   torch::NoGradGuard guard; check_field(p);

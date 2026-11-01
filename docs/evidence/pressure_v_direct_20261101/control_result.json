@@ -1,0 +1,580 @@
+{
+  "case": "control",
+  "status": "completed",
+  "decision": "CONTROL_COMPLETED",
+  "model_completed": true,
+  "failure_class": null,
+  "failure_reason": null,
+  "executable_sha256": "2d2060f859451268effc162a2856e33d0e880728296f7b214282ed20cd7bd4dd",
+  "source_commit": "baacbb4bd76f5e9ec93bfa13baf2e47877c29178",
+  "rss_scope": "postrun rank maxrss; excludes launcher",
+  "timing_scope": "single instrumented feasibility pair only; no Gate B or forecast claim",
+  "return_code": 0,
+  "command": [
+    "/opt/homebrew/bin/mpirun",
+    "--timeout",
+    "360",
+    "--report-state-on-timeout",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/rank_rusage.log",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/native_control/wrf.exe"
+  ],
+  "monotonic_elapsed_seconds": 162.96279633324593,
+  "wall_elapsed_seconds": 162.95856499671936,
+  "environment_overrides": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+    "WRF_SDIRK3_EW_ETA_INITIAL": "0.1",
+    "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0"
+  },
+  "clock_gap_seconds": -0.004231336526572704,
+  "available_artifacts": {
+    "pressure_a5_direction.bin": {
+      "bytes": 72673488,
+      "sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6"
+    },
+    "pressure_a5_actions.bin": {
+      "bytes": 17251144,
+      "sha256": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711"
+    },
+    "pressure_a4_first_pair.bin": {
+      "bytes": 17287872,
+      "sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1"
+    }
+  },
+  "raw_artifact_combined_bytes": 107212504,
+  "raw_artifact_cap_met": true,
+  "steps": 1,
+  "stage_residuals": [
+    "[Newton] CONVERGED stage=2 iters=3 ||S\u207b\u00b9R||_rms=6.296993e-14 [scaled-RMS] (||R||=6.545993e-11 [unscaled-L2])",
+    "[Newton] CONVERGED stage=3 iters=3 ||S\u207b\u00b9R||_rms=6.345785e-14 [scaled-RMS] (||R||=6.596566e-11 [unscaled-L2])",
+    "[Newton] CONVERGED stage=4 iters=3 ||S\u207b\u00b9R||_rms=6.344006e-14 [scaled-RMS] (||R||=6.594741e-11 [unscaled-L2])"
+  ],
+  "wrapper_rows": [
+    [
+      3,
+      0
+    ]
+  ],
+  "rank_peak_rss_bytes": 2061008896,
+  "stage_residual_scaled_rms": {
+    "2": 6.296993e-14,
+    "3": 6.345785e-14,
+    "4": 6.344006e-14
+  },
+  "output_check": {
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "physical_minima_over_all_frames": {
+      "total_theta_K": 258.83935546875,
+      "total_mu_Pa": 89072.1247472763,
+      "layer_depth_m_from_PH_plus_PHB_over_g": 215.13885902459225,
+      "g_m_s2": 9.81
+    },
+    "physical_minimum_total_pressure_Pa": 11079.84334230423,
+    "timestamps": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:10:00"
+    ],
+    "step_logs": {
+      "rsl_main_step_count": 1,
+      "rsl_main_step_sum_seconds": 152.3707,
+      "rsl_main_step_seconds": [
+        152.3707
+      ],
+      "converged_newton_stage_count": 3,
+      "newton_iterations_sum": 9,
+      "rsl_timing_files": {
+        "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/rsl.out.0000",
+        "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/rsl.error.0000"
+      },
+      "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+    }
+  },
+  "t0_gate": {
+    "status": "passed",
+    "reference_label": "rk3",
+    "labels": [
+      "rk3",
+      "control"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "preflight": {
+    "status": "ok",
+    "digest_fnv64": "7bdd17f3a694726e",
+    "state_fnv64": "bfc3393acc9791c0",
+    "F_fnv64": "ff7fe0162403c3c0",
+    "K_fnv64": "5d065c0f7df71aa0",
+    "b_fnv64": "beebab996c9f810b",
+    "x0_fnv64": "fdf60492df066d12",
+    "S_fnv64": "73dac3183f782879",
+    "Sinv_fnv64": "70e824aa5bce8528",
+    "mask_fnv64": "af63bd4c8601b7df",
+    "eos_fnv64": "d53e209fb0d78407",
+    "geometry_fnv64": "9e59543442ce1b6f",
+    "raw_grid_fnv64": "a358e8986d95c6c1",
+    "raw_column_0_0_fnv64": "d9b832053aa30223",
+    "raw_full_fnv64": "d88d4c145bbc2d91",
+    "restart": 30,
+    "max_restarts": 50,
+    "tolerance": 1.0000000116860974e-07,
+    "periodic_x": 1,
+    "periodic_y": 0,
+    "scaling": 1,
+    "mask": 0,
+    "torch_intra_op_threads": 1,
+    "torch_inter_op_threads": 1,
+    "block_scale_requested": 0,
+    "refinement_passes": 1,
+    "apinv_probe": 0,
+    "jvp_probe": 0,
+    "identity_scope": "bounded_captured_inputs_not_all_transitive_state",
+    "preflight_ms": 652.923125
+  },
+  "linear": {
+    "flavor": "reference_p0",
+    "comparison_eligible": true,
+    "preflight_ms": 652.923125,
+    "setup_ms": 99.414792,
+    "linear_with_native_truecheck_ms": 12977.8625,
+    "interval_from_newton_entry_ms": 14408.770333,
+    "iterations": 21,
+    "restarts": 1,
+    "restart_budget": 30,
+    "max_restarts": 50,
+    "tolerance_applied": 1.0000000116860974e-07,
+    "stopping_metric": 1,
+    "stopping_metric_name": "unweighted_scaled_L2",
+    "stopping_relative_norm": 1.2772678470440724e-09,
+    "scaled_relative_norm": 1.2772678470440724e-09,
+    "residual_provenance": "saved_native_checked_raw_not_independent",
+    "saved_native_scaled_residual_norm": 2.573363244729006e-08,
+    "saved_native_physical_residual_norm": 2.8788990210975115e-07,
+    "scaled_rhs_norm": 20.14740542763099,
+    "physical_rhs_norm": 312.3019131227635,
+    "mask_active": false,
+    "refinement_passes": 1,
+    "apinv_probe": false,
+    "jvp_probe": false,
+    "jvp_fd_fallbacks": 0,
+    "success": true,
+    "preconditioner_calls": 21,
+    "guard_events": 0,
+    "reference_calls": 21
+  },
+  "torch_threads_actual": {
+    "intra_op": 1,
+    "inter_op": 1
+  },
+  "a4": {
+    "eligible": true,
+    "capture": "fgmres_restart0_arnoldi0_raw_A_M_v_before_D_and_orthogonalization",
+    "pair_file": "pressure_a4_first_pair.bin",
+    "pair_written": true,
+    "pair_format": "SDIRKA41,u64le_numel,physical_v_f64le,physical_w_f64le",
+    "physical_transform": "S_times_scaled_krylov_vectors",
+    "S_fnv64": "73dac3183f782879",
+    "full_scaled_A_calls": 23,
+    "full_scaled_A_ms": 8687.290710000001,
+    "wrapped_M_calls": 21,
+    "wrapped_M_ms": 2124.779208,
+    "physical_M_calls": 21,
+    "physical_M_ms_nested": 1996.7214989999998,
+    "linear_remainder_ms": 2165.792581999998,
+    "capture_clone_ms_included": 4.6402909999999995,
+    "capture_attempts": 1,
+    "capture_count": 1,
+    "block_scope": "full_packed_block_not_owned_core",
+    "timer_overlap": false,
+    "nested_scope": false,
+    "capture_failed": false,
+    "blocks": [
+      {
+        "name": "ru",
+        "start": 0,
+        "size": 217728,
+        "v_scaled_l2": 7.449424427716914e-05,
+        "w_scaled_l2": 7.91899646060462e-05,
+        "defect_scaled_l2": 3.430649933261014e-05,
+        "v_physical_l2": 7.449424427716914e-05,
+        "w_physical_l2": 7.91899646060462e-05,
+        "defect_physical_l2": 3.430649933261014e-05,
+        "amplitude_ratio_physical": 1.0630346730064917,
+        "cos_physical": 0.9021149665209207
+      },
+      {
+        "name": "rv",
+        "start": 217728,
+        "size": 215168,
+        "v_scaled_l2": 0.00012888896089206222,
+        "w_scaled_l2": 0.0001660511027125685,
+        "defect_scaled_l2": 9.979955160243285e-05,
+        "v_physical_l2": 0.00012888896089206222,
+        "w_physical_l2": 0.0001660511027125685,
+        "defect_physical_l2": 9.979955160243285e-05,
+        "amplitude_ratio_physical": 1.2883268013280642,
+        "cos_physical": 0.7995779844905966
+      },
+      {
+        "name": "rw",
+        "start": 432896,
+        "size": 215865,
+        "v_scaled_l2": 0.025568219723538954,
+        "w_scaled_l2": 0.025950595812501677,
+        "defect_scaled_l2": 0.002678877181104007,
+        "v_physical_l2": 0.025568219723538954,
+        "w_physical_l2": 0.025950595812501677,
+        "defect_physical_l2": 0.002678877181104007,
+        "amplitude_ratio_physical": 1.014955131530362,
+        "cos_physical": 0.994702290996276
+      },
+      {
+        "name": "ph",
+        "start": 648761,
+        "size": 215865,
+        "v_scaled_l2": 0.999609910961963,
+        "w_scaled_l2": 0.9996183261937089,
+        "defect_scaled_l2": 0.00015156490078551392,
+        "v_physical_l2": 15.50082502287768,
+        "w_physical_l2": 15.500955516817587,
+        "defect_physical_l2": 0.002350297832106537,
+        "amplitude_ratio_physical": 1.0000084185157703,
+        "cos_physical": 0.9999999885405899
+      },
+      {
+        "name": "t",
+        "start": 864626,
+        "size": 212544,
+        "v_scaled_l2": 6.201550577608807e-05,
+        "w_scaled_l2": 6.202816884515236e-05,
+        "defect_scaled_l2": 6.908982912408262e-07,
+        "v_physical_l2": 6.201550577608807e-05,
+        "w_physical_l2": 6.202816884515236e-05,
+        "defect_physical_l2": 6.908982912408262e-07,
+        "amplitude_ratio_physical": 1.0002041919824054,
+        "cos_physical": 0.9999379755282726
+      },
+      {
+        "name": "mu",
+        "start": 1077170,
+        "size": 3321,
+        "v_scaled_l2": 0.011236816256539254,
+        "w_scaled_l2": 0.011238500897749476,
+        "defect_scaled_l2": 0.00012008710520698987,
+        "v_physical_l2": 0.011236816256539254,
+        "w_physical_l2": 0.011238500897749476,
+        "defect_physical_l2": 0.00012008710520698987,
+        "amplitude_ratio_physical": 1.0001499215766958,
+        "cos_physical": 0.9999429145255084
+      }
+    ]
+  },
+  "existing_jvp_summaries": {
+    "first_linear_solve": {
+      "calls": 23,
+      "time_ms": 8598.78
+    },
+    "whole_step_records": [
+      {
+        "calls": 23,
+        "time_ms": 8598.78
+      },
+      {
+        "calls": 48,
+        "time_ms": 17593.7
+      },
+      {
+        "calls": 32,
+        "time_ms": 12267.8
+      },
+      {
+        "calls": 48,
+        "time_ms": 22010.3
+      },
+      {
+        "calls": 32,
+        "time_ms": 12718.9
+      },
+      {
+        "calls": 48,
+        "time_ms": 21126.2
+      }
+    ],
+    "whole_step_calls_sum": 231,
+    "whole_step_jvp_time_ms_sum": 94315.68,
+    "scope": "existing JVP summaries: first-solve JVP is nested in first-point scaled A; whole-step sum spans six solves. Never add either to A time; JVP counts need not equal A calls"
+  },
+  "capture": {
+    "status": "captured",
+    "path": "pressure_a5_direction.bin",
+    "missing": []
+  },
+  "legacy_decomposition": {
+    "inverse_scaled_relative": 3.7983779719881305e-14,
+    "packed_closure_ok": true,
+    "blocks": [
+      {
+        "name": "ru",
+        "closure_max": 1.0587911840678754e-22,
+        "closure_budget": 5.812561011151328e-20,
+        "scaled_closure_max": 1.0587911840678754e-22,
+        "scaled_closure_budget": 5.812561011151328e-20
+      },
+      {
+        "name": "rv",
+        "closure_max": 2.117582368135751e-22,
+        "closure_budget": 1.4919043888241515e-19,
+        "scaled_closure_max": 2.117582368135751e-22,
+        "scaled_closure_budget": 1.4919043888241515e-19
+      },
+      {
+        "name": "rw",
+        "closure_max": 6.776263578034403e-21,
+        "closure_budget": 3.5326873106916203e-17,
+        "scaled_closure_max": 6.776263578034403e-21,
+        "scaled_closure_budget": 3.5326873106916203e-17
+      },
+      {
+        "name": "ph",
+        "closure_max": 0,
+        "closure_budget": 5.72631982468653e-15,
+        "scaled_closure_max": 4.235164736271502e-22,
+        "scaled_closure_budget": 3.692762186300596e-16
+      },
+      {
+        "name": "t",
+        "closure_max": 1.6543612251060553e-24,
+        "closure_budget": 4.159141119395235e-20,
+        "scaled_closure_max": 1.6543612251060553e-24,
+        "scaled_closure_budget": 4.159141119395235e-20
+      },
+      {
+        "name": "mu",
+        "closure_max": 0,
+        "closure_budget": 2.6100799248186307e-17,
+        "scaled_closure_max": 0,
+        "scaled_closure_budget": 2.6100799248186307e-17
+      }
+    ]
+  },
+  "legacy_A5": {
+    "status": "observed",
+    "cost_eligible": false,
+    "eligible": false,
+    "gate_pass": false,
+    "native_nh": true,
+    "base_state_branch": true,
+    "use_wrf_mass_flux": true,
+    "S_diag_provided": true,
+    "scale_check": "torch_equal_numeric_signed_zero_equal",
+    "gate_threshold_squared_ratio": 0.5,
+    "minimum_signal_ratio": 1e-08,
+    "inverse_scaled_relative": 3.7983779719881305e-14,
+    "inverse_scaled_ok": true,
+    "inverse_scaled_limit": 1e-08,
+    "ad_pointwise_ok": true,
+    "packed_closure_ok": true,
+    "closure_budget": "128*float64_eps*maxabs(v,P0z,Az), physical and scaled separately per packed block",
+    "action_check": "per V point: 1e-12 m/s3 + relative*abs(FWAD), AD 1e-9, FD 1e-5, at least 2 of 3 FD widths",
+    "fd_pointwise_ok": [
+      true,
+      false,
+      false
+    ],
+    "fd_steps_seconds": [
+      0.01,
+      0.001,
+      0.0001
+    ],
+    "rV_norm": 9.615210825050388e-05,
+    "vV_norm": 0.00012888896033643298,
+    "candidate_norm": 9.539778935453627e-05,
+    "unit_squared_ratio": 0.011628438463446985,
+    "cosine": 0.9941708230048242,
+    "fit_descriptive_only": 1.0020318210707773,
+    "orthogonal_fraction": 0.10781639340085164,
+    "V_wall_mismatch_norm": 0,
+    "V_x_alias_mismatch_norm": 1.7789492040074248e-05,
+    "V_y_alias_mismatch_norm": 1.9956366201922908e-05,
+    "W_dynamic_top_mismatch_norm": 0.0003775120553948331,
+    "W_interior_mismatch_norm": 0.0025917896102223593,
+    "phi_action_norm": 3.642821595174494e-07,
+    "pressure_action_norm": 4.1980586903931296e-07,
+    "alpha_action_norm": 3.192566485224413e-11,
+    "fwad_sum_error": 5.01380949138229e-22,
+    "fd_error_norms": [
+      8.810189397221143e-12,
+      8.946957290668779e-11,
+      8.817703725269064e-10
+    ],
+    "primal_dpy_max": 0,
+    "primal_level_mass_max": 0,
+    "primal_velocity_mass_max": 0,
+    "primal_alpha_v_max": 0,
+    "primal_ratio_max": 0,
+    "primal_alpha_max": 0,
+    "primal_pressure_max": 0,
+    "projected_state_max": 0,
+    "units": "u,v,w:m/s2; phi:m2/s3; theta:K/s; mu:Pa/s; Jphi/Jp/Jalpha/Jfwad:m/s3; Vp0 and mismatch:m/s2",
+    "context_constants": {
+      "rd": 287,
+      "cv": 717.5,
+      "cp": 1004.5,
+      "p0": 100000,
+      "t0": 300,
+      "rdx": 9.999999747378752e-06,
+      "rdy": 9.999999747378752e-06,
+      "velocity_eps": 1.000000013351432e-10,
+      "a": 261.5199129050754,
+      "gravity": 9.8100004196167,
+      "dx": 100000.00252621254,
+      "dy": 100000.00252621254,
+      "nx_physical": 40,
+      "ny_physical": 80,
+      "nz": 64
+    },
+    "blocks": [
+      {
+        "name": "ru",
+        "defect": 3.430649933261014e-05,
+        "reconstruction": 1.064826986822582e-18,
+        "mismatch": 3.4306499332610145e-05,
+        "closure": 2.1110275017016663e-21,
+        "closure_max": 1.0587911840678754e-22,
+        "closure_budget": 5.812561011151328e-20,
+        "scaled_closure_max": 1.0587911840678754e-22,
+        "scaled_closure_budget": 5.812561011151328e-20
+      },
+      {
+        "name": "rv",
+        "defect": 9.979955160243285e-05,
+        "reconstruction": 1.0367877767370047e-18,
+        "mismatch": 9.979955160243286e-05,
+        "closure": 7.444788089709954e-21,
+        "closure_max": 2.117582368135751e-22,
+        "closure_budget": 1.4919043888241515e-19,
+        "scaled_closure_max": 2.117582368135751e-22,
+        "scaled_closure_budget": 1.4919043888241515e-19
+      },
+      {
+        "name": "rw",
+        "defect": 0.002678877181104007,
+        "reconstruction": 4.4299982473712076e-16,
+        "mismatch": 0.0026788771811040056,
+        "closure": 1.0655220730615761e-19,
+        "closure_max": 6.776263578034403e-21,
+        "closure_budget": 3.5326873106916203e-17,
+        "scaled_closure_max": 6.776263578034403e-21,
+        "scaled_closure_budget": 3.5326873106916203e-17
+      },
+      {
+        "name": "ph",
+        "defect": 0.002350297832106537,
+        "reconstruction": 5.889678195790398e-13,
+        "mismatch": 0.00235029783222861,
+        "closure": 0,
+        "closure_max": 0,
+        "closure_budget": 5.72631982468653e-15,
+        "scaled_closure_max": 4.235164736271502e-22,
+        "scaled_closure_budget": 3.692762186300596e-16
+      },
+      {
+        "name": "t",
+        "defect": 6.908982912408262e-07,
+        "reconstruction": 1.186960712286809e-21,
+        "mismatch": 6.908982912408262e-07,
+        "closure": 3.2265180219253543e-24,
+        "closure_max": 1.6543612251060553e-24,
+        "closure_budget": 4.159141119395235e-20,
+        "scaled_closure_max": 1.6543612251060553e-24,
+        "scaled_closure_budget": 4.159141119395235e-20
+      },
+      {
+        "name": "mu",
+        "defect": 0.00012008710520698987,
+        "reconstruction": 2.770397544526052e-19,
+        "mismatch": 0.00012008710520698987,
+        "closure": 0,
+        "closure_max": 0,
+        "closure_budget": 2.6100799248186307e-17,
+        "scaled_closure_max": 0,
+        "scaled_closure_budget": 2.6100799248186307e-17
+      }
+    ],
+    "artifact": "pressure_a5_direction.bin",
+    "actions_artifact": "pressure_a5_actions.bin",
+    "artifact_format": "SDIRKA53:u64records;name32,u32itemsize,u32ndim,i64dims4,u64bytes,data"
+  },
+  "legacy_A5_scope": "primal and AD checks required; do not gate corrected z using P0 inverse or FP64 finite-difference eligibility",
+  "payload": {
+    "direction_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/pressure_a5_direction.bin",
+    "direction_sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6",
+    "actions_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/pressure_a5_actions.bin",
+    "actions_sha256": "bd7d8ec578964a335d1625a8764eb4b399aa34ab51c4ae45da111b1ef50cb711",
+    "A4_pair_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/pressure_a4_first_pair.bin",
+    "A4_pair_sha256": "7a57e9268f6e66839d2e969a333ea845b161db5372e1697cf884676aae01ade1",
+    "combined_bytes": 107212504,
+    "V_and_Az_reconstruction_bitwise": true,
+    "base_z_present": false
+  },
+  "control_P0_inverse_scaled_relative": 3.798377971987565e-14,
+  "control_old05_scaled_v_z_Az_S_bytes_equal": true,
+  "old05_pair_bytes_equal": true,
+  "old05_endpoint_parity": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/native_control/wrf.exe",
+  "disk_free_end": 10358190080,
+  "postrun_disk_floor_met": true
+}

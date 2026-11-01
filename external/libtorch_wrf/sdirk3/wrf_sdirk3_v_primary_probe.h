@@ -27,10 +27,15 @@ public:
     PreparedPrimary& operator=(PreparedPrimary&&) noexcept;
     Actions apply_terms(const torch::Tensor& z_phys) const;
     torch::Tensor apply_sum(const torch::Tensor& z_phys) const;
+    // Physical mass-cell cores, including Phi0; returns interior V faces.
+    torch::Tensor apply_core(const torch::Tensor& phi_nodes, const torch::Tensor& t,
+                             const torch::Tensor& mu) const;
 private:
     friend Actions evaluate(const torch::Tensor&,const torch::Tensor&,const StateLayout&,
                  const pressure_stage_probe::PressureEosContext&,const pressure_stage_probe::PressureVPrimaryContext&);
     Actions compute(const torch::Tensor& z_phys,bool summed) const;
+    Actions compute_core(const torch::Tensor& phi_nodes,const torch::Tensor& t,
+                         const torch::Tensor& mu,bool summed) const;
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

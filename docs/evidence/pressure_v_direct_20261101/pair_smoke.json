@@ -1,0 +1,12 @@
+{
+  "scope": "synthetic pair checks only; no model",
+  "valid_screen_passed": true,
+  "separate_twofold_goal_false_does_not_change_screen": true,
+  "equal_first_JVP_no_go": true,
+  "W_top_no_go_preserves_work": true,
+  "unexpected_base_z_rejected": true,
+  "pair_checks_sha256": "aad1c2b9618a87a22bb9ea677f0a2bef3a0128edab4800072ce4ef2f0486e395",
+  "script_sha256": "da06615fc27d85e93580972957e41ea8166583ba3d25c04d454624e70e26a397",
+  "model_run": false,
+  "time_local": "2026-11-01T11:20:03+0900"
+}

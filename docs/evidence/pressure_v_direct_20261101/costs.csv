@@ -1,0 +1,3 @@
+case,first_inclusive_ms,scaled_A_ms,wrapped_M_ms,other_including_setup_ms,first_JVP,whole_JVP,outer_Arnoldi,full_P0_inverse_calls,XZ_pressure_subsolves,RSL_step_seconds,rank_user_plus_sys_seconds,scope
+control,14408.770333,8687.290710000001,2124.779208,3596.7004149999993,23,231,21,21,0,152.3707,96.87,single instrumented pair; first-point screen only
+candidate,11717.400083,5760.884832000001,3456.5715849999997,2499.943666,14,208,13,0,65,194.93518,93.11,single instrumented pair; first-point screen only
