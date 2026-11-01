@@ -1,0 +1,15 @@
+{
+  "scope": "synthetic schema/pair checks only; no native model",
+  "schema_sha256": "79dc046ee25a85dee913517d3c63cf5a1c0c8d57896e492b41af0e97e7dd47d0",
+  "pair_checks_sha256": "aad1c2b9618a87a22bb9ea677f0a2bef3a0128edab4800072ce4ef2f0486e395",
+  "runner_sha256": "1379aa8e71ba4f7a5511ae416e098c04532a31931d0e66d7d66250bc27d1c8ac",
+  "script_sha256": "2cfe85213c1cca9601f8052797d0456c8e7c97829ef5160ecb1ce4321d363fec",
+  "valid_and_invalid_statuses": true,
+  "counter_and_grid_gates": true,
+  "strict_work_and_W_gates": true,
+  "twofold_separate_from_screen": true,
+  "no_base_z": true,
+  "status": "passed",
+  "model_run": false,
+  "time_local": "2026-11-01T11:23:45+0900"
+}

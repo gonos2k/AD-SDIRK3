@@ -1,0 +1,754 @@
+{
+  "case": "candidate",
+  "status": "completed",
+  "decision": "SCREEN_POSITIVE",
+  "model_completed": true,
+  "failure_class": null,
+  "failure_reason": null,
+  "executable_sha256": "8861d40ac464d853ce573f042823a38a215f14e3701f73587cde3f008bae0dc2",
+  "source_commit": "baacbb4bd76f5e9ec93bfa13baf2e47877c29178",
+  "rss_scope": "postrun rank maxrss; excludes launcher",
+  "timing_scope": "single instrumented feasibility pair only; no Gate B or forecast claim",
+  "return_code": 0,
+  "command": [
+    "/opt/homebrew/bin/mpirun",
+    "--timeout",
+    "360",
+    "--report-state-on-timeout",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/rank_rusage.log",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/native_candidate/wrf.exe"
+  ],
+  "monotonic_elapsed_seconds": 207.88324699969962,
+  "wall_elapsed_seconds": 207.88341903686523,
+  "environment_overrides": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+    "WRF_SDIRK3_EW_ETA_INITIAL": "0.1",
+    "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0"
+  },
+  "clock_gap_seconds": 0.00017203716561198235,
+  "available_artifacts": {
+    "pressure_a5_direction.bin": {
+      "bytes": 72673488,
+      "sha256": "c03f7d165b48fc30ebfadf500aaf59b9acd4e122e1bcc6708a3714227823a6c8"
+    },
+    "pressure_a5_actions.bin": {
+      "bytes": 17251144,
+      "sha256": "3d3560146d81bb27a50b0b7b41d6cccbb5f1ac4a9cfb1452817846f5889f99a1"
+    },
+    "pressure_a4_first_pair.bin": {
+      "bytes": 17287872,
+      "sha256": "fcc9f5a8239302ea0e725912802e93f4266817285ef010bff1780d5adc3f015d"
+    }
+  },
+  "raw_artifact_combined_bytes": 107212504,
+  "raw_artifact_cap_met": true,
+  "steps": 1,
+  "stage_residuals": [
+    "[Newton] CONVERGED stage=2 iters=3 ||S\u207b\u00b9R||_rms=6.34537656251342452e-14 [scaled-RMS] (||R||=8.60657031753753188e-11 [unscaled-L2])",
+    "[Newton] CONVERGED stage=3 iters=3 ||S\u207b\u00b9R||_rms=6.32677910712350910e-14 [scaled-RMS] (||R||=6.57680923610293178e-11 [unscaled-L2])",
+    "[Newton] CONVERGED stage=4 iters=3 ||S\u207b\u00b9R||_rms=6.29053829425546551e-14 [scaled-RMS] (||R||=6.53917336945752936e-11 [unscaled-L2])"
+  ],
+  "wrapper_rows": [
+    [
+      3,
+      0
+    ]
+  ],
+  "rank_peak_rss_bytes": 1935998976,
+  "direct": {
+    "status": "ok",
+    "cap": 4,
+    "tolerance": 0.01,
+    "restarts": 0,
+    "fallback": false,
+    "residual_metric": "V_schur_rhs_with_exact_packed_alias_S_weights",
+    "applications": 13,
+    "arnoldi_iterations": 52,
+    "pressure_xz_subsolves": 65,
+    "primary_core_calls": 78,
+    "full_packed_extensions": 13,
+    "full_P0_inverse_calls": 0,
+    "full_P0_apply_calls_in_inner": 0,
+    "V_basis_elements": 202240,
+    "pressure_cache_elements": 204800,
+    "max_true_relative_residual": 0.003877208277958008,
+    "p1_first_scaled_relative_residual": 4.1836970846169543e-07,
+    "p1_non_v_scaled_relative_residual": 8.123127004552033e-14
+  },
+  "direct_check": {
+    "classification": "VALID",
+    "record": {
+      "status": "ok",
+      "cap": 4,
+      "tolerance": 0.01,
+      "restarts": 0,
+      "fallback": false,
+      "residual_metric": "V_schur_rhs_with_exact_packed_alias_S_weights",
+      "applications": 13,
+      "arnoldi_iterations": 52,
+      "pressure_xz_subsolves": 65,
+      "primary_core_calls": 78,
+      "full_packed_extensions": 13,
+      "full_P0_inverse_calls": 0,
+      "full_P0_apply_calls_in_inner": 0,
+      "V_basis_elements": 202240,
+      "pressure_cache_elements": 204800,
+      "max_true_relative_residual": 0.003877208277958008,
+      "p1_first_scaled_relative_residual": 4.1836970846169543e-07,
+      "p1_non_v_scaled_relative_residual": 8.123127004552033e-14
+    },
+    "residual_scope": "postpoint P1 diagnostic; original-A residual is the saved native true check"
+  },
+  "stage_residual_scaled_rms": {
+    "2": 6.345376562513425e-14,
+    "3": 6.326779107123509e-14,
+    "4": 6.290538294255466e-14
+  },
+  "output_check": {
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "physical_minima_over_all_frames": {
+      "total_theta_K": 258.83935546875,
+      "total_mu_Pa": 89072.1247472763,
+      "layer_depth_m_from_PH_plus_PHB_over_g": 215.13885902459225,
+      "g_m_s2": 9.81
+    },
+    "physical_minimum_total_pressure_Pa": 11079.84334230423,
+    "timestamps": [
+      "0001-01-01_00:00:00",
+      "0001-01-01_00:10:00"
+    ],
+    "step_logs": {
+      "rsl_main_step_count": 1,
+      "rsl_main_step_sum_seconds": 194.93518,
+      "rsl_main_step_seconds": [
+        194.93518
+      ],
+      "converged_newton_stage_count": 3,
+      "newton_iterations_sum": 9,
+      "rsl_timing_files": {
+        "rsl_out": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/rsl.out.0000",
+        "rsl_error": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/rsl.error.0000"
+      },
+      "qualification": "RSL step/main-section and Newton counters; not end-to-end wall time"
+    }
+  },
+  "t0_gate": {
+    "status": "passed",
+    "reference_label": "rk3",
+    "labels": [
+      "rk3",
+      "candidate"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "preflight": {
+    "status": "ok",
+    "digest_fnv64": "7bdd17f3a694726e",
+    "state_fnv64": "bfc3393acc9791c0",
+    "F_fnv64": "ff7fe0162403c3c0",
+    "K_fnv64": "5d065c0f7df71aa0",
+    "b_fnv64": "beebab996c9f810b",
+    "x0_fnv64": "fdf60492df066d12",
+    "S_fnv64": "73dac3183f782879",
+    "Sinv_fnv64": "70e824aa5bce8528",
+    "mask_fnv64": "af63bd4c8601b7df",
+    "eos_fnv64": "d53e209fb0d78407",
+    "geometry_fnv64": "9e59543442ce1b6f",
+    "raw_grid_fnv64": "a358e8986d95c6c1",
+    "raw_column_0_0_fnv64": "d9b832053aa30223",
+    "raw_full_fnv64": "d88d4c145bbc2d91",
+    "restart": 30,
+    "max_restarts": 50,
+    "tolerance": 1.0000000116860974e-07,
+    "periodic_x": 1,
+    "periodic_y": 0,
+    "scaling": 1,
+    "mask": 0,
+    "torch_intra_op_threads": 1,
+    "torch_inter_op_threads": 1,
+    "block_scale_requested": 0,
+    "refinement_passes": 1,
+    "apinv_probe": 0,
+    "jvp_probe": 0,
+    "identity_scope": "bounded_captured_inputs_not_all_transitive_state",
+    "preflight_ms": 544.727625
+  },
+  "linear": {
+    "flavor": "reference_direct_p1",
+    "comparison_eligible": true,
+    "preflight_ms": 544.727625,
+    "setup_ms": 350.647625,
+    "linear_with_native_truecheck_ms": 10279.415375,
+    "interval_from_newton_entry_ms": 11717.400083,
+    "iterations": 13,
+    "restarts": 1,
+    "restart_budget": 30,
+    "max_restarts": 50,
+    "tolerance_applied": 1.0000000116860974e-07,
+    "stopping_metric": 1,
+    "stopping_metric_name": "unweighted_scaled_L2",
+    "stopping_relative_norm": 8.243816185249386e-10,
+    "scaled_relative_norm": 8.243816185249386e-10,
+    "residual_provenance": "saved_native_checked_raw_not_independent",
+    "saved_native_scaled_residual_norm": 1.6609150252779587e-08,
+    "saved_native_physical_residual_norm": 1.7641965598040734e-07,
+    "scaled_rhs_norm": 20.14740542763099,
+    "physical_rhs_norm": 312.3019131227635,
+    "mask_active": false,
+    "refinement_passes": 1,
+    "apinv_probe": false,
+    "jvp_probe": false,
+    "jvp_fd_fallbacks": 0,
+    "success": true,
+    "preconditioner_calls": 13,
+    "guard_events": 0,
+    "reference_calls": 13
+  },
+  "torch_threads_actual": {
+    "intra_op": 1,
+    "inter_op": 1
+  },
+  "a4": {
+    "eligible": true,
+    "capture": "fgmres_restart0_arnoldi0_raw_A_M_v_before_D_and_orthogonalization",
+    "pair_file": "pressure_a4_first_pair.bin",
+    "pair_written": true,
+    "pair_format": "SDIRKA41,u64le_numel,physical_v_f64le,physical_w_f64le",
+    "physical_transform": "S_times_scaled_krylov_vectors",
+    "S_fnv64": "73dac3183f782879",
+    "full_scaled_A_calls": 14,
+    "full_scaled_A_ms": 5760.884832000001,
+    "wrapped_M_calls": 13,
+    "wrapped_M_ms": 3456.5715849999997,
+    "physical_M_calls": 13,
+    "physical_M_ms_nested": 3364.772373999999,
+    "linear_remainder_ms": 1061.9589580000002,
+    "capture_clone_ms_included": 4.8458760000000005,
+    "capture_attempts": 1,
+    "capture_count": 1,
+    "block_scope": "full_packed_block_not_owned_core",
+    "timer_overlap": false,
+    "nested_scope": false,
+    "capture_failed": false,
+    "blocks": [
+      {
+        "name": "ru",
+        "start": 0,
+        "size": 217728,
+        "v_scaled_l2": 7.449424427716914e-05,
+        "w_scaled_l2": 7.924267681561565e-05,
+        "defect_scaled_l2": 3.412351832157588e-05,
+        "v_physical_l2": 7.449424427716914e-05,
+        "w_physical_l2": 7.924267681561565e-05,
+        "defect_physical_l2": 3.412351832157588e-05,
+        "amplitude_ratio_physical": 1.063742274111529,
+        "cos_physical": 0.9032828192449177
+      },
+      {
+        "name": "rv",
+        "start": 217728,
+        "size": 215168,
+        "v_scaled_l2": 0.00012888896089206222,
+        "w_scaled_l2": 0.00013463665589024017,
+        "defect_scaled_l2": 1.0367975219502047e-05,
+        "v_physical_l2": 0.00012888896089206222,
+        "w_physical_l2": 0.00013463665589024017,
+        "defect_physical_l2": 1.0367975219502047e-05,
+        "amplitude_ratio_physical": 1.0445941604183724,
+        "cos_physical": 0.9978546030744694
+      },
+      {
+        "name": "rw",
+        "start": 432896,
+        "size": 215865,
+        "v_scaled_l2": 0.025568219723538954,
+        "w_scaled_l2": 0.02594365480664338,
+        "defect_scaled_l2": 0.002604902141859248,
+        "v_physical_l2": 0.025568219723538954,
+        "w_physical_l2": 0.02594365480664338,
+        "defect_physical_l2": 0.002604902141859248,
+        "amplitude_ratio_physical": 1.0146836614814754,
+        "cos_physical": 0.9949915329098579
+      },
+      {
+        "name": "ph",
+        "start": 648761,
+        "size": 215865,
+        "v_scaled_l2": 0.999609910961963,
+        "w_scaled_l2": 0.9996287110801073,
+        "defect_scaled_l2": 0.00028555797226341765,
+        "v_physical_l2": 15.50082502287768,
+        "w_physical_l2": 15.501116553942861,
+        "defect_physical_l2": 0.004428111519706031,
+        "amplitude_ratio_physical": 1.0000188074547485,
+        "cos_physical": 0.9999999593741038
+      },
+      {
+        "name": "t",
+        "start": 864626,
+        "size": 212544,
+        "v_scaled_l2": 6.201550577608807e-05,
+        "w_scaled_l2": 6.214953375549718e-05,
+        "defect_scaled_l2": 1.625670329053781e-06,
+        "v_physical_l2": 6.201550577608807e-05,
+        "w_physical_l2": 6.214953375549718e-05,
+        "defect_physical_l2": 1.625670329053781e-06,
+        "amplitude_ratio_physical": 1.002161201101754,
+        "cos_physical": 0.9996594861656325
+      },
+      {
+        "name": "mu",
+        "start": 1077170,
+        "size": 3321,
+        "v_scaled_l2": 0.011236816256539254,
+        "w_scaled_l2": 0.011238387698509133,
+        "defect_scaled_l2": 0.00011919791232591854,
+        "v_physical_l2": 0.011236816256539254,
+        "w_physical_l2": 0.011238387698509133,
+        "defect_physical_l2": 0.00011919791232591854,
+        "amplitude_ratio_physical": 1.0001398476164425,
+        "cos_physical": 0.9999437549218797
+      }
+    ]
+  },
+  "existing_jvp_summaries": {
+    "first_linear_solve": {
+      "calls": 14,
+      "time_ms": 5686.464999999999
+    },
+    "whole_step_records": [
+      {
+        "calls": 14,
+        "time_ms": 5686.464999999999
+      },
+      {
+        "calls": 34,
+        "time_ms": 12571.309000000001
+      },
+      {
+        "calls": 32,
+        "time_ms": 12778.676
+      },
+      {
+        "calls": 48,
+        "time_ms": 21466.941000000003
+      },
+      {
+        "calls": 32,
+        "time_ms": 45072.030999999995
+      },
+      {
+        "calls": 48,
+        "time_ms": 22215.154000000006
+      }
+    ],
+    "whole_step_calls_sum": 208,
+    "whole_step_jvp_time_ms_sum": 119790.576,
+    "scope": "existing JVP summaries: first-solve JVP is nested in first-point scaled A; whole-step sum spans six solves. Never add either to A time; JVP counts need not equal A calls"
+  },
+  "capture": {
+    "status": "captured",
+    "path": "pressure_a5_direction.bin",
+    "missing": []
+  },
+  "legacy_decomposition": {
+    "inverse_scaled_relative": 6.8990829750322e-05,
+    "packed_closure_ok": true,
+    "blocks": [
+      {
+        "name": "ru",
+        "closure_max": 1.0587911840678754e-22,
+        "closure_budget": 5.84002052349386e-20,
+        "scaled_closure_max": 1.0587911840678754e-22,
+        "scaled_closure_budget": 5.84002052349386e-20
+      },
+      {
+        "name": "rv",
+        "closure_max": 1.0587911840678754e-22,
+        "closure_budget": 1.495438038141136e-19,
+        "scaled_closure_max": 1.0587911840678754e-22,
+        "scaled_closure_budget": 1.495438038141136e-19
+      },
+      {
+        "name": "rw",
+        "closure_max": 6.776263578034403e-21,
+        "closure_budget": 3.530885490333945e-17,
+        "scaled_closure_max": 6.776263578034403e-21,
+        "scaled_closure_budget": 3.530885490333945e-17
+      },
+      {
+        "name": "ph",
+        "closure_max": 1.6940658945086007e-21,
+        "closure_budget": 5.726596743263231e-15,
+        "scaled_closure_max": 2.117582368135751e-22,
+        "scaled_closure_budget": 3.6929407642494414e-16
+      },
+      {
+        "name": "t",
+        "closure_max": 1.6543612251060553e-24,
+        "closure_budget": 4.159141119395235e-20,
+        "scaled_closure_max": 1.6543612251060553e-24,
+        "scaled_closure_budget": 4.159141119395235e-20
+      },
+      {
+        "name": "mu",
+        "closure_max": 0,
+        "closure_budget": 2.6098747018809505e-17,
+        "scaled_closure_max": 0,
+        "scaled_closure_budget": 2.6098747018809505e-17
+      }
+    ]
+  },
+  "legacy_A5": {
+    "status": "observed",
+    "cost_eligible": false,
+    "eligible": false,
+    "gate_pass": false,
+    "native_nh": true,
+    "base_state_branch": true,
+    "use_wrf_mass_flux": true,
+    "S_diag_provided": true,
+    "scale_check": "torch_equal_numeric_signed_zero_equal",
+    "gate_threshold_squared_ratio": 0.5,
+    "minimum_signal_ratio": 1e-08,
+    "inverse_scaled_relative": 6.8990829750322e-05,
+    "inverse_scaled_ok": false,
+    "inverse_scaled_limit": 1e-08,
+    "ad_pointwise_ok": true,
+    "packed_closure_ok": true,
+    "closure_budget": "128*float64_eps*maxabs(v,P0z,Az), physical and scaled separately per packed block",
+    "action_check": "per V point: 1e-12 m/s3 + relative*abs(FWAD), AD 1e-9, FD 1e-5, at least 2 of 3 FD widths",
+    "fd_pointwise_ok": [
+      true,
+      true,
+      false
+    ],
+    "fd_steps_seconds": [
+      0.01,
+      0.001,
+      0.0001
+    ],
+    "rV_norm": 6.781006716718433e-05,
+    "vV_norm": 0.00012888896033643298,
+    "candidate_norm": 6.675435281725651e-05,
+    "unit_squared_ratio": 0.023358869727235256,
+    "cosine": 0.9882589646759076,
+    "fit_descriptive_only": 1.00388819522675,
+    "orthogonal_fraction": 0.15278814986042807,
+    "V_wall_mismatch_norm": 0,
+    "V_x_alias_mismatch_norm": 1.3680384053184716e-05,
+    "V_y_alias_mismatch_norm": 1.085358951530913e-05,
+    "W_dynamic_top_mismatch_norm": 0.00036939064074124564,
+    "W_interior_mismatch_norm": 0.002520659881744864,
+    "phi_action_norm": 2.541760887192887e-07,
+    "pressure_action_norm": 4.195810075126347e-07,
+    "alpha_action_norm": 3.1924610096458904e-11,
+    "fwad_sum_error": 4.928571161564977e-22,
+    "fd_error_norms": [
+      8.793324435088515e-12,
+      8.703177434456831e-11,
+      8.645781646790686e-10
+    ],
+    "primal_dpy_max": 0,
+    "primal_level_mass_max": 0,
+    "primal_velocity_mass_max": 0,
+    "primal_alpha_v_max": 0,
+    "primal_ratio_max": 0,
+    "primal_alpha_max": 0,
+    "primal_pressure_max": 0,
+    "projected_state_max": 0,
+    "units": "u,v,w:m/s2; phi:m2/s3; theta:K/s; mu:Pa/s; Jphi/Jp/Jalpha/Jfwad:m/s3; Vp0 and mismatch:m/s2",
+    "context_constants": {
+      "rd": 287,
+      "cv": 717.5,
+      "cp": 1004.5,
+      "p0": 100000,
+      "t0": 300,
+      "rdx": 9.999999747378752e-06,
+      "rdy": 9.999999747378752e-06,
+      "velocity_eps": 1.000000013351432e-10,
+      "a": 261.5199129050754,
+      "gravity": 9.8100004196167,
+      "dx": 100000.00252621254,
+      "dy": 100000.00252621254,
+      "nx_physical": 40,
+      "ny_physical": 80,
+      "nz": 64
+    },
+    "blocks": [
+      {
+        "name": "ru",
+        "defect": 3.412351832157588e-05,
+        "reconstruction": 1.5196846718956066e-16,
+        "mismatch": 3.412351832157585e-05,
+        "closure": 2.108434192053261e-21,
+        "closure_max": 1.0587911840678754e-22,
+        "closure_budget": 5.84002052349386e-20,
+        "scaled_closure_max": 1.0587911840678754e-22,
+        "scaled_closure_budget": 5.84002052349386e-20
+      },
+      {
+        "name": "rv",
+        "defect": 1.0367975219502047e-05,
+        "reconstruction": 6.899082975032328e-05,
+        "mismatch": 7.002255723999074e-05,
+        "closure": 3.3489624344829126e-21,
+        "closure_max": 1.0587911840678754e-22,
+        "closure_budget": 1.495438038141136e-19,
+        "scaled_closure_max": 1.0587911840678754e-22,
+        "scaled_closure_budget": 1.495438038141136e-19
+      },
+      {
+        "name": "rw",
+        "defect": 0.002604902141859248,
+        "reconstruction": 7.818904612355869e-14,
+        "mismatch": 0.002604902141859304,
+        "closure": 1.0604966811140004e-19,
+        "closure_max": 6.776263578034403e-21,
+        "closure_budget": 3.530885490333945e-17,
+        "scaled_closure_max": 6.776263578034403e-21,
+        "scaled_closure_budget": 3.530885490333945e-17
+      },
+      {
+        "name": "ph",
+        "defect": 0.004428111519706031,
+        "reconstruction": 3.4149263492700063e-13,
+        "mismatch": 0.004428111519664315,
+        "closure": 1.6940658945086007e-21,
+        "closure_max": 1.6940658945086007e-21,
+        "closure_budget": 5.726596743263231e-15,
+        "scaled_closure_max": 2.117582368135751e-22,
+        "scaled_closure_budget": 3.6929407642494414e-16
+      },
+      {
+        "name": "t",
+        "defect": 1.625670329053781e-06,
+        "reconstruction": 1.827350429654625e-21,
+        "mismatch": 1.625670329053781e-06,
+        "closure": 3.404730260136351e-23,
+        "closure_max": 1.6543612251060553e-24,
+        "closure_budget": 4.159141119395235e-20,
+        "scaled_closure_max": 1.6543612251060553e-24,
+        "scaled_closure_budget": 4.159141119395235e-20
+      },
+      {
+        "name": "mu",
+        "defect": 0.00011919791232591854,
+        "reconstruction": 3.2452012848960107e-19,
+        "mismatch": 0.00011919791232591855,
+        "closure": 0,
+        "closure_max": 0,
+        "closure_budget": 2.6098747018809505e-17,
+        "scaled_closure_max": 0,
+        "scaled_closure_budget": 2.6098747018809505e-17
+      }
+    ],
+    "artifact": "pressure_a5_direction.bin",
+    "actions_artifact": "pressure_a5_actions.bin",
+    "artifact_format": "SDIRKA53:u64records;name32,u32itemsize,u32ndim,i64dims4,u64bytes,data"
+  },
+  "legacy_A5_scope": "primal and AD checks required; do not gate corrected z using P0 inverse or FP64 finite-difference eligibility",
+  "payload": {
+    "direction_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/pressure_a5_direction.bin",
+    "direction_sha256": "c03f7d165b48fc30ebfadf500aaf59b9acd4e122e1bcc6708a3714227823a6c8",
+    "actions_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/pressure_a5_actions.bin",
+    "actions_sha256": "3d3560146d81bb27a50b0b7b41d6cccbb5f1ac4a9cfb1452817846f5889f99a1",
+    "A4_pair_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/pressure_a4_first_pair.bin",
+    "A4_pair_sha256": "fcc9f5a8239302ea0e725912802e93f4266817285ef010bff1780d5adc3f015d",
+    "combined_bytes": 107212504,
+    "V_and_Az_reconstruction_bitwise": true,
+    "base_z_present": false
+  },
+  "owned_field_comparison": {
+    "U": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "V": {
+      "unit": "m s-1",
+      "owned_points": 207360,
+      "max_abs": 7.450580596923828e-09,
+      "rms": 2.785301720103867e-11,
+      "violations": 0
+    },
+    "W": {
+      "unit": "m s-1",
+      "owned_points": 204800,
+      "max_abs": 5.820766091346741e-11,
+      "rms": 3.109773174473121e-13,
+      "violations": 0
+    },
+    "PH": {
+      "unit": "m2 s-2",
+      "owned_points": 204800,
+      "max_abs": 1.4901161193847656e-08,
+      "rms": 3.3940607069789554e-11,
+      "violations": 0
+    },
+    "T": {
+      "unit": "K",
+      "owned_points": 204800,
+      "max_abs": 0.0,
+      "rms": 0.0,
+      "violations": 0
+    },
+    "MU": {
+      "unit": "Pa",
+      "owned_points": 3200,
+      "max_abs": 2.384185791015625e-07,
+      "rms": 4.214684851089403e-09,
+      "violations": 0
+    }
+  },
+  "pair_assessment": {
+    "decision": "SCREEN_POSITIVE",
+    "quality": {
+      "full_scaled_control": 0.002687919855048388,
+      "full_scaled_candidate": 0.0026234597802721827,
+      "full_scaled_not_increased": true,
+      "V_interior_core_control_l2": 9.615210825050719e-05,
+      "V_interior_core_candidate_l2": 1.0347589746732602e-05,
+      "V_interior_core_strictly_decreased": true,
+      "W_top_control_rms": 6.6735333587341275e-06,
+      "W_top_candidate_rms": 6.529965674369771e-06,
+      "W_top_not_increased": true,
+      "W_interior_control_rms": 5.772374250031081e-06,
+      "W_interior_candidate_rms": 5.613955753616152e-06,
+      "W_interior_not_increased": true,
+      "rows": [
+        {
+          "name": "ru",
+          "unit": "m s-2",
+          "control_physical_l2": 3.430649933260993e-05,
+          "candidate_physical_l2": 3.412351832157538e-05,
+          "control_scaled_l2": 3.430649933260993e-05,
+          "candidate_scaled_l2": 3.412351832157538e-05
+        },
+        {
+          "name": "rv",
+          "unit": "m s-2",
+          "control_physical_l2": 9.97995516024313e-05,
+          "candidate_physical_l2": 1.0367975219502123e-05,
+          "control_scaled_l2": 9.97995516024313e-05,
+          "candidate_scaled_l2": 1.0367975219502123e-05
+        },
+        {
+          "name": "rw",
+          "unit": "m s-2",
+          "control_physical_l2": 0.002678877181104007,
+          "candidate_physical_l2": 0.0026049021418592536,
+          "control_scaled_l2": 0.002678877181104007,
+          "candidate_scaled_l2": 0.0026049021418592536
+        },
+        {
+          "name": "ph",
+          "unit": "m2 s-3",
+          "control_physical_l2": 0.0023502978321065424,
+          "candidate_physical_l2": 0.004428111519706104,
+          "control_scaled_l2": 0.00015156490078551305,
+          "candidate_scaled_l2": 0.00028555797226341434
+        },
+        {
+          "name": "t",
+          "unit": "K s-1",
+          "control_physical_l2": 6.908982912408228e-07,
+          "candidate_physical_l2": 1.6256703290537915e-06,
+          "control_scaled_l2": 6.908982912408228e-07,
+          "candidate_scaled_l2": 1.6256703290537915e-06
+        },
+        {
+          "name": "mu",
+          "unit": "Pa s-1",
+          "control_physical_l2": 0.00012008710520698969,
+          "candidate_physical_l2": 0.00011919791232591884,
+          "control_scaled_l2": 0.00012008710520698969,
+          "candidate_scaled_l2": 0.00011919791232591884
+        }
+      ]
+    },
+    "work": {
+      "control_first_jvp_calls": 23,
+      "candidate_first_jvp_calls": 14,
+      "first_jvp_strictly_decreased": true,
+      "control_whole_jvp_calls": 231,
+      "candidate_whole_jvp_calls": 208,
+      "whole_jvp_not_increased": true,
+      "control_first_inclusive_ms": 14408.770333,
+      "candidate_first_inclusive_ms": 11717.400083,
+      "first_inclusive_cost_strictly_decreased": true,
+      "candidate_setup_ms_included": 350.647625,
+      "twofold_goal_met_separate": false,
+      "twofold_scope": "descriptive single-pair screen only; old A4 NO-GO unchanged; no automatic Gate B",
+      "direct_M_accounting_passed": true,
+      "candidate_direct_applications": 13,
+      "candidate_wrapped_M_calls": 13,
+      "physical_M_nested_not_additive": true,
+      "JVP_nested_in_A_not_additive": true
+    },
+    "scope": "one instrumented pair only; no Gate B, adoption or forecast performance claim",
+    "base_z_scope": "not captured or used for Direct-V",
+    "cost_instrumented_feasibility_only": true,
+    "endpoint_8eps_passed": true
+  },
+  "endpoint_8eps_passed": true,
+  "twofold_goal_met_separate": false,
+  "gate_B_authorized": false,
+  "old_A4_outcome": "NO-GO unchanged",
+  "executable_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/native_candidate/wrf.exe",
+  "disk_free_end": 16481353728,
+  "postrun_disk_floor_met": true
+}

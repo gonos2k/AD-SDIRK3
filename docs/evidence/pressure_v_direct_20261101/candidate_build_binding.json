@@ -1,0 +1,10 @@
+{
+  "source_commit": "baacbb4bd76f5e9ec93bfa13baf2e47877c29178",
+  "control_result_sha256": "2aa4126e3981ed1e93c6892fa89994d9ae7b8d3eedba4cf3ab20008d1b31ce1a",
+  "control_build_gate_sha256": "78eed934d2125cea13e8fd59cc03709e09d72a0aa5f738a2ec834121805bbff2",
+  "control_build_receipt_sha256": "d55053f60a31958c93ce4623583eae77d0a839e3e430032273e5259c07866046",
+  "candidate_build_receipt_sha256": "0a44c9a7410938dcc5fcd07a7ee5dd3ec7bf9a6e6a6bf1daded1a7816869e30d",
+  "candidate_executable_sha256": "8861d40ac464d853ce573f042823a38a215f14e3701f73587cde3f008bae0dc2",
+  "control_precheck_before_candidate_build": "verified by root before invocation; original gate file retained",
+  "model_run": false
+}

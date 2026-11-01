@@ -1,0 +1,9 @@
+{
+  "source_commit": "baacbb4bd76f5e9ec93bfa13baf2e47877c29178",
+  "registration_sha256": "bdde318ab89280938ef025823f734c5b30e6aeea89ad08906c19128ea96d573c",
+  "control_result_sha256": "2aa4126e3981ed1e93c6892fa89994d9ae7b8d3eedba4cf3ab20008d1b31ce1a",
+  "control_completed": true,
+  "candidate_build_authorized": true,
+  "additional_models_maximum": 1,
+  "retry": false
+}

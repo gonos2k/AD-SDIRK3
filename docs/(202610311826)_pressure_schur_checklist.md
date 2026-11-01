@@ -1,8 +1,8 @@
 # 표준 em_b_wave 전방 코어 체크리스트
 
 작성: 2026-10-31T18:26:15.434614+09:00.
-마지막 갱신: 2026-11-01T09:24:06.066335+09:00.
-현재 개발 기준: main356b08c5; A7native e05ab44a/수치hook원복ee5914e9. A4/A5 판정 유지.
+마지막 갱신: 2026-11-01T12:22:28.830176+09:00.
+현재 개발 기준: main6d84ae9b; A8 native baacbb4b, default-off 제한 연구 후보. A4/A7 판정 유지.
 Green·Red: GPT-6.1-Terra, medium.
 
 ## 완료 목표와 운영 원칙
@@ -99,6 +99,15 @@ A0–A3의 제한된 기능·첫 단계 수치 검증에 이어 A4 비용 선별
   관측 첫 JVP23→14, P0 역산21→60, 준비 포함13.7614→19.3128초로 후보는 미채택·확대중단이다.
   수치 hook를 원복하고 e05 source/exe/기록을 보존했다. 실용 결합 전처리 수용은 아니다.
   [근거](evidence/pressure_coupled_inverse_20261101/manifest.json).
+
+
+- [x] A8 같은 P1의 X–연직 압력 직접 소거와 독립 V Schur를 구현·검사하고
+  고정 native h600 control→후보 각1회로 제한 선별을 완료했다. 내부 전체P0역산/작용0,
+  V basis202240점·pressure cache204800점, Φ0/alias/보완·실제 P1/native A 잔차와 끝값을 확인했다.
+  첫구간14.4088→11.7174초·첫 JVP23→14로 SCREEN_POSITIVE이나 2배 목표는 false다.
+  전체 JVP231→208과 달리 **전체 RSL152.37→194.94초로 증가**했으며 원인 미분리다.
+  코드 default-off 연구 범위를 유지하고 전체 전방 가속/생산/B 승인으로 올리지 않는다.
+  [근거](evidence/pressure_v_direct_20261101/manifest.json). A7 INCONCLUSIVE와 A4 NO-GO는 유지한다.
 
 **A 종료 산출물:** source/exe/input/context가 고정된 native600초 단계의 기존/압력 P 비교표,
 원래 A의 저장된 실제 잔차, 경계·좌표 복원 검증, 준비 포함 총비용을 확보했다.

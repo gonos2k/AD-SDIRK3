@@ -1,0 +1,383 @@
+{
+  "created_local": "2026-11-01T12:22:28.826676+09:00",
+  "source_commit": "baacbb4bd76f5e9ec93bfa13baf2e47877c29178",
+  "base_main": "6d84ae9b71c65b1059fa6eb8b44b58afd33e9fb4",
+  "native_attempts": 2,
+  "retry": false,
+  "registered_first_point_decision": "SCREEN_POSITIVE",
+  "source_hook": "compile-time default-off; selected first point only; not promoted",
+  "first_point_twofold_goal_met": false,
+  "whole_RSL_step_observation": "152.37070 -> 194.93518 seconds; slower in this pair",
+  "whole_run_or_RK3_speed_claim": false,
+  "late_forecast_noise_resolution_claim": false,
+  "gate_B_authorized": false,
+  "historical_outcomes": "A4 NO-GO and A7 INCONCLUSIVE/retired unchanged",
+  "records": [
+    {
+      "path": "registration.json",
+      "bytes": 10590,
+      "sha256": "bdde318ab89280938ef025823f734c5b30e6aeea89ad08906c19128ea96d573c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/registration.json",
+      "original_sha256": "bdde318ab89280938ef025823f734c5b30e6aeea89ad08906c19128ea96d573c",
+      "normalization": "none"
+    },
+    {
+      "path": "control_intent.json",
+      "bytes": 3616,
+      "sha256": "f5a9e084fe0a3e7419978dab324350f74cfecff048e8a0caebaad0575c27e679",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/control_intent.json",
+      "original_sha256": "f5a9e084fe0a3e7419978dab324350f74cfecff048e8a0caebaad0575c27e679",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_intent.json",
+      "bytes": 4469,
+      "sha256": "8f486644f962551c54dd0cf0f3bb68d449b42954a4fe08a082e6c6ddb5f4b49e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/candidate_intent.json",
+      "original_sha256": "8f486644f962551c54dd0cf0f3bb68d449b42954a4fe08a082e6c6ddb5f4b49e",
+      "normalization": "none"
+    },
+    {
+      "path": "control_pins.json",
+      "bytes": 37788,
+      "sha256": "8d402f0280d31c8d1dd22035c8723d43b7b68ba0952457de63760a501757011d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/control_pins.json",
+      "original_sha256": "8d402f0280d31c8d1dd22035c8723d43b7b68ba0952457de63760a501757011d",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_pins.json",
+      "bytes": 42090,
+      "sha256": "6efb429f9a7e30bd96583f7514e477d54b8a872c5d17fe622f0f750c507216ad",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/candidate_pins.json",
+      "original_sha256": "6efb429f9a7e30bd96583f7514e477d54b8a872c5d17fe622f0f750c507216ad",
+      "normalization": "none"
+    },
+    {
+      "path": "control_build_receipt.json",
+      "bytes": 71447,
+      "sha256": "d55053f60a31958c93ce4623583eae77d0a839e3e430032273e5259c07866046",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/native_control/build_receipt.json",
+      "original_sha256": "d55053f60a31958c93ce4623583eae77d0a839e3e430032273e5259c07866046",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_receipt.json",
+      "bytes": 24152,
+      "sha256": "0a44c9a7410938dcc5fcd07a7ee5dd3ec7bf9a6e6a6bf1daded1a7816869e30d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/native_candidate/build_receipt.json",
+      "original_sha256": "0a44c9a7410938dcc5fcd07a7ee5dd3ec7bf9a6e6a6bf1daded1a7816869e30d",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_control_gate.json",
+      "bytes": 373,
+      "sha256": "78eed934d2125cea13e8fd59cc03709e09d72a0aa5f738a2ec834121805bbff2",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/candidate_build_control_gate.json",
+      "original_sha256": "78eed934d2125cea13e8fd59cc03709e09d72a0aa5f738a2ec834121805bbff2",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_build_binding.json",
+      "bytes": 701,
+      "sha256": "58849e4a0fb3fc75c642dcf5887f4706c73661e8842a2597707c5e924da8c5ca",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/candidate_build_binding.json",
+      "original_sha256": "58849e4a0fb3fc75c642dcf5887f4706c73661e8842a2597707c5e924da8c5ca",
+      "normalization": "none"
+    },
+    {
+      "path": "control_result.json",
+      "bytes": 19298,
+      "sha256": "2aa4126e3981ed1e93c6892fa89994d9ae7b8d3eedba4cf3ab20008d1b31ce1a",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/result.json",
+      "original_sha256": "2aa4126e3981ed1e93c6892fa89994d9ae7b8d3eedba4cf3ab20008d1b31ce1a",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_result.json",
+      "bytes": 25463,
+      "sha256": "c91763134db5d06a572a74bf37e34041429d68e52c5cbe2d016e626c847addb3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/result.json",
+      "original_sha256": "c91763134db5d06a572a74bf37e34041429d68e52c5cbe2d016e626c847addb3",
+      "normalization": "none"
+    },
+    {
+      "path": "component_combined_receipt.json",
+      "bytes": 18909,
+      "sha256": "c8f23b84fb22f5938e0d0d9d3c6dc2838b3c753a3bfff0ff5653e76b84b6d375",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/component_combined_receipt.json",
+      "original_sha256": "c8f23b84fb22f5938e0d0d9d3c6dc2838b3c753a3bfff0ff5653e76b84b6d375",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_component_compile_receipt.json",
+      "bytes": 10307,
+      "sha256": "81c5c6383dc24ce383de7d089b2c3e0285d215bbe6b8953d8f615f83e63e1efa",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/component_build/receipt.json",
+      "original_sha256": "81c5c6383dc24ce383de7d089b2c3e0285d215bbe6b8953d8f615f83e63e1efa",
+      "normalization": "none"
+    },
+    {
+      "path": "primary_component_receipt.json",
+      "bytes": 13161,
+      "sha256": "cba6436157de90f324053919649ba58b3a952ba1a0eb7c88219f093a2fad3fd3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/component_tests_final/receipt.json",
+      "original_sha256": "cba6436157de90f324053919649ba58b3a952ba1a0eb7c88219f093a2fad3fd3",
+      "normalization": "none"
+    },
+    {
+      "path": "final_component_receipt.json",
+      "bytes": 21660,
+      "sha256": "955041729f9c0391b09220105cdef2e882ebe5232e738d62ae6007253501ff4f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/component_refresh/receipt.json",
+      "original_sha256": "955041729f9c0391b09220105cdef2e882ebe5232e738d62ae6007253501ff4f",
+      "normalization": "none"
+    },
+    {
+      "path": "schema_smoke.json",
+      "bytes": 677,
+      "sha256": "160fe6414c4ceb28c0e1c254a80f15881594babf2eebfbf98c9b9c7213ee01b0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/schema_smoke.json",
+      "original_sha256": "160fe6414c4ceb28c0e1c254a80f15881594babf2eebfbf98c9b9c7213ee01b0",
+      "normalization": "none"
+    },
+    {
+      "path": "pair_smoke.json",
+      "bytes": 501,
+      "sha256": "20b3ed6f07c8c12b6654658cdfee2f9f5c5e5b48a301033752ee5cb5fb210c18",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/pair_smoke.json",
+      "original_sha256": "20b3ed6f07c8c12b6654658cdfee2f9f5c5e5b48a301033752ee5cb5fb210c18",
+      "normalization": "none"
+    },
+    {
+      "path": "native_pair_audit.json",
+      "bytes": 18634,
+      "sha256": "a3c5620e64d063e17df672e4c09816eacb81604fadc83d6db517af80bd0c970a",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/native_pair_audit.json",
+      "original_sha256": "a3c5620e64d063e17df672e4c09816eacb81604fadc83d6db517af80bd0c970a",
+      "normalization": "none"
+    },
+    {
+      "path": "whole_step_timing_audit.json",
+      "bytes": 3128,
+      "sha256": "8049927dbe92ca46af4b9fbfc97d930ccf6698946ab870b4a757e9fa4087fb59",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/whole_step_timing_audit.json",
+      "original_sha256": "8049927dbe92ca46af4b9fbfc97d930ccf6698946ab870b4a757e9fa4087fb59",
+      "normalization": "none"
+    },
+    {
+      "path": "whole_step_timing_qualification.json",
+      "bytes": 4373,
+      "sha256": "d26156082e35d3a34ddf6d275251dd94e817690dc1bd8f292f4afe59caebd94c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/whole_step_timing_qualification.json",
+      "original_sha256": "d26156082e35d3a34ddf6d275251dd94e817690dc1bd8f292f4afe59caebd94c",
+      "normalization": "none"
+    },
+    {
+      "path": "duplicate_cleanup_receipt.json",
+      "bytes": 4402,
+      "sha256": "97e79ef158cda167595d2f58fbd3eb67fd6d82efd11af4f3e3d4d4d6f01704e5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/duplicate_cleanup_receipt.json",
+      "original_sha256": "97e79ef158cda167595d2f58fbd3eb67fd6d82efd11af4f3e3d4d4d6f01704e5",
+      "normalization": "none"
+    },
+    {
+      "path": "graph_source_pins.json",
+      "bytes": 3769,
+      "sha256": "8ff3f07b7769d158574bf8e2312d49e9016c415527cc3460fe8f15cf39af1fde",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/final_pins.json",
+      "original_sha256": "8ff3f07b7769d158574bf8e2312d49e9016c415527cc3460fe8f15cf39af1fde",
+      "normalization": "none"
+    },
+    {
+      "path": "costs.csv",
+      "bytes": 505,
+      "sha256": "acafc2a05baeb447fbf5139c80a0b5200bcf371212ae67fa20f83d1eb5c419ce",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/costs.csv",
+      "original_sha256": "b5347b5d4e23703c4565104f00f8f75c7a1766338d47985c66e8814eeeaba8d0",
+      "normalization": "CRLF to LF"
+    },
+    {
+      "path": "rate_defects.png",
+      "bytes": 192336,
+      "sha256": "233f9647fa93c113da060d7b57d3f44472142876ac47d91f3ba5c3a904aa11f2",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/comparison_analysis/rate_defects.png",
+      "original_sha256": "233f9647fa93c113da060d7b57d3f44472142876ac47d91f3ba5c3a904aa11f2",
+      "normalization": "none"
+    },
+    {
+      "path": "scaled_blocks.png",
+      "bytes": 36426,
+      "sha256": "f4d6cb14a9698fddacbe8fddb1c4ebc79f5a4d94141c2bf36250d80394e3be4a",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/comparison_analysis/scaled_blocks.png",
+      "original_sha256": "f4d6cb14a9698fddacbe8fddb1c4ebc79f5a4d94141c2bf36250d80394e3be4a",
+      "normalization": "none"
+    },
+    {
+      "path": "forecast_context.png",
+      "bytes": 127964,
+      "sha256": "e29af17e2ea4a94eee67c0414d432c663f197de52da0772e878ddd2c3e7ce8be",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/comparison_analysis/forecast_context.png",
+      "original_sha256": "e29af17e2ea4a94eee67c0414d432c663f197de52da0772e878ddd2c3e7ce8be",
+      "normalization": "none"
+    },
+    {
+      "path": "first_cost_stack.png",
+      "bytes": 37174,
+      "sha256": "761dbda5ccd5d69b87faa577a7537b41c77c9ceee3ca76e1518c86d6ad2ea267",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/comparison_analysis/first_cost_stack.png",
+      "original_sha256": "761dbda5ccd5d69b87faa577a7537b41c77c9ceee3ca76e1518c86d6ad2ea267",
+      "normalization": "none"
+    },
+    {
+      "path": "whole_step_context.png",
+      "bytes": 113910,
+      "sha256": "a20431de22e95380b37db77edf490e7a482391bd109e254499332cc92e6dd6bb",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/comparison_analysis/whole_step_context.png",
+      "original_sha256": "a20431de22e95380b37db77edf490e7a482391bd109e254499332cc92e6dd6bb",
+      "normalization": "none"
+    },
+    {
+      "path": "defect_blocks.csv",
+      "bytes": 985,
+      "sha256": "38c26beeb6f1fabea80ef261ca8c242c6de3429da1fd3f385ab7b8c785b6b5b9",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/comparison_analysis/defect_blocks.csv",
+      "original_sha256": "e0bbfc1870654e7df35bee29af5aafc0e4b84fb5108aa466f42b72badeaee49d",
+      "normalization": "CRLF to LF"
+    },
+    {
+      "path": "plot_receipt.json",
+      "bytes": 7362,
+      "sha256": "72c9024254b1d2d996f296bd1683a1f4c94dd3b9447e398e9e0b6e4f8ad5377e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/comparison_analysis/receipt.json",
+      "original_sha256": "72c9024254b1d2d996f296bd1683a1f4c94dd3b9447e398e9e0b6e4f8ad5377e",
+      "normalization": "none"
+    },
+    {
+      "path": "whole_step_plot_receipt.json",
+      "bytes": 2670,
+      "sha256": "f0a5180d2933027f86c066e5805e1fdfe31e28cb048b9b808dec88a7261dfc82",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/comparison_analysis/whole_step_context_receipt.json",
+      "original_sha256": "f0a5180d2933027f86c066e5805e1fdfe31e28cb048b9b808dec88a7261dfc82",
+      "normalization": "none"
+    },
+    {
+      "path": "analyze_pair.py",
+      "bytes": 9795,
+      "sha256": "71e51f064e82ef4d2d93a2f7d5ac58538a283984a2a1ad3b5f905b1129a1ddc0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/analyze_pair.py",
+      "original_sha256": "71e51f064e82ef4d2d93a2f7d5ac58538a283984a2a1ad3b5f905b1129a1ddc0",
+      "normalization": "none"
+    },
+    {
+      "path": "plot_whole_step.py",
+      "bytes": 3038,
+      "sha256": "5692b3db19acf710684a6e02e43fb96c1c36f10812a389a2819b6f060b4f3f52",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/plot_whole_step.py",
+      "original_sha256": "5692b3db19acf710684a6e02e43fb96c1c36f10812a389a2819b6f060b4f3f52",
+      "normalization": "none"
+    },
+    {
+      "path": "build_control.py",
+      "bytes": 8026,
+      "sha256": "c1cc906bb866dfd9d6c5f21ae5d36d6bc52d0f83c679555e752f5de56578ccc0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/build_control.draft.py",
+      "original_sha256": "c1cc906bb866dfd9d6c5f21ae5d36d6bc52d0f83c679555e752f5de56578ccc0",
+      "normalization": "none"
+    },
+    {
+      "path": "build_candidate.py",
+      "bytes": 5305,
+      "sha256": "62a70798618efaff3a60010f6bd19da6fc0d8d6aeba24dcf1289e5e1ddce9766",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/build_candidate.draft.py",
+      "original_sha256": "62a70798618efaff3a60010f6bd19da6fc0d8d6aeba24dcf1289e5e1ddce9766",
+      "normalization": "none"
+    },
+    {
+      "path": "run_pair_case.py",
+      "bytes": 18401,
+      "sha256": "1379aa8e71ba4f7a5511ae416e098c04532a31931d0e66d7d66250bc27d1c8ac",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/run_pair_case.draft.py",
+      "original_sha256": "1379aa8e71ba4f7a5511ae416e098c04532a31931d0e66d7d66250bc27d1c8ac",
+      "normalization": "none"
+    },
+    {
+      "path": "pair_checks.py",
+      "bytes": 5640,
+      "sha256": "aad1c2b9618a87a22bb9ea677f0a2bef3a0128edab4800072ce4ef2f0486e395",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/pair_checks.py",
+      "original_sha256": "aad1c2b9618a87a22bb9ea677f0a2bef3a0128edab4800072ce4ef2f0486e395",
+      "normalization": "none"
+    },
+    {
+      "path": "direct_checks.py",
+      "bytes": 4045,
+      "sha256": "79dc046ee25a85dee913517d3c63cf5a1c0c8d57896e492b41af0e97e7dd47d0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/direct_checks.py",
+      "original_sha256": "79dc046ee25a85dee913517d3c63cf5a1c0c8d57896e492b41af0e97e7dd47d0",
+      "normalization": "none"
+    },
+    {
+      "path": "run_a4.py",
+      "bytes": 20422,
+      "sha256": "eef8c435509651877f3e00e1a569732902aeef4f6bed18dcf26980a71dc4a50f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/run_a4.py",
+      "original_sha256": "eef8c435509651877f3e00e1a569732902aeef4f6bed18dcf26980a71dc4a50f",
+      "normalization": "none"
+    },
+    {
+      "path": "run_a5.py",
+      "bytes": 19966,
+      "sha256": "cb0e01cab846bf08500fe61a2419e2a549a992e0c96c9e7c9589594445f16897",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/run_a5.py",
+      "original_sha256": "cb0e01cab846bf08500fe61a2419e2a549a992e0c96c9e7c9589594445f16897",
+      "normalization": "none"
+    },
+    {
+      "path": "base_screen_reference.py",
+      "bytes": 11277,
+      "sha256": "bbd270ec6cc58df7fdc4d1aa6e2dd53731af49f7b42bf4898690c1583b04193b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/base_screen_reference.py",
+      "original_sha256": "bbd270ec6cc58df7fdc4d1aa6e2dd53731af49f7b42bf4898690c1583b04193b",
+      "normalization": "none"
+    },
+    {
+      "path": "benchmark_wrf_accuracy_cost.py",
+      "bytes": 55688,
+      "sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/benchmark_wrf_accuracy_cost.py",
+      "original_sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+      "normalization": "none"
+    },
+    {
+      "path": "control_selected_log.txt",
+      "bytes": 4302,
+      "sha256": "2255726aeb8123e693d4513aa300e8fc6d2cd9513c53e3701392dabc275d81e1",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control",
+      "normalization": "selected original lines deduplicated; raw logs retained locally"
+    },
+    {
+      "path": "control_rank_rusage.txt",
+      "bytes": 777,
+      "sha256": "22d12a328e222b76da0c98ae78ef45185d4a3221ac8105ce912bd79790245cca",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/rank_rusage.log",
+      "original_sha256": "22d12a328e222b76da0c98ae78ef45185d4a3221ac8105ce912bd79790245cca",
+      "normalization": "none"
+    },
+    {
+      "path": "candidate_selected_log.txt",
+      "bytes": 4930,
+      "sha256": "d6f0d253d8e3bee586088eaf6aef7308d919d00b79f95bea9239c8d75df835b5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate",
+      "normalization": "selected original lines deduplicated; raw logs retained locally"
+    },
+    {
+      "path": "candidate_rank_rusage.txt",
+      "bytes": 777,
+      "sha256": "850e0d233f869f865b60c838c8146b234a1ae52e614c6e7567a721278d1cb284",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/rank_rusage.log",
+      "original_sha256": "850e0d233f869f865b60c838c8146b234a1ae52e614c6e7567a721278d1cb284",
+      "normalization": "none"
+    }
+  ]
+}
