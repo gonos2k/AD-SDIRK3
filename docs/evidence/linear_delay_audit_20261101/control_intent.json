@@ -1,0 +1,94 @@
+{
+  "case": "control",
+  "source_commit": "5dc7fc7c8c064f71dc2a272099852f4a529bb73f",
+  "registration": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/registration.json",
+    "sha256": "b6f25d7a602c82c9e0930ef27a40e8bba462257af0e5b50bcaadff6fcdcabfcf"
+  },
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_control/build_receipt.json",
+    "sha256": "3c530b60087929ce52a7923568452457cab427caa00603599eac2d874dde06b6"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_control/wrf.exe",
+    "sha256": "a43f73adb770b6679c3c1d152e64aa896548ac345de2afeba837340e82372dc3"
+  },
+  "archived_arm_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/result.json",
+    "sha256": "2aa4126e3981ed1e93c6892fa89994d9ae7b8d3eedba4cf3ab20008d1b31ce1a"
+  },
+  "archived_arm_endpoint": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/wrfout_d01_0001-01-01_00:10:00",
+    "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e"
+  },
+  "archived_arm_direction": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/control/pressure_a5_direction.bin",
+    "sha256": "be5aff17523bad6973a51c261ff11411e93f6eb09614dd33de94618eff0281f6"
+  },
+  "expected_preflight_digest_fnv64": "7bdd17f3a694726e",
+  "reference_rk3_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "case_attempt_limit": 1,
+  "pair_attempt_limit": 2,
+  "retry": false,
+  "scope": "diagnostic only; no timing acceptance or Gate B",
+  "actual_torch_intra_op_threads_required": 1,
+  "actual_torch_inter_op_threads_required": 1,
+  "current_sdk_evidence": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/current_sdk_provenance.json",
+      "sha256": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/current_sdk_binding_addendum.json",
+      "sha256": "1f9af05712027832a0aeb10548c09842cb437a4f7c205a055be760cf38b27a5d"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/finalize_control_current_sdk.draft.py",
+      "sha256": "b5333eb72ec65b17086f87ef03641dc9722b49996688396c003c136d6f362e2b"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_control/otool.txt",
+      "sha256": "2e59cd3ff039589269fc665d26c06934bc07402b7271cb18e8065e5aeac88172"
+    },
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/control_staging_receipt.json",
+      "sha256": "a4d1abbb52eeee54a8bc2f0a2a86d8b99f9bb808d02eff78a4fe18f6656a5d93"
+    },
+    {
+      "path": "/usr/bin/g++",
+      "sha256": "5b1ddb7e9c11b87a034fc88b212e8ac243cfe2b4db696d767aa44c79595fc09a"
+    },
+    {
+      "path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++",
+      "sha256": "fc5e3cbba6ad54059295cad716aacb05ace8235f5f7a6031f1d8c15d24bd6d66"
+    }
+  ],
+  "noninterference": "174 numerical endpoint arrays must byte-match archived A8 control; future gate"
+}

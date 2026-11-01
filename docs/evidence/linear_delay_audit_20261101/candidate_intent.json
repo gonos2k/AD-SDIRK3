@@ -1,0 +1,79 @@
+{
+  "case": "candidate",
+  "source_commit": "5dc7fc7c8c064f71dc2a272099852f4a529bb73f",
+  "registration": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/registration.json",
+    "sha256": "b6f25d7a602c82c9e0930ef27a40e8bba462257af0e5b50bcaadff6fcdcabfcf"
+  },
+  "build_receipt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_candidate/build_receipt.json",
+    "sha256": "68571443927a477ffbae9dde59f736cdaf4d139722b1e90ea519c1c188f3a309"
+  },
+  "executable": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/native_candidate/wrf.exe",
+    "sha256": "32719a879109fad6403776cf2882c471e380729936f0473eddaab073f780f677"
+  },
+  "archived_arm_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/result.json",
+    "sha256": "c91763134db5d06a572a74bf37e34041429d68e52c5cbe2d016e626c847addb3"
+  },
+  "archived_arm_endpoint": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/wrfout_d01_0001-01-01_00:10:00",
+    "sha256": "386b5c94ccf326b763ff2f04a4bf66f4336ac49d01c73150efd34cae8b027e00"
+  },
+  "archived_arm_direction": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/pressure-v-direct-20261101/runs/candidate/pressure_a5_direction.bin",
+    "sha256": "c03f7d165b48fc30ebfadf500aaf59b9acd4e122e1bcc6708a3714227823a6c8"
+  },
+  "expected_preflight_digest_fnv64": "7bdd17f3a694726e",
+  "reference_rk3_t0": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/reference/wrfout_d01_0001-01-01_00:00:00",
+    "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "ready_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "analysis_contract": {
+    "duration_seconds": 600,
+    "start_timestamp": "0001-01-01_00:00:00",
+    "expected_grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64
+    },
+    "output_interval_seconds": 600,
+    "expected_history_states": 2,
+    "require_shared_initial_state": true,
+    "include_total_pressure": true,
+    "dry_case_no_qv": true,
+    "use_theta_m": 1,
+    "include_mass_theta_budgets": true,
+    "wave_mode1": {
+      "fields": [
+        "T",
+        "W",
+        "P"
+      ]
+    }
+  },
+  "case_attempt_limit": 1,
+  "pair_attempt_limit": 2,
+  "retry": false,
+  "scope": "diagnostic only; no timing acceptance or Gate B",
+  "actual_torch_intra_op_threads_required": 1,
+  "actual_torch_inter_op_threads_required": 1,
+  "control_original_result": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/result.json",
+    "sha256": "d3fc1ed2bd6acbdb74a9b2835a461527f9a2cf73b740bd9999fbb0c9746a6bd4"
+  },
+  "control_postvalidation": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/control_postvalidation.json",
+    "sha256": "86b51c0465a85a54e301bdfa3a44c2c0a4607032061c0d58906f35d902768c58"
+  },
+  "offline_validation_clarification": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/offline_validation_clarification.json",
+    "sha256": "7d11cce7369d67a0068cfe61bf3e3c6d7c80bfa609acf39cf82f0ebc8bdc7745"
+  },
+  "candidate_build_control_gate": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/candidate_build_control_gate.json",
+    "sha256": "6f93506d5753630aa7af69a0767877fcbb083d55e48853ce06546500f0388b16"
+  }
+}

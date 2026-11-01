@@ -1,0 +1,29 @@
+{
+  "scope": "One rank per case, whole-process aggregate counters; no causal attribution; instructions are not synonymous with CPU time; cycles divided by CPU time is not a measured frequency.",
+  "data": {
+    "control": {
+      "real_s": 50.65,
+      "cpu_s": 49.69,
+      "instructions": 343262476142,
+      "cycles": 100216842870,
+      "involuntary_switches": 978,
+      "maxrss_bytes": 2032926720,
+      "peak_footprint_bytes": 1496172728
+    },
+    "candidate": {
+      "real_s": 120.0,
+      "cpu_s": 86.29,
+      "instructions": 317047047237,
+      "cycles": 104747395002,
+      "involuntary_switches": 59119,
+      "maxrss_bytes": 2150039552,
+      "peak_footprint_bytes": 1662552296
+    }
+  },
+  "source_hashes": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/rank_rusage.log": "132f576cfec972e849d05ec083596d83d124fd43ada40d2ea793cbdd6fa8b6a7",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/candidate/rank_rusage.log": "194f9c3f841d8a2aa3f745f1a9935f53fb52eb9e7233c0288f9aefbd1b5c29af"
+  },
+  "script_sha256": "7aef5b7633996723cf7d3b4a9899ad675531f8c32e3789c4a4aeeabf82136e82",
+  "figure_sha256": "ccd5585df52729bfa56ee78d5b1ceced289fd4864611feb3f439760dfd341614"
+}

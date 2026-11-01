@@ -1,0 +1,73 @@
+{
+  "header_sha256": "5d1866fc9296154b9522f391254c7f7c60f0b9c8fa1a848c52a6b5e3a8ee44bb",
+  "sources_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/observer_main.cpp": "a8108a0d0a374142ba54091815140a3cc478ce8aa1e74cc1d94dc990ae265af4",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/observer_peer.cpp": "c0fd61c105f129a63d6ea3f69ca7a3e0e39323051bee310b97ec6d1c2b8498f7"
+  },
+  "build_cmd": [
+    "/usr/bin/g++",
+    "-std=c++17",
+    "-O2",
+    "-DWRF_SDIRK3_LINEAR_DELAY_AUDIT",
+    "-DWRF_SDIRK3_PRESSURE_STAGE_PROBE",
+    "-D_GLIBCXX_USE_CXX11_ABI=0",
+    "-I/private/tmp/linear-delay-audit-20261101/external/libtorch_wrf/sdirk3",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/observer_main.cpp",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/observer_peer.cpp",
+    "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-ltorch",
+    "-ltorch_cpu",
+    "-lc10",
+    "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/observer_test"
+  ],
+  "model_run": false,
+  "build_returncode": 0,
+  "binary_sha256": "91266fa1af97dfd6918ca111812eb19b726c704305ad57688f5d847a438e3ff3",
+  "run_cmd": [
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/tests_v7/observer_test"
+  ],
+  "run_returncode": 0,
+  "run_seconds": 1.922481209039688,
+  "npy": {
+    "linear_delay_u_eval.npy": {
+      "sha256": "1a0e9dacf67fef4c24d3e118b052e855299ef094e10ba53617d34063d7b99b67",
+      "dtype": "float64",
+      "shape": [
+        4
+      ],
+      "exact": true
+    },
+    "linear_delay_u_ref_first_jvp.npy": {
+      "sha256": "558e170d8d73564782393a33a2e6f095db81da70cde9c26dbf668f5086c69ab2",
+      "dtype": "float64",
+      "shape": [
+        4
+      ],
+      "exact": true
+    },
+    "linear_delay_first_tangent.npy": {
+      "sha256": "63dff0446a1e363b6c83912f81cbe66da97eef81c04bf2dfcfe3687eae17447e",
+      "dtype": "float64",
+      "shape": [
+        4
+      ],
+      "exact": true
+    },
+    "linear_delay_first_jvp.npy": {
+      "sha256": "986e0083b0900c189b168dd2fb5c36562d70a645e443f6a6533265c60c9c9d12",
+      "dtype": "float64",
+      "shape": [
+        4
+      ],
+      "exact": true
+    }
+  },
+  "npy_pass": true,
+  "json_metadata_pass": true,
+  "header_unchanged": true,
+  "passed": true
+}

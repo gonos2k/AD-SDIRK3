@@ -1,0 +1,33 @@
+{
+  "status": "PROPOSED - review required; no model",
+  "registration_sha256": "b6f25d7a602c82c9e0930ef27a40e8bba462257af0e5b50bcaadff6fcdcabfcf",
+  "old_receipt_sha256": "d55053f60a31958c93ce4623583eae77d0a839e3e430032273e5259c07866046",
+  "old_executable_sha256": "2d2060f859451268effc162a2856e33d0e880728296f7b214282ed20cd7bd4dd",
+  "control_executable_sha256": "a43f73adb770b6679c3c1d152e64aa896548ac345de2afeba837340e82372dc3",
+  "control_archive_sha256": "0f98428ebc9dea3c3e5d102e579daf8296e1dc2d4a78b56c5d06a4fcd1a2f94e",
+  "control_otool_sha256": "2e59cd3ff039589269fc665d26c06934bc07402b7271cb18e8065e5aeac88172",
+  "old_otool_sha256": "0ebc2a09c47fd0ac883143c39eb50acdd1c90e1d871982e48838171675c09437",
+  "old_LC_BUILD_VERSION": "      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform 1\n    minos 26.0\n      sdk 27.0\n   ntools 1",
+  "control_LC_BUILD_VERSION": "      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform 1\n    minos 26.0\n      sdk 27.2\n   ntools 1",
+  "SDK_path": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+  "SDK_version": "27.2",
+  "compiler_driver": "/usr/bin/g++",
+  "compiler_driver_sha256": "5b1ddb7e9c11b87a034fc88b212e8ac243cfe2b4db696d767aa44c79595fc09a",
+  "compiler_resolved_path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++",
+  "compiler_resolved_sha256": "fc5e3cbba6ad54059295cad716aacb05ace8235f5f7a6031f1d8c15d24bd6d66",
+  "compiler_version": "Apple clang version 21.0.0 (clang-2100.4.1.1)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+  "OS": "ProductName:\t\tmacOS\nProductVersion:\t\t26.7\nBuildVersion:\t\t25G229",
+  "dylib_differences_only": [
+    {
+      "old": "/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "new": "/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.40.3)"
+    },
+    {
+      "old": "/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)",
+      "new": "/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.32.0)"
+    }
+  ],
+  "qualification": "Both load-command platform 1 minos 26.0; running macOS 26.7 is newer. Same dylib paths and compatibility versions. SDK current_version difference does not by itself prove runtime or numerical equivalence; pending Root/Red review and per-arm 174-array gates. No old compiler binary hash asserted.",
+  "build_assertion": "Existing build stopped at exact otool line comparison before receipt; no artifacts modified, no model run.",
+  "model_run": false
+}

@@ -69,6 +69,12 @@
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_halo_c_api.h"
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+#if !defined(WRF_SDIRK3_PRESSURE_STAGE_PROBE) || !defined(WRF_SDIRK3_PRESSURE_A5)
+#error "linear delay audit requires existing pressure and A5 observation contexts"
+#endif
+#include "wrf_sdirk3_linear_delay_audit.h"
+#endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
 #include "wrf_sdirk3_pressure_stage_probe.h"
 #endif
@@ -1625,7 +1631,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             if (M_inv) {
                 v_precond = M_inv(V[j]);
             }
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+            torch::Tensor w = [&]() {
+                wrf::sdirk3::linear_delay_audit::ArnoldiScope observed(iter==0 && j==0);
+                return A(v_precond);
+            }();
+#else
             torch::Tensor w = A(v_precond);
+#endif
             auto jvp_end = std::chrono::high_resolution_clock::now();
             auto jvp_duration = std::chrono::duration_cast<std::chrono::milliseconds>(jvp_end - jvp_start).count();
 
@@ -3247,7 +3260,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 pressure_a4_active->capture_ms+=pressure_a4_active->z_capture_ms;
             }
 #endif
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+            torch::Tensor w = [&]() {
+                wrf::sdirk3::linear_delay_audit::ArnoldiScope observed(iter==0 && j==0);
+                return A(v_precond);
+            }();
+#else
             torch::Tensor w = A(v_precond);
+#endif
 #ifdef WRF_SDIRK3_PRESSURE_A4
             // Capture the actual first pair before weighting or orthogonalization.
             if (pressure_a4_active && iter == 0 && j == 0 && !pressure_a4_active->v0.defined()) {
@@ -5807,6 +5827,15 @@ public:
         stats_.final_residual_measured = false;
         frozen_ab_fired_this_solve_ = false;
         for (int newton_iter = 0; newton_iter < options_.max_newton_iter; ++newton_iter) {
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+            static std::atomic_flag delay_fifth_fired=ATOMIC_FLAG_INIT;
+            wrf::sdirk3::linear_delay_audit::Frame delay_frame;
+            delay_frame.stage=stage; delay_frame.newton=newton_iter;
+            delay_frame.refinement_passes=wrf::sdirk3::g_sdirk3_config.precond_refinement_passes;
+            delay_frame.selected=stage==4 && newton_iter==0 &&
+                !delay_fifth_fired.test_and_set(std::memory_order_relaxed);
+            wrf::sdirk3::linear_delay_audit::IterationScope delay_iteration(delay_frame);
+#endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
             static std::atomic_flag pressure_probe_fired = ATOMIC_FLAG_INIT;
             const bool pressure_capture_here = stage == 2 && newton_iter == 0 &&
@@ -6082,12 +6111,23 @@ public:
             // F(U_eval) call. JVPs, determinism probes, and trial RHS calls use
             // compute_rhs directly and remain outside this scope.
             auto compute_base_rhs = [&]() -> torch::Tensor {
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                wrf::sdirk3::linear_delay_audit::BoolScope delay_base(&delay_frame.base_call,true);
+#endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
                 std::unique_ptr<wrf::sdirk3::pressure_stage_probe::ScopedEosCapture> eos_capture;
                 if (pressure_capture_here) {
                     eos_capture = std::make_unique<wrf::sdirk3::pressure_stage_probe::ScopedEosCapture>(
                         pressure_eos_context);
                 }
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                else if (delay_frame.selected) {
+                    try {
+                        eos_capture = std::make_unique<wrf::sdirk3::pressure_stage_probe::ScopedEosCapture>(
+                            pressure_eos_context);
+                    } catch (...) { delay_frame.invalid=true; }
+                }
+#endif
 #endif
                 pending_stage2_rw_ledger = {};
                 current_base_rhs_input_digest = 0;
@@ -7197,8 +7237,19 @@ public:
                     jvp_start = std::chrono::high_resolution_clock::now();
                 }
 
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                wrf::sdirk3::linear_delay_audit::JvpScope delay_jvp;
+#endif
                 // JVP: J(U_eval) * (dt*gamma*dK)
                 auto v = dt * gamma * dK;
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                delay_jvp.tangent(v);
+                auto* delay_jvp_frame=wrf::sdirk3::linear_delay_audit::current;
+                const bool delay_sample=delay_jvp_frame && delay_jvp_frame->in_linear &&
+                    delay_jvp_frame->sample_active && !delay_jvp_frame->sample_done;
+                const auto delay_sample_fallback_before=delay_sample
+                    ? g_jvp_fd_fallback_count.load(std::memory_order_relaxed) : 0;
+#endif
 
                 // Check JVP method
                 torch::Tensor jvp_result;
@@ -7542,6 +7593,12 @@ public:
                 //   2. use_autograd=false: Finite difference (L1728-1780)
                 // The legacy path was a remnant from when jvp_graph_prepared existed.
 
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                if (delay_sample) delay_jvp_frame->sampled_fallbacks=
+                    g_jvp_fd_fallback_count.load(std::memory_order_relaxed)-delay_sample_fallback_before;
+                delay_jvp.result(jvp_result);
+                delay_jvp.stop();
+#endif
                 // Timing is diagnostic-only; the ordinary matvec does not read the clock.
                 if (collect_jvp_stats) {
                     const auto jvp_end = std::chrono::high_resolution_clock::now();
@@ -8181,6 +8238,11 @@ public:
                     };
                 }
             }
+#endif
+
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+            wrf::sdirk3::linear_delay_audit::wrap(
+                delay_frame,gmres_op,wrf::sdirk3::linear_delay_audit::WallTimer::A);
 #endif
 
             // v20.14: DEFECT-CORRECTION PRECONDITIONER REFINEMENT
@@ -9200,6 +9262,26 @@ public:
 #ifdef WRF_SDIRK3_PRESSURE_A4
                 PressureA4Context pressure_a4;
 #endif
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                if (delay_frame.selected) {
+                    try {
+                        delay_frame.U.set_owner(U_eval); delay_frame.F.set_owner(F); delay_frame.K.set_owner(K);
+                        delay_frame.b.set_owner(gmres_rhs); delay_frame.x0.set_owner(gmres_x0);
+                        if (scaling_initialized_) { delay_frame.S.set_owner(S_diag_); delay_frame.Sinv.set_owner(S_inv_diag_); }
+                        else { delay_frame.S.set(torch::Tensor()); delay_frame.Sinv.set(torch::Tensor()); }
+                        if (halo_mask_initialized_) delay_frame.mask.set_owner(halo_mask_);
+                        else delay_frame.mask.set(torch::Tensor());
+                        delay_frame.capture(delay_frame.raw_U,U_eval);
+                    } catch (...) { delay_frame.invalid=true; }
+                }
+                delay_frame.fallback_start=g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
+                delay_frame.m_native_start=precond_total_calls_; delay_frame.guard_start=precond_fallback_count_;
+                delay_frame.ad_start=jvp_ad_calls; delay_frame.fd_start=jvp_fd_calls;
+                // Wrap the final M callable, after refinement and all routing.
+                // Nested A calls are then detected rather than double-counted.
+                wrf::sdirk3::linear_delay_audit::wrap(
+                    delay_frame,gmres_M_inv,wrf::sdirk3::linear_delay_audit::WallTimer::M);
+#endif
                 auto gmres_result = [&]() {
                     std::unique_ptr<wrf::sdirk3::PreparedJvp> prepared;
                     rhs_interleaved = false;
@@ -9277,7 +9359,13 @@ public:
 #ifdef WRF_SDIRK3_PRESSURE_A4
                     PressureA4Scope pressure_a4_scope(pressure_a4, pressure_capture_here && pressure_preflight_ok);
 #endif
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                    auto result = [&]() {
+                        wrf::sdirk3::linear_delay_audit::LinearScope delay_linear(delay_frame);
+                        return gmres_M_inv
+#else
                     auto result = gmres_M_inv
+#endif
                     ? krylov_methods::solve_fgmres(
                           gmres_op,
                           gmres_rhs,
@@ -9326,6 +9414,9 @@ public:
                           halo_mask_initialized_ ? &halo_mask_ : nullptr,
                           options_.periodic_x,
                           options_.periodic_y);
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                    }();
+#endif
                     if (rhs_interleaved) reuse_status = "rhs_interleaved";
                     else if (prepared_application_error) reuse_status = "application_error";
                     prepared.reset();
@@ -9628,6 +9719,23 @@ public:
                             std::cerr << "[PRESSURE_STAGE_PROBE] {\"status\":\"observation_failed\",\"reason\":\"exception_details_in_error_log\"}\n";
                         }
                     }
+                }
+#endif
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                {
+                    wrf::sdirk3::linear_delay_audit::SolveInfo info;
+                    info.timestep=global_timestep_; info.solver_id=solver_id_; info.generation=diag_solve_generation_;
+                    info.ordinal=delay_frame.ordinal;
+                    info.iterations=gmres_result.iterations; info.restarts=gmres_result.restarts;
+                    info.restart_budget=effective_restart; info.max_restarts=effective_max_restarts;
+                    info.success=gmres_result.success; info.tolerance=gmres_result.tolerance_applied;
+                    info.dt=dt; info.gamma=gamma; info.layout=layout_initialized_ ? &cached_layout_ : nullptr;
+                    info.selected_ad_calls=jvp_ad_calls-delay_frame.ad_start;
+                    info.selected_fd_calls=jvp_fd_calls-delay_frame.fd_start;
+                    info.m_native_calls=precond_total_calls_-delay_frame.m_native_start;
+                    info.guard_events=precond_fallback_count_-delay_frame.guard_start;
+                    info.fallback_delta=g_jvp_fd_fallback_count.load(std::memory_order_relaxed)-delay_frame.fallback_start;
+                    wrf::sdirk3::linear_delay_audit::report(delay_frame,info,&pressure_eos_context,std::cout);
                 }
 #endif
                 variable_pc_event_this_newton = *variable_pc_event;
@@ -10480,6 +10588,21 @@ public:
                     } // outer guard (iter==0 && layout)
                 }
             } catch (const std::exception& e) {
+#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+                if (delay_frame.linear_started) {
+                    wrf::sdirk3::linear_delay_audit::SolveInfo info;
+                    info.timestep=global_timestep_; info.solver_id=solver_id_; info.generation=diag_solve_generation_;
+                    info.ordinal=delay_frame.ordinal;
+                    info.dt=dt; info.gamma=gamma; info.layout=layout_initialized_ ? &cached_layout_ : nullptr;
+                    info.selected_ad_calls=jvp_ad_calls-delay_frame.ad_start;
+                    info.selected_fd_calls=jvp_fd_calls-delay_frame.fd_start;
+                    info.m_native_calls=precond_total_calls_-delay_frame.m_native_start;
+                    info.guard_events=precond_fallback_count_-delay_frame.guard_start;
+                    info.fallback_delta=g_jvp_fd_fallback_count.load(std::memory_order_relaxed)-delay_frame.fallback_start;
+                    delay_frame.invalid=true;
+                    wrf::sdirk3::linear_delay_audit::report(delay_frame,info,&pressure_eos_context,std::cout);
+                }
+#endif
                 ERROR_PRINT("ERROR in GMRES: " << e.what());
                 stats_.converged = false;
                 stats_.final_residual = res_norm_for_stats;

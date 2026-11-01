@@ -1,0 +1,13 @@
+{
+  "eligible": true,
+  "control_result_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/control_postvalidation.json",
+  "control_result_sha256": "86b51c0465a85a54e301bdfa3a44c2c0a4607032061c0d58906f35d902768c58",
+  "original_control_result_path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/result.json",
+  "original_control_result_sha256": "d3fc1ed2bd6acbdb74a9b2835a461527f9a2cf73b740bd9999fbb0c9746a6bd4",
+  "association_addendum_sha256": "cb8b50beb8dd4d9b909eeeaa2194ab489f7eb7e1127c7f2073ddbfaea6164460",
+  "source_commit": "5dc7fc7c8c064f71dc2a272099852f4a529bb73f",
+  "registration_sha256": "b6f25d7a602c82c9e0930ef27a40e8bba462257af0e5b50bcaadff6fcdcabfcf",
+  "candidate_build_authorized": true,
+  "candidate_model_authorized": false,
+  "scope": "control same-gate offline validation passed; original INCONCLUSIVE unchanged; no model retry"
+}

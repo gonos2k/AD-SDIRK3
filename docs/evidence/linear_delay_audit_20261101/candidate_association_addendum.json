@@ -1,0 +1,19 @@
+{
+  "status": "approved_for_candidate_build",
+  "source_commit": "5dc7fc7c8c064f71dc2a272099852f4a529bb73f",
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/registration.json": "b6f25d7a602c82c9e0930ef27a40e8bba462257af0e5b50bcaadff6fcdcabfcf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/current_sdk_provenance.json": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/current_sdk_binding_addendum.json": "1f9af05712027832a0aeb10548c09842cb437a4f7c205a055be760cf38b27a5d",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/result.json": "d3fc1ed2bd6acbdb74a9b2835a461527f9a2cf73b740bd9999fbb0c9746a6bd4",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/control_postvalidation.json": "86b51c0465a85a54e301bdfa3a44c2c0a4607032061c0d58906f35d902768c58",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/offline_validation_clarification.json": "7d11cce7369d67a0068cfe61bf3e3c6d7c80bfa609acf39cf82f0ebc8bdc7745",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/build_candidate_current_sdk.draft.py": "b4e0bf5b943abd6e0ed545fa3a1135054c5e43b75dc20f70e70d0ff27f55c1d1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/run_candidate_current_sdk.py": "77ac33d3ab532c7c88b1c82bdc0e027224df12cb56669e8fe4ad7cb0cf827edd",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/pin_candidate_current_sdk.py": "1c034abfee125ac97d337dafc43115952257c580534c70762fca521d5562d340"
+  },
+  "semantics": "Original control INCONCLUSIVE is immutable. Separately passed control postvalidation verifies the same registered gates; candidate eligibility refers to that receipt and original result, not a rewritten control result. Candidate-only runner imports the original positive helper. Same registered physics, diagnostics, input, and numerical gates; no extra run, retry or benchmark acceptance.",
+  "candidate_build": "Only fresh Newton with DIRECT flag; control Tile and other 29 objects reused with existing verification. Same current toolchain/SDK, exact otool and LC_BUILD_VERSION match control.",
+  "no_model_run": true,
+  "candidate_model_authorized": false
+}
