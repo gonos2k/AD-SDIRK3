@@ -104,7 +104,11 @@ inline torch::Tensor compute_jvp_fwad_or_fd(
     // detach, or an output that does not depend on the dual input. A caller that only learns a
     // fallback happened cannot act on it, and a degraded operator then reads as a working one.
     // Optional and defaulted, so production call sites are unchanged.
-    std::string* fallback_reason = nullptr) {
+    std::string* fallback_reason = nullptr,
+    // Capture the primal from this same native dual evaluation, never an extra RHS.
+    // Undefined on every FD path, so diagnostics cannot mistake fallback for fwAD.
+    torch::Tensor* primal_out = nullptr) {
+    if (primal_out) *primal_out = torch::Tensor();
 
 #ifdef DNWP_DISABLE_FWAD
     if (used_fd_fallback) {
@@ -130,6 +134,7 @@ inline torch::Tensor compute_jvp_fwad_or_fd(
         if (used_fd_fallback) {
             *used_fd_fallback = false;
         }
+        if (primal_out) *primal_out = std::get<0>(parts).detach();
         return jvp;
     } catch (const std::exception& e) {
         if (used_fd_fallback) {

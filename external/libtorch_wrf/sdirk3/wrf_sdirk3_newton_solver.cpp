@@ -94,6 +94,8 @@
 #endif
 #include "wrf_sdirk3_pressure_v_direct.h"
 #endif
+#include "wrf_sdirk3_terminal_jvp_probe.h"
+#include <cstdlib>
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
@@ -483,10 +485,31 @@ static inline torch::Tensor gmres_residual_norm(const torch::Tensor& r, int halo
 // reads afterwards as a run that used forward-mode AD. The manifest reports this count.
 static std::atomic<long long> g_jvp_fd_fallback_count{0};
 
+#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+// Deliberately never unwind through Newton/Fortran fallback handlers. This build
+// is a one-rank diagnostic executable, not a forecast or a restart producer.
+[[noreturn]] static void terminal_jvp_exit(bool passed, const char* reason) noexcept {
+    if (!passed) {
+        const int fd=::open("terminal_jvp_probe.json",O_WRONLY|O_CREAT|O_EXCL,0644);
+        if(fd>=0) {
+            const char message[]="{\"status\":\"terminal_diagnostic_failed\",\"reason\":\"terminal_exception_or_profile_gate\",\"forecast_complete\":false}\n";
+            (void)::write(fd,message,sizeof(message)-1); (void)::close(fd);
+        }
+    }
+    std::fprintf(stderr,"[TERMINAL_JVP_DETAIL] reason=%s\n",reason);
+    std::fprintf(stderr,"[TERMINAL_JVP] status=%s exit_code=%d forecast_complete=false\n",
+                 passed?"terminal_diagnostic_passed":"terminal_diagnostic_failed",passed?86:87);
+    std::fflush(stderr); std::fflush(stdout);
+    std::_Exit(passed?86:87);
+}
+#endif
+
+
 static torch::Tensor compute_jvp_forward_mode(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
-    const torch::Tensor& v) {
+    const torch::Tensor& v,
+    torch::Tensor* primal_out = nullptr) {
     bool used_fd_fallback = false;
     auto jvp = compute_jvp_fwad_or_fd(
         F,
@@ -494,7 +517,9 @@ static torch::Tensor compute_jvp_forward_mode(
         v,
         /*halo_width=*/0,
         /*fd_epsilon_override=*/0.0f,
-        &used_fd_fallback);
+        &used_fd_fallback,
+        /*fallback_reason=*/nullptr,
+        primal_out);
 
     if (used_fd_fallback) {
         g_jvp_fd_fallback_count.fetch_add(1, std::memory_order_relaxed);
@@ -7231,6 +7256,13 @@ public:
             // Set up linear system: (I - dt*gamma*J) dK = -R
             // where J is Jacobian of F
             auto apply_jacobian = [&](const torch::Tensor& dK) -> torch::Tensor {
+#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+                const auto* terminal_entry_frame=wrf::sdirk3::linear_delay_audit::current;
+                const bool terminal_entry=terminal_entry_frame && terminal_entry_frame->in_linear &&
+                    terminal_entry_frame->selected && terminal_entry_frame->sample_active &&
+                    !terminal_entry_frame->sample_done;
+                try {
+#endif
                 jvp_call_count++;
                 std::chrono::high_resolution_clock::time_point jvp_start;
                 if (collect_jvp_stats) {
@@ -7249,6 +7281,23 @@ public:
                     delay_jvp_frame->sample_active && !delay_jvp_frame->sample_done;
                 const auto delay_sample_fallback_before=delay_sample
                     ? g_jvp_fd_fallback_count.load(std::memory_order_relaxed) : 0;
+#endif
+#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+                torch::Tensor terminal_primal;
+                wrf_terminal_jvp::Timing terminal_original_time;
+                const int terminal_rhs_before=delay_sample ? delay_jvp_frame->rhs_linear : 0;
+                if (delay_sample) {
+                    const auto& f=*delay_jvp_frame;
+                    const auto& cfg=wrf::sdirk3::g_sdirk3_config;
+                    if (stage!=4 || newton_iter!=0 || global_timestep_!=0 || f.ordinal!=5 ||
+                        !f.have_base || f.invalid || f.split!=3 || f.n_moist!=0 || f.has_physics ||
+                        f.prepared || f.topology[14]!=1 || f.topology[15]!=1 || f.flags[13] ||
+                        f.flags[14] || !f.flags[15] || !use_autograd_jvp || options_.reuse_linearization ||
+                        cfg.retain_graph_for_adjoint || cfg.save_trajectory || cfg.enable_ad_halo_exchange ||
+                        !cfg.internal_fp64 || !cfg.internal_fp64_state_carry || dt!=600 ||
+                        (active_prepared && *active_prepared))
+                        terminal_jvp_exit(false,"unsupported_terminal_profile");
+                }
 #endif
 
                 // Check JVP method
@@ -7289,11 +7338,35 @@ public:
                         }
                     }
                     if (!jvp_result.defined()) {
+#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+                        double terminal_cpu_begin=0;
+                        std::chrono::steady_clock::time_point terminal_wall_begin;
+                        try {
+                            if (delay_sample) {
+                                terminal_cpu_begin=wrf_terminal_jvp::cpu_seconds();
+                                terminal_wall_begin=std::chrono::steady_clock::now();
+                            }
+#endif
                         jvp_result = compute_jvp_forward_mode(
                             /*F=*/[&](const torch::Tensor& x) { return compute_rhs(x); },
                             /*u=*/U_eval,
                             /*v=*/v
+#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+                            , delay_sample ? &terminal_primal : nullptr
+#endif
                         );
+#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+                            if (delay_sample) {
+                                const auto end=std::chrono::steady_clock::now();
+                                const double cpu_end=wrf_terminal_jvp::cpu_seconds();
+                                terminal_original_time={std::chrono::duration<double>(end-terminal_wall_begin).count(),
+                                                        cpu_end-terminal_cpu_begin};
+                            }
+                        } catch (...) {
+                            if(delay_sample) terminal_jvp_exit(false,"original_fwad_exception");
+                            throw;
+                        }
+#endif
                     }
 
                     if (log_forward_jvp) {
@@ -7599,6 +7672,69 @@ public:
                 delay_jvp.result(jvp_result);
                 delay_jvp.stop();
 #endif
+#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+                if (delay_sample) {
+                    try {
+                        torch::NoGradGuard no_grad;
+                        auto& f=*delay_jvp_frame;
+                        if (terminal_rhs_before!=0 || f.rhs_linear!=1 || f.sampled_fallbacks!=0 ||
+                            !terminal_primal.defined() || jvp_fd_calls!=0 || !f.raw_U.defined() ||
+                            wrf_terminal_jvp::hash(U_eval)!=wrf_terminal_jvp::hash(f.raw_U) ||
+                            !f.raw_v.defined() || wrf_terminal_jvp::hash(v)!=wrf_terminal_jvp::hash(f.raw_v))
+                            terminal_jvp_exit(false,"original_not_single_native_fwad");
+                        // Independent immutable baselines; Tile work tensors may be reused.
+                        const auto primal=terminal_primal.detach().clone();
+                        const auto tangent=jvp_result.detach().clone();
+                        const auto snapshot=[&]() {
+                            wrf_terminal_jvp::Snapshot out;
+                            out.valid=!f.invalid && f.have_base && f.have_first_ref && f.have_last_ref &&
+                                f.ref_handle_changes==0 && f.ref_version_changes==0 && !f.flags[14] &&
+                                f.ref_base.unchanged() && f.ref_first.unchanged() && f.ref_last.unchanged() &&
+                                f.ref_base.value.is_same(f.ref_last.value) &&
+                                torch::get_num_threads()==1 && torch::get_num_interop_threads()==1;
+                            std::ostringstream signature;
+                            signature << "observed_subset;stage=4;newton=0;ordinal=" << f.ordinal
+                                      << ";dt=" << dt << ";gamma=" << gamma << ";split=" << f.split << ';';
+                            const auto add=[&](const char* name,const wrf::sdirk3::linear_delay_audit::Handle& h) {
+                                out.valid &= h.unchanged();
+                                signature << name << '=' << std::hex
+                                    << wrf::sdirk3::linear_delay_audit::audit_hash_tensor(h.owner?*h.owner:h.value)
+                                    << std::dec << ';';
+                            };
+                            add("U",f.U); add("F",f.F); add("K",f.K); add("b",f.b); add("x0",f.x0);
+                            add("S",f.S); add("Sinv",f.Sinv); add("mask",f.mask); add("ref",f.ref_last);
+                            add("Fphys",f.Fphys); add("Fexp",f.Fexp); add("halo",f.full_halo);
+                            for(const auto& entry:f.context) {
+                                const bool scratch=entry.first.find("_work")!=std::string::npos ||
+                                    entry.first=="ru_tend" || entry.first=="rv_tend" || entry.first=="rw_tend" ||
+                                    entry.first=="t_tend" || entry.first=="mu_tend" || entry.first=="ph_tend" ||
+                                    entry.first=="qv_tend";
+                                if(!scratch) add(entry.first.c_str(),entry.second);
+                            }
+                            out.valid &= f.linear_rhs_modes[0]==0 && f.linear_rhs_modes[2]==0;
+                            out.context=signature.str(); out.path_count=f.rhs_linear;
+                            out.fallback_count=jvp_fd_calls;
+                            out.internal_fd_count=g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
+                            return out;
+                        };
+                        // Exact original RHS closure and forward-mode router, with no recursive
+                        // apply_jacobian/Arnoldi call and no PreparedJvp substitution or restore.
+                        const auto repeat=[&]() {
+                            torch::Tensor repeated_primal;
+                            auto repeated_tangent=compute_jvp_forward_mode(
+                                [&](const torch::Tensor& x) {return compute_rhs(x);},U_eval,v,&repeated_primal);
+                            return std::make_pair(repeated_primal,repeated_tangent);
+                        };
+                        const bool passed=wrf_terminal_jvp::run_terminal_jvp_probe(
+                            "terminal_jvp_probe.json",
+                            "stage=4 newton=0 solve_ordinal=5 timestep=0 original_plus_5 native_forward_ad; "
+                            "terminal_no_continuation; observed_context_subset_not_full_replay; "
+                            "validation_between_calls_conditions_cache",
+                            U_eval,v,primal,tangent,terminal_original_time,repeat,snapshot);
+                        terminal_jvp_exit(passed,passed?"fixed_sample_block_complete":"fixed_sample_block_failed");
+                    } catch (...) { terminal_jvp_exit(false,"terminal_setup_or_report_exception"); }
+                }
+#endif
                 // Timing is diagnostic-only; the ordinary matvec does not read the clock.
                 if (collect_jvp_stats) {
                     const auto jvp_end = std::chrono::high_resolution_clock::now();
@@ -7637,6 +7773,12 @@ public:
                 }
 
                 return result;
+#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+                } catch (...) {
+                    if(terminal_entry) terminal_jvp_exit(false,"selected_jvp_entry_exception");
+                    throw;
+                }
+#endif
             };
 
             // Report JVP setup for this Newton iteration
