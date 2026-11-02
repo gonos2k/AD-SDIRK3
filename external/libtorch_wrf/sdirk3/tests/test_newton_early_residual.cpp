@@ -82,30 +82,36 @@ int main() {
                   << production << '\n';
         ok &= pass;
     }
-    // FP64 residual is finite, but its unscaled norm overflows the float receipt.
-    // The already-computed scaled RMS remains finite and is the final metric.
+    // A checked FP64-to-float conversion can throw before a scalar receipt exists.
+    // The status API must not invent a residual; the production API still propagates.
     for (bool production : {false, true}) {
+      for (bool conversion_overflow : {false, true}) {
         WRFNewtonKrylovSolver solver(opt);
         solver.set_physics_scaling(torch::full_like(u, 1.0e40));
         int calls = 0;
         const auto rhs = [&](const torch::Tensor& x) {
             ++calls;
+            if (!conversion_overflow) throw 17;
             return torch::full_like(x, 1.0e39);
         };
         WRFNewtonKrylovSolver::NewtonResult result{};
         torch::Tensor returned;
-        if (production) returned = solver.solve_stage(u, k, rhs, 0.125, 0.25, 1);
-        else { result = solver.solve_stage_with_status(u, k, rhs, 0.125, 0.25, 1); returned = result.K; }
+        bool threw = false;
+        try {
+            if (production) returned = solver.solve_stage(u, k, rhs, 0.125, 0.25, 1);
+            else { result = solver.solve_stage_with_status(u, k, rhs, 0.125, 0.25, 1); returned = result.K; }
+        } catch (...) { threw = true; }
         const auto stats = solver.get_stats();
-        const bool pass = returned.defined() && torch::equal(returned, k.select(0, 0)) &&
-            calls == 1 && !stats.converged && stats.initial_residual_measured &&
-            !stats.initial_residual_finite && stats.final_residual_measured &&
-            std::isfinite(stats.final_residual) && std::abs(stats.final_residual - 0.1f) < 1e-6f &&
-            stats.newton_termination == static_cast<int>(NewtonTerminationReason::NonfiniteResidual) &&
-            (production || (!result.converged && result.final_residual == stats.final_residual));
-        std::cout << (pass ? "PASS" : "FAIL") << " scaled_overflow production="
+        const bool pass = !returned.defined() && threw == production &&
+            calls == 1 && !stats.converged && !stats.initial_residual_measured &&
+            !stats.final_residual_measured && std::isnan(stats.final_residual) &&
+            stats.newton_termination == static_cast<int>(NewtonTerminationReason::Exception) &&
+            (production || (!result.converged && std::isnan(result.final_residual)));
+        std::cout << (pass ? "PASS" : "FAIL") << " unobserved_exception conversion="
+                  << conversion_overflow << " production="
                   << production << " calls=" << calls << " final=" << stats.final_residual << '\n';
         ok &= pass;
+      }
     }
     g_sdirk3_config = saved;
     return ok ? 0 : 1;

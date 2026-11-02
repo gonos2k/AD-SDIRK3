@@ -5077,7 +5077,9 @@ public:
         double dt,
         double gamma,
         int stage,
-        const torch::Tensor& F_phys = torch::Tensor()) {  // Added F_phys with default
+        const torch::Tensor& F_phys = torch::Tensor()) try {  // Added F_phys with default
+
+        reset_stats();
 
         TORCH_CHECK(!options_.reuse_linearization ||
                     (!options_.retain_graph_for_adjoint && !options_.save_trajectory),
@@ -5219,8 +5221,6 @@ public:
             std::cerr << "  gmres_restart: " << options_.gmres_restart << std::endl;
             std::cerr << "=========================" << std::endl;
         }
-        
-        reset_stats();
         
         // Get adaptive parameters if enabled
         // `newton_tol_adaptive` is DELIBERATELY cross-iteration: it is a monotone ratchet seeded
@@ -12900,6 +12900,17 @@ public:
         }
         update_stage_predictor_cache(false, result.K);
         return result;
+    } catch (...) {
+        // No K is returned on this path, so an earlier measurement cannot certify it.
+        record_unobserved_exception();
+        throw;
+    }
+
+    void record_unobserved_exception() {
+        stats_.converged = false;
+        stats_.final_residual = std::numeric_limits<float>::quiet_NaN();
+        stats_.final_residual_measured = false;
+        stats_.newton_termination = static_cast<int>(wrf::sdirk3::NewtonTerminationReason::Exception);
     }
     
     void reset_stats() {
@@ -12957,7 +12968,7 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
         NewtonResult result;
         result.converged = false;
         result.iterations = 0;
-        result.final_residual = 1e10f;
+        result.final_residual = std::numeric_limits<float>::quiet_NaN();
         result.message = "ERROR: Newton solver pImpl is null";
         return result;
     }
@@ -12988,18 +12999,20 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
         return result;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: Exception in pImpl->solve_stage_impl: " << e.what() << std::endl;
+        pImpl->record_unobserved_exception();
         NewtonResult result;
         result.converged = false;
-        result.iterations = 0;
-        result.final_residual = 1e10f;
+        result.iterations = pImpl->stats_.newton_iterations;
+        result.final_residual = pImpl->stats_.final_residual;
         result.message = std::string("Exception: ") + e.what();
         return result;
     } catch (...) {
         std::cerr << "ERROR: Unknown exception in pImpl->solve_stage_impl" << std::endl;
+        pImpl->record_unobserved_exception();
         NewtonResult result;
         result.converged = false;
-        result.iterations = 0;
-        result.final_residual = 1e10f;
+        result.iterations = pImpl->stats_.newton_iterations;
+        result.final_residual = pImpl->stats_.final_residual;
         result.message = "Unknown exception in Newton solver";
         return result;
     }
