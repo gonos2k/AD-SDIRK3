@@ -1,0 +1,19 @@
+{
+  "review": "Green final evidence review",
+  "timestamp_local": "2026-11-02T15:10:18.396466+09:00",
+  "source_commit": "c7a282e3032b6f760d9d8154ee9536ab3688a95b",
+  "findings": [],
+  "checks": {
+    "manifest": "35 listed files verified byte lengths and SHA-256, no mismatches",
+    "focused": "three receipt sources match worktree hashes, compile/run return codes zero; logs report trust 101/101 and classification 210/210, early test log 12 PASS",
+    "native": "existing postvalidation reports stage 2/3/4 Newton 3 and RMS ~6.3e-14, 174 numeric arrays bitwise parity, six RK3 distances; three referenced wrfout SHA-256 verified, numerical comparison itself not rerun",
+    "provenance": "receipt notes describe 10 affected translation units, later Newton recompilation and hash-verified reuse of nine, matching documented scope; no claim of full clean WRF rebuild",
+    "invalid_fixture": "attempt1 failing overflow log and receipt retained; README identifies checked float conversion exception and does not treat it as observed Inf",
+    "scope": "R2 and R4 targeted closure; R5 shared tri-state contract tested but actual mixed MPI and coordinated exception handling remain open; single-step research configuration does not establish production cost or long-forecast convergence"
+  },
+  "limitations": [
+    "This review checks recorded receipts and hashes, not independent re-execution or independent numerical field recomputation.",
+    "External build fixtures and executable inputs are not all shipped with the evidence bundle."
+  ],
+  "actions": "No build, test, model rerun, or source edit."
+}

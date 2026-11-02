@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-11-02T15:10:29.885989+09:00",
+  "review": "Final Red docs and public evidence review",
+  "source": "c7a282e3032b6f760d9d8154ee9536ab3688a95b",
+  "critical_blockers": [],
+  "scope_wording_suggestion": "The report sentence saying exceptions occur before K update should explicitly refer to the caught GMRES early-failure site; exceptions escaping Impl can occur elsewhere and correctly have unmeasured residual.",
+  "manifest": "35/35 file sizes and SHA-256 match",
+  "reviewed": [
+    "R4 limited scope, R5 mixed rank and wrapper exceptions explicitly open",
+    "attempt1 checked-conversion failure preserved",
+    "native h600 one-rank A9/P0 research one-step only; no new RK3, performance or long-forecast proof",
+    "build_receipt_notes.json states both files changed 2625 to c7 and raw receipt remains unchanged"
+  ],
+  "validation": "No tests, build, or model repeated by reviewer"
+}

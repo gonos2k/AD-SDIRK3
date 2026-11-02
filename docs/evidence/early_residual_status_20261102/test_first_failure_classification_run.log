@@ -1,0 +1,213 @@
+  ok   measured finite residual
+  ok   measured NaN residual
+  ok   measured infinite residual
+  ok   unmeasured finite placeholder
+  ok   unmeasured NaN placeholder
+  ok   unmeasured infinite placeholder
+  ok   rank observation merge handles all pairs and is associative
+  ok   unmeasured final residual forces abort
+  ok   nonfinite final residual forces abort
+  ok   finite residual at limit leaves nonconvergence policy in control
+  ok   finite residual above limit forces abort
+  ok   nonfinite unscaled initial residual forces abort even with finite scaled final
+  ok   missing initial aborts; observed nonfinite takes precedence over missing
+  ok   residual observation names
+  ok   nonfinite residual termination name
+  ok   a converged, admissible, published stage reports NO failure (a classifier that always finds one is not a classifier)
+  ok   a non-finite stage ENTRY state: the equation G_s does not exist, and nothing measured after it is a cause
+  ok   a finite entry with a non-finite G(0): the RHS operator, not the state
+  ok   a residual that GREW is divergence -- and this is the ONE category a dt sweep is the right experiment for
+  ok   a non-finite FINAL residual is divergence that overflowed, not a missing measurement
+  ok   a LINEAR solve that made no progress: Newton cannot converge on top of a solve that does not solve, so the cause is upstream of the outer iteration
+  ok   an outright GMRES failure is the same finding, reached from a different signal
+  ok   a working linear solve whose every step was rejected is a trust-region POLICY statement, not a numerical one
+  ok   steps taken, linear solve working, residual flat: the residual has a FLOOR, which is a statement about the split
+  ok   Newton converged by its own test and the gate refused: the disagreement is between two measures of 'converged', not in the solve
+  ok(RESERVED) everything converged and admissible, and the state was still not published -- RESERVED: the one production call site (handle_stage_gate) sets state_published false unconditionally because it is upstream of any publish, AND is entered only when the gate is already unhappy, so a converged stage there always answers admissibility_rejected first. Kept for a publish-site classifier call that does not exist yet
+  ok   em_b_wave dt=600 stage 2, as measured: a residual falling 1 -> 0.4855 over 3 of 3 allowed iterations is BUDGET EXHAUSTION, not a stall
+  ok   ...and the layer it names is the budget, not the split -- the distinction the first real run existed to make
+  ok   the SAME residual history with iterations left in the budget is NOT budget exhaustion -- the two are separated by the budget, not by the residual
+  ok   a FLAT residual that also ran out of budget is a stall: spending every iteration on nothing is not the budget's fault
+  ok   an R0 that was never measured is INSUFFICIENT EVIDENCE, not a finite one -- 0.0 is finite, which is how the unmeasured case used to read as positive
+  ok   ...and it names no layer, because it has no evidence to name one from
+  ok   a linear residual that GREW is divergence, not stagnation -- they arrived as the same category and point at different work
+  ok   a Krylov stall names the FULL disjunction including timestep, JVP and solver policy: A_h = I - h*gamma*J, so h is in the Krylov operator, and termination_reason (arnoldi_stagnation / mid_budget_hopeless / restart / nan retry / max budget) is not yet plumbed to separate policy from operator
+  ok   best_krylov_rel and gmres_total_failures describe different solves. The count is named gmres_non_total_failures because that is what it counts -- a solve that ended at rho=0.5 without meeting tolerance was being called a success; gmres_tolerance_reached is the quantity the old name implied, and it is 0 here
+  ok   a final residual that was never MEASURED is insufficient evidence, not divergence -- the -1 sentinel and NaN/Inf are different states
+  ok   ...while a MEASURED non-finite final residual still IS divergence that overflowed
+  ok   a rejection at iteration 1 followed by a Krylov failure at iteration 3 is reported as the REJECTION -- time order, not precedence
+  ok   ...and with the Krylov failure first in time, it is reported first
+  ok   with no index recorded the old precedence stands, and the record says the index is -1 rather than implying an order it did not measure
+  ok   with EVERY gate refusing, the report is the FIRST one -- reporting the Krylov stall here would send the work to the preconditioner when the state was already non-finite before the solve began
+  ok   divergence outranks a Krylov stall and a rejected step: a diverging iteration produces both
+  ok   a Krylov stall outranks the rejected steps it causes -- a solve that returns nothing has nothing to accept
+  ok   a residual that ends slightly ABOVE where it started is stagnation with noise, not divergence -- naming it divergence would send the work to dt
+  ok   a linear solve that halved its residual made progress, so the stall is the OUTER iteration's
+  ok   an UNMEASURED Krylov error is not evidence of a stall -- absence of a measurement must not become a finding
+  ok   a solve that REDUCED its residual is not a stalled solve, however it compares to ||b||: with r0-relative progress measured, the category is what refused the step, not the linear solve that produced it
+  ok   and when nothing refused the step either, a working solve plus a falling residual at the budget is a budget statement -- the em_b_wave dt=600 case
+  ok   the converse case: a warm start whose ||r||/||b|| looks healthy while the solve made no progress at all -- caught only in r0 coordinates
+  ok   a record without the r0 measurement keeps the old precedence -- the fix must not make the classifier weaker on the records it already had
+  ok   twelve consecutive solves each removing 2% of their own residual is a Krylov stall; a 0.99 threshold inherited from ||b|| coordinates calls it healthy and sends the work to the split
+  ok   the stage-best is a MIN and answers 'did any solve work'; the max is what answers 'did the linear solve stop working', and the record names the iteration it happened at
+  ok   the r0 no-progress boundary is pinned at 0.90 from both sides and AT the constant, so a later coordinate change cannot move it unnoticed
+  ok   a solve whose residual GREW is diverged even when the stage's worst progress ratio looks healthy -- divergence is upstream of stagnation, and the new progress clause must not preempt it
+  ok   with no r0 measurement and no total failure, the ||b|| reading is the only progress statement available and still fires -- the fallback branch is not dead code
+  ok   a stage whose every solve converged on entry or reached tolerance has NO Krylov evidence, and a falling residual at the budget is a budget statement -- the category that exists to stop exactly this being called a stall
+  ok   the measured 0.8795 sits 2.3% below the default boundary and flips under a stricter one, so the constant is reachable per run -- and an unset threshold classifies exactly as it did before the knob existed
+  ok   an out-of-range threshold falls back to the header constant rather than becoming the rule -- a knob that can silently disable a category is worse than no knob
+  ok   classifying stage 3 from stage 2's signals produces a confident WRONG layer; a provenance mismatch is not weak evidence, it is the wrong evidence
+  ok   and with provenance matched the same record classifies normally -- the gate is a refusal, not a new failure mode
+  ok   an explicit stage whose RHS blew up says so, instead of collapsing into insufficient_evidence because it has no Newton residual to report
+  ok(RESERVED) and its gate refusal is its own category, on its own layer -- RESERVED: reaching it needs a FINITE explicit tendency with a bad gate metric, but a finite tendency sets all three gate metrics to 0 and the gate early-returns
+  ok(RESERVED) as is its publish refusal -- RESERVED, same reason as publish_rejected above
+  ok(RESERVED) a clean explicit stage is clean -- the branch must not manufacture a failure. RESERVED: the gate is not entered at all when nothing is wrong
+  ok   an explicit stage whose RHS was never measured is unmeasured, not finite -- absence of a measurement must not become a finding here either
+  ok   a non-finite explicit tendency is reported AS THAT, not as the admissibility or publish rejection that the same signals also satisfy -- the RHS is the earlier cause, and before R13.20 this stage was never gated at all
+  ok   an explicit-stage verdict names the explicit-stage gate as its basis
+  ok   ...and claims neither r0 metric evidence nor an exit receipt, neither of which an explicit stage has
+  ok   ...but the site was never reached, so the header constant applies and the emitter's `not_reached` and the classifier's answer agree
+  ok   a solve that made no progress because its own forcing term did not ask for more is not the operator's failure -- naming it krylov_stagnated sends the work to the preconditioner, and the layer actually responsible had no category at all
+  ok   the category's own layer names the tolerance policy without asserting WHICH one
+  ok   ...and the recorded source selects the specific layer, with an UNRECORDED source saying so rather than defaulting to a named mechanism
+  ok   while the same ratio from a solve that did NOT meet its tolerance is a stall
+  ok   a stage whose every solve did zero work has NO Krylov evidence, so the ||b|| rule -- the coordinate this line of work exists to leave -- must not be applied to it by default
+  ok   and the same for a stage where no solve measured r0
+  ok   while a record that simply predates the field keeps the old precedence, so the classifier does not get weaker on evidence it already had
+  ok   an UNSTAMPED record cannot be classified: the gate required both stamps >= 0, so the sentinel skipped it and the whole classifier ran on signals of unknown owner
+  ok   and the same when the classifying stage is the one that was never stamped
+  ok   D reached and S not is neither a stall (the solve worked) nor a forcing-term problem (tightening eta does not align two objectives) -- and it is exactly the InternalConvergenceStop state the round-6 rule sent back to krylov_stagnated
+  ok   the category's layer names the stop metric against the Newton merit without asserting WHICH metric
+  ok   ...and the RECORDED metric selects the specific one, with an unrecorded metric saying so rather than defaulting to block D
+  ok   with BOTH metrics satisfied and progress still poor, the forcing term asked for little -- that is the policy layer
+  ok   neither tolerance met and the budget gone is a solve cut off while still descending -- the inner budget, not the operator
+  ok   and only when it met nothing and was not cut off is the operator implicated
+  ok   when a solve tied at the worst ratio implies a DIFFERENT category, the forcing-term and objective-mismatch readings are refused -- with eta saturated at its cap a tie is not a remote case, and a strict `>` let whichever arrived first name the layer
+  ok   an UNMET tie that agrees on the mechanism is not ambiguous, and the specific category is named rather than refused
+  ok   neither tolerance met and the budget gone is the inner budget, not the operator -- and it is now reachable from the signal combination the solver produces
+  ok   and only when it met nothing and was not cut off is the operator implicated
+  ok   a flat residual at the bound is 'stopped moving' to the aggregate reconstruction and 'ran out of budget' to the loop itself -- and the loop is the one that knows; the campaign's reading of the 12x-budget run rests on exactly this distinction
+  ok   and the same aggregates with a RECORDED stall are a stall
+  ok   an unrecorded reason falls back to the old precedence, so records taken before the field classify exactly as they did
+  ok   the exit names WHAT IT OBSERVED -- a zero update after a total-failure flag -- and not a mechanism. Calling it a Krylov stall claimed the linear solve produced nothing, while the same run's worst solve removed 13.8% of its own residual, and the flag gating it is the ||b|| predicate this classifier spent four rounds moving off
+  ok   while the same ratio with a RECORDED residual stall is the outer iteration -- the two are separated by the exit reason, not by the threshold
+  ok   the exit is honoured with NO Krylov evidence too, and still only claims what it observed; its layer names both candidates (the ||b|| rule and the step recovery) rather than picking one
+  ok   and an exception thrown by the linear solve is not the outer iteration's failure -- nor is it DIVERGENCE, which is a measured behaviour an exception does not establish; the Exception enum value had ZERO producers until this review
+  ok   A(0.90,not-met) then B(0.99,met) must equal B then A -- the streaming version gave false one way and true the other, and that verdict decides whether the forcing-term and objective-mismatch categories may be read at all
+  ok   a clearly-better earlier solve is not in the final tie set and must not poison it
+  ok   a solve within the tie band of the final worst IS in the set, so one that met no tolerance makes the set ambiguous
+  ok   and that holds in either arrival order
+  ok   all six permutations of a three-element chain agree, and agree on TRUE -- the solve that met nothing is outside the final tie band, and a running boolean could not retract it because near-ness is not transitive
+  ok   the first solve starts the set rather than inheriting the `true` default
+  ok   the exit solve met no tolerance, so the terminal event keeps its own name -- reading the stage-worst receipt here would report an objective mismatch from an iteration that ended nothing
+  ok   the event is still the zero-update break -- a subtype earned by the exit solve is a statement about WHY, not about what ended the stage
+  ok   and when the exit solve itself met D and not S, the subtype is earned by the solve the event belongs to -- carried as the exit attribution
+  ok   with no exit receipt the event may not borrow the stage-worst one
+  ok   the loop ended at the zero-update break, and that is what the EVENT says -- the metric subtype is a separate answer to a separate question
+  ok   both metrics the solver was steered by are satisfied and the GATE's metric is not -- not the operator, not the forcing term, not the budget, but the gate's norm disagreeing with the solver's, recorded as the exit attribution
+  ok   and the layer names that disagreement rather than a component
+  ok   with the gate's metric also satisfied there is no mismatch to report
+  ok   and an UNMEASURED rho_E may not produce the finding -- absence of a measurement must not become one, here either
+  ok   a seam between the solver's metrics is not a refusal, and the classifier may not report one while the gate is recorded as having passed
+  ok   the primary slot is what actually ended the stage
+  ok   ...and the r0 evidence is PRESERVED beside it rather than discarded by it -- the event outranking the reconstruction no longer means throwing it away
+  ok   and first_failure_of still returns the primary event, so every fixture built on it keeps its meaning
+  ok   absence of metric evidence is reported as absence, not as agreement with the event -- the rule this campaign has applied to every other field
+  ok   an attribution reached by the aggregate fallback is NOT metric evidence, and the record says which -- a reconstruction naming an operator layer must not read as a measurement
+  ok   two solves tied at the worst ratio with DIFFERENT mechanisms are ambiguous in either order -- one of them is an objective mismatch and the other a forcing-term limit, and reporting the first arrival's was order-dependent
+  ok   agreeing solves, and a single solve, are not ambiguous
+  ok   and a solve outside the tie band is not in the set, so it cannot create ambiguity
+  ok   with the near-worst solves agreeing, the specific mechanism is named
+  ok   and when they disagree the classifier reports the general category rather than whichever solve arrived first
+  ok   a solve that converged on entry in the D objective and not in S is the objective mismatch, and must reach that clause rather than being refused as an unmet tie
+  ok   ...which is exactly what the record said before: krylov_stagnated, on the operator/split layer, beside a receipt reading D_reached=1 S_reached=0
+  ok   a category reached through the STAGE-WORST receipt must not be annotated with the exit solve's source or metric -- that is a layer describing one solve attached to a verdict decided by another
+  ok   the event is the zero-update break and the exit receipt is what decided it, so the emitted layer and the verdict describe the same solve
+  ok   ...and the subtype the exit solve earned -- D met, S not -- is carried BESIDE the event rather than replacing it, which is what `primary_event` used to report
+  ok   two tied solves that differ ONLY in where their tolerance came from imply the same category and are not ambiguous -- the refusal used to fire here and fall through to krylov_stagnated, i.e. toward the operator/split layer
+  ok   ...and both of them say objective mismatch, which is why
+  ok   a tied solve that implies a DIFFERENT category is still ambiguous
+  ok   and the budget answer is reachable from one receipt, so the four-way's third arm has a producer rather than only a fixture
+  ok   with every solve making progress the attribution comes from the residual trend and the iteration counts -- the aggregate reconstruction, by name
+  ok   ...so it is NOT metric-decided, however many r0 readings exist on the record
+  ok   and when the r0 four-way is the clause that answered, it says so
+  ok   the ||b||-coordinate fallback has its own name and is deliberately NOT counted as metric evidence
+  ok   the eta clamp and the iteration-0 seed constant name their OWN knobs: the forcing term is not what bound when max(krylov_tol, EW_ETA_INITIAL) or the [eta_min, eta_max] clamp produced the number
+  ok   ...and the record prints them distinctly from eisenstat_walker
+  ok   an entry that met BOTH the stopping objective and S is converged: it exempts the total-failure rules and needs no extra nonlinear check
+  ok   an entry that met the stopping objective and NOT S is an objective mismatch, not a convergence -- InitialStopMetricReached is named for the half it measures
+  ok   ...and it does NOT bypass the total-failure policy: an identical rho_S returned after Arnoldi iterations is judged by that policy, and a control-flow label must not buy a different one
+  ok   ...and its step is taken only against a measured nonlinear decrease, which is what the recovery and trust acceptance sites already require of every other step
+  ok   a solve that did NOT return on entry is neither, whatever its S flag says -- the verdict is about the entry return, not about S alone
+  ok   two tied forcing-limited solves whose tolerance came from DIFFERENT knobs agree on the category and disagree on the layer, so they are action-ambiguous in either order -- R13.20 called them interchangeable and the emitted layer depended on arrival order
+  ok   ...and those are the two different places the record would have sent the work
+  ok   and two tied objective mismatches that stopped on DIFFERENT metrics are ambiguous too -- the layer is derived from the stopping metric there
+  ok   but two tied stagnations derive no specific layer, so differing provenance does NOT make them ambiguous -- the refusal must not fire toward the operator/split layer for a difference that cannot change where the work goes
+  ok   ...which is exactly because that category names its layer from the category alone
+  ok   a return that stamps both ratios, the metric it stopped on, and the budget it spent against what it was allowed is a complete receipt
+  ok   ...an unstamped rho_D alone makes it incomplete
+  ok   ...an unstamped rho_S alone makes it incomplete
+  ok   ...and without the metric it stopped on, nothing downstream can name the layer
+  ok   ...nor without the work actually spent
+  ok   ...nor with a zero budget, which cannot establish exhaustion
+  ok   the NaN-retry return as it stood before R13.21 is incomplete by this rule, which is why a terminal solve ending there fell back to the generic event
+  ok   the distance is SIGNED, so the record says which side of the boundary the row landed on as well as how far
+  ok   and both readings from the real sweep are inside the sensitivity band -- the flip between them is a boundary crossing, not a change of mechanism
+  ok   so neither may issue a specific layer: a work order that a 1 % change in the ratio would have reversed is not a work order
+  ok   the dt=600 central record at 0.9941 is far from the boundary and keeps its layer
+  ok   and a row with no r0 progress at all is not 'threshold sensitive' -- absence of a measurement must not be reported as a near-boundary verdict
+  ok   the band is applied to the threshold ACTUALLY used, not to the header constant -- the boundary is overridable per run and the distance must follow it
+  ok   a receipt whose ratios, metric, budget and reached flags all agree is complete
+  ok   an UNKNOWN stopping metric fails: the old test was `>= 0` and Unknown is 0, so an unstamped metric passed as complete and an attribution named a layer the receipt could not support
+  ok   work spent cannot exceed work allowed -- a receipt that says so is not describing one solve
+  ok   a reached flag that contradicts rho against the tolerance fails: the flags are re-derived, not trusted
+  ok   and a tolerance that was never applied cannot have been reached -- claiming it is the fabrication this rule exists to catch
+  ok   ...while a path that applied no tolerance and claims neither flag is complete, because it reports exactly what it measured
+  ok   and a receipt stamped for another iteration is not this solve's
+  ok   with only the reached flags set the receipt is incomplete, so the event stands and NO subtype is attributed -- before this gate the same signals produced krylov_objective_mismatch from a receipt that could not support it
+  ok   at np=1 the single rank owns every physical edge, so raw == effective and the projection is the identity
+  ok   ...so a raw open_xs survives the projection in serial
+  ok   an interior rank of a 3x1 decomposition owns no x edge
+  ok   so its effective open_xs is FALSE even though the raw flag is true -- reading the raw flag there would apply a physical boundary in the middle of the domain
+  ok   while the undecomposed y axis still leaves it owning both y edges
+  ok   periodicity is global: an interior rank keeps periodic_x=true, because masking it would silently un-wrap the domain on every rank but two
+  ok   ...and a false raw periodicity is never manufactured into a true effective one
+  ok   a 2x2 corner rank owns exactly the two edges it touches -- the projection is per-edge, not per-rank
+  ok   a candidate that has not been accepted ENTERS the trust loop, so it is judged rather than silently dropped
+  ok   an accepted step does not re-enter the loop
+  ok   attempts exhausted stops the loop
+  ok   and so does an exhausted RHS budget -- the loop cannot borrow evaluations it does not have
+  ok   an all-false, all-zero state must not hash to the 'nothing emitted yet' sentinel, or the very first receipt would re-emit forever
+  ok   a change in the RAW flags moves the key
+  ok   ...and so does a change in the EFFECTIVE flags alone, which is the whole point of printing both: at np>1 they diverge without the raw side moving
+  ok   a change in nprocx moves the key
+  ok   a change in nprocy moves the key
+  ok   a change in mypx moves the key -- this is the field the hand-packed version PRINTED but did not key, so an interior-rank move would have gone unreported
+  ok   and a change in mypy moves it too
+  ok   while identical content gives an identical key -- otherwise the dedup would be a re-emit on every call and the receipt would drown its own signal
+  ok   a receipt stamped for an iteration whose exit event was never stamped is INCOMPLETE -- one authority present and one missing is exactly the state the two-stamp split exists to detect
+  ok   ...and the mirror case too: a missing receipt stamp is not excused by a present exit stamp
+  ok   an entry mismatch is not Krylov stagnation: the linear solve raised nothing, and the counter that said otherwise was mixing a nonlinear check's failure into it
+  ok   while a genuine linear failure still reaches krylov_stagnated -- the repair must not blunt the signal it was protecting
+  ok   and an archived record from before the split classifies exactly as it used to: -1 means 'this record cannot answer', not 'no failures'
+  ok   a 0.999 ratio under a 0.98 gate is REJECTED -- the configured bar decides, not a bare decrease, because this acceptance mutates the state rather than granting entry to a trial that would judge again
+  ok   ...while 0.97 clears the same gate
+  ok   and the config value demonstrably changes the verdict: 0.97 fails a 0.5 gate, which is what 'trust_fallback_ratio' was set to mean
+  ok   no S merit is fail-closed, not a silent fall back to the raw predicate
+  ok   and a merit that needed the halo mask and could not apply it is not the quantity trust judges by, so it cannot carry a state mutation
+  ok   the ru guard is an AND, never an OR escape: a large S gain does not license a step that worsens the block the stage is dominated by
+  ok   a signal the recovery step overruled is RESOLVED: the residual fell and the state advanced, so reporting KrylovStagnated for that iteration contradicts the very lifecycle rule that let the step through
+  ok   ...and so is one overruled by trust or by the direct path
+  ok   while a refused trial leaves it UNRESOLVED -- which is the evidence the classifier should have been reading all along
+  ok   an entry mismatch is not a linear total failure however it ends: one signal, one meaning
+  ok   a linear signal with no trial: the failure stands and the outcome is Vetoed
+  ok   offered to trust and refused: still stands, and the refusal names trust
+  ok   a recovery that took the step OVERRULES the signal -- the flag R13.26 had to clear by hand is now a consequence of the outcome
+  ok   an entry mismatch whose decrease check refused: the signal is the mismatch (not a total failure), and no step means the failure stands
+  ok   nothing signalled, nothing tried, nothing applied: a zero update that is not a failure of any kind
+  ok   a rejected postprocessed direction does not turn raw Krylov success into stagnation
+  ok   direction failure telemetry preserves the observed zero-update exit event
+  ok   each category names the LAYER to work on, as data rather than something the reader reconstructs -- and the entry/R0 layers name what they ACTUALLY exclude. entry_finite=1 excludes a NaN/Inf entry tensor, not a wrong EOS value, a stagger or metric sign error, a stale halo or a finite-but-unphysical state; R0_finite=1 excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale or a JVP inconsistency
+  ok   case-count ratchet (210/210)
+  ok   reserved-branch ratchet (4/4 pinned classifications that NO production call site can produce)
+FIRST_FAILURE_CLASSIFICATION_CONTRACT: PASS

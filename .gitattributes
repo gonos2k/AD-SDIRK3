@@ -1,3 +1,5 @@
 
 # Preserve the exact hashed native namelist fixture, including original trailing blanks.
 docs/evidence/matched_pressure_cost_20261102/inputs/namelist.input whitespace=-blank-at-eol
+# Preserve the hashed focused-test log verbatim.
+docs/evidence/early_residual_status_20261102/test_trust_model_contract_run.log whitespace=-blank-at-eol
