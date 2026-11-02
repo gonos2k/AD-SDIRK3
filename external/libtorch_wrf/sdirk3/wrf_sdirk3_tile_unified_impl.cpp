@@ -14025,7 +14025,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 if (mode>=0 && mode<3) { ++f->rhs_modes[mode]; if (f->in_linear) ++f->linear_rhs_modes[mode]; }
                 else f->invalid=true;
                 if (f->selected && f->base_call && !f->have_base) {
-                    f->ref_base.set(U_ref_stage_); f->Fphys.set(F_phys); f->Fexp.set(F_exp);
+                    f->ref_base.set_owner(U_ref_stage_); f->Fphys.set(F_phys); f->Fexp.set(F_exp);
                     f->full_halo.set(U_full_exchanged); f->dt_stage=dt_stage_; f->split=split_mode;
                     f->n_moist=n_moist_; f->has_physics=has_physics; f->prepared=prepared_rhs_enabled_;
                     f->topology={nx_,ny_,nz_,nx_u_,ny_v_,nz_w_,its_,ite_,ids_,ide_,
