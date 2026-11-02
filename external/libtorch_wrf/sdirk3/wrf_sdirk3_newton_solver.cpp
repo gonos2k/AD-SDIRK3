@@ -95,6 +95,12 @@
 #include "wrf_sdirk3_pressure_v_direct.h"
 #endif
 #include "wrf_sdirk3_terminal_jvp_probe.h"
+#ifdef WRF_SDIRK3_OPERATOR_GAP_PROBE
+#if !defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT) || !defined(WRF_SDIRK3_PRESSURE_STAGE_PROBE) || !defined(WRF_SDIRK3_PRESSURE_A5) || defined(WRF_SDIRK3_TERMINAL_JVP_PROBE) || defined(WRF_SDIRK3_MATCHED_PRESSURE_PROBE)
+#error "operator gap probe requires the audit and A5 context, exclusively"
+#endif
+#include "wrf_sdirk3_operator_gap_probe.h"
+#endif
 #ifdef WRF_SDIRK3_MATCHED_PRESSURE_PROBE
 #if !defined(WRF_SDIRK3_PRESSURE_REFERENCE_STAGE) || !defined(WRF_SDIRK3_PRESSURE_A5) || !defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT)
 #error "matched pressure terminal experiment requires existing native EOS/reference/A5/audit context"
@@ -5873,7 +5879,7 @@ public:
             wrf::sdirk3::linear_delay_audit::Frame delay_frame;
             delay_frame.stage=stage; delay_frame.newton=newton_iter;
             delay_frame.refinement_passes=wrf::sdirk3::g_sdirk3_config.precond_refinement_passes;
-#ifdef WRF_SDIRK3_MATCHED_PRESSURE_PROBE
+#if defined(WRF_SDIRK3_MATCHED_PRESSURE_PROBE) || defined(WRF_SDIRK3_OPERATOR_GAP_PROBE)
             delay_frame.selected=stage==2 && newton_iter==0 &&
                 !delay_selected_fired.test_and_set(std::memory_order_relaxed);
 #else
@@ -5884,8 +5890,12 @@ public:
 #endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
             static std::atomic_flag pressure_probe_fired = ATOMIC_FLAG_INIT;
+#ifdef WRF_SDIRK3_OPERATOR_GAP_PROBE
+            const bool pressure_capture_here = false; // base EOS capture still uses selected audit frame
+#else
             const bool pressure_capture_here = stage == 2 && newton_iter == 0 &&
                 !pressure_probe_fired.test_and_set(std::memory_order_relaxed);
+#endif
             std::chrono::steady_clock::time_point pressure_interval_start;
             const int pressure_precond_calls_before = precond_total_calls_;
             const int pressure_fallback_before = precond_fallback_count_;
@@ -6148,6 +6158,9 @@ public:
             }
             
             torch::Tensor F;
+#ifdef WRF_SDIRK3_OPERATOR_GAP_PROBE
+            const bool operator_gap_base_grad_mode = at::GradMode::is_enabled();
+#endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
             // Only the claimed existing base RHS may publish EOS operands.
             wrf::sdirk3::pressure_stage_probe::PressureEosContext pressure_eos_context;
@@ -6401,6 +6414,10 @@ public:
             //
             // Before buggy code: R = K - F - F_phys  (double-counted F_phys)
             // After fix:         R = K - F           (correct for all configurations)
+#ifdef WRF_SDIRK3_OPERATOR_GAP_PROBE
+            // Preserve the base RHS before later selected JVPs can reuse RHS scratch.
+            const auto operator_gap_base_F = delay_frame.selected ? F.detach().clone() : torch::Tensor();
+#endif
             torch::Tensor R = K - F;
             observed_K = K.detach();
             observed_R = R.detach();
@@ -10162,6 +10179,119 @@ public:
                                 WRFNewtonKrylovSolver::KrylovTerminationReason::NanRetryExhausted;
                     }
                 }
+#ifdef WRF_SDIRK3_OPERATOR_GAP_PROBE
+                if (delay_frame.selected) {
+                    using namespace wrf::sdirk3::operator_gap_probe;
+                    bool completed=false;
+                    try {
+                        const auto& cfg=wrf::sdirk3::g_sdirk3_config;
+                        const auto& e=pressure_eos_context;
+                        const auto& v=e.v_primary;
+                        TORCH_CHECK(stage==2 && newton_iter==0 && global_timestep_==0 && dt==600 &&
+                            delay_frame.have_base && !delay_frame.invalid && delay_frame.split==3 &&
+                            delay_frame.n_moist==0 && !delay_frame.has_physics && !delay_frame.prepared &&
+                            delay_frame.topology[14]==1 && delay_frame.topology[15]==1 &&
+                            !delay_frame.flags[13] && !delay_frame.flags[14] && delay_frame.flags[15] &&
+                            cfg.internal_fp64 && cfg.internal_fp64_state_carry && use_autograd_jvp &&
+                            cfg.imex_split_mode==3 && !cfg.split_explicit &&
+                            torch::get_num_threads()==1 && torch::get_num_interop_threads()==1 &&
+                            !options_.reuse_linearization && !cfg.reuse_linearization &&
+                            !cfg.omega_update_ref_per_newton && !cfg.enable_ad_halo_exchange &&
+                            !cfg.retain_graph_for_adjoint && !cfg.save_trajectory && !halo_mask_initialized_ &&
+                            scaling_initialized_ && layout_initialized_ &&
+                            e.captured && !e.failed && !e.duplicate && v.captured && !v.failed &&
+                            !v.duplicate && v.project_native, "unsupported operator gap profile");
+                        using Handle=wrf::sdirk3::linear_delay_audit::Handle;
+                        Handle base_handle; base_handle.set_owner(U_stage);
+                        TORCH_CHECK(wrf_terminal_jvp::hash(U_stage+dt*gamma*K)==wrf_terminal_jvp::hash(U_eval),
+                            "base state does not reproduce U_eval");
+                        const auto initial_jvp_method=cfg.jvp_method;
+                        const int initial_threads=torch::get_num_threads();
+                        const int initial_interop_threads=torch::get_num_interop_threads();
+                        std::vector<std::pair<const Handle*,uint64_t>> fixed;
+                        std::ostringstream fixed_json;
+                        fixed_json << "[";
+                        auto add=[&](const std::string& name,const Handle& h) {
+                            TORCH_CHECK(h.unchanged(), "fixed input changed before probe");
+                            const uint64_t hash=h.value.defined()?wrf_terminal_jvp::hash(h.value):0;
+                            if(!fixed.empty()) fixed_json << ",";
+                            fixed_json << "{\"name\":" << wrf_terminal_jvp::quote(name)
+                                << ",\"defined\":" << (h.value.defined()?"true":"false")
+                                << ",\"fnv64\":" << wrf_terminal_jvp::quote(std::to_string(hash)) << "}";
+                            fixed.emplace_back(&h,hash);
+                        };
+                        add("U_stage",base_handle); add("U_eval",delay_frame.U); add("K",delay_frame.K);
+                        add("b",delay_frame.b); add("x0",delay_frame.x0); add("S",delay_frame.S);
+                        add("Sinv",delay_frame.Sinv); add("mask",delay_frame.mask);
+                        add("reference",delay_frame.ref_base); add("Fphys",delay_frame.Fphys);
+                        add("Fexp",delay_frame.Fexp); add("full_halo",delay_frame.full_halo);
+                        int required_base=0;
+                        for (const auto& entry:delay_frame.context) {
+                            const auto& name=entry.first;
+                            const bool scratch=name.find("_work")!=std::string::npos ||
+                                name=="ru_tend" || name=="rv_tend" || name=="rw_tend" ||
+                                name=="t_tend" || name=="mu_tend" || name=="ph_tend" || name=="qv_tend";
+                            if(!scratch) {
+                                if(name=="p_base" || name=="th_base" || name=="mu_base" || name=="ph_base") {
+                                    TORCH_CHECK(entry.second.value.defined(), "missing base-state input");
+                                    ++required_base;
+                                }
+                                add(name,entry.second);
+                            }
+                        }
+                        TORCH_CHECK(required_base==4, "incomplete base-state context");
+                        fixed_json << "]";
+                        auto context_ok=[&]() {
+                            if (halo_mask_initialized_ || cfg.omega_update_ref_per_newton ||
+                                cfg.enable_ad_halo_exchange || cfg.reuse_linearization || options_.reuse_linearization ||
+                                cfg.imex_split_mode!=3 || cfg.split_explicit || !cfg.internal_fp64 ||
+                                !cfg.internal_fp64_state_carry || cfg.retain_graph_for_adjoint ||
+                                cfg.save_trajectory || !use_autograd_jvp || !scaling_initialized_ || !layout_initialized_ ||
+                                cfg.jvp_method!=initial_jvp_method || torch::get_num_threads()!=initial_threads ||
+                                torch::get_num_interop_threads()!=initial_interop_threads) return false;
+                            for(const auto& item:fixed)
+                                if(!item.first->unchanged() || (item.first->value.defined() &&
+                                    wrf_terminal_jvp::hash(item.first->value)!=item.second)) return false;
+                            return true;
+                        };
+                        const auto fallback_before=g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
+                        const int ad_before=jvp_ad_calls, fd_before=jvp_fd_calls;
+                        auto observed_apply=[&](const torch::Tensor& x) {
+                            TORCH_CHECK(at::GradMode::is_enabled()==operator_gap_base_grad_mode, "JVP grad mode differs from base");
+                            auto y=apply_jacobian(x);
+                            TORCH_CHECK(at::GradMode::is_enabled()==operator_gap_base_grad_mode, "JVP changed grad mode");
+                            TORCH_CHECK(jvp_fd_calls==fd_before &&
+                                g_jvp_fd_fallback_count.load(std::memory_order_relaxed)==fallback_before,
+                                "selected JVP used a finite difference fallback");
+                            return y;
+                        };
+                        auto observed_rhs=[&](const torch::Tensor& x) {
+                            TORCH_CHECK(at::GradMode::is_enabled()==operator_gap_base_grad_mode, "RHS grad mode differs from base");
+                            auto y=compute_rhs(x);
+                            TORCH_CHECK(at::GradMode::is_enabled()==operator_gap_base_grad_mode, "RHS changed grad mode");
+                            return y;
+                        };
+                        auto json=measure(U_stage,K,operator_gap_base_F,U_eval,dK,S_diag_,
+                            halo_mask_initialized_ ? halo_mask_.detach() : torch::Tensor(),dt*gamma,
+                            v.project_native,observed_apply,observed_rhs,context_ok);
+                        TORCH_CHECK(jvp_ad_calls-ad_before==3, "unexpected selected JVP count");
+                        json.pop_back();
+                        json += ",\"fixed_input_handles\":" + fixed_json.str() +
+                            ",\"gmres_tolerance\":" + wrf_terminal_jvp::json_number(gmres_result.tolerance_applied) +
+                            ",\"gmres_raw_relative\":" + wrf_terminal_jvp::json_number(gmres_result.rel_error) +
+                            ",\"direction_relative\":" + wrf_terminal_jvp::json_number(effective_relative_error) +
+                            ",\"direction_modified\":" + (direction_modified ? "true" : "false") +
+                            ",\"mask_scope\":\"" + (halo_mask_initialized_ ? std::string("solver_halo_mask") : std::string("all_packed_no_halo_mask")) + "\"}";
+                        completed=write_exclusive("operator_gap_probe.json",json);
+                    } catch (const std::exception& error) {
+                        std::fprintf(stderr,"[OPERATOR_GAP] error=%s\n",error.what());
+                    } catch (...) { std::fprintf(stderr,"[OPERATOR_GAP] unknown error\n"); }
+                    if(!completed) write_exclusive("operator_gap_probe.json",
+                        "{\"status\":\"failed\",\"forecast_complete\":false}");
+                    std::fprintf(stderr,"[OPERATOR_GAP] status=%s forecast_complete=false\n",completed?"completed":"failed");
+                    std::fflush(stderr); std::fflush(stdout); std::_Exit(completed?86:87);
+                }
+#endif
                 if (direction_modified && wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     std::ostringstream receipt;
                     receipt << std::scientific << std::setprecision(9)
