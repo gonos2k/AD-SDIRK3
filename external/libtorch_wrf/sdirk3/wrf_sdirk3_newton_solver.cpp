@@ -10022,7 +10022,7 @@ public:
                     }
                 }
 #endif
-#ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
+#if defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT) && !defined(WRF_SDIRK3_OPERATOR_GAP_PROBE)
                 {
                     wrf::sdirk3::linear_delay_audit::SolveInfo info;
                     info.timestep=global_timestep_; info.solver_id=solver_id_; info.generation=diag_solve_generation_;
@@ -10187,8 +10187,15 @@ public:
                         const auto& cfg=wrf::sdirk3::g_sdirk3_config;
                         const auto& e=pressure_eos_context;
                         const auto& v=e.v_primary;
-                        TORCH_CHECK(stage==2 && newton_iter==0 && global_timestep_==0 && dt==600 &&
-                            delay_frame.have_base && !delay_frame.invalid && delay_frame.split==3 &&
+                        const bool profile_ok = stage==2 && newton_iter==0 && global_timestep_==0 && dt==600 &&
+                            delay_frame.ordinal==1 && delay_frame.have_base && !delay_frame.invalid &&
+                            delay_frame.have_first_ref && delay_frame.have_last_ref &&
+                            delay_frame.ref_base.unchanged() && delay_frame.ref_first.unchanged() &&
+                            delay_frame.ref_last.unchanged() &&
+                            delay_frame.ref_base.value.is_same(delay_frame.ref_first.value) &&
+                            delay_frame.ref_first.value.is_same(delay_frame.ref_last.value) &&
+                            delay_frame.ref_handle_changes==0 && delay_frame.ref_version_changes==0 &&
+                            delay_frame.split==3 &&
                             delay_frame.n_moist==0 && !delay_frame.has_physics && !delay_frame.prepared &&
                             delay_frame.topology[14]==1 && delay_frame.topology[15]==1 &&
                             !delay_frame.flags[13] && !delay_frame.flags[14] && delay_frame.flags[15] &&
@@ -10200,7 +10207,44 @@ public:
                             !cfg.retain_graph_for_adjoint && !cfg.save_trajectory && !halo_mask_initialized_ &&
                             scaling_initialized_ && layout_initialized_ &&
                             e.captured && !e.failed && !e.duplicate && v.captured && !v.failed &&
-                            !v.duplicate && v.project_native, "unsupported operator gap profile");
+                            !v.duplicate && v.project_native;
+                        if (!profile_ok) {
+                            std::cerr << "[OPERATOR_GAP_PROFILE] stage=" << stage
+                                << " newton=" << newton_iter << " timestep=" << global_timestep_
+                                << " dt=" << dt << " ordinal=" << delay_frame.ordinal
+                                << " have_base=" << int(delay_frame.have_base)
+                                << " have_first_ref=" << int(delay_frame.have_first_ref)
+                                << " have_last_ref=" << int(delay_frame.have_last_ref)
+                                << " reference_handles_equal=" << int(delay_frame.ref_base.value.is_same(delay_frame.ref_first.value) &&
+                                    delay_frame.ref_first.value.is_same(delay_frame.ref_last.value))
+                                << " ref_base_unchanged=" << int(delay_frame.ref_base.unchanged())
+                                << " ref_first_unchanged=" << int(delay_frame.ref_first.unchanged())
+                                << " ref_last_unchanged=" << int(delay_frame.ref_last.unchanged())
+                                << " ref_handle_changes=" << delay_frame.ref_handle_changes
+                                << " ref_version_changes=" << delay_frame.ref_version_changes
+                                << " invalid=" << int(delay_frame.invalid) << " split=" << delay_frame.split
+                                << " n_moist=" << delay_frame.n_moist << " has_physics=" << int(delay_frame.has_physics)
+                                << " prepared=" << int(delay_frame.prepared)
+                                << " nprocx=" << delay_frame.topology[14] << " nprocy=" << delay_frame.topology[15]
+                                << " captured_ad_halo=" << int(delay_frame.flags[13])
+                                << " captured_ref_update=" << int(delay_frame.flags[14])
+                                << " packed=" << int(delay_frame.flags[15])
+                                << " fp64=" << int(cfg.internal_fp64) << " fp64_carry=" << int(cfg.internal_fp64_state_carry)
+                                << " autograd_jvp=" << int(use_autograd_jvp)
+                                << " options_reuse=" << int(options_.reuse_linearization)
+                                << " config_reuse=" << int(cfg.reuse_linearization)
+                                << " ref_update=" << int(cfg.omega_update_ref_per_newton)
+                                << " ad_halo=" << int(cfg.enable_ad_halo_exchange)
+                                << " retain_graph=" << int(cfg.retain_graph_for_adjoint)
+                                << " save_trajectory=" << int(cfg.save_trajectory)
+                                << " halo_mask=" << int(halo_mask_initialized_)
+                                << " scaling=" << int(scaling_initialized_) << " layout=" << int(layout_initialized_)
+                                << " eos_captured=" << int(e.captured) << " eos_failed=" << int(e.failed)
+                                << " eos_duplicate=" << int(e.duplicate) << " v_captured=" << int(v.captured)
+                                << " v_failed=" << int(v.failed) << " v_duplicate=" << int(v.duplicate)
+                                << " project_native=" << int(bool(v.project_native)) << '\n';
+                        }
+                        TORCH_CHECK(profile_ok, "unsupported operator gap profile");
                         using Handle=wrf::sdirk3::linear_delay_audit::Handle;
                         Handle base_handle; base_handle.set_owner(U_stage);
                         TORCH_CHECK(wrf_terminal_jvp::hash(U_stage+dt*gamma*K)==wrf_terminal_jvp::hash(U_eval),
@@ -10256,6 +10300,9 @@ public:
                         };
                         const auto fallback_before=g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
                         const int ad_before=jvp_ad_calls, fd_before=jvp_fd_calls;
+                        const int rhs_before=delay_frame.rhs_all;
+                        const auto modes_before=delay_frame.rhs_modes;
+                        int direct_rhs_calls=0;
                         auto observed_apply=[&](const torch::Tensor& x) {
                             TORCH_CHECK(at::GradMode::is_enabled()==operator_gap_base_grad_mode, "JVP grad mode differs from base");
                             auto y=apply_jacobian(x);
@@ -10266,6 +10313,7 @@ public:
                             return y;
                         };
                         auto observed_rhs=[&](const torch::Tensor& x) {
+                            ++direct_rhs_calls;
                             TORCH_CHECK(at::GradMode::is_enabled()==operator_gap_base_grad_mode, "RHS grad mode differs from base");
                             auto y=compute_rhs(x);
                             TORCH_CHECK(at::GradMode::is_enabled()==operator_gap_base_grad_mode, "RHS changed grad mode");
@@ -10276,7 +10324,20 @@ public:
                             v.project_native,observed_apply,observed_rhs,context_ok);
                         TORCH_CHECK(jvp_ad_calls-ad_before==3, "unexpected selected JVP count");
                         json.pop_back();
-                        json += ",\"fixed_input_handles\":" + fixed_json.str() +
+                        json += ",\"stage\":" + std::to_string(stage) +
+                            ",\"newton\":" + std::to_string(newton_iter) +
+                            ",\"timestep\":" + std::to_string(global_timestep_) +
+                            ",\"solve_ordinal\":" + std::to_string(delay_frame.ordinal) +
+                            ",\"probe_ad_calls\":" + std::to_string(jvp_ad_calls-ad_before) +
+                            ",\"probe_fd_calls\":" + std::to_string(jvp_fd_calls-fd_before) +
+                            ",\"probe_fallbacks\":" + std::to_string(g_jvp_fd_fallback_count.load(std::memory_order_relaxed)-fallback_before) +
+                            ",\"probe_direct_rhs_calls\":" + std::to_string(direct_rhs_calls) +
+                            ",\"probe_total_rhs_calls\":" + std::to_string(delay_frame.rhs_all-rhs_before) +
+                            ",\"probe_rhs_mode_order\":\"full,implicit,explicit\",\"probe_rhs_modes\":[" +
+                            std::to_string(delay_frame.rhs_modes[0]-modes_before[0]) + "," +
+                            std::to_string(delay_frame.rhs_modes[1]-modes_before[1]) + "," +
+                            std::to_string(delay_frame.rhs_modes[2]-modes_before[2]) + "]" +
+                            ",\"fixed_input_handles\":" + fixed_json.str() +
                             ",\"gmres_tolerance\":" + wrf_terminal_jvp::json_number(gmres_result.tolerance_applied) +
                             ",\"gmres_raw_relative\":" + wrf_terminal_jvp::json_number(gmres_result.rel_error) +
                             ",\"direction_relative\":" + wrf_terminal_jvp::json_number(effective_relative_error) +
