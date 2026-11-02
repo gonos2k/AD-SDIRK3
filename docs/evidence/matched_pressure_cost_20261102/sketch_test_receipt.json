@@ -1,0 +1,25 @@
+{
+  "cwd": "/private/tmp/matched-pressure-cost-20261102",
+  "header_sha256": "42b4edc710208dc0e451ae10099bda31fac6811e7ead7c4cb46db4b9482630f9",
+  "test_sha256": "9c32a8da02bca776f04d2cac27a86b0d9982087b7b6b8c66581d7a7a50bd3824",
+  "exit_code": 0,
+  "warnings": "two upstream PyTorch C++20 bit-field extension warnings",
+  "model_run": false,
+  "command": "clang++ -std=c++17 -O0 -I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include -I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include/torch/csrc/api/include external/libtorch_wrf/sdirk3/tests/test_matched_pressure_sketch.cpp -L/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib -Wl,-rpath,/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib -ltorch -ltorch_cpu -lc10 -o /private/tmp/test_matched_pressure_sketch && /private/tmp/test_matched_pressure_sketch",
+  "binary": "/private/tmp/test_matched_pressure_sketch",
+  "binary_sha256": "2097d3c976f65ef8ee96dd8a4f79630d5932d7536c52eb55683857a99b7283a2",
+  "output": "matched pressure sketch passed\n",
+  "previous": {
+    "cwd": "/private/tmp/matched-pressure-cost-20261102",
+    "header_sha256": "fda17270921a32b5b2e58e116e68fc55118e0b41311d8335c8aa0ea9fcbaa690",
+    "test_sha256": "9c32a8da02bca776f04d2cac27a86b0d9982087b7b6b8c66581d7a7a50bd3824",
+    "exit_code": 0,
+    "warnings": "two upstream PyTorch C++20 bit-field extension warnings",
+    "model_run": false,
+    "command": "clang++ -std=c++17 -O0 -I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include -I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include/torch/csrc/api/include external/libtorch_wrf/sdirk3/tests/test_matched_pressure_sketch.cpp -L/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib -Wl,-rpath,/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib -ltorch -ltorch_cpu -lc10 -o /private/tmp/test_matched_pressure_sketch && /private/tmp/test_matched_pressure_sketch",
+    "binary": "/private/tmp/test_matched_pressure_sketch",
+    "binary_sha256": "b5ae6ba1e57ee002b844971d1dfd7bc5e394955608e4b7e3ec41053aa5a9912c",
+    "output": "matched pressure sketch passed"
+  },
+  "completed_local": "2026-11-02T09:38:30.573414+09:00"
+}

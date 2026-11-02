@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-11-02T08:57:31.817611+09:00",
+  "run_directory": "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run",
+  "collector_sha256": "8b9e1c579da4147f6c0dd20cd777b6c40b5552f3d3f36904e51a68c3e6b5ac76",
+  "source_sha256": {
+    "rsl.out.0000": "12bd2e202fe52bf7ce7ebafaf37f8e4dd24b6ba44454fcb15457f456b51613b7",
+    "rsl.error.0000": "574dd7d1c34743e6472dd93b88b720ad74cc7db244210861be5c2e34a149b342",
+    "launcher.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "launcher.stderr.log": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df"
+  },
+  "original_result_sha256": "c3336e3838e2e829791528c38a713d302306bc30233c67b55661db3c302ab14c",
+  "original_converged_stages": [],
+  "recount": {
+    "stage_iterations": [
+      {
+        "stage": 2,
+        "iters": 3,
+        "count": 1
+      },
+      {
+        "stage": 3,
+        "iters": 3,
+        "count": 1
+      }
+    ],
+    "stage_count": 2,
+    "stream_counts": {
+      "rsl.out.0000": 0,
+      "rsl.error.0000": 2,
+      "launcher.stdout.log": 0,
+      "launcher.stderr.log": 0
+    },
+    "deduplication": "maximum multiplicity per (stage, iters) across streams"
+  },
+  "note": "Offline recount; original record unchanged. Identical events split across streams cannot be distinguished."
+}

@@ -1,8 +1,8 @@
 # 표준 em_b_wave 전방 코어 체크리스트
 
 작성: 2026-10-31T18:26:15.434614+09:00.
-마지막 갱신: 2026-11-02T00:44:24.662975+09:00.
-현재 개발 기준: main036748f2(PR336 병합); A10 종료형 소스08b21c11. A4/A7/A8/A9 원판정 유지.
+마지막 갱신: 2026-11-02T11:38:39.993430+09:00.
+현재 개발 기준: main9292c6c8(PR337 병합); A11 수정 완료 소스d0bfa40b. A4/A7/A8/A9/A10 원판정 유지.
 Green·Red: GPT-6.1-Terra, medium.
 
 ## 완료 목표와 운영 원칙
@@ -135,8 +135,16 @@ A0–A3의 제한된 기능·첫 단계 수치 검증에 이어 A4 비용 선별
   등록된 전체 clock 차이−1.7938초가1초 조건을 실패해 runner **INCONCLUSIVE**와
   cost_eligible=false를 유지한다. 재시도/과거 판정 변경은 없다.
   [실제 결과](evidence/terminal_jvp_replay_20261102/manifest.json).
-- [ ] 적격 시간 비교가 가능한 별도 규약에서 같은 A,b,x0,S의 P0/P1 준비 포함 비용을 판정한다.
-  아직 Gate B를 승인하거나 전체 가속·후반 W·5일 정확도를 완료로 올리지 않는다.
+- [x] A11 같은 **공통 PreparedJvp A**와 b/x0/S의 P0–P1–P1–P0 준비 포함 모형 비용을
+  별도 규약에서 판정했다. native15회·tape1회·검증27회와 실제 Arnoldi 조합/각 해의 native
+  잔차를 통과했다. P0/P1 Arnoldi21→13, A적용23→14이나 charged 경과비1.1646/1.0687,
+  CPU비1.0863/1.0908로2배 기준 미달: **확대 NO_GO(완료된 부정 판정)**다.
+  common/tape는 후보마다 전액 charge한 모형 비용이며 전체 ABBA/Native-FWAD/예보 속도가 아니다.
+  최초11b input 캡처 실패INCONCLUSIVE와 수정d0b 블록은 분리 보존한다(소스별1회, 총2회).
+  시계 읽기 bracket과 stderr 집계를 보완했고 완료 블록 시간·자원 조건은 적격이었다.
+  [근거](evidence/matched_pressure_cost_20261102/manifest.json).
+- [ ] Gate B 승인·실용 전체 가속·후반 W·5일 정확도는 아직 미완료다.
+  이번 P1을 전 단계/장시간으로 확대하거나, 결과를 기존 native JVP 속도와 곱하지 않는다.
 
 **A 종료 산출물:** source/exe/input/context가 고정된 native600초 단계의 기존/압력 P 비교표,
 원래 A의 저장된 실제 잔차, 경계·좌표 복원 검증, 준비 포함 총비용을 확보했다.

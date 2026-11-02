@@ -1,0 +1,529 @@
+{
+  "status": "diagnostic_completed",
+  "cost_decision": "NO_GO",
+  "cost_eligible_scope": "local modeled prepared-operator first point; no forecast or native kernel performance claim",
+  "model_completed": false,
+  "endpoint_claimed": false,
+  "initial_state_comparison": "pending separate numerical validation",
+  "errors": [],
+  "clock": {
+    "start": {
+      "monotonic_before_ns": 3322650947347500,
+      "realtime_ns": 1793586471837439000,
+      "monotonic_after_ns": 3322650947349250
+    },
+    "end": {
+      "monotonic_before_ns": 3322707692258125,
+      "realtime_ns": 1793586528582842000,
+      "monotonic_after_ns": 3322707692259208
+    },
+    "wall_elapsed_ns": 56745403000,
+    "gap_interval_ns": [
+      489208,
+      496209
+    ],
+    "endpoint_spans_ns": [
+      1750,
+      1083
+    ],
+    "max_endpoint_span_ns": 10000000,
+    "gap_limit_ns": 1000000000,
+    "monotonic_resolution_ns": 42,
+    "realtime_resolution_ns": 1000,
+    "classification": "consistent"
+  },
+  "launcher_return_code": 88,
+  "marker_streams": [
+    "rsl.error.0000"
+  ],
+  "diagnostic": {
+    "status": "matched_prepared_diagnostic_passed",
+    "phase": "complete",
+    "error": "",
+    "forecast_complete": false,
+    "stage": 2,
+    "newton_iteration": 0,
+    "timestep": 0,
+    "order": [
+      "P0",
+      "P1",
+      "P1",
+      "P0"
+    ],
+    "single_tape": true,
+    "no_rhs_interleaving_required": true,
+    "a": 261.5199129050754,
+    "dt": 600,
+    "gamma": 0.435866521508459,
+    "tolerance": 1.0000000116860974e-07,
+    "restart": 30,
+    "max_restarts": 50,
+    "N": 1080491,
+    "frozen_hashes": [
+      9227350765751078771,
+      14044514444751719475,
+      14544107913973293440,
+      7380069588991331333,
+      8470282445223911666,
+      14859681834983167751
+    ],
+    "hash_order": [
+      "U",
+      "F",
+      "b",
+      "x0",
+      "S",
+      "Sinv"
+    ],
+    "observed_native_context": "observed_native_subset;prepared_A_shared;stage=2;Newton=0;dt=600;gamma=0.435866521508459;U=bfc3393acc9791c0;F=ff7fe0162403c3c0;K=5d065c0f7df71aa0;b=beebab996c9f810b;x0=fdf60492df066d12;S=73dac3183f782879;Sinv=70e824aa5bce8528;mask=af63bd4c8601b7df;actual_ref=1ce9610f145202e3;Fphys=4392ac913e4eb2bb;Fexp=af63bd4c8601b7df;halo=af63bd4c8601b7df;p_base=b25db653035c8216;th_base=2120e754790da3e0;mu_base=87f1b77d980beefe;ph_base=56aa110cd24e8725;c1h=e581f25d019bd1eb;c2h=30613798fac7f3eb;c1f=3a73764f3c55bd12;c2f=d74be9b7377d547b;msftx=2e67d05c8ae59b31;msfty=2e67d05c8ae59b31;msfux=87147cdf90a01397;msfuy=87147cdf90a01397;msfvx=4db9144b7c29b07f;msfvy=4db9144b7c29b07f;cqu=a9e78c7d64349fc4;cqv=a9e78c7d64349fc4;cqw=6e4f6a2899b95c4;zx=a3b076d80775095b;zy=a3b076d80775095b;6c6594bc40dadde6;4344bcb2739851df;6979036add3396b8;87f1b77d980beefe;e7a64f1f39f75404;b25db653035c8216;e581f25d019bd1eb;30613798fac7f3eb;226a33a24ef254fc;843b3cd1c33d78fb;38715360ee3e8572;3a73764f3c55bd12;d74be9b7377d547b;b57f00526e2b596e;2e67d05c8ae59b31;2e67d05c8ae59b31;87147cdf90a01397;87147cdf90a01397;4db9144b7c29b07f;4db9144b7c29b07f;3b290ce845179fec;f9b52b4560136760;f0572b01745387e0;a2e4e4a8ca0534e0;f0572b01745387e0;f9b52b4560136760;cb2f7b0f32bf9e9a;d88d4c145bbc2d91;287:717.5:1004.5:100000:300:9.9999997473787516e-06:9.9999997473787516e-06:9.8100004196166992:1:1:9.9999997473787516e-06:1.000000013351432e-10:1:1:1:1:1:0:0;4383093429:4383093642:4383093855:4383094068;1000110000000001:41:81:64:42:82:65:1:41:1:41:1:81:1:81:1:1:0:0:5:1",
+    "context_scope": "one immutable prepared graph; native closure attested only on captured subset",
+    "rhs_interleaved": false,
+    "native_calls": 15,
+    "tape_constructor_rhs_calls": 1,
+    "tape_validation_calls": 27,
+    "tape_validation_errors": 0,
+    "tape_validation_max_abs": 3.552713678800501e-15,
+    "tape_validation_max_rel": 7.78851631399179e-16,
+    "tape_validation_time": {
+      "wall": 6.227226039,
+      "cpu": 5.724987000000006,
+      "clock_valid": true
+    },
+    "validation_scope": "bounded probes and streamed Arnoldi mixtures, not proof for all directions",
+    "primal_comparison": "torch::equal numeric equality, signed zeros equivalent",
+    "action_comparison": "elementwise allclose rtol=1e-10 atol=1e-12, global and each block",
+    "scope": "common_prepared_A_plus_M_not_native_FWAD_cost",
+    "cost_screen_only": true,
+    "cost_screen": false,
+    "accounting": "modeled per-candidate cost: common and tape fully charged per arm; not actual ABBA runtime; validation probes and mixture oracle checks excluded; overhead subtraction is an estimate",
+    "common": {
+      "wall": 0.866674417,
+      "cpu": 0.6688660000000004,
+      "clock_valid": true
+    },
+    "tape_preparation": {
+      "wall": 0.96067,
+      "cpu": 0.45041700000000073,
+      "clock_valid": true
+    },
+    "oracle_verification": {
+      "wall": 3.3186579170000003,
+      "cpu": 3.1462129999999973,
+      "clock_valid": true
+    },
+    "boundary_guards": {
+      "wall": 14.083312916000002,
+      "cpu": 12.861841999999971,
+      "clock_valid": true
+    },
+    "arms": [
+      {
+        "kind": "P0",
+        "solved": true,
+        "native_checked": true,
+        "setup": {
+          "wall": 0.042419208,
+          "cpu": 0.035312999999999484,
+          "clock_valid": true
+        },
+        "solve": {
+          "wall": 6.853868917,
+          "cpu": 5.9009789999999995,
+          "clock_valid": true
+        },
+        "native_residual": {
+          "wall": 0.285386917,
+          "cpu": 0.2846219999999988,
+          "clock_valid": true
+        },
+        "A_time": {
+          "wall": 3.2707805030000006,
+          "cpu": 3.0219550000000037,
+          "clock_valid": true
+        },
+        "M_time": {
+          "wall": 1.8599812880000002,
+          "cpu": 1.2634130000000034,
+          "clock_valid": true
+        },
+        "sketch_overhead": {
+          "wall": 0.576542543,
+          "cpu": 0.5305049999999945,
+          "clock_valid": true
+        },
+        "guard_overhead": {
+          "wall": 0.000739166,
+          "cpu": 0.000718000000002661,
+          "clock_valid": true
+        },
+        "charged_total": {
+          "wall": 9.009019459000001,
+          "cpu": 7.340196999999999,
+          "clock_valid": true
+        },
+        "accounted_total": {
+          "wall": 8.431737750000002,
+          "cpu": 6.808974000000002,
+          "clock_valid": true
+        },
+        "A_time_includes_guard": true,
+        "guard_events": 0,
+        "A_calls": 23,
+        "M_calls": 21,
+        "inner_arnoldi": 0,
+        "pressure_subsolves": 0,
+        "primary_calls": 0,
+        "extensions": 0,
+        "direct_max_residual": 0,
+        "iterations": 21,
+        "restarts": 1,
+        "arnoldi_spent": 21,
+        "arnoldi_allowed": 1500,
+        "success": true,
+        "stopping_metric": 1,
+        "termination_reason": 1,
+        "tolerance": 1.0000000116860974e-07,
+        "rho_S": 1.2772678470440724e-09,
+        "rho_D": 1.2772678470440724e-09,
+        "native_scaled_rel": 1.277267811901776e-09,
+        "native_physical_rel": 9.218320155223223e-10,
+        "block_scaled_residual_norms": [
+          1.4282267362405465e-09,
+          2.66895182758171e-09,
+          1.7569056401312456e-08,
+          1.8529559998669285e-08,
+          8.854039838881676e-11,
+          1.0161335646741762e-09
+        ],
+        "sketch_count": 21,
+        "sketch_max_abs": 3.694822225952521e-13,
+        "sketch_max_rel": 1.2964793229479993e-12,
+        "sketch_cosine": 0.2157676791799742
+      },
+      {
+        "kind": "P1",
+        "solved": true,
+        "native_checked": true,
+        "setup": {
+          "wall": 0.179220167,
+          "cpu": 0.11922799999999967,
+          "clock_valid": true
+        },
+        "solve": {
+          "wall": 5.533959958,
+          "cpu": 5.3237950000000005,
+          "clock_valid": true
+        },
+        "native_residual": {
+          "wall": 0.195291667,
+          "cpu": 0.19468299999999772,
+          "clock_valid": true
+        },
+        "A_time": {
+          "wall": 2.4164763330000003,
+          "cpu": 2.31153500000001,
+          "clock_valid": true
+        },
+        "M_time": {
+          "wall": 2.0367628739999994,
+          "cpu": 1.969284000000016,
+          "clock_valid": true
+        },
+        "sketch_overhead": {
+          "wall": 0.42866695600000004,
+          "cpu": 0.4151389999999928,
+          "clock_valid": true
+        },
+        "guard_overhead": {
+          "wall": 0.0004924150000000001,
+          "cpu": 0.0004910000000073467,
+          "clock_valid": true
+        },
+        "charged_total": {
+          "wall": 7.735816208999999,
+          "cpu": 6.756988999999999,
+          "clock_valid": true
+        },
+        "accounted_total": {
+          "wall": 7.306656837999999,
+          "cpu": 6.341358999999999,
+          "clock_valid": true
+        },
+        "A_time_includes_guard": true,
+        "guard_events": 0,
+        "A_calls": 14,
+        "M_calls": 13,
+        "inner_arnoldi": 52,
+        "pressure_subsolves": 65,
+        "primary_calls": 78,
+        "extensions": 13,
+        "direct_max_residual": 0.0038772082779580047,
+        "iterations": 13,
+        "restarts": 1,
+        "arnoldi_spent": 13,
+        "arnoldi_allowed": 1500,
+        "success": true,
+        "stopping_metric": 1,
+        "termination_reason": 1,
+        "tolerance": 1.0000000116860974e-07,
+        "rho_S": 8.243816185249386e-10,
+        "rho_D": 8.243816185249386e-10,
+        "native_scaled_rel": 8.243815966289803e-10,
+        "native_physical_rel": 5.64900977311878e-10,
+        "block_scaled_residual_norms": [
+          2.096241619215233e-09,
+          3.5172218169340926e-11,
+          1.1852651615583064e-08,
+          1.1349961418441871e-08,
+          5.130030858567834e-11,
+          1.4692855130010876e-09
+        ],
+        "sketch_count": 13,
+        "sketch_max_abs": 1.4449552665496412e-13,
+        "sketch_max_rel": 3.4341889751051405e-12,
+        "sketch_cosine": 0.36074851295037424
+      },
+      {
+        "kind": "P1",
+        "solved": true,
+        "native_checked": true,
+        "setup": {
+          "wall": 0.16910275,
+          "cpu": 0.12052400000000052,
+          "clock_valid": true
+        },
+        "solve": {
+          "wall": 5.610383042,
+          "cpu": 5.3971180000000025,
+          "clock_valid": true
+        },
+        "native_residual": {
+          "wall": 0.218992958,
+          "cpu": 0.21891800000000927,
+          "clock_valid": true
+        },
+        "A_time": {
+          "wall": 2.4314465840000006,
+          "cpu": 2.334217000000006,
+          "clock_valid": true
+        },
+        "M_time": {
+          "wall": 2.091556207,
+          "cpu": 2.0085469999999894,
+          "clock_valid": true
+        },
+        "sketch_overhead": {
+          "wall": 0.43475374999999994,
+          "cpu": 0.42541500000000454,
+          "clock_valid": true
+        },
+        "guard_overhead": {
+          "wall": 0.0005154140000000001,
+          "cpu": 0.0005150000000071486,
+          "clock_valid": true
+        },
+        "charged_total": {
+          "wall": 7.825823166999999,
+          "cpu": 6.8558430000000135,
+          "clock_valid": true
+        },
+        "accounted_total": {
+          "wall": 7.390554002999999,
+          "cpu": 6.429913000000002,
+          "clock_valid": true
+        },
+        "A_time_includes_guard": true,
+        "guard_events": 0,
+        "A_calls": 14,
+        "M_calls": 13,
+        "inner_arnoldi": 52,
+        "pressure_subsolves": 65,
+        "primary_calls": 78,
+        "extensions": 13,
+        "direct_max_residual": 0.0038772082779580047,
+        "iterations": 13,
+        "restarts": 1,
+        "arnoldi_spent": 13,
+        "arnoldi_allowed": 1500,
+        "success": true,
+        "stopping_metric": 1,
+        "termination_reason": 1,
+        "tolerance": 1.0000000116860974e-07,
+        "rho_S": 8.243816185249386e-10,
+        "rho_D": 8.243816185249386e-10,
+        "native_scaled_rel": 8.243815966289803e-10,
+        "native_physical_rel": 5.64900977311878e-10,
+        "block_scaled_residual_norms": [
+          2.096241619215233e-09,
+          3.5172218169340926e-11,
+          1.1852651615583064e-08,
+          1.1349961418441871e-08,
+          5.130030858567834e-11,
+          1.4692855130010876e-09
+        ],
+        "sketch_count": 13,
+        "sketch_max_abs": 1.4449552665496412e-13,
+        "sketch_max_rel": 3.4341889751051405e-12,
+        "sketch_cosine": 0.36074851295037424
+      },
+      {
+        "kind": "P0",
+        "solved": true,
+        "native_checked": true,
+        "setup": {
+          "wall": 0.047432208,
+          "cpu": 0.03338999999999981,
+          "clock_valid": true
+        },
+        "solve": {
+          "wall": 6.2703285,
+          "cpu": 6.107020000000006,
+          "clock_valid": true
+        },
+        "native_residual": {
+          "wall": 0.218631416,
+          "cpu": 0.21850799999999992,
+          "clock_valid": true
+        },
+        "A_time": {
+          "wall": 3.2193243360000006,
+          "cpu": 3.12846600000001,
+          "clock_valid": true
+        },
+        "M_time": {
+          "wall": 1.2455785419999998,
+          "cpu": 1.2057080000000369,
+          "clock_valid": true
+        },
+        "sketch_overhead": {
+          "wall": 0.551917082,
+          "cpu": 0.5454949999999812,
+          "clock_valid": true
+        },
+        "guard_overhead": {
+          "wall": 0.000756457,
+          "cpu": 0.0007560000000026434,
+          "clock_valid": true
+        },
+        "charged_total": {
+          "wall": 8.363736541,
+          "cpu": 7.4782010000000065,
+          "clock_valid": true
+        },
+        "accounted_total": {
+          "wall": 7.811063002,
+          "cpu": 6.931950000000023,
+          "clock_valid": true
+        },
+        "A_time_includes_guard": true,
+        "guard_events": 0,
+        "A_calls": 23,
+        "M_calls": 21,
+        "inner_arnoldi": 0,
+        "pressure_subsolves": 0,
+        "primary_calls": 0,
+        "extensions": 0,
+        "direct_max_residual": 0,
+        "iterations": 21,
+        "restarts": 1,
+        "arnoldi_spent": 21,
+        "arnoldi_allowed": 1500,
+        "success": true,
+        "stopping_metric": 1,
+        "termination_reason": 1,
+        "tolerance": 1.0000000116860974e-07,
+        "rho_S": 1.2772678470440724e-09,
+        "rho_D": 1.2772678470440724e-09,
+        "native_scaled_rel": 1.277267811901776e-09,
+        "native_physical_rel": 9.218320155223223e-10,
+        "block_scaled_residual_norms": [
+          1.4282267362405465e-09,
+          2.66895182758171e-09,
+          1.7569056401312456e-08,
+          1.8529559998669285e-08,
+          8.854039838881676e-11,
+          1.0161335646741762e-09
+        ],
+        "sketch_count": 21,
+        "sketch_max_abs": 3.694822225952521e-13,
+        "sketch_max_rel": 1.2964793229479993e-12,
+        "sketch_cosine": 0.2157676791799742
+      }
+    ]
+  },
+  "computed_cost_ratios": {
+    "charged_total_wall_0_over_1": 1.164585509221216,
+    "charged_total_wall_3_over_2": 1.068735692402082,
+    "charged_total_cpu_0_over_1": 1.0863118172902162,
+    "charged_total_cpu_3_over_2": 1.0907777497238476,
+    "accounted_total_wall_0_over_1": 1.1539802589535548,
+    "accounted_total_wall_3_over_2": 1.0568981701276123,
+    "accounted_total_cpu_0_over_1": 1.0737405026272764,
+    "accounted_total_cpu_3_over_2": 1.0780783503602647
+  },
+  "stages": {
+    "stage_iterations": [],
+    "stage_count": 0,
+    "stream_counts": {
+      "rsl.out.0000": 0,
+      "rsl.error.0000": 0,
+      "launcher.stdout.log": 0,
+      "launcher.stderr.log": 0
+    },
+    "deduplication": "maximum multiplicity per (stage, iters) across streams"
+  },
+  "steps": 0,
+  "normal_forecast_success": false,
+  "rank_peak_rss_bytes": 2157035520,
+  "disk_free_end": 13657276416,
+  "artifacts": {
+    "attempt.json": {
+      "sha256": "1e0455920004407ec8d7e3c97b9a570bc18de7cd96159e2a24d80480f78d1c9c",
+      "bytes": 2026
+    },
+    "launcher.stderr.log": {
+      "sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "bytes": 49
+    },
+    "launcher.stdout.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "matched_pressure_probe.json": {
+      "sha256": "d82bb9999d5d8767464a05f3326c837eb024eee8297ab1af182587aba12b6325",
+      "bytes": 9897
+    },
+    "namelist.input": {
+      "sha256": "a43ddbc716a08430e0302be8b30845c568af241a80db24e596bc9cddff81dda6",
+      "bytes": 6097
+    },
+    "namelist.output": {
+      "sha256": "f8d7ef8f03651bf3f61b80becb4964f64bd3790b6f8ea4bcb007df3b397e6bd6",
+      "bytes": 93060
+    },
+    "rank_rusage.log": {
+      "sha256": "e84b134b83a28d7cbc22353e0df6cb8663ea015a9d395c658a5c880b4b48eeba",
+      "bytes": 777
+    },
+    "rsl.error.0000": {
+      "sha256": "deec46a1111a21aeef0fc9a2c5f516ab54bf8c51cff0ad49c6836aa4683ae24d",
+      "bytes": 19933
+    },
+    "rsl.out.0000": {
+      "sha256": "8ec515ae0bd482c4b9084b8d666a63f1f94f214a4f3dcee3308eda49dc235b9e",
+      "bytes": 1946
+    },
+    "wrfinput_d01": {
+      "sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "bytes": 2065615
+    },
+    "wrfoutReady_d01_0001-01-01_00:00:00": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "wrfout_d01_0001-01-01_00:00:00": {
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "bytes": 1989217
+    }
+  }
+}

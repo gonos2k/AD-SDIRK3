@@ -1,0 +1,18 @@
+{
+  "time": "2026-11-02T11:17:48.967052+09:00",
+  "source_sha256": "265378a2697dffdf786015132b37f5a0b352fe1e5c2a24f556063020845c5890",
+  "previous_source_sha256": "02d7a1d61c8a0365aa0b7bed9023aaa398e1ee8bb3a6ad5a4996e6eb7eb490c7",
+  "python": "3.10.11 (main, Apr  9 2023, 15:10:32) [Clang 14.0.3 (clang-1403.0.22.14.1)]",
+  "checks": [
+    "byte-exact old runner with one evidence-path substitution",
+    "AST parse; one Popen",
+    "false cost screen accepts numerically valid receipt",
+    "strict residual and float32 tolerance",
+    "guard, sketch count, stopping metric, six blocks, native calls",
+    "cost screen mismatches rejected",
+    "2x charged/accounted wall/CPU accepted",
+    "zero denominator yields NO_GO"
+  ],
+  "model_or_build_launched": false,
+  "status": "passed"
+}

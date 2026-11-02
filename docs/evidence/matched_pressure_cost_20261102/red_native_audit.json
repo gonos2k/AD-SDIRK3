@@ -1,0 +1,87 @@
+{
+  "review": "PASS",
+  "source_commit": "d0bfa40b997a2cf34e2660de2119daf1cfbc8d73",
+  "result_sha256": "492abc03a469dc258cec8b655d676a09b12bf0c297e54fe8b3cfefc684d5e842",
+  "artifact_integrity": "all reported artifacts verified SHA256 and size; raw diagnostic equals runner receipt",
+  "independently_recomputed_p0_over_p1_ratios": {
+    "charged_total_wall_0_over_1": 1.164585509221216,
+    "charged_total_wall_3_over_2": 1.068735692402082,
+    "charged_total_cpu_0_over_1": 1.0863118172902162,
+    "charged_total_cpu_3_over_2": 1.0907777497238476,
+    "accounted_total_wall_0_over_1": 1.1539802589535548,
+    "accounted_total_wall_3_over_2": 1.0568981701276123,
+    "accounted_total_cpu_0_over_1": 1.0737405026272764,
+    "accounted_total_cpu_3_over_2": 1.0780783503602647
+  },
+  "decision": "NO_GO: every paired wall and CPU ratio, charged and adjusted, is below 2",
+  "scope": "modeled candidate costs include common and tape per arm; not full ABBA elapsed, native FWAD cost, nor forecast speed",
+  "actual_launcher_wall_seconds": 56.745403,
+  "tape_and_native": {
+    "single_tape": true,
+    "rhs_interleaved": false,
+    "tape_rhs_calls": 1,
+    "native_calls": 15,
+    "tape_validation_calls": 27,
+    "tape_validation_errors": 0,
+    "max_abs": 3.552713678800501e-15,
+    "comparison": "elementwise allclose rtol=1e-10 atol=1e-12, global and each block",
+    "primal": "torch::equal numeric equality, signed zeros equivalent",
+    "limitation": "bounded probes and streamed Arnoldi mixtures, not proof for all directions"
+  },
+  "arms": [
+    {
+      "kind": "P0",
+      "A_calls": 23,
+      "M_calls": 21,
+      "true_scaled_relative_residual": 1.277267811901776e-09,
+      "true_physical_relative_residual": 9.218320155223223e-10,
+      "sketch_count": 21,
+      "sketch_cosine": 0.2157676791799742,
+      "guard_events": 0
+    },
+    {
+      "kind": "P1",
+      "A_calls": 14,
+      "M_calls": 13,
+      "true_scaled_relative_residual": 8.243815966289803e-10,
+      "true_physical_relative_residual": 5.64900977311878e-10,
+      "sketch_count": 13,
+      "sketch_cosine": 0.36074851295037424,
+      "guard_events": 0
+    },
+    {
+      "kind": "P1",
+      "A_calls": 14,
+      "M_calls": 13,
+      "true_scaled_relative_residual": 8.243815966289803e-10,
+      "true_physical_relative_residual": 5.64900977311878e-10,
+      "sketch_count": 13,
+      "sketch_cosine": 0.36074851295037424,
+      "guard_events": 0
+    },
+    {
+      "kind": "P0",
+      "A_calls": 23,
+      "M_calls": 21,
+      "true_scaled_relative_residual": 1.277267811901776e-09,
+      "true_physical_relative_residual": 9.218320155223223e-10,
+      "sketch_count": 21,
+      "sketch_cosine": 0.2157676791799742,
+      "guard_events": 0
+    }
+  ],
+  "clock": "consistent",
+  "rank_peak_rss_bytes": 2157035520,
+  "memory_note": "observed rank peak; no comparative performance or unconstrained memory claim",
+  "earlier_attempt": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/result.json",
+    "status": "inconclusive",
+    "cost_decision": "INCONCLUSIVE",
+    "sha256": "b4f1e3065c1318db5403ae44fb5d7bf4ee4ebc55df89a28db3281eaabfc93b09"
+  },
+  "limitations": [
+    "Observed native context subset, not proof of all native operator actions.",
+    "Single process ABBA; modeled overhead subtraction is an estimate.",
+    "No completed model forecast, longer timestep validation, or RK3 forecast comparison."
+  ]
+}

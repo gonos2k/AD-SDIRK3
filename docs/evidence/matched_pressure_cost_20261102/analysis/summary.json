@@ -1,0 +1,74 @@
+{
+  "source_commit": "d0bfa40b997a2cf34e2660de2119daf1cfbc8d73",
+  "registered_status": "diagnostic_completed",
+  "cost_decision": "NO_GO",
+  "errors": [],
+  "cpp_status": "matched_prepared_diagnostic_passed",
+  "phase": "complete",
+  "cpp_error": "",
+  "forecast_complete": false,
+  "scope": "common_prepared_A_plus_M_not_native_FWAD_cost",
+  "clock": {
+    "start": {
+      "monotonic_before_ns": 3322650947347500,
+      "realtime_ns": 1793586471837439000,
+      "monotonic_after_ns": 3322650947349250
+    },
+    "end": {
+      "monotonic_before_ns": 3322707692258125,
+      "realtime_ns": 1793586528582842000,
+      "monotonic_after_ns": 3322707692259208
+    },
+    "wall_elapsed_ns": 56745403000,
+    "gap_interval_ns": [
+      489208,
+      496209
+    ],
+    "endpoint_spans_ns": [
+      1750,
+      1083
+    ],
+    "max_endpoint_span_ns": 10000000,
+    "gap_limit_ns": 1000000000,
+    "monotonic_resolution_ns": 42,
+    "realtime_resolution_ns": 1000,
+    "classification": "consistent"
+  },
+  "paired_P0_over_P1": {
+    "charged_total": {
+      "wall": [
+        1.164585509221216,
+        1.068735692402082
+      ],
+      "cpu": [
+        1.0863118172902162,
+        1.0907777497238476
+      ]
+    },
+    "accounted_total": {
+      "wall": [
+        1.1539802589535548,
+        1.0568981701276123
+      ],
+      "cpu": [
+        1.0737405026272764,
+        1.0780783503602647
+      ]
+    }
+  },
+  "conditional_P1_zero_M_setup_and_wrapper_speed_ceiling": {
+    "wall": [
+      1.6321180703844058,
+      1.5028732711913997
+    ],
+    "cpu": [
+      1.572289421153842,
+      1.58209471495557
+    ]
+  },
+  "ceiling_assumption": "Hold observed A costs, counts and all other costs fixed; idealize P1 M setup and every wrapped M application as free. Arithmetic bound, not an achievable or future performance prediction.",
+  "within_one_process_not_independent_repeats": true,
+  "modeled_cost_not_whole_ABBA_elapsed": true,
+  "raw_result_sha256": "492abc03a469dc258cec8b655d676a09b12bf0c297e54fe8b3cfefc684d5e842",
+  "raw_diagnostic_sha256": "d82bb9999d5d8767464a05f3326c837eb024eee8297ab1af182587aba12b6325"
+}

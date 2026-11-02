@@ -1,0 +1,41 @@
+{
+  "created_local": "2026-11-02T11:18:04.548829+09:00",
+  "prior_source": "11b71a6b5854afa047fe3bee2b5086fe458d9c66",
+  "prior_registration_sha256": "48a0788cdf44c40b779113123f22725434b8862473aaa8101cb2ae8294779a68",
+  "prior_result_sha256": "b4f1e3065c1318db5403ae44fb5d7bf4ee4ebc55df89a28db3281eaabfc93b09",
+  "prior_outcome": "inconclusive",
+  "prior_cost_decision": "INCONCLUSIVE",
+  "failure_phase": "input",
+  "native_jvp_calls": 0,
+  "M_calls": 0,
+  "clock": {
+    "start": {
+      "monotonic_before_ns": 3321372070455583,
+      "realtime_ns": 1793580415571793000,
+      "monotonic_after_ns": 3321372070457625
+    },
+    "end": {
+      "monotonic_before_ns": 3321380237932875,
+      "realtime_ns": 1793580423739346000,
+      "monotonic_after_ns": 3321380237936708
+    },
+    "wall_elapsed_ns": 8167553000,
+    "gap_interval_ns": [
+      69791,
+      79834
+    ],
+    "endpoint_spans_ns": [
+      2042,
+      3833
+    ],
+    "max_endpoint_span_ns": 10000000,
+    "gap_limit_ns": 1000000000,
+    "monotonic_resolution_ns": 42,
+    "realtime_resolution_ns": 1000,
+    "classification": "consistent"
+  },
+  "correction": "A5 callback capture was suppressed for every selected_base; selecting first stage2 made it empty. Allow stage2 capture under existing active EOS scope, preserve selectedstage4 suppression. Metadata-only, no PDE/tolerance/criterion change.",
+  "additional_native_attempt_limit": 1,
+  "retry_unchanged_source": false,
+  "old_files_rewritten": false
+}

@@ -1,0 +1,127 @@
+{
+  "status": "registered",
+  "created_local": "2026-11-02T11:19:49.794615+09:00",
+  "source_commit": "d0bfa40b997a2cf34e2660de2119daf1cfbc8d73",
+  "base_main": "9292c6c896fcec0f338d0fec7d27bd803e4c620f",
+  "maximum_native_attempts": 1,
+  "retry": false,
+  "experiment": "terminal ABBA at first actual stage2/Newton0; one common PreparedJvp double-reverse A, not native-FWAD kernel cost",
+  "order": [
+    "P0",
+    "P1",
+    "P1",
+    "P0"
+  ],
+  "setup": {
+    "grid": [
+      40,
+      80,
+      64
+    ],
+    "dx_m": 100000,
+    "dt_seconds": 600,
+    "reuse_linearization": true,
+    "mpi_ranks": 1,
+    "actual_torch_threads": [
+      1,
+      1
+    ],
+    "newton_tol_preserved": 1e-09,
+    "linear_tol_float32_literal": 1e-07,
+    "identity_S_only": true,
+    "refinement_passes": 1,
+    "NML_change": "only existing reuse_linearization false to true, common to both M"
+  },
+  "capture": {
+    "stage": 2,
+    "newton": 0,
+    "timestep": 0,
+    "pass_exit_code": 88,
+    "failure_exit_code": 89,
+    "forecast_complete": false,
+    "single_tape": true,
+    "fresh_M_models": 4,
+    "native_jvp_calls": 15,
+    "tape_constructor_rhs": 1,
+    "tape_validation_calls": 27,
+    "oracle_directions": "normalized b, normalized alternating global-index sign, normalized sin(.017i)+.5cos(.013i)",
+    "mixtures": "actual Arnoldi sum and alternating sum per arm, nonzero |cos|<1-1e-12; checked after tape destruction",
+    "native_equivalence": "torch.equal primal signed-zero equivalent; elementwise allclose rtol1e-10 atol1e-12 global and perblock; native true scaled L2 residual<appliedtol",
+    "no_RHS_tape_interleave": true,
+    "no_tape_repair_or_fallback": true
+  },
+  "cost": {
+    "screen_ratio": 2.0,
+    "mirror_pairs": [
+      [
+        0,
+        1
+      ],
+      [
+        3,
+        2
+      ]
+    ],
+    "require_all": [
+      "charged_wall",
+      "charged_cpu",
+      "accounted_wall",
+      "accounted_cpu"
+    ],
+    "definition": "modeled standalone common+tape(full each)+freshMsetup+solve+native residual, common executed once not actual ABBA runtime sum",
+    "excluded": "separate oracle/tape-validation/boundary guards; accounted subtracts measured in-solve guard/sketch, not uninstrumented measurement",
+    "no_production_or_forecast_promotion": true
+  },
+  "clock": {
+    "max_endpoint_span_ns": 10000000,
+    "gap_limit_ns": 1000000000,
+    "record": "m_before,realtime,m_after both endpoints; resolution-expanded gap interval; wide/crossing unresolved; no retroactive337change"
+  },
+  "resources": {
+    "disk_floor_bytes": 5368709120,
+    "rank_post_maxrss_cap_bytes": 4294967296,
+    "mpi_timeout_seconds": 360,
+    "launcher_wait_seconds": 390,
+    "global_polling": false
+  },
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/build_matched.py": "3e0536d9682f7d6b8f2af84ef34432cea2efb1f19027450800e5874c957bab2c",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run_matched.py": "265378a2697dffdf786015132b37f5a0b352fe1e5c2a24f556063020845c5890",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/inputs/namelist.input": "a43ddbc716a08430e0302be8b30845c568af241a80db24e596bc9cddff81dda6",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/clock_test_receipt.json": "1aacb0be38e89e5d401f36345fbfc1504824b1544d6bae2df23ec4076ec3e25f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/sketch_test_receipt.json": "702dd7cc18afbb03b5bf30b2d50f8c2e91e6dec534d7df7a14eb6668e063dcf0",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/matched_header_syntax.json": "9b81289d13b90ad2d9c761120bf2e30d8c46e3da5e5eedec2a29547efcfbb59b",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/newton_syntax.json": "3923dce549a0930e8729cc058f3db63b1505f51ac4bce2a925fc71acffec73b5",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/graph_after_pins.json": "183f260a1c37829599906f3aeeaab1ab3fbd06b3bef7767acb80d1808c59131c",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/native_terminal/build_receipt.json": "e88f16d369b26c5615894ece3f5a9e9dc90a554fd79e1c450af682d255cc79f8",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/terminal-jvp-replay-20261102/run/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/current_sdk_provenance.json": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/reference/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/private/tmp/matched-pressure-cost-20261102/tools/sdirk3_run_measurement.py": "8b9e1c579da4147f6c0dd20cd777b6c40b5552f3d3f36904e51a68c3e6b5ac76",
+    "/private/tmp/matched-pressure-cost-20261102/tools/test_sdirk3_run_measurement.py": "1e2505ad2437fb328978e43476d7c113a321ebc2fcdf22966264745ed1528491",
+    "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "e4399601291d72816ec702968d61938b9f553ae4d3480f2eeef3ca3dec67873e",
+    "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "4e2c9d1148abd629b0a08395299edfcb02f0975ec8f26788a14f8dd6411e173e",
+    "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "4fa1dc3db83457ecd44d2cdd3bf36f3cefe7497bc0aa60a366e21ff3f9661162",
+    "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_matched_pressure_probe.h": "42b4edc710208dc0e451ae10099bda31fac6811e7ead7c4cb46db4b9482630f9",
+    "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/tests/test_matched_pressure_sketch.cpp": "9c32a8da02bca776f04d2cac27a86b0d9982087b7b6b8c66581d7a7a50bd3824",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/capture_policy_test.json": "15954849940ebbb47cae6f2e6c0f0345769929c89b2dcd5fd2cb39d256b41252",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/prior_failure_link.json": "0b666911fb6bad0f6c6e7ece53629b6e4af733d0215e5c3459eafbdf7a6f4df3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/result.json": "b4f1e3065c1318db5403ae44fb5d7bf4ee4ebc55df89a28db3281eaabfc93b09",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/registration.json": "48a0788cdf44c40b779113123f22725434b8862473aaa8101cb2ae8294779a68",
+    "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_linear_delay_audit.h": "2fcc3ecb6c49bb344d8eac1412d04b6f63094e4243bc5d59e848ad0da571d40b",
+    "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/tests/test_matched_capture_policy.cpp": "f103fe80e6df58d55884a84ac9026a3e34c971102b2b2ec6dde71993f081a6fa"
+  },
+  "old_verdicts_unchanged": true,
+  "same_native_FWAD_performance_claim": false,
+  "new_RK3_forecast_or_speed_comparison": false,
+  "prior_attempt": {
+    "source_commit": "11b71a6b5854afa047fe3bee2b5086fe458d9c66",
+    "result_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/result.json",
+    "result_sha256": "b4f1e3065c1318db5403ae44fb5d7bf4ee4ebc55df89a28db3281eaabfc93b09",
+    "preserved_status": "inconclusive before native_JVP0 and M0; capture wiring failed",
+    "separate_corrected_source_block": true
+  },
+  "total_development_native_attempt_limit_including_initial": 2,
+  "correction": "Only selected Stage2 capture policy; equations/tolerances/budgets/2x cost/clock criteria unchanged"
+}

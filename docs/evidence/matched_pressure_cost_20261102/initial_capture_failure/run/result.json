@@ -1,0 +1,521 @@
+{
+  "status": "inconclusive",
+  "cost_decision": "INCONCLUSIVE",
+  "cost_eligible_scope": "local modeled prepared-operator first point; no forecast or native kernel performance claim",
+  "model_completed": false,
+  "endpoint_claimed": false,
+  "initial_state_comparison": "pending separate numerical validation",
+  "errors": [
+    "diagnostic_status",
+    "tape_and_native_calls",
+    "arm_0_solved",
+    "arm_0_native_residual",
+    "arm_0_blocks",
+    "arm_0_contract",
+    "arm_1_solved",
+    "arm_1_native_residual",
+    "arm_1_blocks",
+    "arm_1_contract",
+    "arm_2_solved",
+    "arm_2_native_residual",
+    "arm_2_blocks",
+    "arm_2_contract",
+    "arm_3_solved",
+    "arm_3_native_residual",
+    "arm_3_blocks",
+    "arm_3_contract",
+    "launcher_exit_not_pass_88"
+  ],
+  "clock": {
+    "start": {
+      "monotonic_before_ns": 3321372070455583,
+      "realtime_ns": 1793580415571793000,
+      "monotonic_after_ns": 3321372070457625
+    },
+    "end": {
+      "monotonic_before_ns": 3321380237932875,
+      "realtime_ns": 1793580423739346000,
+      "monotonic_after_ns": 3321380237936708
+    },
+    "wall_elapsed_ns": 8167553000,
+    "gap_interval_ns": [
+      69791,
+      79834
+    ],
+    "endpoint_spans_ns": [
+      2042,
+      3833
+    ],
+    "max_endpoint_span_ns": 10000000,
+    "gap_limit_ns": 1000000000,
+    "monotonic_resolution_ns": 42,
+    "realtime_resolution_ns": 1000,
+    "classification": "consistent"
+  },
+  "launcher_return_code": 89,
+  "marker_streams": [
+    "rsl.error.0000"
+  ],
+  "diagnostic": {
+    "status": "matched_prepared_diagnostic_failed",
+    "phase": "input",
+    "error": "captured native preparation callback missing\nException raised from operator() at /private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp:9322 (most recent call first):\nframe #0: c10::Error::Error(c10::SourceLocation, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>) + 56 (0x131986844 in libc10.dylib)\nframe #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 92 (0x1319847d8 in libc10.dylib)\nframe #2: wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda'(bool)::operator()(bool) const + 6188 (0x100f73994 in wrf.exe)\nframe #3: wrf::sdirk3::matched_pressure::run_terminal(wrf::sdirk3::matched_pressure::Inputs const&) + 2204 (0x100f75418 in wrf.exe)\nframe #4: wrf::sdirk3::matched_pressure::fail_exit(char const*, char const*) + 0 (0x100f42e18 in wrf.exe)\nframe #5: wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) + 207664 (0x100f31744 in wrf.exe)\nframe #6: wrf::sdirk3::WRFNewtonKrylovSolver::solve_stage(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) + 256 (0x100f39b48 in wrf.exe)\nframe #7: TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&) + 11812 (0x100d2dfe4 in wrf.exe)\nframe #8: TileSDIRK3UnifiedSolver::unifiedStep(float*, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*, float, float, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*, int, float, int, int, int, int, int, int) + 117772 (0x100bee680 in wrf.exe)\nframe #9: TileSDIRK3UnifiedSolver::advanceZeroCopy(wrf::sdirk3::ZeroCopyConfig const&, int, float) + 77456 (0x100e5bfc4 in wrf.exe)\nframe #10: sdirk3_tile_unified_step_zerocopy_v2 + 2808 (0x100badd20 in wrf.exe)\nframe #11: __module_implicit_sdirk3_MOD_advance_implicit + 3256 (0x10350fd3c in wrf.exe)\nframe #12: solve_em_ + 777292 (0x1035d17ac in wrf.exe)\nframe #13: solve_interface_ + 1972 (0x102036458 in wrf.exe)\nframe #14: __module_integrate_MOD_integrate + 644 (0x101102cf8 in wrf.exe)\nframe #15: __module_wrf_top_MOD_wrf_run + 48 (0x1010f2098 in wrf.exe)\nframe #16: main + 60 (0x10389f73c in wrf.exe)\nframe #17: start + 6992 (0x18f93c4e4 in dyld)\n",
+    "forecast_complete": false,
+    "stage": 2,
+    "newton_iteration": 0,
+    "timestep": 0,
+    "order": [
+      "P0",
+      "P1",
+      "P1",
+      "P0"
+    ],
+    "single_tape": true,
+    "no_rhs_interleaving_required": true,
+    "a": 261.5199129050754,
+    "dt": 600,
+    "gamma": 0.435866521508459,
+    "tolerance": 1.0000000116860974e-07,
+    "restart": 30,
+    "max_restarts": 50,
+    "N": 1080491,
+    "frozen_hashes": [
+      9227350765751078771,
+      14044514444751719475,
+      14544107913973293440,
+      7380069588991331333,
+      8470282445223911666,
+      14859681834983167751
+    ],
+    "hash_order": [
+      "U",
+      "F",
+      "b",
+      "x0",
+      "S",
+      "Sinv"
+    ],
+    "observed_native_context": "",
+    "context_scope": "one immutable prepared graph; native closure attested only on captured subset",
+    "rhs_interleaved": false,
+    "native_calls": 0,
+    "tape_constructor_rhs_calls": 0,
+    "tape_validation_calls": 0,
+    "tape_validation_errors": 0,
+    "tape_validation_max_abs": 0,
+    "tape_validation_max_rel": 0,
+    "tape_validation_time": {
+      "wall": 0,
+      "cpu": 0,
+      "clock_valid": true
+    },
+    "validation_scope": "bounded probes and streamed Arnoldi mixtures, not proof for all directions",
+    "primal_comparison": "torch::equal numeric equality, signed zeros equivalent",
+    "action_comparison": "elementwise allclose rtol=1e-10 atol=1e-12, global and each block",
+    "scope": "common_prepared_A_plus_M_not_native_FWAD_cost",
+    "cost_screen_only": true,
+    "cost_screen": false,
+    "accounting": "modeled per-candidate cost: common and tape fully charged per arm; not actual ABBA runtime; validation probes and mixture oracle checks excluded; overhead subtraction is an estimate",
+    "common": {
+      "wall": 0,
+      "cpu": 0,
+      "clock_valid": true
+    },
+    "tape_preparation": {
+      "wall": 0,
+      "cpu": 0,
+      "clock_valid": true
+    },
+    "oracle_verification": {
+      "wall": 0,
+      "cpu": 0,
+      "clock_valid": true
+    },
+    "boundary_guards": {
+      "wall": 0,
+      "cpu": 0,
+      "clock_valid": true
+    },
+    "arms": [
+      {
+        "kind": "P0",
+        "solved": false,
+        "native_checked": false,
+        "setup": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "solve": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "native_residual": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "A_time": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "M_time": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "sketch_overhead": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "guard_overhead": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "charged_total": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "accounted_total": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "A_time_includes_guard": true,
+        "guard_events": 0,
+        "A_calls": 0,
+        "M_calls": 0,
+        "inner_arnoldi": 0,
+        "pressure_subsolves": 0,
+        "primary_calls": 0,
+        "extensions": 0,
+        "direct_max_residual": 0,
+        "iterations": 0,
+        "restarts": 0,
+        "arnoldi_spent": -1,
+        "arnoldi_allowed": -1,
+        "success": false,
+        "stopping_metric": 0,
+        "termination_reason": 8,
+        "tolerance": -1,
+        "rho_S": -1,
+        "rho_D": -1,
+        "native_scaled_rel": -1,
+        "native_physical_rel": -1,
+        "block_scaled_residual_norms": [],
+        "sketch_count": 0,
+        "sketch_max_abs": 0,
+        "sketch_max_rel": 0,
+        "sketch_cosine": 0
+      },
+      {
+        "kind": "P1",
+        "solved": false,
+        "native_checked": false,
+        "setup": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "solve": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "native_residual": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "A_time": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "M_time": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "sketch_overhead": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "guard_overhead": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "charged_total": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "accounted_total": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "A_time_includes_guard": true,
+        "guard_events": 0,
+        "A_calls": 0,
+        "M_calls": 0,
+        "inner_arnoldi": 0,
+        "pressure_subsolves": 0,
+        "primary_calls": 0,
+        "extensions": 0,
+        "direct_max_residual": 0,
+        "iterations": 0,
+        "restarts": 0,
+        "arnoldi_spent": -1,
+        "arnoldi_allowed": -1,
+        "success": false,
+        "stopping_metric": 0,
+        "termination_reason": 8,
+        "tolerance": -1,
+        "rho_S": -1,
+        "rho_D": -1,
+        "native_scaled_rel": -1,
+        "native_physical_rel": -1,
+        "block_scaled_residual_norms": [],
+        "sketch_count": 0,
+        "sketch_max_abs": 0,
+        "sketch_max_rel": 0,
+        "sketch_cosine": 0
+      },
+      {
+        "kind": "P1",
+        "solved": false,
+        "native_checked": false,
+        "setup": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "solve": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "native_residual": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "A_time": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "M_time": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "sketch_overhead": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "guard_overhead": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "charged_total": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "accounted_total": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "A_time_includes_guard": true,
+        "guard_events": 0,
+        "A_calls": 0,
+        "M_calls": 0,
+        "inner_arnoldi": 0,
+        "pressure_subsolves": 0,
+        "primary_calls": 0,
+        "extensions": 0,
+        "direct_max_residual": 0,
+        "iterations": 0,
+        "restarts": 0,
+        "arnoldi_spent": -1,
+        "arnoldi_allowed": -1,
+        "success": false,
+        "stopping_metric": 0,
+        "termination_reason": 8,
+        "tolerance": -1,
+        "rho_S": -1,
+        "rho_D": -1,
+        "native_scaled_rel": -1,
+        "native_physical_rel": -1,
+        "block_scaled_residual_norms": [],
+        "sketch_count": 0,
+        "sketch_max_abs": 0,
+        "sketch_max_rel": 0,
+        "sketch_cosine": 0
+      },
+      {
+        "kind": "P0",
+        "solved": false,
+        "native_checked": false,
+        "setup": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "solve": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "native_residual": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "A_time": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "M_time": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "sketch_overhead": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "guard_overhead": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "charged_total": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "accounted_total": {
+          "wall": 0,
+          "cpu": 0,
+          "clock_valid": true
+        },
+        "A_time_includes_guard": true,
+        "guard_events": 0,
+        "A_calls": 0,
+        "M_calls": 0,
+        "inner_arnoldi": 0,
+        "pressure_subsolves": 0,
+        "primary_calls": 0,
+        "extensions": 0,
+        "direct_max_residual": 0,
+        "iterations": 0,
+        "restarts": 0,
+        "arnoldi_spent": -1,
+        "arnoldi_allowed": -1,
+        "success": false,
+        "stopping_metric": 0,
+        "termination_reason": 8,
+        "tolerance": -1,
+        "rho_S": -1,
+        "rho_D": -1,
+        "native_scaled_rel": -1,
+        "native_physical_rel": -1,
+        "block_scaled_residual_norms": [],
+        "sketch_count": 0,
+        "sketch_max_abs": 0,
+        "sketch_max_rel": 0,
+        "sketch_cosine": 0
+      }
+    ]
+  },
+  "computed_cost_ratios": {
+    "charged_total_wall_0_over_1": null,
+    "charged_total_wall_3_over_2": null,
+    "charged_total_cpu_0_over_1": null,
+    "charged_total_cpu_3_over_2": null,
+    "accounted_total_wall_0_over_1": null,
+    "accounted_total_wall_3_over_2": null,
+    "accounted_total_cpu_0_over_1": null,
+    "accounted_total_cpu_3_over_2": null
+  },
+  "stages": {
+    "stage_iterations": [],
+    "stage_count": 0,
+    "stream_counts": {
+      "rsl.out.0000": 0,
+      "rsl.error.0000": 0,
+      "launcher.stdout.log": 0,
+      "launcher.stderr.log": 0
+    },
+    "deduplication": "maximum multiplicity per (stage, iters) across streams"
+  },
+  "steps": 0,
+  "normal_forecast_success": false,
+  "rank_peak_rss_bytes": 1005486080,
+  "disk_free_end": 8172478464,
+  "artifacts": {
+    "attempt.json": {
+      "sha256": "4344ab1b6f6a910624c6fc0e37d9d0e5980d18c290004ff645879f11ff675f66",
+      "bytes": 2002
+    },
+    "launcher.stderr.log": {
+      "sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "bytes": 49
+    },
+    "launcher.stdout.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "matched_pressure_probe.json": {
+      "sha256": "812d0a27be0c6cc3dd164be60a60b7cf67eccf51f028c6e263a83031f32560ec",
+      "bytes": 8659
+    },
+    "namelist.input": {
+      "sha256": "a43ddbc716a08430e0302be8b30845c568af241a80db24e596bc9cddff81dda6",
+      "bytes": 6097
+    },
+    "namelist.output": {
+      "sha256": "f8d7ef8f03651bf3f61b80becb4964f64bd3790b6f8ea4bcb007df3b397e6bd6",
+      "bytes": 93060
+    },
+    "rank_rusage.log": {
+      "sha256": "851c596fbbe1149c06dcdec777456ebb0fb8b013b4d3bbfa2834461739a94f15",
+      "bytes": 777
+    },
+    "rsl.error.0000": {
+      "sha256": "cee42629def2d415bf747e4421931ce6c9a5571fb2012ccc5d12355b0cb0e26d",
+      "bytes": 17951
+    },
+    "rsl.out.0000": {
+      "sha256": "a3e55b68644a8352dfdb83d6df953652bc8e936b45b5cc689b94ab6bc952709e",
+      "bytes": 1946
+    },
+    "wrfinput_d01": {
+      "sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "bytes": 2065615
+    },
+    "wrfoutReady_d01_0001-01-01_00:00:00": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "wrfout_d01_0001-01-01_00:00:00": {
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "bytes": 1989217
+    }
+  }
+}
