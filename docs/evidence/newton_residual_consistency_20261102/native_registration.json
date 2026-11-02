@@ -1,0 +1,58 @@
+{
+  "status": "registered",
+  "created_local": "2026-11-02T13:43:26.505523+09:00",
+  "source_commit": "e0fed059358ecc052462938305099dc99f30414b",
+  "core_compiled_source_commit": "ef81e4f7348a170ed4c1bc41d84cb2412970225f",
+  "core_CPP_unchanged_after_compile": true,
+  "maximum_native_attempts": 1,
+  "retry": false,
+  "purpose": "one h600 numerical noninterference regression using archived A9/P0 research-feature configuration, not default-configuration validation or cost acceptance",
+  "setup": {
+    "dx_m": 100000,
+    "grid": [
+      40,
+      80,
+      64
+    ],
+    "dt": 600,
+    "MPI": 1,
+    "actual_Torch_threads": [
+      1,
+      1
+    ],
+    "newton_atol": 1e-09,
+    "newton_rtol": 0,
+    "stage_count": 3,
+    "steps": 1
+  },
+  "resources": {
+    "disk_floor_bytes": 5368709120,
+    "rank_post_peak_RSS_cap_bytes": 4294967296,
+    "MPI_timeout_s": 360,
+    "launcher_wait_s": 390,
+    "global_polling": false
+  },
+  "numerical_followup": [
+    "model rc0/Wrf success/1step/3stage/wrapper3,0",
+    "finite output and unchanged oldinitial",
+    "174 endpoint numeric arrays compared with oldA9control",
+    "existing RK3 field comparison reused sameh600, no newreference run"
+  ],
+  "performance_eligible": false,
+  "new_long_forecast": false,
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/run_native_regression.py": "bc89cc606776a7c29485fb5a9f2793bc321d46d9c00038b391668ad278ab6816",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/newton_build_receipt.json": "c07f27143bc0ec61985c1c10e262d5a0c56d28d21e9d1166d5d2d3604d88ef2a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/newton_test_receipt.json": "ac28c5dd8cc62f7d1381368852f0baca60f1214031c69e646fbfaad42f9488a3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/trust_halo_test_receipt.json": "eaba5456002d0ec423c125f87743b396d4b5a02c58a19ef7f235adb88ff12054",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_build/libwrf_sdirk3_libtorch.a": "8c489ea19ac8933c67545ff7e2365a14451a8749f419c0c6b09ab965d5e5a0b4",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_build/wrf.exe": "8bd1e2e3fa63f9233360d7d97dd3689ff3d505142bab73da75b02826e99b5c32",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/graph_after_pins.json": "171c07442a53715f4891832d79bf36a0807f1061bb2aa730a47de699b70891d8",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/reference/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/private/tmp/newton-residual-consistency-20261102/external/libtorch_wrf/sdirk3/test_trust_model_contract.cpp": "92bf8524fe1114ecec14cdb89acbdd5b6fba0962077f9b56ba243ceb9a250a90",
+    "/private/tmp/newton-residual-consistency-20261102/external/libtorch_wrf/sdirk3/tests/test_newton_returned_residual.cpp": "e1a2ad9ac0f86abeca311a3d7648651a1088cade4f90761fbf234b0cbdf015a4",
+    "/private/tmp/newton-residual-consistency-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "cc5c9576a413cb6ed2d269cbcd921685bbb268f72ae986fcbca2c12d09d8a04a"
+  }
+}

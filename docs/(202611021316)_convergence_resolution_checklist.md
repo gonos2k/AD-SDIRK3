@@ -28,9 +28,9 @@ T(실제 시간 지도) → A(오차 예산) → F(짧은 전방·장시간 수�
 
 | ID | 해소할 조건 | 최소 근거 | 상태 |
 |---|---|---|---|
-| R1 | 후처리된 실제 dK의 implemented A 잔차와 성공/품질 판정 일치 | production Direct-U/halo 경로 반례, S=I 및4I, 변경 없는 대조 | 소스 확인·수정 중 |
-| R2 | raw Krylov receipt/warm-start와 실제 방향 지표 구분 | 원래 GMRESResult 보존, 실제 방향 log, entry exemption·trust/회복 소비자 대조 | 수정 중 |
-| R3 | 반환 K의 final_residual은 그 K에서 관측한 같은 G_K·S·mask RMS | 한 번 갱신 후 예산 종료, adaptive/debug 별도, 독립 해석식 검산, 추가 RHS 없음 | 수정 중 |
+| R1 | 후처리된 실제 dK의 implemented A 잔차와 성공/품질 판정 일치 | production Direct-U/halo 경로 반례, S=I 및4I, 변경 없는 대조 | 완료: 실제 public 경로 시험101/101 |
+| R2 | raw Krylov receipt/warm-start와 실제 방향 지표 구분 | 원래 GMRESResult 보존, 실제 방향 log, entry exemption·trust/회복 소비자 대조 | 부분 해소: raw/실제 지표 분리; 분류기 용어 후속 |
+| R3 | 반환 K의 final_residual은 그 K에서 관측한 같은 G_K·S·mask RMS | 한 번 갱신 후 예산 종료, adaptive/debug 별도, 독립 해석식 검산, 추가 RHS 없음 | 완료: adaptive on/off 독립 잔차 일치 |
 | R4 | 예외/NaN/zero-budget 반환의 잔차·측정 여부 진실성 | early-return 분기별 재현; 측정하지 않은0을 실제 잔차로 쓰지 않음 | 미완료 |
 | R5 | stage acceptance와 실패 정책을 경로별로 명시 | mode3 severe gate와 mode0/1/2 permissive 정책을 분리 | 검토 본문 근거; 연결 검증 미완료 |
 
@@ -94,5 +94,9 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
 - [ ] F3 선별·예산 고정 후 같은 연속5일의 질량·열역학·물리 허용성·파동·전체 비용을 판정한다.
   restart 상태 이력 미검증의 이어붙이기나 강제 감쇠로 해결됐다고 처리하지 않는다.
 
-현재는 R1–R3부터 끝낸다. E/T/A/F의 증명·실험이 모두 완료된 것처럼 묶지 않는다.
+R1과 R3의 이번 변경 범위는 완료다. Direct-U/S=4/실제 halo/warm-entry 및 한 갱신 뒤
+실패 반환 시험을 통과했다. 보관 A9/P0 구성의 h600 한 스텝(현재 기본 구성 인증 아님)은
+3stage 수렴·wrapper3/0·끝174숫자 배열 parity·저장 상태 유한값과 RK3 거리 유지로 확인했다.
+다음 우선순위는 R4의 예외·NaN·zero-budget 반환과 R2 분류기 용어, R5 수용정책의 연결이다.
+E/T/A/F의 증명·실험이 모두 완료된 것처럼 묶지 않는다.
 검증 결과와 source/executable/input hash는 별도 진행 보고서에 연결해 상태를 한 항목씩 갱신한다.

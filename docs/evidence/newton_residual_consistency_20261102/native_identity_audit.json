@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "checks": {
+    "head": true,
+    "build_head_descendant_and_only_trust_test_diff": true,
+    "clean_worktree": true,
+    "compiled_source_header_hashes_except_superseded_test": true,
+    "registration_hash_and_all_pins": true,
+    "build_receipt_executable_archive_pins": true,
+    "31_members_newton_replaced_other_30_identical": true,
+    "feature_header": true,
+    "fortran_proof_objects_dylibs": true,
+    "sdk_compiler_os": true,
+    "raw_run_artifacts": true,
+    "inputs_control_and_run": true,
+    "validation_pins_and_run": true,
+    "latest_test_receipt": true
+  },
+  "failures": {},
+  "build_source_commit": "ef81e4f7348a170ed4c1bc41d84cb2412970225f",
+  "native_source_head": "e0fed059358ecc052462938305099dc99f30414b",
+  "registration_sha256": "0e14baab37cdf76fcc6f59c054e81c5743ecb0d3500dea4e12965aff67fe51a8",
+  "native_result_sha256": "dca61f405023b9edb753b02ee7bbcff856d474459a80160bd02a9e3cbce2b4de",
+  "native_validation_sha256": "ef06543aa96e62e40b880eb3f43ee6afc6dfb73b10da35e188de24100b16eae0",
+  "newton_source_sha256": "cc5c9576a413cb6ed2d269cbcd921685bbb268f72ae986fcbca2c12d09d8a04a",
+  "archive_sha256": "8c489ea19ac8933c67545ff7e2365a14451a8749f419c0c6b09ab965d5e5a0b4",
+  "executable_sha256": "8bd1e2e3fa63f9233360d7d97dd3689ff3d505142bab73da75b02826e99b5c32",
+  "fortran_proof_sha256": "7d7a0cb7717d3faa1f03b04214f8d6d25c17f752aa62f9f4a1d58ae350bd1b82",
+  "sdk_proof_sha256": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1",
+  "limits": [
+    "Retained records and current hashes establish artifact identity, not independent proof of run-time process history.",
+    "SDK/Fortran checks are current rechecks and attempt records; the audit does not rebuild or rerun.",
+    "Only the single-step research configuration is covered; no default configuration, long forecast, or performance acceptance is claimed."
+  ]
+}

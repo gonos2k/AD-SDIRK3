@@ -1,0 +1,46 @@
+{
+  "archive_sha256": "8c489ea19ac8933c67545ff7e2365a14451a8749f419c0c6b09ab965d5e5a0b4",
+  "results": [
+    {
+      "source": "/private/tmp/newton-residual-consistency-20261102/external/libtorch_wrf/sdirk3/test_trust_model_contract.cpp",
+      "source_sha256": "a2d26682d2c75b40b1c53b2fe6679ec1d8d7b982dfafbe690295e09b88c22e1a",
+      "argv": [
+        "/usr/bin/g++",
+        "-DWRF_SDIRK3_LINEAR_DELAY_AUDIT",
+        "-DWRF_SDIRK3_PRESSURE_A5",
+        "-I/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/B",
+        "-DWRF_SDIRK3_PRESSURE_REFERENCE_STAGE",
+        "-DWRF_SDIRK3_PRESSURE_A4",
+        "-std=c++17",
+        "-O3",
+        "-DMACOS",
+        "-DDMPARALLEL",
+        "-DUSE_SDIRK3",
+        "-DWRF_SDIRK3_PRESSURE_STAGE_PROBE",
+        "-I/private/tmp/newton-residual-consistency-20261102/external/libtorch_wrf/sdirk3",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+        "-I/opt/homebrew/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+        "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+        "-D_GLIBCXX_USE_CXX11_ABI=0",
+        "/private/tmp/newton-residual-consistency-20261102/external/libtorch_wrf/sdirk3/test_trust_model_contract.cpp",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_build/libwrf_sdirk3_libtorch.a",
+        "-Wl,-dead_strip",
+        "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+        "-ltorch",
+        "-ltorch_cpu",
+        "-lc10",
+        "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+        "-L/opt/homebrew/opt/open-mpi/lib",
+        "-lmpi",
+        "-Wl,-rpath,/opt/homebrew/opt/open-mpi/lib",
+        "-o",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_build/test_trust_model_contract"
+      ],
+      "compile_returncode": 0,
+      "executable_sha256": "30cbe86d6f059d9ba61a957defa22ef6468b8af62fa7b1be003eec0297bac3a0",
+      "run_returncode": 1
+    }
+  ]
+}

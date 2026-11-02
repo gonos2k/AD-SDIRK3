@@ -28,6 +28,11 @@ Mode3 stays default; mode4 and PR328's local reuse remain bounded candidates,
 not proof that late grid-scale W or practical cost is solved. MPI shutdown
 failures remain separately unresolved engineering records.
 
+For the current convergence-review corrections, resolve the actual-direction and
+returned-residual contracts first using the [convergence resolution checklist](<(202611021316)_convergence_resolution_checklist.md>).
+This code-correctness sequence does not claim a native convergence guarantee or
+replace the retained pressure/forward acceptance gates.
+
 ## Retained first-stage mathematical and derivative contracts
 
 The following original case records and derivative definitions are preserved
