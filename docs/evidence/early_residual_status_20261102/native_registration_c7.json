@@ -1,0 +1,55 @@
+{
+  "status": "registered",
+  "created_local": "2026-11-02T14:59:24.456032+09:00",
+  "source_commit": "c7a282e3032b6f760d9d8154ee9536ab3688a95b",
+  "core_compiled_source_commit": "c7a282e3032b6f760d9d8154ee9536ab3688a95b",
+  "reused_nine_affected_object_source_commit": "e7fc08a1bb19732ae551fd35413fb246b2598b84",
+  "maximum_native_attempts": 1,
+  "retry": false,
+  "purpose": "one h600 A9/P0 research-config numerical regression, no performance gate",
+  "setup": {
+    "grid": [
+      40,
+      80,
+      64
+    ],
+    "dt": 600,
+    "MPI": 1,
+    "actual_Torch_threads": [
+      1,
+      1
+    ],
+    "newton_atol": 1e-09,
+    "newton_rtol": 0,
+    "stage_count": 3,
+    "steps": 1
+  },
+  "resources": {
+    "disk_floor_bytes": 5368709120,
+    "rank_post_peak_RSS_cap_bytes": 4294967296,
+    "MPI_timeout_s": 360,
+    "launcher_wait_s": 390
+  },
+  "numerical_followup": [
+    "one step, stages 2/3/4, unique wrapper 3/0",
+    "finite fields and initial state",
+    "174 endpoint numeric arrays compared with archived A9 control",
+    "same-setup archived RK3 comparison, no new RK3 run"
+  ],
+  "performance_eligible": false,
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/run_native_regression_c7.py": "69833a59cb28589b9303836f217b912af0743550a17fe3c5b7f774daf66f66f9",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/validate_native.py": "794f62fe0261838f3a4d1595fa879130827cabf8ffaa119ccb2235ca9fb321d8",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/link_native_c7.py": "7fd9a3c36cdce11bae340a8a179969a2ed661e4d12791b65cb63e152ad5c1787",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/verify_rebuilt_archive.py": "bbf32e3831f85c7cbb2aea86cb7d54787ade3ac45b43ce45fd3f00e21af944d6",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/reference/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/private/tmp/early-residual-status-20261102/external/libtorch_wrf/sdirk3/tests/test_newton_early_residual.cpp": "82bcbbffafc33e07e6da1d27446f6b0cd3f08b9d1779d2809113a3a8daa3f9e8",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/early_build_receipt.json": "14e8910b8e2368febcaa509a2b3141a06d34767a6b0fb903f875240be6da5dfe",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/native_link_receipt.json": "22dbba74d76f07cfb4a1c3aada8b122a34d8a3b004c71c825fc12490fcb0d362",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/focused_test_receipt.json": "ead731b427f3f84ccac91cf6ab847c6b0e2c2785b15cbd423a9f5194a559b1fc",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/graph_after_pins.json": "c4c985978699c1e4ffac1fa357bc3c002bd246f052e2aa16a4ac992655f3f059"
+  },
+  "registered_local": "2026-11-02T15:03:13.109266+09:00"
+}

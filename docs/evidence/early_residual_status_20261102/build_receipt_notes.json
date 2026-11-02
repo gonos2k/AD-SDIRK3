@@ -1,0 +1,12 @@
+{
+  "canonical_receipt_sha256": "14e8910b8e2368febcaa509a2b3141a06d34767a6b0fb903f875240be6da5dfe",
+  "historical_field": "only_followup_change inherited from e7fc-to-2625 receipt; not a claim about the later c7 change",
+  "actual_2625_to_c7_files": [
+    "external/libtorch_wrf/sdirk3/tests/test_newton_early_residual.cpp",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp"
+  ],
+  "production_recompiled": "wrf_sdirk3_newton_solver.cpp",
+  "nine_affected_objects": "unchanged source/header hashes verified; compiled at e7fc",
+  "canonical_notes_before_native_link": "native link/run deferred refers to receipt creation time; see separate native_link_receipt and native_validation",
+  "raw_receipt_unmodified": true
+}

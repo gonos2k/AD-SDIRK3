@@ -634,33 +634,39 @@ inline float finite_or_large(float value, float large = 1.0e8f) {
 
 inline void sync_newton_stage_stats_mpi(bool& converged,
                                         float& final_residual,
-                                        float& initial_r0) {
+                                        bool& final_measured,
+                                        float& initial_r0,
+                                        bool& initial_measured,
+                                        bool& initial_finite) {
     MPI_Comm comm = MPI_COMM_NULL;
-    if (!get_active_halo_comm(comm)) {
-        return;
-    }
+    if (!get_active_halo_comm(comm)) return;
 
-    int local_conv = converged ? 1 : 0;
-    int global_conv = local_conv;
-    if (MPI_Allreduce(&local_conv, &global_conv, 1, MPI_INT, MPI_MIN, comm) != MPI_SUCCESS) {
-        return;
-    }
+    using wrf::sdirk3::ResidualObservation;
+    using wrf::sdirk3::residual_observation;
+    int local[3] = {converged ? 0 : 1,
+                    static_cast<int>(residual_observation(final_measured, final_residual)),
+                    static_cast<int>(!initial_measured ? ResidualObservation::Unmeasured :
+                                     initial_finite ? ResidualObservation::MeasuredFinite :
+                                                      ResidualObservation::MeasuredNonfinite)};
+    int global[3];
+    if (MPI_Allreduce(local, global, 3, MPI_INT, MPI_MAX, comm) != MPI_SUCCESS) return;
 
-    float local_final_residual = finite_or_large(final_residual);
-    float global_final_residual = local_final_residual;
-    if (MPI_Allreduce(&local_final_residual, &global_final_residual, 1, MPI_FLOAT, MPI_MAX, comm) != MPI_SUCCESS) {
-        return;
-    }
-
-    float local_initial_r0 = finite_or_large(initial_r0);
-    float global_initial_r0 = local_initial_r0;
-    if (MPI_Allreduce(&local_initial_r0, &global_initial_r0, 1, MPI_FLOAT, MPI_MAX, comm) != MPI_SUCCESS) {
-        return;
-    }
-
-    converged = (global_conv != 0);
-    final_residual = global_final_residual;
-    initial_r0 = global_initial_r0;
+    // Reduce only finite observed values; restore the provenance before any consumer reads them.
+    const float missing = -std::numeric_limits<float>::infinity();
+    float values[2] = {static_cast<ResidualObservation>(local[1]) == ResidualObservation::MeasuredFinite ? final_residual : missing,
+                       static_cast<ResidualObservation>(local[2]) == ResidualObservation::MeasuredFinite ? initial_r0 : missing};
+    float maxima[2];
+    if (MPI_Allreduce(values, maxima, 2, MPI_FLOAT, MPI_MAX, comm) != MPI_SUCCESS) return;
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const auto final_status = static_cast<ResidualObservation>(global[1]);
+    const auto initial_status = static_cast<ResidualObservation>(global[2]);
+    final_measured = final_status != ResidualObservation::Unmeasured;
+    final_residual = final_status == ResidualObservation::MeasuredFinite ? maxima[0] : nan;
+    initial_measured = initial_status != ResidualObservation::Unmeasured;
+    initial_finite = initial_status == ResidualObservation::MeasuredFinite;
+    initial_r0 = initial_finite ? maxima[1] : nan;
+    converged = global[0] == 0 && final_status == ResidualObservation::MeasuredFinite &&
+                initial_status == ResidualObservation::MeasuredFinite;
 }
 
 inline void sync_stage_quality_mpi(float& rel_r_full,
@@ -9786,6 +9792,8 @@ vertical_coefficients:
                               << " best_krylov_rel=" << sig.best_krylov_rel_error
                               << " krylov_iters=" << sig.krylov_iterations
                               << " gmres_total_failures=" << sig.gmres_total_failures
+                              << " postprocessed_direction_failures="
+                              << sig.postprocessed_direction_failures
                               << " gmres_non_total_failures="
                               << sig.gmres_non_total_failures
                               << " gmres_tolerance_reached="
@@ -14508,8 +14516,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // stage accept/abort/gate decisions (prevents decomposition-dependent branching).
     sync_newton_stage_stats_mpi(stats.converged,
                                 stats.final_residual,
-                                stats.initial_unscaled_residual);
+                                stats.final_residual_measured,
+                                stats.initial_unscaled_residual,
+                                stats.initial_residual_measured,
+                                stats.initial_residual_finite);
 #endif
+
+    const auto final_observation = wrf::sdirk3::residual_observation(
+        stats.final_residual_measured, stats.final_residual);
+    const auto initial_observation = !stats.initial_residual_measured
+        ? wrf::sdirk3::ResidualObservation::Unmeasured
+        : stats.initial_residual_finite ? wrf::sdirk3::ResidualObservation::MeasuredFinite
+                                        : wrf::sdirk3::ResidualObservation::MeasuredNonfinite;
+    if (final_observation != wrf::sdirk3::ResidualObservation::MeasuredFinite ||
+        initial_observation != wrf::sdirk3::ResidualObservation::MeasuredFinite)
+        stats.converged = false;
 
     // v20.14r27e: Track per-stage convergence for inter-stage gating
     last_stage_converged_ = stats.converged;
@@ -14581,6 +14602,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // R13.25 SELF-REVIEW: carry the split counters to the classifier, which is the consumer whose
     // misreading motivated splitting them in the first place.
     last_stage_signals_.linear_total_failure_signals = stats.linear_total_failure_signals;
+    last_stage_signals_.postprocessed_direction_failures = stats.postprocessed_direction_failures;
     last_stage_signals_.unresolved_linear_failures = stats.unresolved_linear_failures;
     last_stage_signals_.entry_metric_mismatch_events = stats.entry_metric_mismatch_events;
     last_stage_signals_.globalization_rejections = stats.globalization_rejections;
@@ -14726,25 +14748,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                   << "  Time step: " << dt << " seconds\n"
                   << "  SDIRK coefficient (a_ii): " << a_ii << "\n";
 
-        // Check for NaN/Inf
-        if (std::isnan(stats.final_residual) || std::isinf(stats.final_residual)) {
-            error_msg << "  ERROR: NaN or Inf detected in residual!\n";
+        using wrf::sdirk3::ResidualAbortReason;
+        const auto reason = wrf::sdirk3::residual_abort_reason(
+            initial_observation, final_observation, stats.final_residual, 100.0f);
+        const char* reason_text = nullptr;
+        switch (reason) {
+            case ResidualAbortReason::InitialNonfinite: reason_text = "Initial unscaled residual is non-finite"; break;
+            case ResidualAbortReason::FinalNonfinite: reason_text = "Final scaled residual is non-finite"; break;
+            case ResidualAbortReason::InitialUnmeasured: reason_text = "Initial unscaled residual was not measured"; break;
+            case ResidualAbortReason::FinalUnmeasured: reason_text = "Final scaled residual was not measured"; break;
+            case ResidualAbortReason::FinalTooLarge: reason_text = "Final scaled-RMS residual exceeds 100"; break;
+            case ResidualAbortReason::None: break;
         }
-
-        // Check residual magnitude (final_residual is scaled-RMS, ~0.1-1.0 normal)
-        // Threshold 100.0: 100x per-DOF error → catastrophic divergence
-        if (stats.final_residual > 100.0f) {
-            error_msg << "  ERROR: Scaled-RMS residual " << stats.final_residual
-                      << " >> 1 — likely diverging!\n";
-        }
-
-        // v20.14r27b: Catastrophic divergence → force abort regardless of policy.
-        // !isfinite or scaled-RMS > 100 means state is irrecoverable.
-        bool catastrophic = !std::isfinite(stats.final_residual) ||
-                            stats.final_residual > 100.0f;
-        if (catastrophic) {
-            error_msg << "\nFATAL: Catastrophic residual (NaN/Inf or scaled-RMS > 100).\n"
-                      << "  Aborting regardless of hard_abort_on_newton_fail setting.";
+        if (reason_text) {
+            error_msg << "\nFATAL: " << reason_text << ".";
             throw std::runtime_error(error_msg.str());
         }
 

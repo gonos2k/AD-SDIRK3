@@ -530,6 +530,7 @@ public:
         // signalled nothing -- and the legacy classifier branch reads it as Krylov stagnation
         // evidence.
         int   linear_total_failure_signals = 0;
+        int   postprocessed_direction_failures = 0; // unresolved after raw Krylov success
         int   unresolved_linear_failures = 0;   // R13.26: signals no globalizer overruled   // the residual-ratio veto fired
         int   entry_metric_mismatch_events = 0;   // stop metric met, S tolerance not
         int   globalization_rejections = 0;       // offered to a globalizer and refused

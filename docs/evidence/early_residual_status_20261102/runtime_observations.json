@@ -1,0 +1,17 @@
+{
+  "scope": "same-setup archived RK3 field reference and unpaired RSL observations; not a speed estimate or performance gate",
+  "performance_eligible": false,
+  "new_native_RSL_seconds": [
+    120.51868
+  ],
+  "archived_RK3_RSL_seconds": [
+    0.557
+  ],
+  "logs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/native_regression/rsl.out.0000": "9ead2e4db96007283bf689c9e8ca234b42777feb133043b68de934490a9fa2b2",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_rk3/rsl.out.0000": "9a44b7039ebc44bf53e46a80132c4836fa6b8bc076f89c7a3a32e1a7c2eb2d5f"
+  },
+  "new_RK3_run": false,
+  "same_conditions": "h600,100km,40x80x64,21 post-initialization fields/coefficient arrays match",
+  "limitation": "Different sequential execution dates/environments and instrumentation; ratios are not accepted speedups."
+}

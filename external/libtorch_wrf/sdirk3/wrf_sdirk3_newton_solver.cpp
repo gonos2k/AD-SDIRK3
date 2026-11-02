@@ -5077,7 +5077,9 @@ public:
         double dt,
         double gamma,
         int stage,
-        const torch::Tensor& F_phys = torch::Tensor()) {  // Added F_phys with default
+        const torch::Tensor& F_phys = torch::Tensor()) try {  // Added F_phys with default
+
+        reset_stats();
 
         TORCH_CHECK(!options_.reuse_linearization ||
                     (!options_.retain_graph_for_adjoint && !options_.save_trajectory),
@@ -5219,8 +5221,6 @@ public:
             std::cerr << "  gmres_restart: " << options_.gmres_restart << std::endl;
             std::cerr << "=========================" << std::endl;
         }
-        
-        reset_stats();
         
         // Get adaptive parameters if enabled
         // `newton_tol_adaptive` is DELIBERATELY cross-iteration: it is a monotone ratchet seeded
@@ -6594,6 +6594,15 @@ public:
                     std::cerr << "[WARN] Newton convergence using unscaled RMS ||R||/√N (no layout)" << std::endl;
                 }
             }
+            // Record the metric already computed for this K and residual on early failure.
+            const auto record_early_failure = [&]() {
+                stats_.converged = false;
+                stats_.newton_iterations = newton_iter + 1;
+                stats_.final_residual = guarded_item<float>(res_norm_tensor);
+                stats_.final_residual_measured = true;
+                return stats_.final_residual;
+            };
+
             // NOTE: k_norm_tensor and rel_res_norm removed (2026-02-03).
             // Convergence now uses scaled norm ||S⁻¹R||; relative ||R||/||K|| is no longer needed.
 
@@ -6746,7 +6755,9 @@ public:
                     fail_result.converged = false;
                     fail_result.K = wrf::sdirk3::g_sdirk3_config.use_autograd ? K : K.detach();
                     fail_result.iterations = 1;
-                    fail_result.final_residual = unscaled_rms;
+                    fail_result.final_residual = record_early_failure();
+                    stats_.newton_termination = static_cast<int>(
+                        wrf::sdirk3::NewtonTerminationReason::NonfiniteResidual);
                     fail_result.message = "Stage " + std::to_string(stage) +
                                           " explosion: unscaled-RMS=" +
                                           std::to_string(unscaled_rms) + " is non-finite";
@@ -7006,15 +7017,15 @@ public:
                 // Check for numerical issues
                 if (guarded_item<bool>(is_nan.any())) {
                     ERROR_PRINT("ERROR: NaN detected in Newton residual!");
-                    stats_.converged = false;
-                    stats_.final_residual = res_norm_for_stats;
-                    stats_.final_residual_measured = true;
+                    const float failure_residual = record_early_failure();
+                    stats_.newton_termination = static_cast<int>(
+                        wrf::sdirk3::NewtonTerminationReason::NonfiniteResidual);
 
                     WRFNewtonKrylovSolver::NewtonResult result;
                     result.K = K;  // Return current K to avoid propagating NaN
                     result.converged = false;
                     result.iterations = newton_iter + 1;
-                    result.final_residual = res_norm_for_stats;
+                    result.final_residual = failure_residual;
                     result.message = "ERROR: NaN detected in Newton residual";
                     update_stage_predictor_cache(false, result.K);
                     return result;
@@ -8005,6 +8016,9 @@ public:
             int gmres_start_iter = stats_.total_krylov_iterations;
             torch::Tensor dK;
             bool gmres_success = false;
+            bool raw_krylov_success = false;
+            bool direction_modified = false;
+            float raw_krylov_rel_error = 1.0f;
             bool effective_entry_converged = false;
             bool gmres_warmstart_used = false;
             bool variable_pc_event_this_newton = false;
@@ -10087,7 +10101,6 @@ public:
                 const bool may_modify_direction = halo_mask_initialized_ ||
                     wrf::sdirk3::g_sdirk3_config.direct_u_solve_thresh > 0.0f;
                 const auto gmres_direction = may_modify_direction ? dK.detach().clone() : dK.detach();
-                bool direction_modified = false;
                 double effective_relative_error = gmres_result.rel_error;
                 bool effective_success = gmres_result.success;
 
@@ -10176,6 +10189,8 @@ public:
                 // Newton quality decisions describe the direction it will actually use.
                 // The Krylov result, diagnostics and warm-start pair above remain raw.
                 gmres_success = effective_success;
+                raw_krylov_success = gmres_result.success;
+                raw_krylov_rel_error = static_cast<float>(gmres_result.rel_error);
 
                 // "raw" here means unclamped; it is the effective direction's ratio.
                 gmres_raw_rel_error = static_cast<float>(effective_relative_error);
@@ -10910,16 +10925,14 @@ public:
                 }
 #endif
                 ERROR_PRINT("ERROR in GMRES: " << e.what());
-                stats_.converged = false;
-                stats_.final_residual = res_norm_for_stats;
-                stats_.final_residual_measured = true;
+                const float failure_residual = record_early_failure();
 
                 // Return failure result
                 WRFNewtonKrylovSolver::NewtonResult result;
                 result.K = K;
                 result.converged = false;
-                result.iterations = options_.max_newton_iter;
-                result.final_residual = stats_.final_residual;
+                result.iterations = newton_iter + 1;
+                result.final_residual = failure_residual;
                 result.message = std::string("GMRES exception: ") + e.what();
                 // R13.17 self-review: this exit was UNTYPED, and
                 // NewtonTerminationReason::Exception had ZERO producers -- an enum value with no
@@ -10941,13 +10954,17 @@ public:
             // Krylov counter updated inside try block above (gmres_result scoped there).
             int gmres_iters = stats_.total_krylov_iterations - gmres_start_iter;
             // Keep failures visible; successful updates need no diagnostic reductions.
-            if (collect_jvp_stats || !gmres_success) {
+            if (collect_jvp_stats || !gmres_success || !raw_krylov_success) {
                 torch::NoGradGuard no_grad;
                 float dK_n = dK.norm().to(torch::kCPU).item<float>();
                 std::cerr << "[Newton] GMRES: " << gmres_iters << " krylov iters, ||dK||=" << dK_n
-                         << ", rel_error=" << gmres_rel_error
-                         << (gmres_success ? " (OK)" : " (FAIL)")
-                         << std::endl;
+                         << ", raw_rel_error=" << raw_krylov_rel_error
+                         << (raw_krylov_success ? " (OK)" : " (FAIL)");
+                if (direction_modified) {
+                    std::cerr << ", direction_rel_error=" << gmres_raw_rel_error
+                              << (gmres_success ? " (OK)" : " (FAIL)");
+                }
+                std::cerr << std::endl;
             }
             if (collect_jvp_stats) {
                 std::cerr << "[Newton] JVP calls: " << jvp_call_count
@@ -10977,7 +10994,9 @@ public:
                 std::cerr << "[SOLVER TELEMETRY] stage=" << stage
                           << ", newton=" << newton_iter
                           << ", gmres_iters=" << gmres_iters
-                          << ", gmres_rel=" << gmres_rel_error
+                          << ", gmres_rel=" << raw_krylov_rel_error
+                          << ", direction_modified=" << (direction_modified ? 1 : 0)
+                          << ", direction_rel=" << gmres_raw_rel_error
                           << ", jvp_calls=" << jvp_call_count
                           << ", jvp_ms=" << total_jvp_time_ms
                           << ", warmstart=" << (gmres_warmstart_used ? "on" : "off")
@@ -11563,8 +11582,18 @@ public:
             it.linear.total_failure_signal =
                 failure_vs_r0 ? (r0_measured ? total_failure_vs_r0 : total_failure_vs_b)
                               : total_failure_vs_b;
-            stats_.total_failure_vs_b_count  += total_failure_vs_b  ? 1 : 0;
-            stats_.total_failure_vs_r0_count += total_failure_vs_r0 ? 1 : 0;
+            // The production veto concerns the direction Newton receives. Krylov
+            // counters and classification must instead describe the unmodified solve.
+            const float raw_clamped = std::clamp(raw_krylov_rel_error, 0.0f, 1.0f);
+            const bool raw_total_failure_vs_b = !it.linear.entry_S_reached &&
+                (raw_krylov_rel_error > 1.0f || raw_clamped >= 0.999f);
+            const bool raw_total_failure_vs_r0 = r0_measured && !it.linear.entry_S_reached &&
+                raw_krylov_rel_error >= 0.99f * r0_ref;
+            const bool raw_total_failure = failure_vs_r0
+                ? (r0_measured ? raw_total_failure_vs_r0 : raw_total_failure_vs_b)
+                : raw_total_failure_vs_b;
+            stats_.total_failure_vs_b_count  += raw_total_failure_vs_b ? 1 : 0;
+            stats_.total_failure_vs_r0_count += raw_total_failure_vs_r0 ? 1 : 0;
             if (!r0_measured) {
                 stats_.krylov_r0_unmeasured_solves++;
                 if (failure_vs_r0) stats_.krylov_rule_fellback_to_b++;
@@ -11591,7 +11620,7 @@ public:
             // requires that no step was accepted, so indexing off it made this "the first
             // failure that also produced no step" -- a different event, and one that can
             // never precede a rejection, which silently disabled the time-order clause.
-            if (it.linear.total_failure_signal && stats_.first_krylov_failure_iter < 0) {
+            if (raw_total_failure && stats_.first_krylov_failure_iter < 0) {
                 stats_.first_krylov_failure_iter = newton_iter;
             }
             // Unified trust-region step bound:
@@ -12466,33 +12495,24 @@ public:
                 stats_.rejected_steps++;
                 if (stats_.first_rejection_iter < 0) stats_.first_rejection_iter = newton_iter;
             }
-            if (it.failure_stands()) {
-                // RETRACTED (red team round 4). R13.12 moved the first-event index here from
-                // the predicate on the claim that `it.failure_stands()` "additionally requires
-                // that no step was accepted", making it a different event. That conjunction is
-                // VACUOUS: `it.step_applied()` is false at the point `it.failure_stands()` is
-                // formed under the trust region (the attempt loop that can set it runs later)
-                // and is exactly `!candidate` without it, so `it.failure_stands() ==
-                // it.linear.total_failure_signal` in both configurations. The move is a
-                // no-op refactor; records taken before it are NOT untrustworthy. Kept at the
-                // predicate because that is where the quantity is defined, not because the old
-                // site was wrong.
+            auto raw_iteration = it;
+            raw_iteration.linear.total_failure_signal = raw_total_failure;
+            if (wrf::sdirk3::linear_failure_unresolved(raw_iteration.signal(), trial_outcome)) {
                 stats_.gmres_total_failures++;
             } else {
                 stats_.gmres_non_total_failures++;
             }
-            // R13.25 (external review, section 6): R13.24 patched the legacy counters AFTER the
-            // fact -- decrementing one and incrementing another to make an aggregate agree with a
-            // runtime state that disagreed with it. A post-hoc correction is not a record; it is
-            // two answers reconciled by arithmetic. These three counters each answer exactly one
-            // question, taken from the signal and the outcome rather than from a derived boolean.
-            // The legacy pair is left untouched so archived records stay comparable.
-            if (wrf::sdirk3::is_linear_total_failure_signal(it.signal())) {
+            // Count raw linear signals separately from the effective direction and trial.
+            if (wrf::sdirk3::is_linear_total_failure_signal(raw_iteration.signal())) {
                 stats_.linear_total_failure_signals++;
             }
             // R13.26 (external review section 5): and separately, whether it went UNRESOLVED.
-            if (wrf::sdirk3::linear_failure_unresolved(it.signal(), trial_outcome)) {
+            if (wrf::sdirk3::linear_failure_unresolved(raw_iteration.signal(), trial_outcome)) {
                 stats_.unresolved_linear_failures++;
+            }
+            if (direction_modified && raw_krylov_success && !gmres_success &&
+                !it.step_applied()) {
+                stats_.postprocessed_direction_failures++;
             }
             if (wrf::sdirk3::is_entry_metric_mismatch_event(it.signal())) {
                 stats_.entry_metric_mismatch_events++;
@@ -12880,6 +12900,17 @@ public:
         }
         update_stage_predictor_cache(false, result.K);
         return result;
+    } catch (...) {
+        // No K is returned on this path, so an earlier measurement cannot certify it.
+        record_unobserved_exception();
+        throw;
+    }
+
+    void record_unobserved_exception() {
+        stats_.converged = false;
+        stats_.final_residual = std::numeric_limits<float>::quiet_NaN();
+        stats_.final_residual_measured = false;
+        stats_.newton_termination = static_cast<int>(wrf::sdirk3::NewtonTerminationReason::Exception);
     }
     
     void reset_stats() {
@@ -12937,7 +12968,7 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
         NewtonResult result;
         result.converged = false;
         result.iterations = 0;
-        result.final_residual = 1e10f;
+        result.final_residual = std::numeric_limits<float>::quiet_NaN();
         result.message = "ERROR: Newton solver pImpl is null";
         return result;
     }
@@ -12968,18 +12999,20 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
         return result;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: Exception in pImpl->solve_stage_impl: " << e.what() << std::endl;
+        pImpl->record_unobserved_exception();
         NewtonResult result;
         result.converged = false;
-        result.iterations = 0;
-        result.final_residual = 1e10f;
+        result.iterations = pImpl->stats_.newton_iterations;
+        result.final_residual = pImpl->stats_.final_residual;
         result.message = std::string("Exception: ") + e.what();
         return result;
     } catch (...) {
         std::cerr << "ERROR: Unknown exception in pImpl->solve_stage_impl" << std::endl;
+        pImpl->record_unobserved_exception();
         NewtonResult result;
         result.converged = false;
-        result.iterations = 0;
-        result.final_residual = 1e10f;
+        result.iterations = pImpl->stats_.newton_iterations;
+        result.final_residual = pImpl->stats_.final_residual;
         result.message = "Unknown exception in Newton solver";
         return result;
     }

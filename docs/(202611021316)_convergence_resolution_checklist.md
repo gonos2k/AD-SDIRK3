@@ -1,7 +1,9 @@
 # 수렴 검토 해소 체크리스트
 
 작성: 2026-11-02T13:16:08.084142+09:00.
-개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
+최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
+최신 갱신: 2026-11-02T15:09:02.878814+09:00, 기준 main696def3b(PR338·339 병합).
+이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
 Green·Red: GPT-6.1-Terra, medium.
 기준 자료는 사용자가 제공한 수렴 이론 검토 본문이다. sandbox 첨부 전체 파일은 로컬에서
 확보하지 못했으므로, 그 전체를 직접 읽거나 모든 독립 계산을 재실행했다고 주장하지 않는다.
@@ -18,8 +20,8 @@ T(실제 시간 지도) → A(오차 예산) → F(짧은 전방·장시간 수�
 
 - [x] A10 종료형 실행: 선택점의 primal/JVP 반복 일치, 완료 스텝0이라는 제한을 보존한다.
   전체 시간 gate INCONCLUSIVE를 바꾸지 않는다. [기록](evidence/terminal_jvp_replay_20261102/manifest.json).
-- [x] 현재 별도 PR338의 공통 prepared-A/P0-P1 비교는 NO_GO 기록으로 구분한다.
-  현재 기준 main에는 아직 없으며, native-FWAD 성능·전체 수렴 보장으로 합치지 않는다.
+- [x] PR338의 공통 prepared-A/P0-P1 비교는 NO_GO로 종료됐고 현재 main에 병합됐다.
+  같은 비용 비교를 재개하거나 native-FWAD 성능·전체 수렴 보장으로 합치지 않는다.
 - [x] 이전 dry240초·두 제어 E0–E2, roll·미분·관리기·출력 입력 검사의 원래 완료 범위를 보존한다.
 - [x] 수치식을 바꾸지 않고 원래 h600·최종 Newton 기준·필터·감쇠를 유지한다.
   작은 h 제조검사는 코드 계약용이며 실용 RK3 비교를 대체하지 않는다.
@@ -29,10 +31,10 @@ T(실제 시간 지도) → A(오차 예산) → F(짧은 전방·장시간 수�
 | ID | 해소할 조건 | 최소 근거 | 상태 |
 |---|---|---|---|
 | R1 | 후처리된 실제 dK의 implemented A 잔차와 성공/품질 판정 일치 | production Direct-U/halo 경로 반례, S=I 및4I, 변경 없는 대조 | 완료: 실제 public 경로 시험101/101 |
-| R2 | raw Krylov receipt/warm-start와 실제 방향 지표 구분 | 원래 GMRESResult 보존, 실제 방향 log, entry exemption·trust/회복 소비자 대조 | 부분 해소: raw/실제 지표 분리; 분류기 용어 후속 |
+| R2 | raw Krylov receipt/warm-start와 실제 방향 지표 구분 | 원래 GMRESResult 보존, 실제 방향 log, entry exemption·trust/회복 소비자 대조 | 이번 범위 완료: raw 로그·실패 집계와 방향 실패 별도; 혼합 원인의 단일 추정은 하지 않음 |
 | R3 | 반환 K의 final_residual은 그 K에서 관측한 같은 G_K·S·mask RMS | 한 번 갱신 후 예산 종료, adaptive/debug 별도, 독립 해석식 검산, 추가 RHS 없음 | 완료: adaptive on/off 독립 잔차 일치 |
-| R4 | 예외/NaN/zero-budget 반환의 잔차·측정 여부 진실성 | early-return 분기별 재현; 측정하지 않은0을 실제 잔차로 쓰지 않음 | 미완료 |
-| R5 | stage acceptance와 실패 정책을 경로별로 명시 | mode3 severe gate와 mode0/1/2 permissive 정책을 분리 | 검토 본문 근거; 연결 검증 미완료 |
+| R4 | 예외/NaN/zero-budget 반환의 잔차·측정 여부 진실성 | early-return 분기별 재현; 측정하지 않은0을 실제 잔차로 쓰지 않음 | 이번 범위 완료: 관측 tensor의 예외·NaN/Inf와 관측 전 예외/zero-budget을 분리 |
+| R5 | stage acceptance와 실패 정책을 경로별로 명시 | mode3 severe gate와 mode0/1/2 permissive 정책을 분리 | 3상태 소비·중단 규칙 연결 완료; 실제 혼합 MPI/예외 동시 중단은 미검증 |
 
 R1의 비율은 Krylov의 unweighted S-coordinate norm 및 zero-RHS 규칙을 따른다.
 그 값은 실제 사용한 matvec에 대한 잔차이며, JVP가 전체 residual의 정확한 미분이라는
@@ -97,6 +99,9 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
 R1과 R3의 이번 변경 범위는 완료다. Direct-U/S=4/실제 halo/warm-entry 및 한 갱신 뒤
 실패 반환 시험을 통과했다. 보관 A9/P0 구성의 h600 한 스텝(현재 기본 구성 인증 아님)은
 3stage 수렴·wrapper3/0·끝174숫자 배열 parity·저장 상태 유한값과 RK3 거리 유지로 확인했다.
-다음 우선순위는 R4의 예외·NaN·zero-budget 반환과 R2 분류기 용어, R5 수용정책의 연결이다.
+이번 후속은 R4의 특정 예외·NaN/Inf·zero-budget 및 관측 전 예외, R2의 raw/방향 로그·집계,
+R5의 3상태 정책 연결을 닫았다. 생산 API의 Impl 예외 전파는 유지하며, 혼합 MPI 실행과
+rank-local 예외의 동시 중단, Impl 반환 후 public wrapper 예외는 이번 범위 밖이다.
+다음 우선순위는 O1의 실제 residual·고정 문맥·projection·S·mask 함수 정의다.
 E/T/A/F의 증명·실험이 모두 완료된 것처럼 묶지 않는다.
 검증 결과와 source/executable/input hash는 별도 진행 보고서에 연결해 상태를 한 항목씩 갱신한다.
