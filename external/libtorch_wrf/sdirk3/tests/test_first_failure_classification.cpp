@@ -112,6 +112,66 @@ std::string name_of(const StageFailureSignals& s) {
 }  // namespace
 
 int main() {
+    using wrf::sdirk3::ResidualObservation;
+    using wrf::sdirk3::residual_observation;
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+    check(residual_observation(true, 1.0) == ResidualObservation::MeasuredFinite,
+          "measured finite residual");
+    check(residual_observation(true, nan) == ResidualObservation::MeasuredNonfinite,
+          "measured NaN residual");
+    check(residual_observation(true, inf) == ResidualObservation::MeasuredNonfinite,
+          "measured infinite residual");
+    check(residual_observation(false, 1.0) == ResidualObservation::Unmeasured,
+          "unmeasured finite placeholder");
+    check(residual_observation(false, nan) == ResidualObservation::Unmeasured,
+          "unmeasured NaN placeholder");
+    check(residual_observation(false, inf) == ResidualObservation::Unmeasured,
+          "unmeasured infinite placeholder");
+    using wrf::sdirk3::merge_residual_observations;
+    const ResidualObservation states[] = {ResidualObservation::MeasuredFinite,
+                                          ResidualObservation::Unmeasured,
+                                          ResidualObservation::MeasuredNonfinite};
+    bool merge_ok = true;
+    for (int i = 0; i < 3; ++i) {
+        merge_ok = merge_ok && static_cast<int>(states[i]) == i &&
+                   static_cast<ResidualObservation>(i) == states[i];
+        for (int j = 0; j < 3; ++j) {
+            merge_ok = merge_ok && merge_residual_observations(states[i], states[j]) ==
+                                      states[std::max(i, j)];
+            for (int k = 0; k < 3; ++k) {
+                merge_ok = merge_ok &&
+                    merge_residual_observations(merge_residual_observations(states[i], states[j]), states[k]) ==
+                    merge_residual_observations(states[i], merge_residual_observations(states[j], states[k]));
+            }
+        }
+    }
+    check(merge_ok, "rank observation merge handles all pairs and is associative");
+    using wrf::sdirk3::ResidualAbortReason;
+    using wrf::sdirk3::residual_abort_reason;
+    const auto finite = ResidualObservation::MeasuredFinite;
+    const auto missing = ResidualObservation::Unmeasured;
+    const auto nonfinite = ResidualObservation::MeasuredNonfinite;
+    check(residual_abort_reason(finite, missing, nan, 100) == ResidualAbortReason::FinalUnmeasured,
+          "unmeasured final residual forces abort");
+    check(residual_abort_reason(finite, nonfinite, nan, 100) == ResidualAbortReason::FinalNonfinite,
+          "nonfinite final residual forces abort");
+    check(residual_abort_reason(finite, finite, 100, 100) == ResidualAbortReason::None,
+          "finite residual at limit leaves nonconvergence policy in control");
+    check(residual_abort_reason(finite, finite, 100.01, 100) == ResidualAbortReason::FinalTooLarge,
+          "finite residual above limit forces abort");
+    check(residual_abort_reason(nonfinite, finite, 1, 100) == ResidualAbortReason::InitialNonfinite,
+          "nonfinite unscaled initial residual forces abort even with finite scaled final");
+    check(residual_abort_reason(missing, finite, 1, 100) == ResidualAbortReason::InitialUnmeasured &&
+          residual_abort_reason(missing, nonfinite, nan, 100) == ResidualAbortReason::FinalNonfinite,
+          "missing initial aborts; observed nonfinite takes precedence over missing");
+    check(std::string(wrf::sdirk3::residual_observation_name(ResidualObservation::Unmeasured)) == "unmeasured" &&
+          std::string(wrf::sdirk3::residual_observation_name(ResidualObservation::MeasuredFinite)) == "measured_finite" &&
+          std::string(wrf::sdirk3::residual_observation_name(ResidualObservation::MeasuredNonfinite)) == "measured_nonfinite",
+          "residual observation names");
+    check(std::string(wrf::sdirk3::newton_termination_name(
+              wrf::sdirk3::NewtonTerminationReason::NonfiniteResidual)) == "nonfinite_residual",
+          "nonfinite residual termination name");
     check(first_failure_of(ok_stage()) == StageFailure::None,
           "a converged, admissible, published stage reports NO failure (a classifier that "
           "always finds one is not a classifier)");
@@ -1943,6 +2003,22 @@ int main() {
               "failure of any kind");
     }
 
+    {
+        auto s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = s.residual_first;
+        s.accepted_steps = 0;
+        s.rejected_steps = 1;
+        s.linear_total_failure_signals = 0;
+        s.unresolved_linear_failures = 0;
+        s.postprocessed_direction_failures = 1;
+        check(first_failure_of(s) == StageFailure::AllStepsRejected,
+              "a rejected postprocessed direction does not turn raw Krylov success into stagnation");
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        check(first_failure_of(s) == StageFailure::ZeroUpdateAfterTotalFailure,
+              "direction failure telemetry preserves the observed zero-update exit event");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1959,7 +2035,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 193;
+    constexpr int expected_checks = 210;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

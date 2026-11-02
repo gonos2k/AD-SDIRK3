@@ -697,8 +697,13 @@ int main() {
                 check(cold_stats.total_krylov_iterations > 0 &&
                       warm_stats.last_arnoldi_spent == 0 && warm_stats.last_S_reached &&
                       check_direction_receipt(log.str(), 1.1) &&
-                      warm_stats.total_failure_vs_b_count == 1,
-                      "modified warm-start direction cannot inherit the entry failure exemption");
+                      warm_stats.total_failure_vs_b_count == 0 &&
+                      warm_stats.linear_total_failure_signals == 0 &&
+                      warm_stats.unresolved_linear_failures == 0 &&
+                      warm_stats.postprocessed_direction_failures ==
+                          (warm_stats.accepted_steps == 0 ? 1 : 0) &&
+                      log.str().find("direction_rel_error=") != std::string::npos,
+                      "modified warm-start direction fails without blaming the raw Krylov solve");
                 g_sdirk3_config = saved_config;
                 std::cerr.rdbuf(saved_stream);
             } catch (...) {

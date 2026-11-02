@@ -25,6 +25,7 @@
 // re-derives the category from raw signals would be that defect again.
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 #include <limits>
 #include <cstring>
@@ -231,14 +232,10 @@ inline const char* stage_failure_layer(StageFailure f) {
 // and budget usage -- a fixed precedence over aggregates, which cannot tell "the residual stopped
 // moving" from "the budget ran out at a residual that happened to be flat".
 enum class NewtonTerminationReason {
-    // `TrustRejected` and `NonfiniteResidual` were removed -- both had
-    // ZERO producers, and neither corresponds to an actual Newton-loop exit: the trust region's
-    // "all attempts rejected" path keeps K and CONTINUES, and no non-finite-residual site breaks
-    // the loop. An enum value nothing writes is the same defect as a field nothing reads, and
-    // keeping them made the inventory look more complete than the instrumentation was. If such an
-    // exit is added later, the value comes back WITH its producer.
+    // Trust-region rejection keeps K and continues; it is not a termination reason.
+    // NonfiniteResidual records the two non-finite residual exits.
     NotRecorded = 0, Converged, BudgetExhausted, ResidualStall, ZeroStepStall,
-    ZeroUpdateAfterTotalFailure, Exception
+    ZeroUpdateAfterTotalFailure, Exception, NonfiniteResidual
 };
 
 inline const char* newton_termination_name(NewtonTerminationReason r) {
@@ -251,8 +248,48 @@ inline const char* newton_termination_name(NewtonTerminationReason r) {
         case NewtonTerminationReason::ZeroUpdateAfterTotalFailure:
             return "zero_update_after_total_failure";
         case NewtonTerminationReason::Exception:          return "exception";
+        case NewtonTerminationReason::NonfiniteResidual:  return "nonfinite_residual";
     }
     return "not_recorded";
+}
+
+// Values are MPI_MAX priorities; do not reorder without changing that reduction.
+enum class ResidualObservation { MeasuredFinite = 0, Unmeasured = 1, MeasuredNonfinite = 2 };
+
+inline ResidualObservation residual_observation(bool measured, double value) {
+    if (!measured) return ResidualObservation::Unmeasured;
+    return std::isfinite(value) ? ResidualObservation::MeasuredFinite
+                                : ResidualObservation::MeasuredNonfinite;
+}
+
+// A non-finite observation on any rank is evidence even if another rank has no measurement.
+inline ResidualObservation merge_residual_observations(ResidualObservation a,
+                                                       ResidualObservation b) {
+    return static_cast<ResidualObservation>(std::max(static_cast<int>(a), static_cast<int>(b)));
+}
+
+enum class ResidualAbortReason {
+    None, InitialNonfinite, FinalNonfinite, InitialUnmeasured, FinalUnmeasured, FinalTooLarge
+};
+
+// The caller supplies its scaled-RMS limit; the initial unscaled residual is never compared to it.
+inline ResidualAbortReason residual_abort_reason(ResidualObservation initial,
+                                                  ResidualObservation final,
+                                                  double final_value, double limit) {
+    if (initial == ResidualObservation::MeasuredNonfinite) return ResidualAbortReason::InitialNonfinite;
+    if (final == ResidualObservation::MeasuredNonfinite) return ResidualAbortReason::FinalNonfinite;
+    if (initial == ResidualObservation::Unmeasured) return ResidualAbortReason::InitialUnmeasured;
+    if (final == ResidualObservation::Unmeasured) return ResidualAbortReason::FinalUnmeasured;
+    return final_value > limit ? ResidualAbortReason::FinalTooLarge : ResidualAbortReason::None;
+}
+
+inline const char* residual_observation_name(ResidualObservation observation) {
+    switch (observation) {
+        case ResidualObservation::Unmeasured:        return "unmeasured";
+        case ResidualObservation::MeasuredFinite:    return "measured_finite";
+        case ResidualObservation::MeasuredNonfinite: return "measured_nonfinite";
+    }
+    return "unmeasured";
 }
 
 // The near-worst tie fold as a PURE FUNCTION, so order-independence is testable. State is
@@ -497,6 +534,8 @@ struct StageFailureSignals {
     // nothing, and reading it as Krylov stagnation evidence is the defect. -1 = an old record that
     // predates the split, which keeps the legacy reading.
     int    linear_total_failure_signals = -1;
+    // Modified direction missed forcing after raw success and no step was accepted.
+    int    postprocessed_direction_failures = 0;
     // Signals that NO globalizer overruled. This -- not the
     // raw signal count -- is Krylov-stagnation evidence. -1 = a record predating the split.
     int    unresolved_linear_failures = -1;
