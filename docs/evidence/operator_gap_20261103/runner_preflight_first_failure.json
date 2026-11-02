@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-11-03T08:27:33.263292+09:00",
+  "status": "failed",
+  "error": "Traceback (most recent call last):\n  File \"<stdin>\", line 4, in <module>\n  File \"/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103_scope_fix/run_operator_gap.py\", line 30, in verify_build_link\n    assert sha(W/'external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp')==receipt['newton_source_sha256']\nKeyError: 'newton_source_sha256'\n",
+  "source_commit": "acc393912b38c6d83537649a7e75ea485c462db1",
+  "runner_sha256": "0438d4877b541ec4d8f0ecd0c7bf5a335970fa03fec302293d494b3a98a6e5c4",
+  "build_receipt_sha256": "10caf0f65ec4f2417156a95ca863b4c4d5713b0f5e90a04ac576397c08d891a4",
+  "link_receipt_sha256": "6d9e8249989f917cc51b412ccb393cdbb303749247954520d235c0d45a67c307",
+  "helper_reuse_sha256": "7d55d2fbe776463fc42a385f4c87ffb4b3bf1a520020d79d94b15f31021f816f",
+  "executable_sha256": "bd00dd85e356ae74f97a8dca4552bbd1a88a432e14121c4cc0cf5aadcebcc8b7",
+  "map_sha256": "a11e4f270bf3bf8a70119414b2a81a5de5d574c2d0fe119aae0d89d7d52f4e5e",
+  "scope": "read-only source, archive, link, direct-method origin, and helper reuse checks; no model run"
+}

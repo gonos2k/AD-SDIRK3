@@ -1,0 +1,57 @@
+{
+  "status": "sampled_evidence_only",
+  "source_commit": "acc393912b38c6d83537649a7e75ea485c462db1",
+  "result_sha256": "a3bc7fd3853518f135351030306208a8f5ce85a3e6cc020995ee6203b744995f",
+  "base_G_scaled_l2": 20.14740542763099,
+  "requested_tolerance": 1.0000000116860974e-07,
+  "raw_gmres_relative": 1.6527321733406097e-08,
+  "fresh_used_p_relative": 1.6527321827977203e-08,
+  "directions": {
+    "used_p": {
+      "implemented_candidate_residual_ratio": 1.6527321827977203e-08,
+      "minimum_sampled_gap_over_G": 1.9784757589622152e-10,
+      "maximum_sampled_gap_over_G": 1.9978106698934923e-08,
+      "coarse_to_fine_gap_ratios": [
+        9.952744473709458,
+        10.145670195305796
+      ]
+    },
+    "Q_seed": {
+      "implemented_candidate_residual_ratio": 8.068516784567649,
+      "minimum_sampled_gap_over_G": 7.123320120198841e-10,
+      "maximum_sampled_gap_over_G": 1.989388909101809e-08,
+      "coarse_to_fine_gap_ratios": [
+        2.7874013586301687,
+        10.019307904241973
+      ]
+    },
+    "boundary_complement": {
+      "implemented_candidate_residual_ratio": 1.0000992282110768,
+      "minimum_sampled_gap_over_G": 7.326867914578733e-16,
+      "maximum_sampled_gap_over_G": 7.153348088305018e-14,
+      "coarse_to_fine_gap_ratios": [
+        10.086464418284239,
+        9.679480194820473
+      ]
+    }
+  },
+  "all_input_perturbation_loss_counts_zero": true,
+  "projection_sample_errors": {
+    "used_p_Q_error_l2": 0,
+    "projection_idempotence_l2": 0,
+    "boundary_Q_l2": 0
+  },
+  "interpretation": [
+    "The used-p and boundary-complement sampled gaps grow approximately as 1/epsilon; consistent with differencing roundoff, not proof of its exclusive cause.",
+    "Input perturbations are not wholly lost in any recorded component; this does not measure all floating point rounding.",
+    "The three epsilon values do not establish a native truncation error regime or a rigorous bound on A_star minus Ahat.",
+    "implemented_plus_FD_sample_gap is a numerical proxy only, not a certified upper bound on exact forcing.",
+    "Q_seed and boundary-complement forcing ratios are not Newton acceptance claims; only used_p is the postprocessed search candidate."
+  ],
+  "exact_forcing_certified": false,
+  "forecast_complete": false,
+  "complete_steps": 0,
+  "new_RK3_run": false,
+  "new_endpoint_comparison": false,
+  "performance_eligible": false
+}

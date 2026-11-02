@@ -1,0 +1,23 @@
+{
+  "timestamp_local": "2026-11-03T08:39:08.116275+09:00",
+  "source_revision": "acc393912b38c6d83537649a7e75ea485c462db1",
+  "scope": "Independent check of recorded scalar arithmetic, source semantics, scope and figure; no native replay or vector recomputation",
+  "result_sha256": "a3bc7fd3853518f135351030306208a8f5ce85a3e6cc020995ee6203b744995f",
+  "row_count": 9,
+  "arithmetic_errors": [],
+  "verified": [
+    "Each gap_over_base_G equals gap_scaled_l2 / base_G_scaled_l2 and each proxy sum equals implemented ratio plus sampled gap.",
+    "Summary result SHA and result probe SHA match files.",
+    "Source makes four exact center RHS/context checks: before directions and after each of three directions; observed context is only the captured subset.",
+    "Probe reports 3 AD, 0 FD fallback, 22 direct RHS and 25 implicit RHS calls; exit 86 and zero stages/steps are diagnostic termination.",
+    "Qp-p, Q(Qseed)-Qseed and Q boundary-complement errors are zero on these samples.",
+    "Plot matches recorded trends and labels sampled gap and absent epsilon-squared regime."
+  ],
+  "limits": [
+    "No finite-difference truncation-error bound is established; sampled sums are proxies, not certified exact forcing bounds.",
+    "gap_scaled_relative uses FD norm, which is not separately recorded, so its denominator cannot be independently reconstructed from the scalar output.",
+    "Approximate inverse-epsilon growth is consistent with roundoff, not proof of cause.",
+    "Initial-state comparison and reused two input byte hashes do not prove full-context equivalence or a completed forecast.",
+    "Prior ordinal-mismatch attempt is preserved INCONCLUSIVE, not a derivative or forecast failure."
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "status": "registered",
+  "created_local": "2026-11-03T08:10:51.731871+09:00",
+  "source_commit": "85df46805c6129b2ab0c0d86b90f91ef30f8ce0f",
+  "maximum_native_attempts": 1,
+  "retry": false,
+  "performance_eligible": false,
+  "purpose": "one terminal diagnostic stage 2 Newton iteration 0; no forecast/endpoint, no arbitrary numeric gap threshold",
+  "direction_role": "used_p is postprocessed Newton search candidate whose quality R1 checks, before trust, recovery and line search; no accepted or damped update computed; eta_impl is candidate forcing only",
+  "operator_scope": "raw principal selected preconditioner; P0 pressure preflight and observer hooks bypassed for probe; not a P0/P1 comparison",
+  "context_scope": "observed fixed inputs only; exact Jacobian and exact forcing not certified",
+  "directions": [
+    "used_p",
+    "Q_seed",
+    "boundary_complement"
+  ],
+  "epsilons": [
+    0.01,
+    0.001,
+    0.0001
+  ],
+  "source_asserted_selected_ad_jvp_calls": 3,
+  "source_asserted_fd_fallbacks": 0,
+  "resources": {
+    "disk_floor_bytes": 5368709120,
+    "rank_post_peak_RSS_cap_bytes": 4294967296,
+    "MPI_timeout_s": 360,
+    "launcher_wait_s": 390
+  },
+  "initial_state_comparison": "21 fields vs archived A9 and RK3 initial frames",
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/run_operator_gap.py": "345327703e46bac5f355a1958d48db187aa7124969ca8433250e4a88ce161ae3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/build_receipt.json": "808e54cf91bda0e5ef84a476e3df629ace6642eb797be14d7ea8d56db45527ce",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/link_receipt.json": "21c9d6ff8f276d885dd318073aa31c60c0afb1a2ead98594be67af5a2607d666",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/wrf_link.map": "a46b201d3cd8eca9e7f6b2ccefe65c464a93ab54949a9e70c855065b72fe3c99",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/link.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/link.stderr.log": "35bc94ba923227213c68ed462096fc2eeae3e13caf261e953b404e8b996626ee",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/link_driver_probe.txt": "cb972ba3557d0eccd7e17e708523b3f877b66db72494ac58a2e4b49773f622d9",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/helper_test_receipt.json": "c433e277023903de4a5587cddc9ef2a8b17ec09b9440641cfeb652625a4bf697",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/red_o2_fd_context_audit.json": "2004a637fcfa312e527a162806a83c4f446cc4ac245601d35d5895c6bd1fe627",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/red_o2_path_audit.json": "55a6072f6fce902145fdf911190f33ae2f7fabf128c478fa4066890f5c12f261",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/red_probe_source_review.json": "e7798c9edc3376d1cc6e500765473d268061d1789c2c30e13686009f7ff429ec",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/native_build/wrf.exe": "5f08ee5f571391d2e905fc4ec918867effb5a36264afc5a06052ab24e39908a0",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/native_build/libwrf_sdirk3_libtorch.a": "5a49d6db8fa4c9afff6b0cae3429d62ce1477d650e6afaaca24eb315794442d0",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/benchmark_wrf_accuracy_cost.py": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/runner_preflight_receipt.json": "4c4bcbcb0211eb9d61a7ea6bc5bfb8411b170ebc935ee827a039f0134339411d",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/graph_after_pins.json": "15f9fe5a7c24b3731244bc3b5e593acc0da06be06d901522da2d6afb76040dd0",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/green_o1_revision_audit.json": "d57af95c658b04cfb08e496f1cf285307ff839425a9ada7b9ef9bf2d45f23057",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/red_o1_revision_review.json": "bed14c27d45f3bc58c21fc5e2cee5ab5934085b117116c08b408384553a444d2"
+  },
+  "model_run": false,
+  "registered_local": "2026-11-03T08:13:11.685425+09:00",
+  "numeric_gap_acceptance_threshold": null,
+  "exact_forcing_certified": false
+}

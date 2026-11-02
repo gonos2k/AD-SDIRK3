@@ -1,0 +1,159 @@
+{
+  "status": "inconclusive",
+  "errors": [
+    "terminal_exit_or_marker",
+    "scope",
+    "projection_idempotence_l2",
+    "boundary_Q_l2",
+    "used_p_Q_error_l2",
+    "q_b_scaled_cosine",
+    "p_q_scaled_cosine",
+    "p_b_scaled_cosine",
+    "base_G_scaled_l2",
+    "gmres_tolerance",
+    "gmres_raw_relative",
+    "direction_relative",
+    "fixed_input_handles",
+    "mask_and_direction",
+    "direction_count"
+  ],
+  "return_code": 87,
+  "model_completed": false,
+  "forecast_complete": false,
+  "performance_eligible": false,
+  "exact_forcing_certified": false,
+  "scope": "directional comparison at observed input subset after a raw-principal solve; no complete fixed-operator, exact Jacobian or forcing claim",
+  "steps": 0,
+  "completed_implicit_stages": 0,
+  "markers": [
+    "[OPERATOR_GAP] status=failed forecast_complete=false"
+  ],
+  "initial_state_comparison": {
+    "status": "passed",
+    "reference_label": "new_terminal",
+    "labels": [
+      "new_terminal",
+      "archived_A9_old_binary",
+      "archived_RK3"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "rank_peak_rss_bytes": 1960280064,
+  "disk_free_end": 65611055104,
+  "clock_triplets": {
+    "start": {
+      "monotonic_before": 3389772.849581375,
+      "wall": 1793661217.822934,
+      "monotonic_after": 3389772.849583833
+    },
+    "end": {
+      "monotonic_before": 3389793.203919416,
+      "wall": 1793661238.177784,
+      "monotonic_after": 3389793.203921333
+    }
+  },
+  "diagnostic": {
+    "status": "failed",
+    "forecast_complete": false
+  },
+  "artifacts": {
+    "attempt.json": {
+      "sha256": "1f8151a546148eaca394d2e48a00dfbe62a362c1c635b2ce192e962aa0e56bd2",
+      "bytes": 4083
+    },
+    "launcher.stderr.log": {
+      "sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "bytes": 49
+    },
+    "launcher.stdout.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "linear_delay_first_jvp.npy": {
+      "sha256": "0a4f1407062a586883de0b934c9fe18833fd6367a3e92276a043309730718f5d",
+      "bytes": 8644008
+    },
+    "linear_delay_first_tangent.npy": {
+      "sha256": "3cf4185ad76e8b8c51746919ad2fee87c4075d1f91cc5d0b259a4de56a470e89",
+      "bytes": 8644008
+    },
+    "linear_delay_u_eval.npy": {
+      "sha256": "36066354aab639372f4eee8f4a47bde6f8047f39557062c6402c80b7dfb50e86",
+      "bytes": 8644008
+    },
+    "linear_delay_u_ref_first_jvp.npy": {
+      "sha256": "9514b1510b5784349fc15c0e8ec91b5ab83cbf7166ec3dfbd7344be791822a6a",
+      "bytes": 8644008
+    },
+    "namelist.input": {
+      "sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+      "bytes": 6098
+    },
+    "namelist.output": {
+      "sha256": "f07ca977061445ef8f7657acf9d2a6bce3440ce4023fd353c2547674808daeb9",
+      "bytes": 93060
+    },
+    "operator_gap_probe.json": {
+      "sha256": "c93a40543e395ad0ed0d54928a4aeb804d15aa8b03317bd6eef6c4ecfafd5061",
+      "bytes": 46
+    },
+    "rank_rusage.log": {
+      "sha256": "850afbfcfff2120d2416a11f478ab219661b5d872229275e487bd60f31475ab8",
+      "bytes": 777
+    },
+    "rsl.error.0000": {
+      "sha256": "0aedaf731b598c8401aba1eed98abe3be4dd6930448ae129f4ac73ae1d374db5",
+      "bytes": 11757
+    },
+    "rsl.out.0000": {
+      "sha256": "f20248a920eee074b64ad3540d9a5af0a35ae70cdc24803373ae0b24b45234f3",
+      "bytes": 13183
+    },
+    "wrfinput_d01": {
+      "sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "bytes": 2065615
+    },
+    "wrfoutReady_d01_0001-01-01_00:00:00": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "wrfout_d01_0001-01-01_00:00:00": {
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "bytes": 1989217
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "time_local": "2026-11-03T07:57:06.910586+09:00",
+  "worktree": "/private/tmp/operator-gap-20261103",
+  "head": "b98a0e81df0e3ca7fc59499d9246aa42f03038ab",
+  "sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "194365634d17e9a5eaefc38e577bccd0b6c606f4ace3de4cabdf102981bb01ad",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "9c2397aacb7aceca00b4d23e67467505118bca8ae399baa5b865e9235b212441",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_linear_delay_audit.h": "2fcc3ecb6c49bb344d8eac1412d04b6f63094e4243bc5d59e848ad0da571d40b",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_stage_probe.h": "a9e3490a3a0c1daa28b4a9a891c5a499637274adf1012da698dd1317cf558bf6"
+  },
+  "scope": "stage-2 Newton-0 selected live mode3 RHS fixed-input FD, source review only",
+  "exact_frame_context": [
+    "p_base",
+    "th_base",
+    "mu_base",
+    "ph_base",
+    "c1h",
+    "c2h",
+    "c1f",
+    "c2f",
+    "msftx",
+    "msfty",
+    "msfux",
+    "msfuy",
+    "msfvx",
+    "msfvy",
+    "cqu",
+    "cqv",
+    "cqw",
+    "zx",
+    "zy",
+    "p_pert_work",
+    "dpx_work",
+    "cqv_at_v_work",
+    "ru_tend",
+    "rv_tend",
+    "rw_tend",
+    "t_tend",
+    "mu_tend",
+    "ph_tend",
+    "qv_tend",
+    "ru_adv_z_work",
+    "rv_adv_z_work",
+    "rw_adv_z_work",
+    "t_adv_z_work",
+    "div_x_work",
+    "div_y_work",
+    "div_z_work",
+    "cqu_at_u_work",
+    "cqw_at_w_work"
+  ],
+  "snapshot_before_each_call": [
+    "Pristine B,K,U_eval,a, directions, S/Sinv, effective H/mask, actual stage/Newton/rank identifiers, dt and reference U_ref_stage_; tensor value/hash and metadata and meaningful owner/version where stable. Inspect value rather than requiring scratch versions to return after center.",
+    "Required captured fixed subset: p_base, th_base, mu_base, ph_base, c1h,c2h,c1f,c2f, six map factors, cqu,cqv,cqw,zx,zy. Check reference, topology/BC/packed condition, mode, no full halo, omega reference update off, dtype/device, no reuse, options and stage dt; source and executable identity, AD and fallback counters. Check map epoch/cache freshness and native scalar/geometry inputs beyond f.context; that list itself is not exhaustive.",
+    "Gate the base-state pressure branch (p_base,th_base,ph_base defined/nonempty plus valid mu_base) and actual stage2 pressure EOS/V primary capture, project_native nonempty, not failed/duplicate and same live Tile lifetime/profile, for Q. Do not assume the capture exists for a different selected stage or unarmed build."
+  ],
+  "conditional_recomputed_exclusions": {
+    "p_pert_work": "Label is already p_pert_work, so A10 _work exclusion covers it. In valid base-state branch calc_p_rho overwrites p_pert_ at 20533\u201320539 before later member reads; result depends on perturbed Y and may rebind. Fail/gate unsupported branch rather than assume old pressure irrelevant.",
+    "ru_tend rv_tend rw_tend t_tend mu_tend ph_tend qv_tend": "Both allocation branches reset them to zeros at 16171\u201316244 before current RHS use; these change/rebind; qv setup depends on grid moisture, gate dry case.",
+    "dpx_work cqw_at_w_work": "Relevant branches initialize or zero before use, 20694\u201320699 and 21835\u201321840. Owner/versions can change.",
+    "cqu_at_u_work cqv_at_v_work": "fill_(1) then interpolate before use, 20912 onward and 21322 onward; legitimate in-place version increments.",
+    "ru_adv_z_work rv_adv_z_work rw_adv_z_work t_adv_z_work div_x_work div_y_work div_z_work": "Inspected member references in computeUnifiedRHS are stores of locally computed results (with branch-dependent absence); not value invariants. This does not prove all transitive consumers or continuation side effects absent."
+  },
+  "caveats": [
+    "Do not exclude arbitrary _work by name as proof: for each actively used branch, establish overwrite-before-read or treat its prior value as unproven mathematical input; full cache/observer/backend state is not covered. Map/base tensors can be rebound by refresh/alignment at 16425\u201316562: gate valid stable epochs/device/dtype and compare input values; an unexpected rebind or mismatch is ineligible rather than silently accepted.",
+    "A centered baseline reevaluation is not state restore and does not make work tensor owner/version match its pre-perturbation state. Compare actual baseline output and repeat plus/minus order to detect drift; this gives sample evidence, not proof of context independence. Terminal stop avoids claiming continuation safety.",
+    "A10 f.context Handle.unchanged compares owner/version; its hash is computed for unchanged subset and excludes names containing _work plus tendency list. It is not an immutable cloned context and not a complete fingerprint.",
+    "No source edits, test, build, run or RK3 comparison."
+  ]
+}

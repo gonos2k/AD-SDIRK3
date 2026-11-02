@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-11-03T08:39:04.385802+09:00",
+  "status": "PASS_SAMPLED_DATA",
+  "source_commit": "acc393912b38c6d83537649a7e75ea485c462db1",
+  "critical_findings": [],
+  "sha256": {
+    "run/result.json": "a3bc7fd3853518f135351030306208a8f5ce85a3e6cc020995ee6203b744995f",
+    "run/operator_gap_probe.json": "b679f4d5a9a8ff53df9a411460ad717f1cc771ce3c30df95787366c9665162e7",
+    "gap_samples.csv": "6a65cb2701ac94b7be1beaa36607d5a1d6ecd08fee955338bac8cb137bf60f83",
+    "analysis_summary.json": "89a9fbe26c9fbe7657104ae871f560bc232d640fcad1048437913d8f7348ab33",
+    "gap_vs_epsilon.png": "c71381932fa9216f5da82aad8af4fe9aaff04ae659fe872600381c4a5a190c2a"
+  },
+  "checks": [
+    "Nine CSV rows and sampled gap/G and proxy sums independently match raw diagnostic; summary pins result; result pins raw probe JSON.",
+    "Exit 86 diagnostic completed, zero complete steps and stages; three AD, zero routed FD/fallback, 22 direct RHS and 25 total implicit RHS (18 perturbations + 4 centers + 3 AD).",
+    "Used candidate fresh implemented residual/G=1.6527321828e-8, tolerance=1.0000000117e-7; sampled gap/G = 1.978475759e-10, 1.969126368e-9, 1.997810670e-8 for epsilon .01/.001/.0001.",
+    "Q(p)-p=0 for this sample only; no universal constrained-space claim.",
+    "Increasing gap approximately inverse epsilon is consistent with cancellation/roundoff, not proof of exclusive mechanism; unknown FD error prevents exact forcing certification."
+  ],
+  "limitations": [
+    "Only named observed context and sampled directions; no full Jacobian, fixed operator, or global stability proof.",
+    "Raw principal solve, not P0/P1 cost comparison; zero forecast and no endpoint or performance conclusion.",
+    "Original first attempt remains INCONCLUSIVE and is not overwritten.",
+    "No tests or model rerun by reviewer."
+  ]
+}

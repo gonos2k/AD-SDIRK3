@@ -1,0 +1,36 @@
+{
+  "created_local": "2026-11-03T08:21:13.479783+09:00",
+  "prior_attempt": "operator-gap-20261103/run",
+  "prior_source": "85df4680",
+  "prior_status": "inconclusive",
+  "prior_untouched": true,
+  "demonstrated_cause": "legacy A9 report expected ordinal5, invalidatedselectedstage2ordinal1 beforemeasure",
+  "not_demonstrated": "JVP derivative gap or numerical forecast failure; V capturestatus unknown",
+  "scope_fix": "bypass unrelated A9 report only operator-gap macro; ownordinal1/ref invarianceguards",
+  "prior_records": {
+    "run/result.json": {
+      "sha256": "2bb01b322b3d5d180467154b120dd136425220432e42b2fe1e5a2ffb761b9b87",
+      "bytes": 4487
+    },
+    "run/operator_gap_probe.json": {
+      "sha256": "c93a40543e395ad0ed0d54928a4aeb804d15aa8b03317bd6eef6c4ecfafd5061",
+      "bytes": 46
+    },
+    "run/rsl.out.0000": {
+      "sha256": "f20248a920eee074b64ad3540d9a5af0a35ae70cdc24803373ae0b24b45234f3",
+      "bytes": 13183
+    },
+    "run/rsl.error.0000": {
+      "sha256": "0aedaf731b598c8401aba1eed98abe3be4dd6930448ae129f4ac73ae1d374db5",
+      "bytes": 11757
+    },
+    "native_registration.json": {
+      "sha256": "994cad6a25bf67f84019a190ca4b8eee11e27a86154035c03627daf2946754a9",
+      "bytes": 4670
+    },
+    "red_o3_unsupported_audit.json": {
+      "sha256": "3bf932de9df3b8f6a246f1af29e0936fb6003855efd16820ae2a45240518cddc",
+      "bytes": 2013
+    }
+  }
+}

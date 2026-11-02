@@ -1,0 +1,20 @@
+{
+  "time_local": "2026-11-03T08:24:45.876048+09:00",
+  "worktree": "/private/tmp/operator-gap-20261103",
+  "base": "85df4680",
+  "reviewed": "acc393912b38c6d83537649a7e75ea485c462db1",
+  "old_sha256": "4ba3036855877525539aba77d1ff999213c8191e4814a9017733529cea54aa6d",
+  "new_sha256": "3c8892097967260dd775046a087c7b969d78160cf725c30be903d4b49ef95ea5",
+  "verdict": "addresses demonstrated root cause; O3 profile gates retained and reference/ordinal checks strengthened; diagnostic completeness issue noted",
+  "evidence": [
+    "Legacy report, which sets invalid on ordinal != 5, is omitted under OPERATOR_GAP_PROBE; first stage2 ordinal1 is guarded explicitly.",
+    "Own checks require base and first/last reference handles unchanged, same identity and zero reference changes; original profile predicates including v_primary callback remain.",
+    "Changes confined to diagnostic conditional, guards and output; no direct alteration of base RHS, solver computation or acceptance. Report side effects (A9 raw artifact write and invalidation) are intentionally absent.",
+    "Old report raw-NPY/sample_done eligibility no longer applies; O3 tests the solved direction rather than claiming A9 sample eligibility.",
+    "Named unsupported-profile diagnostic does not print cfg.imex_split_mode, cfg.split_explicit or torch thread counts, though these are checked; recommend recording all predicate values for decisive diagnosis."
+  ],
+  "limits": [
+    "Not proof all conditions pass or V callback exists in next run.",
+    "No native build, run, tests, or model; original failure preserved."
+  ]
+}

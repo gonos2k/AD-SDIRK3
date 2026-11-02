@@ -1,0 +1,37 @@
+{
+  "timestamp_local": "2026-11-03T07:54:13.533399+09:00",
+  "worktree": "/private/tmp/operator-gap-20261103",
+  "head": "b98a0e81df0e3ca7fc59499d9246aa42f03038ab",
+  "sha256": {
+    "docs/design/pressure_schur_20261031/frozen_tile_replay_boundary.md": "2059e0c8f7654be86b60fbc21b068710df7c96a4a366a59bd488984954e42d8f",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "9c2397aacb7aceca00b4d23e67467505118bca8ae399baa5b865e9235b212441",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "194365634d17e9a5eaefc38e577bccd0b6c606f4ace3de4cabdf102981bb01ad",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": "ed95906c98fbcc20a5c6027b596863b6b8cac5e629e497d7924e0787bcab5b26"
+  },
+  "scope": "source audit for supplied verified h600 A9/P0 profile; no runtime probe or independent revalidation of that run",
+  "actual_path": [
+    "solveImplicitStage clones actual stage base B into U_ref_stage_; mode3 compute_rhs wrapper does not replace reference with omega_update_ref_per_newton off and selects compute_rhs_inner(ImplicitOnly); with no full-halo tensor it invokes computeUnifiedRHS and its native Q input/output projection. Reuse off means no prepared reverse-AD cleanup branch.",
+    "At fixed B,a,K define U_eval=B+a*K and G(K)=K-compute_rhs(U_eval). Production JVP uses a*p as RHS tangent and returns p-J_F(a*p). Compare with [G(K+epsilon*p)-G(K-epsilon*p)]/(2*epsilon), preserving wrapper, dtype and physical K-space direction. Probe before any K update.",
+    "Single-tile option is constructed from nprocx*nprocy>1 (Tile :3861); halo mask build requires is_multi_tile and nonperiodicity (Newton :5599). Packed 1D apply_halo_zeroing is no-op absent initialized matching mask (:4960), so H=I for a fresh supported single-tile solver; assert live mask uninitialized/no effective mask rather than assume retained state absent. Q is separate and generally nonidentity."
+  ],
+  "fixed_inputs": [
+    "B, K, a=dt*gamma, U_eval, each p, stage/iteration and actual S/Sinv and H state; same tensor metadata and values across observations.",
+    "Reference U_ref_stage_ and owner/version/value, geometry and base-state tensors, topology, BC, stage dt, global and solver option branches; split=3, reference-update=false, reuse=false, full-halo absent, MPI1 and packed periodic/symmetric profile; actual dtype/device and backend/thread metadata.",
+    "Wrapper callback path, physics and moisture flags, relevant branch selection, numerical JVP mode and fallback counters; F_phys is not directly added by mode3 wrapper."
+  ],
+  "mutable_context": [
+    "RHS writes grid_info.dt, diagnostics counters, tendency work and p_pert and other scratch; map/base alignment and thread-local caches can initialize or change. Work buffers may be legitimately recomputed, but do not assume every changed object is harmless or cache transparent. Reference/base/geometry/options/BC are mathematical inputs, not disposable scratch.",
+    "A10 Snapshot in Newton near :7710 uses linear_delay_audit::Handle unchanged owner/version plus audit_hash_tensor for U,F,K,b,x0,S,Sinv,mask,ref,Fphys,Fexp,halo and selected context; excludes _work/tendency buffers; records RHS-mode/fallback counters. Existing A9/A10 observed subset stability and repeated primal/tangent agree only for its selected sample; neither verifies all transitive caches or this future terminal point.",
+    "A5 project_native captures live Tile this with topology check near :21468, usable synchronously while Tile/context alive; it is not an independent frozen evaluator."
+  ],
+  "minimal_runtime_gates": [
+    "At terminal chosen stage/newton point verify expected profile and path, live H status, valid fixed U_eval=B+aK, finite matching metadata, three finite nonzero labelled directions; record raw vectors and hashes, distinguish actual Krylov directions from any Q-admissible O3 samples.",
+    "Before/between/after each complete wrapper call fingerprint A10 observed input subset and reference, options/geometry/topology/BC/mask and check versions/owners; verify finite outputs and unchanged pristine B/K/a/S/U_eval. Use expected ImplicitOnly call counts and require forward-AD path and zero fallback; do not treat intentional diagnostic FD calls as production fallback.",
+    "For each direction run JVP and centered full-wrapper residual FD over multiple representable epsilons, include repeat U_eval primal bracketing plus reversed +/- order or equivalent repeat to detect order/context drift, compare vector/block absolute and scaled relative errors and report epsilon/roundoff and branch changes. Preserve raw observations; reject context drift, nonfinite, missing data, exceptions or fallback. Agreement supports only sampled points/directions, not full differentiability or operator equality.",
+    "Calls mutate scratch/cache and may alter continuation, so terminate after the probe or establish separate isolated evaluator; no restoring/freeze/detach of live callback state, and no claim that terminal before-update intervention preserves a continuing solve."
+  ],
+  "limits": [
+    "Complete mutable context and branch smoothness not proven by finite snapshots; repeated baseline agreement detects but cannot exclude all hidden state dependence.",
+    "A10 was one-direction selected-point evidence only; no O2/O3, model, production build, RK3 comparison or performance conclusion follows from this audit."
+  ]
+}
