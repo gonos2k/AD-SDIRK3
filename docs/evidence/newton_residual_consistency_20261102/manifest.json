@@ -1,0 +1,186 @@
+{
+  "created_local": "2026-11-02T13:56:57.275482+09:00",
+  "base_main": "9292c6c896fcec0f338d0fec7d27bd803e4c620f",
+  "compiled_core_source": "ef81e4f7348a170ed4c1bc41d84cb2412970225f",
+  "native_target_head": "e0fed059358ecc052462938305099dc99f30414b",
+  "native_attempts": 1,
+  "native_steps": 1,
+  "research_feature_configuration": true,
+  "default_native_configuration_claim": false,
+  "new_RK3_run": false,
+  "performance_eligible": false,
+  "global_convergence_guarantee": false,
+  "records": [
+    {
+      "path": "build_newton.py",
+      "bytes": 3439,
+      "sha256": "71f16d7f5df0f978446272540108803d6b6096da5f5818ea3180d31d6567fb96",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/build_newton.py",
+      "normalization": "none"
+    },
+    {
+      "path": "run_tests.py",
+      "bytes": 2441,
+      "sha256": "cc0734da612693235d6e4291950df3d1d742e57fec04e1c51b22305496ca96a3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/run_tests.py",
+      "normalization": "none"
+    },
+    {
+      "path": "newton_build_receipt.json",
+      "bytes": 41692,
+      "sha256": "c07f27143bc0ec61985c1c10e262d5a0c56d28d21e9d1166d5d2d3604d88ef2a",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/newton_build_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "newton_test_receipt.json",
+      "bytes": 4466,
+      "sha256": "ac28c5dd8cc62f7d1381368852f0baca60f1214031c69e646fbfaad42f9488a3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/newton_test_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "trust_halo_test_receipt.json",
+      "bytes": 2093,
+      "sha256": "eaba5456002d0ec423c125f87743b396d4b5a02c58a19ef7f235adb88ff12054",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/trust_halo_test_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_newton_test_receipt.json",
+      "bytes": 2276,
+      "sha256": "705a5c4e4099fac3f6121c346e2d56b3c70cbf895679d2f376972b23f4d9e271",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/initial_newton_test_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_registration.json",
+      "bytes": 3614,
+      "sha256": "0e14baab37cdf76fcc6f59c054e81c5743ecb0d3500dea4e12965aff67fe51a8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_registration.json",
+      "normalization": "none"
+    },
+    {
+      "path": "run_native_regression.py",
+      "bytes": 8871,
+      "sha256": "bc89cc606776a7c29485fb5a9f2793bc321d46d9c00038b391668ad278ab6816",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/run_native_regression.py",
+      "normalization": "none"
+    },
+    {
+      "path": "native_validation.json",
+      "bytes": 4645,
+      "sha256": "ef06543aa96e62e40b880eb3f43ee6afc6dfb73b10da35e188de24100b16eae0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_validation.json",
+      "normalization": "none"
+    },
+    {
+      "path": "validate_native.py",
+      "bytes": 4098,
+      "sha256": "e8de4a07f6c4f308f0ada2ceb3b6e6b68d5a85f1c0832447dcfaa2340eb42301",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/validate_native.py",
+      "normalization": "none"
+    },
+    {
+      "path": "rk3_comparison.csv",
+      "bytes": 405,
+      "sha256": "b01956bc0738c4ad49ddb78214a47933f5509cf81f3c10d54ab6124ab305b6ea",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/rk3_comparison.csv",
+      "normalization": "none"
+    },
+    {
+      "path": "native_identity_audit.json",
+      "bytes": 1888,
+      "sha256": "60ff277a088b67e5928920448cbc9bd89b602edc10d0ff3890a5b3a214ae29d3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_identity_audit.json",
+      "normalization": "none"
+    },
+    {
+      "path": "test_inventory_note.md",
+      "bytes": 1321,
+      "sha256": "58ec7c28ca415731047723553f2e827acfcdba74c106d6660a25217ced3af532",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/test_inventory_note.md",
+      "normalization": "none"
+    },
+    {
+      "path": "red_source_validation_audit.json",
+      "bytes": 2228,
+      "sha256": "9d3d9812ac6fac77362f3bb218fe0a5a9f4981059e6d9d36164995cb12fb1b88",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/red_source_validation_audit.json",
+      "normalization": "none"
+    },
+    {
+      "path": "green_failure_residual_audit.json",
+      "bytes": 1777,
+      "sha256": "ffd4c44cb7b9dfb15f24ca4f639870e87895791b864e2a21961215a7e7544f0d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/green_failure_residual_audit.json",
+      "normalization": "none"
+    },
+    {
+      "path": "graph_after_pins.json",
+      "bytes": 5376,
+      "sha256": "171c07442a53715f4891832d79bf36a0807f1061bb2aa730a47de699b70891d8",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/graph_after_pins.json",
+      "normalization": "none"
+    },
+    {
+      "path": "cleanup_receipt.json",
+      "bytes": 2326,
+      "sha256": "ab7f4d372570df7801f96a87b865d328dd20991cb671e3f497ff3a01c0289511",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/cleanup_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_regression/attempt.json",
+      "bytes": 4233,
+      "sha256": "044f27f7f161a970b8a6a24be0f49ad7948432f0d681fea89c0c491259c69b02",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_regression/attempt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_regression/result.json",
+      "bytes": 3862,
+      "sha256": "dca61f405023b9edb753b02ee7bbcff856d474459a80160bd02a9e3cbce2b4de",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_regression/result.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_regression/rank_rusage.log",
+      "bytes": 777,
+      "sha256": "65b88f95ea9ffa78aa85e967ea09530f21e1c05e46be13ef08adf4863b780418",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_regression/rank_rusage.log",
+      "normalization": "none"
+    },
+    {
+      "path": "selected_unit_log.txt",
+      "bytes": 482,
+      "sha256": "67cec0543361864ff2a4f407b44147aa187e48373a915d7c21a817578add2eb5",
+      "original_paths": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/trust_halo_run.log",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/test_newton_returned_residual_run.log"
+      ],
+      "normalization": "selected original lines by file, deduplicated; not chronological merge"
+    },
+    {
+      "path": "selected_initial_inventory_log.txt",
+      "bytes": 68,
+      "sha256": "00f056ef25154c19fd161a774399282489fce9f044d53c58d025429d71bc8dbb",
+      "original_paths": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/initial_test_trust_model_contract_run.log"
+      ],
+      "normalization": "selected original lines by file, deduplicated; not chronological merge"
+    },
+    {
+      "path": "selected_native_log.txt",
+      "bytes": 524,
+      "sha256": "46154278bb24ea3f8889fa770626fae69b331b5126712e519af64fc299da9ba4",
+      "original_paths": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_regression/rsl.out.0000",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_regression/rsl.error.0000",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_regression/launcher.stdout.log",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_regression/launcher.stderr.log"
+      ],
+      "normalization": "selected original lines by file, deduplicated; not chronological merge"
+    }
+  ]
+}

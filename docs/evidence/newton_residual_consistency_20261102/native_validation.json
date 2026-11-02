@@ -1,0 +1,166 @@
+{
+  "status": "PASSED",
+  "scope": "h600 single-step A9/P0 research-config noninterference, not default-native or long-forecast convergence/cost acceptance",
+  "source_head": "e0fed059358ecc052462938305099dc99f30414b",
+  "build_source_commit": "ef81e4f7348a170ed4c1bc41d84cb2412970225f",
+  "raw_runner_sha256": "dca61f405023b9edb753b02ee7bbcff856d474459a80160bd02a9e3cbce2b4de",
+  "endpoint_parity": {
+    "numeric_variables_compared": 174,
+    "bitwise_mismatch_variables": [],
+    "passed": true
+  },
+  "stage_scaled_RMS": [
+    {
+      "stage": 2,
+      "Newton_iterations": 3,
+      "scaled_rms": 6.296993e-14
+    },
+    {
+      "stage": 3,
+      "Newton_iterations": 3,
+      "scaled_rms": 6.345785e-14
+    },
+    {
+      "stage": 4,
+      "Newton_iterations": 3,
+      "scaled_rms": 6.344006e-14
+    }
+  ],
+  "wrapper_calls_failed": [
+    [
+      "3",
+      "0"
+    ],
+    [
+      "3",
+      "0"
+    ]
+  ],
+  "initial_gate": {
+    "status": "passed",
+    "reference_label": "new_native",
+    "labels": [
+      "new_native",
+      "archived_A9",
+      "archived_RK3"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "finite_and_positive_saved_endpoints": {
+    "new_native": {
+      "theta": 258.83935546875,
+      "total_pressure": 11079.84334230423,
+      "total_mass": 89072.1247472763,
+      "geopotential_layer_delta": 2110.51220703125
+    },
+    "archived_A9": {
+      "theta": 258.83935546875,
+      "total_pressure": 11079.84334230423,
+      "total_mass": 89072.1247472763,
+      "geopotential_layer_delta": 2110.51220703125
+    },
+    "archived_RK3": {
+      "theta": 258.83935546875,
+      "total_pressure": 11079.991608858109,
+      "total_mass": 89071.89104366302,
+      "geopotential_layer_delta": 2110.5087890625
+    }
+  },
+  "comparison_rows": [
+    {
+      "field": "U",
+      "owned_points": 204800,
+      "new_minus_old_max_abs": 0.0,
+      "new_minus_RK3_RMS": 0.00031484921884297165,
+      "new_minus_RK3_max_abs": 0.002048492431640625
+    },
+    {
+      "field": "V",
+      "owned_points": 207360,
+      "new_minus_old_max_abs": 0.0,
+      "new_minus_RK3_RMS": 0.00020319480626702284,
+      "new_minus_RK3_max_abs": 0.0013668779283761978
+    },
+    {
+      "field": "W",
+      "owned_points": 204800,
+      "new_minus_old_max_abs": 0.0,
+      "new_minus_RK3_RMS": 0.0006909942879028214,
+      "new_minus_RK3_max_abs": 0.0035210284404456615
+    },
+    {
+      "field": "PH",
+      "owned_points": 204800,
+      "new_minus_old_max_abs": 0.0,
+      "new_minus_RK3_RMS": 0.39634871478232453,
+      "new_minus_RK3_max_abs": 4.1317138671875
+    },
+    {
+      "field": "T",
+      "owned_points": 204800,
+      "new_minus_old_max_abs": 0.0,
+      "new_minus_RK3_RMS": 0.00029223435090725854,
+      "new_minus_RK3_max_abs": 0.004150390625
+    },
+    {
+      "field": "MU",
+      "owned_points": 3200,
+      "new_minus_old_max_abs": 0.0,
+      "new_minus_RK3_RMS": 0.31379463510573785,
+      "new_minus_RK3_max_abs": 1.4685750007629395
+    }
+  ],
+  "files": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_regression/wrfout_d01_0001-01-01_00:10:00": {
+      "bytes": 3444089,
+      "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e"
+    },
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/wrfout_d01_0001-01-01_00:10:00": {
+      "bytes": 3444089,
+      "sha256": "19da64a7e321433bc6429cba7bbdbc443ed53593f7a00816ed0e0da509ff9d8e"
+    },
+    "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_rk3/wrfout_d01_0001-01-01_00:10:00": {
+      "bytes": 3343772,
+      "sha256": "bef2489e98127f8a67ba9d015f5f18f0a2fcc7b31341a526d8b27c0ef6b88e41"
+    }
+  },
+  "helper_sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+  "array_compare_helper_sha256": "bbd270ec6cc58df7fdc4d1aa6e2dd53731af49f7b42bf4898690c1583b04193b",
+  "new_RK3_run": false,
+  "performance_eligible": false,
+  "full_convergence_guarantee": false
+}

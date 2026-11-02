@@ -1,0 +1,6 @@
+[LINEAR DIRECTION] stage=1 iter=0 modified=1 raw_success=1 raw_rel_error=3.453034765e-07 effective_success=0 effective_rel_error=9.000000219e-01 tolerance=9.999999975e-07
+[Newton] GMRES: 1 krylov iters, ||dK||=1.03096, rel_error=0.9 (FAIL)
+=== NEWTON SOLVER FAILED TO CONVERGE ===
+Trust model contract: ALL PASS (101/101)
+PASS adaptive=0 returned=0.215316 expected=0.215316 initial=0.507358 accepted=1
+PASS adaptive=1 returned=0.215316 expected=0.215316 initial=0.507358 accepted=1

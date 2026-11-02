@@ -1,0 +1,20 @@
+{
+  "timestamp_local": "2026-11-02T13:51:21+0900",
+  "scope": "Green source audit of common Newton failure return, finite numerical state equality and scaled RMS; not an audit of all failure exits or arbitrary stateful RHS behavior",
+  "head_at_audit": "e0fed059358ecc052462938305099dc99f30414b",
+  "source_sha256": "cc5c9576a413cb6ed2d269cbcd921685bbb268f72ae986fcbca2c12d09d8a04a",
+  "test_sha256": "e1a2ad9ac0f86abeca311a3d7648651a1088cade4f90761fbf234b0cbdf015a4",
+  "findings": [
+    "At each iteration halo projection precedes base RHS and base K/R receipt.",
+    "Recovery and ordinary trust acceptance retain their evaluated trial K and R; rejected steps use zero direction and retain the base receipt.",
+    "Alpha is set to 1 and not reassigned. The sole subsequent K update is functional K + alpha*dK_scaled; no later K mutation before common failure return was found.",
+    "Failure return verifies numeric tensor equality before recomputing the scaled halo-masked RMS from the recorded residual. It makes no additional RHS call.",
+    "torch::equal is numerical rather than bitwise equality, so signed zeros compare equal; no claim is made for opaque sign-sensitive or impure callbacks.",
+    "No receipt or mismatch yields unmeasured NaN and may affect downstream severe-failure classification; zero budget and mismatches remain open. Separate early returns are outside this audit."
+  ],
+  "reported_existing_evidence": {
+    "manufactured": "Parent reported both adaptive modes pass: returned RMS 0.215316 matches independent analytic value; initial RMS 0.507358.",
+    "execution": "No test, build, or model rerun by this audit."
+  },
+  "result": "No additional K mutation found for audited common failure path; performance and broader behavior remain open."
+}

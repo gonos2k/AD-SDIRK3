@@ -1,0 +1,29 @@
+{
+  "review": "Red source and existing validation review",
+  "timestamp": "2026-11-02T13:50:39.845662+09:00",
+  "scope": "R1 direction residual/quality and R3 returned residual, with limited native noninterference",
+  "critical_issues": [],
+  "source_sha256": {
+    "newton_solver_cpp": "cc5c9576a413cb6ed2d269cbcd921685bbb268f72ae986fcbca2c12d09d8a04a",
+    "trust_test_cpp": "92bf8524fe1114ecec14cdb89acbdd5b6fba0962077f9b56ba243ceb9a250a90"
+  },
+  "source_findings": [
+    "Changed direction residual and scalar quality use S-coordinate operator and applied tolerance; effective entry exemption follows it.",
+    "Raw solver result, diagnostics, warm-start direction and quality remain paired; adaptive tuning reads raw residual.",
+    "Direct U replacement skips NanRetryExhausted; exact trust model consumes residual vector.",
+    "Returned residual uses observed state/residual pair if state matches; no extra RHS evaluation."
+  ],
+  "validation_review": [
+    "trust_halo_test_receipt.json matches final trust source and archive; trust_halo_run.log reports 101/101.",
+    "newton_test_receipt.json reports successful manufactured test; log records adaptive 0/1 returned 0.215316 versus analytic 0.215316, initial 0.507358.",
+    "native_validation.json reports PASSED only for registered h600 single-step A9/P0 research configuration; 174 numeric endpoint variables bitwise match archived A9 and six-field RK3 differences recorded.",
+    "No model, build, or test rerun by this reviewer."
+  ],
+  "open_limitations": [
+    "R2: effective-direction total-failure counters coexist with raw Krylov statistics; classifier attribution requires separate review.",
+    "R4: observed tensors are detached aliases, not clones; current functional K update and next-iteration evaluation support pairing on reviewed paths, but later in-place changes must be audited.",
+    "R5: unmatched failure state returns NaN and measured=false; downstream legacy failure classification/continuation behavior remains open.",
+    "Single-step research configuration does not establish default-native parity, long-forecast stability, cost improvement, global Newton forcing, energy or splitting properties."
+  ],
+  "status": "PASS_LIMITED_SCOPE"
+}

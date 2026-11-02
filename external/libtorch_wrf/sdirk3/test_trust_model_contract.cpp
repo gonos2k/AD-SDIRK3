@@ -626,14 +626,136 @@ int main() {
               std::cerr.precision() == cerr_precision_before_direct,
               "GMRES summary preserves caller stderr formatting state");
         std::printf("DIRECT_U_PRODUCTION_LOG\n%s\n", direct.second.c_str());
+        // The production RHS is F(x)=0.9x, so A=I-F'=0.1I. Replacing the
+        // solved U direction by -R leaves b-A*dK = 0.9b, independently of
+        // the predictor and of a uniform physics scale.
+        const auto check_direction_receipt = [](const std::string& log, double expected_rel) {
+            const auto pos = log.find("[LINEAR DIRECTION] ");
+            if (pos == std::string::npos) return false;
+            int stage = 0, iter = -1, modified = 0, raw_success = 0, effective_success = 1;
+            double raw_rel = -1.0, effective_rel = -1.0, tolerance = -1.0;
+            const int parsed = std::sscanf(log.c_str() + pos,
+                "[LINEAR DIRECTION] stage=%d iter=%d modified=%d raw_success=%d "
+                "raw_rel_error=%lf effective_success=%d effective_rel_error=%lf tolerance=%lf",
+                &stage, &iter, &modified, &raw_success, &raw_rel,
+                &effective_success, &effective_rel, &tolerance);
+            return parsed == 8 && stage == 1 && iter == 0 && modified == 1 &&
+                   raw_success == 1 && std::isfinite(raw_rel) && raw_rel < tolerance &&
+                   effective_success == 0 && std::isfinite(effective_rel) &&
+                   std::abs(effective_rel - expected_rel) < 1.0e-5 * expected_rel &&
+                   effective_rel > tolerance;
+        };
         check(direct.second.find("[DIRECT U SOLVE]") != std::string::npos &&
               has_near_unit_first_trust_ratio(direct.second),
               "production Direct U trial retains rho=1 for a linear operator");
+        check(check_direction_receipt(direct.second, 0.9),
+              "Direct U reports the forcing failure of the actual direction after GMRES success");
         const auto scaled_direct = run_linear_newton(0.5f, true, true, 1.0, false, 4.0);
         check(scaled_direct.second.find("[DIRECT U SOLVE]") != std::string::npos &&
               has_near_unit_first_trust_ratio(scaled_direct.second),
               "production Direct U ratio matches the linear model under S=4I");
+        check(check_direction_receipt(scaled_direct.second, 0.9),
+              "Direct U reports the actual forcing failure under S=4I");
+        // Reuse the same solver to make its cached exact GMRES direction the
+        // initial guess on the second solve, then mutate that direction.
+        {
+            using namespace wrf::sdirk3;
+            const auto saved_config = g_sdirk3_config;
+            std::ostringstream log;
+            auto* saved_stream = std::cerr.rdbuf(log.rdbuf());
+            try {
+                g_sdirk3_config.debug_level = 1;
+                g_sdirk3_config.jvp_method = decltype(g_sdirk3_config)::JVP_DUAL_NUMBER;
+                g_sdirk3_config.use_autograd = false;
+                g_sdirk3_config.precond_type = 0;
+                g_sdirk3_config.gmres_warmstart = true;
+                g_sdirk3_config.direct_u_solve_thresh = 0.0f;
+                WRFNewtonKrylovOptions options;
+                options.nx = options.ny = options.nz = 1;
+                options.nx_u = options.ny_v = options.nz_w = 2;
+                options.use_preconditioner = false;
+                options.use_adaptive_tolerances = false;
+                options.max_newton_iter = 1;
+                options.gmres_restart = 10;
+                options.max_krylov_iter = 20;
+                options.newton_tol = options.krylov_tol = 1e-6f;
+                const auto layout = StateLayout::from_grid_dims(1, 1, 1, 2, 2, 2);
+                auto U = torch::zeros({layout.total_size}, torch::kFloat64);
+                U.slice(0, 0, 2).fill_(1.0);
+                auto history = torch::zeros({1, layout.total_size}, torch::kFloat64);
+                // A=-0.1I: replacing the exact direction by -R makes the
+                // effective residual 1.1 times b, crossing the failure gate.
+                const auto rhs = [](const torch::Tensor& x) { return 1.1 * x; };
+                WRFNewtonKrylovSolver solver(options);
+                solver.solve_stage_with_status(U, history, rhs, 1.0, 1.0, 1);
+                const auto cold_stats = solver.get_stats();
+                log.str("");
+                log.clear();
+                g_sdirk3_config.direct_u_solve_thresh = 0.5f;
+                solver.solve_stage_with_status(U, history, rhs, 1.0, 1.0, 1);
+                const auto warm_stats = solver.get_stats();
+                check(cold_stats.total_krylov_iterations > 0 &&
+                      warm_stats.last_arnoldi_spent == 0 && warm_stats.last_S_reached &&
+                      check_direction_receipt(log.str(), 1.1) &&
+                      warm_stats.total_failure_vs_b_count == 1,
+                      "modified warm-start direction cannot inherit the entry failure exemption");
+                g_sdirk3_config = saved_config;
+                std::cerr.rdbuf(saved_stream);
+            } catch (...) {
+                g_sdirk3_config = saved_config;
+                std::cerr.rdbuf(saved_stream);
+                throw;
+            }
+        }
+        // On a 4x4 tile the ru block is 4x1x5: six cells remain
+        // active after a one-cell halo is removed, and fourteen are masked.
+        {
+            using namespace wrf::sdirk3;
+            const auto saved_config = g_sdirk3_config;
+            std::ostringstream log;
+            auto* saved_stream = std::cerr.rdbuf(log.rdbuf());
+            try {
+                g_sdirk3_config.debug_level = 1;
+                g_sdirk3_config.jvp_method = decltype(g_sdirk3_config)::JVP_DUAL_NUMBER;
+                g_sdirk3_config.use_autograd = false;
+                g_sdirk3_config.precond_type = 0;
+                g_sdirk3_config.gmres_warmstart = false;
+                g_sdirk3_config.direct_u_solve_thresh = 0.0f;
+                g_sdirk3_config.halo_width = 1;
+                WRFNewtonKrylovOptions options;
+                options.nx = options.ny = 4;
+                options.nz = 1;
+                options.nx_u = options.ny_v = 5;
+                options.nz_w = 2;
+                options.is_multi_tile = true;
+                options.use_preconditioner = false;
+                options.use_adaptive_tolerances = false;
+                options.max_newton_iter = 1;
+                options.gmres_restart = 10;
+                options.max_krylov_iter = 20;
+                options.newton_tol = options.krylov_tol = 1e-6f;
+                const auto layout = StateLayout::from_grid_dims(4, 4, 1, 5, 5, 2);
+                auto U = torch::zeros({layout.total_size}, torch::kFloat64);
+                U.slice(0, 0, 20).fill_(1.0);
+                auto history = torch::zeros({1, layout.total_size}, torch::kFloat64);
+                const auto rhs = [](const torch::Tensor& x) { return 0.9 * x; };
+                WRFNewtonKrylovSolver solver(options);
+                solver.set_physics_scaling(torch::ones_like(U));
+                solver.solve_stage_with_status(U, history, rhs, 1.0, 1.0, 1);
+                check(log.str().find("[HALO MASK] Activated") != std::string::npos &&
+                      check_direction_receipt(log.str(), std::sqrt(14.0 / 20.0)),
+                      "halo masking reports the actual direction's independently counted residual");
+                g_sdirk3_config = saved_config;
+                std::cerr.rdbuf(saved_stream);
+            } catch (...) {
+                g_sdirk3_config = saved_config;
+                std::cerr.rdbuf(saved_stream);
+                throw;
+            }
+        }
         const auto identity = run_linear_newton(0.0f, true);
+        check(identity.second.find("[LINEAR DIRECTION] ") == std::string::npos,
+              "unchanged GMRES direction emits no modification receipt");
         std::printf("IDENTITY_PRODUCTION_LOG\n%s\n", identity.second.c_str());
         std::printf("NEWTON_OFF_RESULT converged=%d iterations=%d residual=%a K=",
                     identity.first.converged, identity.first.iterations,
@@ -821,7 +943,7 @@ int main() {
               "fallback result is invariant under equivalent physical-unit rescaling");
     }
 
-    const int kExpected = 96;
+    const int kExpected = 101;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;

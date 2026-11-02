@@ -1,0 +1,2 @@
+FAIL: case-count 100 expected 96
+Trust model contract: 1 FAILURE(S)
