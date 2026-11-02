@@ -68,6 +68,9 @@ struct Frame {
 inline thread_local Frame* current=nullptr;
 inline std::atomic<int> solve_ordinal{0};
 inline bool selected_base() noexcept { return current && current->selected && current->base_call; }
+// The fifth-solve observer omits V-primary capture; the matched first-stage
+// experiment needs the same base-call payload as the existing stage-2 probe.
+inline bool a5_capture_allowed() noexcept { return !selected_base() || current->stage==2; }
 inline bool capture_failure() noexcept {
     if (!selected_base()) return false;
     current->invalid=true;

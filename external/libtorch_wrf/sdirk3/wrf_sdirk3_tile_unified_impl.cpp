@@ -21405,7 +21405,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 #ifdef WRF_SDIRK3_PRESSURE_A5
             if (wrf::sdirk3::pressure_stage_probe::capture_active()
 #ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
-                && !wrf::sdirk3::linear_delay_audit::selected_base()
+                && wrf::sdirk3::linear_delay_audit::a5_capture_allowed()
 #endif
                 ) {
                 try {
