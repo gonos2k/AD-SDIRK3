@@ -5507,6 +5507,9 @@ public:
         // explosion at timestep 2 (||b|| went from 0.18 to 6.3e8).
         const torch::Tensor& U_stage = U_n;
 
+        // Last observed state/residual pair, including an accepted trial.
+        torch::Tensor observed_K, observed_R;
+
         // Track last residual for failure path
         // STATS FIX: Track detached tensor for accurate final_residual at debug_level=0
         float last_res_norm = 0.0f;
@@ -6381,6 +6384,8 @@ public:
             // Before buggy code: R = K - F - F_phys  (double-counted F_phys)
             // After fix:         R = K - F           (correct for all configurations)
             torch::Tensor R = K - F;
+            observed_K = K.detach();
+            observed_R = R.detach();
 
 
             // PR 9E (diagnosis-only, opt-in): retain the FINAL fast RHS and Newton
@@ -7982,6 +7987,7 @@ public:
             int gmres_start_iter = stats_.total_krylov_iterations;
             torch::Tensor dK;
             bool gmres_success = false;
+            bool effective_entry_converged = false;
             bool gmres_warmstart_used = false;
             bool variable_pc_event_this_newton = false;
             bool gmres_inn_candidate_built = false;
@@ -9959,6 +9965,9 @@ public:
                 const bool may_modify_direction = halo_mask_initialized_ ||
                     wrf::sdirk3::g_sdirk3_config.direct_u_solve_thresh > 0.0f;
                 const auto gmres_direction = may_modify_direction ? dK.detach().clone() : dK.detach();
+                bool direction_modified = false;
+                double effective_relative_error = gmres_result.rel_error;
+                bool effective_success = gmres_result.success;
 
                 // Zero halo components in dK before K += dK update.
                 // v20.14r27g: Halo mask is DISABLED in GMRES operator (v20.14r26),
@@ -9969,7 +9978,9 @@ public:
                 // below: -R_u is generally not the U component of the GMRES solution.
                 {
                     float du_thresh = wrf::sdirk3::g_sdirk3_config.direct_u_solve_thresh;
-                    if (du_thresh > 0.0f && last_ru_share_ > du_thresh &&
+                    if (gmres_result.termination_reason !=
+                            WRFNewtonKrylovSolver::KrylovTerminationReason::NanRetryExhausted &&
+                        du_thresh > 0.0f && last_ru_share_ > du_thresh &&
                         layout_initialized_ && cached_layout_.blocks.size() >= 1 &&
                         cached_layout_.blocks[0].name == "ru") {
                         torch::NoGradGuard no_grad;
@@ -9999,7 +10010,33 @@ public:
                         const auto r_final = -R.detach() - A_final.detach();
                         last_gmres_r_true_ = scaling_initialized_
                             ? S_inv_diag_ * r_final : r_final;
+                        direction_modified = true;
+                        // Match Krylov's unweighted S-coordinate metric, including its
+                        // geometric halo convention (a no-op for 1D packed vectors).
+                        auto r_metric = last_gmres_r_true_.detach().clone();
+                        auto b_metric = gmres_rhs.detach().clone();
+                        const int width = wrf::sdirk3::g_sdirk3_config.halo_width;
+                        zero_halo_regions(r_metric, width, options_.periodic_x, options_.periodic_y);
+                        zero_halo_regions(b_metric, width, options_.periodic_x, options_.periodic_y);
+                        effective_relative_error = wrf::sdirk3::krylov_relative_norm(
+                            safe_tensor_norm_fp64(r_metric).item<double>(),
+                            safe_tensor_norm_fp64(b_metric).item<double>());
+                        effective_success = std::isfinite(effective_relative_error) &&
+                            effective_relative_error < gmres_result.tolerance_applied &&
+                            gmres_result.termination_reason !=
+                                WRFNewtonKrylovSolver::KrylovTerminationReason::NanRetryExhausted;
                     }
+                }
+                if (direction_modified && wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    std::ostringstream receipt;
+                    receipt << std::scientific << std::setprecision(9)
+                            << "[LINEAR DIRECTION] stage=" << stage << " iter=" << newton_iter
+                            << " modified=1 raw_success=" << int(gmres_result.success)
+                            << " raw_rel_error=" << gmres_result.rel_error
+                            << " effective_success=" << int(effective_success)
+                            << " effective_rel_error=" << effective_relative_error
+                            << " tolerance=" << gmres_result.tolerance_applied << '\n';
+                    std::cerr << receipt.str();
                 }
 
                 if (stage >= 0 && stage < static_cast<int>(gmres_warmstart_stage_.size())) {
@@ -10014,11 +10051,12 @@ public:
                     gmres_warmstart_varpc_stage_[stage] = variable_pc_event_this_newton;
                 }
 
-                gmres_success = gmres_result.success;
+                // Newton quality decisions describe the direction it will actually use.
+                // The Krylov result, diagnostics and warm-start pair above remain raw.
+                gmres_success = effective_success;
 
-                // v20.14r27g: Keep raw rel_error for diagnostics/trust-region.
-                // Clamped value is only for the quadratic prediction model (e² term).
-                gmres_raw_rel_error = gmres_result.rel_error;
+                // "raw" here means unclamped; it is the effective direction's ratio.
+                gmres_raw_rel_error = static_cast<float>(effective_relative_error);
                 gmres_initial_rel_error = gmres_result.initial_rel_error;
                 gmres_rel_error = std::clamp(gmres_raw_rel_error, 0.0f, 1.0f);
                 stats_.total_krylov_iterations += gmres_result.iterations;
@@ -10050,6 +10088,7 @@ public:
                         wrf::sdirk3::entry_exempts_total_failure(entry_v);
                     it.linear.entry_objective_mismatch =
                         wrf::sdirk3::entry_requires_nonlinear_decrease(entry_v);
+                    effective_entry_converged = stop_metric_reached_on_entry && effective_success;
                 }
                 // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
                 // no-progress ratio is budget-dependent -- a healthy operator on 7 Arnoldi
@@ -10458,9 +10497,12 @@ public:
                     }
                 }
 
-                if (!gmres_success) {
-                    if (gmres_rel_error > 0.5f) {
-                        std::cerr << "[NEWTON] GMRES failed badly (rel_error=" << gmres_rel_error
+                // These failure diagnostics describe the raw Krylov solve. Optional
+                // direction postprocessing must not relabel its original outcome.
+                if (!gmres_result.success) {
+                    const float raw_krylov_error = std::clamp(gmres_result.rel_error, 0.0f, 1.0f);
+                    if (raw_krylov_error > 0.5f) {
+                        std::cerr << "[NEWTON] GMRES failed badly (rel_error=" << raw_krylov_error
                                   << "): " << gmres_result.message << std::endl;
                         {
                             // WHY zero progress. rel_error exactly 1 is the signature of a
@@ -10553,7 +10595,7 @@ public:
                                       << std::endl << std::flush;
                         }
                     } else {
-                        std::cerr << "[NEWTON] GMRES did not converge (rel_error=" << gmres_rel_error
+                        std::cerr << "[NEWTON] GMRES did not converge (rel_error=" << raw_krylov_error
                                   << ") but usable for inexact Newton: " << gmres_result.message << std::endl;
                     }
                 }
@@ -11378,7 +11420,7 @@ public:
             // whose stopping objective was met while rho_S >= eta is not converged and must be
             // judged by the same rule as any other solve that returned that rho_S.
             const bool total_failure_vs_b  =
-                !it.linear.entry_S_reached &&
+                !effective_entry_converged &&
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
             // R13.19 SELF-REVIEW (round 8, P1-A): a solve that CONVERGED ON ENTRY is not a
             // total failure, and after the P0-1 fix it would otherwise be flagged as one
@@ -11389,7 +11431,7 @@ public:
             // path under the opt-in r0 rule: a production side effect of a fix whose commit
             // message claimed only to change what is REPORTED.
             const bool total_failure_vs_r0 =
-                r0_measured && !it.linear.entry_S_reached &&
+                r0_measured && !effective_entry_converged &&
                 // "the solve did not reduce its own starting residual by 1%". The old first
                 // clause (raw > 1.0001*r0_ref) was dead: it implies this one.
                 gmres_raw_rel_error >= 0.99f * r0_ref;
@@ -11685,6 +11727,8 @@ public:
                             if (canonical_ok) {   // ru_guard_ok is inside the rule
                                 dK_scaled = dK_recovery;
                                 accepted_residual = R_trial;
+                                observed_K = K_trial.detach();
+                                observed_R = R_trial.detach();
                                 accepted_residual_norm = trial_norm_tensor;
                                 it.candidate.outcome = wrf::sdirk3::TrialOutcome::AcceptedRecovery;
                                 recovered_with_fallback = true;
@@ -12227,6 +12271,8 @@ public:
                     it.candidate.outcome = wrf::sdirk3::TrialOutcome::AcceptedTrust;
                     dK_scaled = dK_scaled_candidate;
                     accepted_residual = R_trial;
+                    observed_K = K_trial.detach();
+                    observed_R = R_trial.detach();
                     accepted_residual_norm = res_trial_tensor;
                     last_rho = rho_val;
 
@@ -12658,23 +12704,24 @@ public:
             }
         }
 
-        // STATS FIX: Extract final residual accurately even at debug_level=0
-        if (!stats_.newton_residuals.empty()) {
-            // Have scalar residuals from inner loop (need_scalar=true)
-            stats_.final_residual = stats_.newton_residuals.back();
-            stats_.final_residual_measured = true;
-        } else if (res_norm_detached.defined()) {
-            // Fast-path: single .item() on failure (debug_level=0 without adaptive)
-            torch::NoGradGuard no_grad;
-            // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
-            stats_.final_residual = res_norm_detached.to(torch::kCPU).item<float>();
-            stats_.final_residual_measured = true;
-        } else {
-            // Should never reach here, but fallback to tracked value
-            stats_.final_residual = last_res_norm;
-            stats_.final_residual_measured = true;
+        // A trial residual is reusable only if it belongs to the returned state.
+        // This comparison also covers damping and any post-trial projection without
+        // replaying the potentially stateful RHS on the failure path.
+        {
+            torch::NoGradGuard no_grad_failure_receipt;
+            if (observed_K.defined() && observed_R.defined() && torch::equal(K.detach(), observed_K)) {
+                auto residual = observed_R.clone();
+                apply_halo_zeroing(residual);
+                const auto rms = safe_tensor_norm(metric_scale_inv() * residual) /
+                                 std::sqrt(static_cast<float>(residual.numel()));
+                stats_.final_residual = guarded_item<float>(rms);
+                stats_.final_residual_measured = true;
+            } else {
+                stats_.final_residual = std::numeric_limits<float>::quiet_NaN();
+                stats_.final_residual_measured = false;
+            }
         }
-        
+
         // Debug: print convergence failure
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
             std::cerr << "\n=== NEWTON SOLVER FAILED TO CONVERGE ===" << std::endl;
