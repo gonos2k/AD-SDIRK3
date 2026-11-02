@@ -3,8 +3,8 @@
   "created_local": "2026-11-02T15:08:35.417023+09:00",
   "files": {
     "README.md": {
-      "bytes": 2441,
-      "sha256": "55a3fa8134b26d628f6b7bfc4b4db16a117a5649de9225e79175c6f3b89f9688"
+      "bytes": 2839,
+      "sha256": "84a5a04c2ce926a2036b79747a05e2c89a294eda40e868bf378621f4388e3a3b"
     },
     "attempt1/early_build_receipt.json": {
       "bytes": 68139,
@@ -152,5 +152,11 @@
     }
   },
   "external_binary_fixtures_included": false,
-  "reviewed_payload_files": 35
+  "reviewed_payload_files": 35,
+  "attribution_correction": {
+    "timestamp_local": "2026-11-02T23:31:24.698152+09:00",
+    "prior_manifest_sha256": "7c413c0e154cfcf23900a2a28b172b04f5e9ff9fafb4130d88e8008220579885",
+    "prior_manifest_copy": "../link_origin_o1_20261102/prior_manifest_as_published.json",
+    "scope": "README/index attribution annotation only; all original experimental records unchanged"
+  }
 }

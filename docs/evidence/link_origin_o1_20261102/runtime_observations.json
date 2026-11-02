@@ -1,0 +1,15 @@
+{
+  "current_RSL_seconds": [
+    146.37157
+  ],
+  "archived_RK3_RSL_seconds": [
+    0.557
+  ],
+  "performance_eligible": false,
+  "new_RK3_run": false,
+  "scope": "unpaired observations, not accepted runtime ratio",
+  "logs_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/native_regression/rsl.out.0000": "e1e85072659f5b0dbdae03e15aac45ff10d0b4769254e2ea6ca0148629f33e04",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/noise-cost-coupling-20261031/modal/runs/baseline_rk3/rsl.out.0000": "9a44b7039ebc44bf53e46a80132c4836fa6b8bc076f89c7a3a32e1a7c2eb2d5f"
+  }
+}

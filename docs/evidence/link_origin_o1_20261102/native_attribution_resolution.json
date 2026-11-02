@@ -1,0 +1,19 @@
+{
+  "status": "corrected_native_source_attribution_verified",
+  "created_local": "2026-11-02T23:28:14.150606+09:00",
+  "source_commit": "fcd58bc9aa77818e98fdb21f54aa375d66e3139d",
+  "executable_sha256": "79a1f00887f889d8ac944f168b040e9e2ab7f4a5f8bba345c5764d8b6d9a2185",
+  "prior_executable_sha256": "8bd1e2e3fa63f9233360d7d97dd3689ff3d505142bab73da75b02826e99b5c32",
+  "different_from_prior": true,
+  "build_receipt_sha256": "cde25e69bfc8a71e3245d82f4f1824447e5526f089fa324c9ff28e566f049c63",
+  "link_receipt_sha256": "340a62b865450fdca71eb732dd595167426642ff0df08abbafe15a2bdbb20f0d",
+  "symbol_origin_audit_sha256": "c71be9823aa1b5d8b95807a33d098890d448b6be84fe351e4aae4aaaec691519",
+  "native_validation_sha256": "bd7a6b812b13e4f65a748e44ac8d92ad4f9cbbc82ff411911947f7d31e8e08dd",
+  "runner_result_sha256": "d70cfdec54c52011994e3161bb1b5ae120bdbf7c09e266524f4ccb91b0b880d1",
+  "attempt_sha256": "d63b639c0c4a609911c27139a826d84e6e0e9cbb8e1a377f95184369d0cb34dd",
+  "full_map_sha256": "55987ff165e1873091a490a58e9df5c33ac9ab33f42d53e5802b2d58b1f53363",
+  "compressed_map_sha256": "1f903db587708e637c12a71e40362b4cb2f16019f27e84983b7bef7f5c23c134",
+  "compressed_bytes": 801792,
+  "uncompressed_bytes": 5284800,
+  "scope": "one h600 A9/P0 research step, current Newton/Tile symbol origins verified; not global convergence or performance acceptance"
+}

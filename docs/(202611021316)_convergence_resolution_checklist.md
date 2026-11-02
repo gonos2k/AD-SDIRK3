@@ -2,7 +2,8 @@
 
 작성: 2026-11-02T13:16:08.084142+09:00.
 최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
-최신 갱신: 2026-11-02T15:09:02.878814+09:00, 기준 main696def3b(PR338·339 병합).
+최신 갱신: 2026-11-02T23:31:24.698152+09:00, 기준 maineca8f6fc(PR340 병합).
+링크 귀속 정정·O1: [보고서]((202611022330)_link_origin_o1_resolution.md).
 이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
 Green·Red: GPT-6.1-Terra, medium.
 기준 자료는 사용자가 제공한 수렴 이론 검토 본문이다. sandbox 첨부 전체 파일은 로컬에서
@@ -31,7 +32,7 @@ T(실제 시간 지도) → A(오차 예산) → F(짧은 전방·장시간 수�
 | ID | 해소할 조건 | 최소 근거 | 상태 |
 |---|---|---|---|
 | R1 | 후처리된 실제 dK의 implemented A 잔차와 성공/품질 판정 일치 | production Direct-U/halo 경로 반례, S=I 및4I, 변경 없는 대조 | 완료: 실제 public 경로 시험101/101 |
-| R2 | raw Krylov receipt/warm-start와 실제 방향 지표 구분 | 원래 GMRESResult 보존, 실제 방향 log, entry exemption·trust/회복 소비자 대조 | 이번 범위 완료: raw 로그·실패 집계와 방향 실패 별도; 혼합 원인의 단일 추정은 하지 않음 |
+| R2 | raw Krylov receipt/warm-start와 실제 방향 지표 구분 | 원래 GMRESResult 보존, 실제 방향 log, entry exemption·trust/회복 소비자 대조 | 완료 범위: raw/방향 지표·집계 분리 및 no accepted update 종료 문구; 같은 iteration 상태를 표시 |
 | R3 | 반환 K의 final_residual은 그 K에서 관측한 같은 G_K·S·mask RMS | 한 번 갱신 후 예산 종료, adaptive/debug 별도, 독립 해석식 검산, 추가 RHS 없음 | 완료: adaptive on/off 독립 잔차 일치 |
 | R4 | 예외/NaN/zero-budget 반환의 잔차·측정 여부 진실성 | early-return 분기별 재현; 측정하지 않은0을 실제 잔차로 쓰지 않음 | 이번 범위 완료: 관측 tensor의 예외·NaN/Inf와 관측 전 예외/zero-budget을 분리 |
 | R5 | stage acceptance와 실패 정책을 경로별로 명시 | mode3 severe gate와 mode0/1/2 permissive 정책을 분리 | 3상태 소비·중단 규칙 연결 완료; 실제 혼합 MPI/예외 동시 중단은 미검증 |
@@ -46,8 +47,9 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
 
 ## O — 같은 residual·연산자·문맥
 
-- [ ] O1 mode3의 G_K(K)=K−F_I(Q+hγK;c), 고정 c, projection, S, mask를 하나의
-  실제 함수 정의에 연결한다. state residual G_Y=hγG_K와 rate residual을 혼동하지 않는다.
+- [x] O1 정의·소스 대응: 실제 stage base B, Y=B+aK, G_K=K−F_C(Y), G_Y=aG_K,
+  projection·문맥·S/H/N 및 GMRES/merit norm 차이를 [계약](design/mode3_residual_operator_contract.md)에 고정했다.
+  고정 c와 미분 동일성의 증명은 O2/O3, 허용 공간의 작용은 O4에 남긴다.
 - [ ] O2 활성 참조/omega/halo/cache 경로의 상태 의존성과 AD 연결을 확정한다.
   frozen reference가 수학적 독립 입력인지, update를 미분해야 하는지 경로별로 구분한다.
 - [ ] O3 native JVP의 가법성/동차성·residual 미분 일치·오차 gap을 관련 방향에서 확인한다.
@@ -97,11 +99,13 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
   restart 상태 이력 미검증의 이어붙이기나 강제 감쇠로 해결됐다고 처리하지 않는다.
 
 R1과 R3의 이번 변경 범위는 완료다. Direct-U/S=4/실제 halo/warm-entry 및 한 갱신 뒤
-실패 반환 시험을 통과했다. 보관 A9/P0 구성의 h600 한 스텝(현재 기본 구성 인증 아님)은
-3stage 수렴·wrapper3/0·끝174숫자 배열 parity·저장 상태 유한값과 RK3 거리 유지로 확인했다.
+실패 반환 시험을 통과했다. 이전 PR340 native 실행파일은 PR339와 byte-identical하여 c7 코드 검증 귀속을 철회했다.
+단일 archive와 실제 Newton/Tile 메서드 출처를 확인한 fcd58bc9의 새 h600 한 스텝에서
+3stage 수렴·wrapper3/0·끝174숫자 배열 parity·저장 비교장 유한값과 RK3 거리 유지를 확인했다.
+이는 A9/P0 연구 구성의 제한 회귀이며 현재 기본 구성 전체 인증은 아니다.
 이번 후속은 R4의 특정 예외·NaN/Inf·zero-budget 및 관측 전 예외, R2의 raw/방향 로그·집계,
 R5의 3상태 정책 연결을 닫았다. 생산 API의 Impl 예외 전파는 유지하며, 혼합 MPI 실행과
 rank-local 예외의 동시 중단, Impl 반환 후 public wrapper 예외는 이번 범위 밖이다.
-다음 우선순위는 O1의 실제 residual·고정 문맥·projection·S·mask 함수 정의다.
+O1의 소스 정의는 완료했고, 다음은 O2/O3/O4의 실제 문맥·제약 공간·residual/JVP 연결이다.
 E/T/A/F의 증명·실험이 모두 완료된 것처럼 묶지 않는다.
 검증 결과와 source/executable/input hash는 별도 진행 보고서에 연결해 상태를 한 항목씩 갱신한다.

@@ -1,0 +1,12 @@
+{
+  "status": "reused_not_rerun",
+  "prior_focused_receipt_sha256": "ead731b427f3f84ccac91cf6ab847c6b0e2c2785b15cbd423a9f5194a559b1fc",
+  "counts": [
+    101,
+    210,
+    12
+  ],
+  "source_change_scope": "Newton diagnostic string/comments and Darwin link profile; no numerical/control-flow change",
+  "test_sources_unchanged": true,
+  "fresh_evidence": "current archive recompiled Newton; link map binds actual method symbols; registered native one-step follows"
+}

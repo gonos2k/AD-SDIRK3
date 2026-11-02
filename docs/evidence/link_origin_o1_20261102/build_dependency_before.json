@@ -1,0 +1,14 @@
+{
+  "base": "eca8f6fcbc91c42bcea9bda4375ae6cd333a238c",
+  "files": {
+    "arch/configure.defaults": "3e22757308ded58ac7120612d3a632acbcfcc0e6ef5f85a791b3254e2f922082",
+    "main/Makefile": "5e0a93c74055dd113038ee9f226e8f82b58816063b336d9c7f8221115a43b45f",
+    "arch/postamble": "b954908012e2a9dc64f3aa2efd7b1d78a0429d849611b8d1d4f7d7724a1cf4a4"
+  },
+  "source_edges": [
+    "Darwin GNU/OpenMPI SDIRK3 stanza: LDFLAGS_LOCAL supplies early archive; LIB_BUNDLED supplies explicit archive",
+    "arch/postamble: LDFLAGS includes LDFLAGS_LOCAL; LIB includes LIB_BUNDLED",
+    "main/Makefile: all eight executable link recipes consume LDFLAGS then objects then LIB"
+  ],
+  "graph_gap": "Make macro expansion is manually source-audited; AST graph not proof of archive selection."
+}

@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "configure_defaults_sha256": "d822476d3541d71d545ceeb6930626c71ff52a02f6b0da7434adb9c86ae83453",
+  "expanded_fragment_sha256": "a9d912cb829ded193689d2b8c371fc51af1462d4ee80b71e8202bfc9e773f687",
+  "actual_make_argv": [
+    "make",
+    "--no-print-directory",
+    "-f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/darwin_link_contract.mk"
+  ],
+  "sdikr3_library_candidates": 1,
+  "all_main_link_recipes_use_LIB": true,
+  "limit": "Make expansion plus source inspection of eight main recipes; not separate native executions of each target"
+}

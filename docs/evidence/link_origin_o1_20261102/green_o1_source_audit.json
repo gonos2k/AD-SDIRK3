@@ -1,0 +1,26 @@
+{
+  "timestamp_local": "2026-11-02T23:12:21.724697+09:00",
+  "base": "eca8f6fc",
+  "source_head": "fcd58bc9aa77818e98fdb21f54aa375d66e3139d",
+  "graph": "Parent reports pre-change 39-source graph pin verification; intervening Newton change inspected and limited to zero-update logging/comments.",
+  "source_sha256": {
+    "tile": "194365634d17e9a5eaefc38e577bccd0b6c606f4ace3de4cabdf102981bb01ad",
+    "newton": "9c2397aacb7aceca00b4d23e67467505118bca8ae399baa5b865e9235b212441",
+    "composition": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907"
+  },
+  "contract": "docs/design/mode3_residual_operator_contract.md",
+  "contract_sha256": "3203e708174a8a97d37cec070962d68ec9bba80c190f4da74b30d10a8782b8d5",
+  "source_findings": [
+    "Mode 3 Newton callback is ImplicitOnly and excludes direct F_phys; slow tendency handles physics by tangent and activation gates.",
+    "B is assembled from prior explicit/implicit tendencies and is the actual post-processing Newton base.",
+    "Ordinary packed RHS projects input/output; full-halo callback has a separate combine path.",
+    "Newton scaled RMS masks residual while GMRES rhs and scaled operator are unmasked; post-GMRES step is masked.",
+    "Reference changes when omega_update_ref_per_newton enabled, so fixed context is a conditional obligation.",
+    "Preconditioned caller uses FGMRES; conditional D-weighted internal relative objective differs from final D-unweighted relative success. Packed 1-D zero_halo_regions is a no-op. Stage-WRMS objective is retired."
+  ],
+  "limits": [
+    "Algebraic coordinate identity assumes same B, a and context and a nonzero a; no floating-point bitwise claim.",
+    "No proof of AD chain rule, JVP identity, fixed mutable context, admissible-subspace preservation, weighted adjoint, MPI behavior, stability or forecast correctness.",
+    "No tests, build, or model run."
+  ]
+}

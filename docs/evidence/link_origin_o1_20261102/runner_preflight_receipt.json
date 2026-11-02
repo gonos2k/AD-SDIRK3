@@ -1,0 +1,12 @@
+{
+  "time": "2026-11-02T23:22:32.624278+09:00",
+  "status": "passed",
+  "error": null,
+  "runner_sha256": "6148975b5087393b6d9f9aecfdf6539713a2b30743ab7b26ef1103c9b6ddab58",
+  "symbol_origin_audit_sha256": "c71be9823aa1b5d8b95807a33d098890d448b6be84fe351e4aae4aaaec691519",
+  "build_receipt_sha256": "cde25e69bfc8a71e3245d82f4f1824447e5526f089fa324c9ff28e566f049c63",
+  "link_receipt_sha256": "340a62b865450fdca71eb732dd595167426642ff0df08abbafe15a2bdbb20f0d",
+  "map_sha256": "55987ff165e1873091a490a58e9df5c33ac9ab33f42d53e5802b2d58b1f53363",
+  "executable_sha256": "79a1f00887f889d8ac944f168b040e9e2ab7f4a5f8bba345c5764d8b6d9a2185",
+  "scope": "read-only verify_build_link; no main or model run"
+}
