@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-11-02T23:10:03.948479+09:00",
+  "conclusion": "Prior executable reused byte-for-byte; PR340 native run cannot validate new production changes. Specific archive extraction mechanics not independently proven; relink with single intended archive and map.",
+  "evidence": {
+    "old_executable": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_build/wrf.exe",
+    "new_claimed_executable": "/Users/yhlee/AD-SDIRK3-review-evidence/early-residual-status-20261102/native_build/wrf.exe",
+    "both_executable_sha256": "8bd1e2e3fa63f9233360d7d97dd3689ff3d505142bab73da75b02826e99b5c32",
+    "old_archive_sha256": "8c489ea19ac8933c67545ff7e2365a14451a8749f419c0c6b09ab965d5e5a0b4",
+    "new_archive_sha256": "d116d7ee84d341ebfd46a2802605cbc542cda4cdf0c9507e591718a7bf33a444",
+    "old_newton_object_sha256": "edabda617502be618aed0dd8eb4fc799edd9728dc40d9a9e687c52bde74952c2",
+    "new_newton_object_sha256": "d73780bd39118bd78f2de97a0a995d3a470af0f03f46ff35fbd9e303cedb02ad",
+    "string_evidence": "Current Newton object contains direction_rel_error and comma-prefixed raw_rel_error diagnostics; claimed executable does not.",
+    "link_order": "native_link_receipt.json includes old -L and -lwrf_sdirk3_libtorch before explicit new archive",
+    "linker_version": "Apple ld 27106.1"
+  },
+  "actions": "Read-only inspection; no relink, build or model run."
+}

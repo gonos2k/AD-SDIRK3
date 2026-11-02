@@ -1,5 +1,10 @@
 # Early failure residual evidence
 
+**Attribution correction:** the original native executable is byte-identical to PR339.
+Its attribution to c7 is withdrawn. Direct-archive focused tests remain valid. See
+[corrected native evidence](../link_origin_o1_20261102/native_attribution_resolution.json)
+and [the follow-up report](../../(202611022330)_link_origin_o1_resolution.md). Original run/array observations below remain historical.
+
 Source base: 696def3b (PR338/339). Final production/test revision: c7a282e3.
 Green/Red model: GPT-6.1-Terra medium.
 

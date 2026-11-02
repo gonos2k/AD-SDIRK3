@@ -1,0 +1,13 @@
+{
+  "timestamp_local": "2026-11-02T23:18:23.791031+09:00",
+  "status": "prior_native_attribution_withdrawn",
+  "prior_claimed_source": "c7a282e3",
+  "prior_executable_sha256": "8bd1e2e3fa63f9233360d7d97dd3689ff3d505142bab73da75b02826e99b5c32",
+  "byte_identical_to": "PR339 native executable; exact hashes checked against both files",
+  "what_remains_valid": "old binary executed one h600 step; recorded output comparison is an observation of that binary; direct-new-archive focused tests remain valid",
+  "what_is_withdrawn": "claim that prior native run validated c7 source",
+  "old_evidence_unmodified": true,
+  "corrected_link_receipt_sha256": "340a62b865450fdca71eb732dd595167426642ff0df08abbafe15a2bdbb20f0d",
+  "corrected_executable_sha256": "79a1f00887f889d8ac944f168b040e9e2ab7f4a5f8bba345c5764d8b6d9a2185",
+  "corrected_native_pending": true
+}

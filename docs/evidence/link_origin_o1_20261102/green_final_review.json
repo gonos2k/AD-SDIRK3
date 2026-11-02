@@ -1,0 +1,19 @@
+{
+  "review": "Green final O1 and native link-origin evidence review",
+  "timestamp_local": "2026-11-02T23:32:39.409529+09:00",
+  "source_commit": "fcd58bc9aa77818e98fdb21f54aa375d66e3139d",
+  "blocking_findings": [],
+  "checks": [
+    "All 38 new manifest entries and 37 current old manifest entries have matching byte lengths and SHA-256. Original 37-entry published manifest is preserved; only README entry differs from old manifest, alongside index metadata.",
+    "Prior report and old evidence README prominently withdraw c7 native executable attribution and link to corrected evidence.",
+    "Compressed full link map decompresses to recorded SHA; symbol origin audit identifies direct Tile and Newton methods in the current archive.",
+    "Native validation records one h600 A9/P0 research step: three converged stages, 174 numeric endpoint arrays bitwise matching older-binary A9, 21 initial fields/coefficients and unchanged distances to archived RK3. Three referenced output file hashes match. Numerical comparison was not rerun.",
+    "Focused 101/210/12 receipt is explicitly reused and not rerun; historical failed fixture remains preserved in old evidence.",
+    "O1 closes source definition and conditional algebra only; O2/O3/O4 and E/T/A/F remain open. Report disclaims speedup, noise improvement and global convergence claims."
+  ],
+  "limits": [
+    "Review checks preserved records, hashes and stated scope, not independent replay or numerical field recomputation.",
+    "Full WRF clean rebuild, default configuration, multi-rank and long forecast are outside native evidence scope."
+  ],
+  "actions": "No tests, model runs, builds, or production edits."
+}

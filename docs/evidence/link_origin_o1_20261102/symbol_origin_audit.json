@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "link_receipt_sha256": "340a62b865450fdca71eb732dd595167426642ff0df08abbafe15a2bdbb20f0d",
+  "direct_method_entries": [
+    {
+      "map_line": "0x1028F018C\t0x00009E58\t[465] __ZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&)"
+    },
+    {
+      "map_line": "0x102AC3C54\t0x0003F068\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)"
+    }
+  ],
+  "archive_member_sha256": {
+    "wrf_sdirk3_tile_unified_impl.o": "8187aebc8b65d2b08134a1c31e7d4caacd7ea1acaea8f5b57a7aaac7913d7317",
+    "wrf_sdirk3_newton_solver.o": "5d860b1eaabcfdb3fcb1f6ec36ae4bc8ab01e7118befff0fa672315af8d3a6e2"
+  },
+  "all_sdirk_archive_origins_current": true,
+  "executable_sha256": "79a1f00887f889d8ac944f168b040e9e2ab7f4a5f8bba345c5764d8b6d9a2185",
+  "map_sha256": "55987ff165e1873091a490a58e9df5c33ac9ab33f42d53e5802b2d58b1f53363",
+  "full_map_bytes": 5284800,
+  "filter": "direct _ZN method symbols; exclude _ZZ local lambdas and .cold clones"
+}

@@ -1,0 +1,60 @@
+{
+  "status": "registered",
+  "created_local": "2026-11-02T23:18:53.674194+09:00",
+  "source_commit": "fcd58bc9aa77818e98fdb21f54aa375d66e3139d",
+  "maximum_native_attempts": 1,
+  "retry": false,
+  "performance_eligible": false,
+  "purpose": "corrected single-link h600 A9/P0 numerical regression; archived A9 control is older binary, not PR340 c7 executable evidence",
+  "setup": {
+    "grid": [
+      40,
+      80,
+      64
+    ],
+    "dt": 600,
+    "MPI": 1,
+    "Torch_threads": [
+      1,
+      1
+    ],
+    "newton_atol": 1e-09,
+    "newton_rtol": 0,
+    "steps": 1
+  },
+  "resources": {
+    "disk_floor_bytes": 5368709120,
+    "rank_post_peak_RSS_cap_bytes": 4294967296,
+    "MPI_timeout_s": 360,
+    "launcher_wait_s": 390
+  },
+  "numerical_followup": [
+    "compare 21 initial state fields",
+    "unique wrapper 3/0 and stages 2/3/4",
+    "finite fields and 174 endpoint array parity against archived old-binary A9",
+    "same-setup archived RK3 field comparison; no new RK3"
+  ],
+  "immutable_inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/run_native_regression.py": "6148975b5087393b6d9f9aecfdf6539713a2b30743ab7b26ef1103c9b6ddab58",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/validate_native.py": "cb6276d8f103ad997c58402f9b76697745a50ab90817603c006dd317691ed3eb",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/build_receipt.json": "cde25e69bfc8a71e3245d82f4f1824447e5526f089fa324c9ff28e566f049c63",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/link_receipt.json": "340a62b865450fdca71eb732dd595167426642ff0df08abbafe15a2bdbb20f0d",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/wrf_link.map": "55987ff165e1873091a490a58e9df5c33ac9ab33f42d53e5802b2d58b1f53363",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/link.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/link.stderr.log": "2ce4f6fb14ef101ecc56f45f44489d5186126590fff231ef53221b7e3b86bc3a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/link_driver_probe.txt": "a6178ef8e29c91461eeff24cbcf74f818822c567798efb39af3841e529cda4a9",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/native_build/libwrf_sdirk3_libtorch.a": "978d2a81e0153d71185fa48d2d98412f5355b3aa3459ef924e3ac31253d0ced4",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/native_build/wrf.exe": "79a1f00887f889d8ac944f168b040e9e2ab7f4a5f8bba345c5764d8b6d9a2185",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/namelist.input": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/runs/control/wrfinput_d01": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/reference/wrfout_d01_0001-01-01_00:00:00": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+    "/private/tmp/link-origin-o1-20261102/external/libtorch_wrf/sdirk3/tests/test_newton_early_residual.cpp": "82bcbbffafc33e07e6da1d27446f6b0cd3f08b9d1779d2809113a3a8daa3f9e8",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/symbol_origin_audit.json": "c71be9823aa1b5d8b95807a33d098890d448b6be84fe351e4aae4aaaec691519",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/graph_after_pins.json": "a06d5bb4f6e2307f7b3d5be9f76e2d66ecfd3f68b7729a0d95a57cb5bd2da784",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/runner_preflight_receipt.json": "f3dac9fd3ba82b212656cd092b6e8f54e7118b14f7aac4b1b32e2be7af2bf39b",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/link-origin-o1-20261102/focused_evidence_reuse.json": "a60c43ff6c6c7e5fce85ca9c7c50d4abb30e89d072a14c66c3e28cfae7a4cbfd",
+    "/private/tmp/link-origin-o1-20261102/arch/configure.defaults": "d822476d3541d71d545ceeb6930626c71ff52a02f6b0da7434adb9c86ae83453"
+  },
+  "model_run": false,
+  "registered_local": "2026-11-02T23:23:25.409386+09:00"
+}

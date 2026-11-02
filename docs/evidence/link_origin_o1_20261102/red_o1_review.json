@@ -1,0 +1,24 @@
+{
+  "timestamp_local": "2026-11-02T23:14:50.254168+09:00",
+  "worktree": "/private/tmp/link-origin-o1-20261102",
+  "head": "fcd58bc9aa77818e98fdb21f54aa375d66e3139d",
+  "review": "independent source audit of O1 contract, no code modification",
+  "sha256": {
+    "docs/design/mode3_residual_operator_contract.md": "3203e708174a8a97d37cec070962d68ec9bba80c190f4da74b30d10a8782b8d5",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "194365634d17e9a5eaefc38e577bccd0b6c606f4ace3de4cabdf102981bb01ad",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "9c2397aacb7aceca00b4d23e67467505118bca8ae399baa5b865e9235b212441",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ark324_composition.h": "8ebf4d680c79a0103522b68c278f5145e2c2dd1c5007fd17e684014411a2a907"
+  },
+  "findings": [
+    "K-to-Y identity and mode-3 fast physics exclusion match source with fixed callback context and nonzero stage coefficient; equality is algebraic, not a numerical equivalence proof.",
+    "Input/output packed Q, separate full-halo map, reference mutation, and masked Newton versus unmasked scaled Krylov distinctions match inspected source.",
+    "Original draft omitted right-preconditioned FGMRES/conditional D-weighted internal objective versus returned unweighted success, 1-D halo helper no-op, optional block-max gate and unscaled fallback; Green amended the document and revised text was checked against source.",
+    "Newton/GMRES scale, denominator and mask domains differ; no equivalence of full constrained GMRES operator established."
+  ],
+  "open": [
+    "O2/O3 fixed-context directional/JVP equivalence, boundary admissibility, mutable-state behavior and full-halo correctness remain unproven.",
+    "Weighted adjoint, stability, forecast behavior and model validation remain open.",
+    "Source navigation only; no graph extraction verification, tests, build, native or model run in this review."
+  ],
+  "doc_diff_check": "git diff --check exit 0"
+}

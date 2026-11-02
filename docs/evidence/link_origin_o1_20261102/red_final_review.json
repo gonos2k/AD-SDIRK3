@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-02T23:32:28.366733+09:00",
+  "status": "PASS_LIMITED_SCOPE",
+  "blockers": [],
+  "checks": [
+    "public manifest 38/38 sizes and SHA-256 match",
+    "compressed and decompressed map SHA match; direct Tile and Newton method entries map to file IDs 465 and 466 in single current archive",
+    "ar -p hashes of both specified members match independent symbol audit",
+    "link receipt, executable, attempt, raw result, and validation hashes match attribution resolution; attempt identifies corrected executable and validation cites raw result",
+    "previous attribution withdrawn; scope remains one h600 one-rank A9/P0 research step, no default or long-forecast/performance proof"
+  ],
+  "limitations": [
+    "Map establishes linked object provenance, not formal numerical correctness or execution of every error path.",
+    "No build, tests or model repeated by reviewer."
+  ]
+}
