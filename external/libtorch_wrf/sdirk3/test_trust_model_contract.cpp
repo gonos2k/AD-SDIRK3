@@ -707,6 +707,52 @@ int main() {
                 throw;
             }
         }
+        // On a 4x4 tile the ru block is 4x1x5: six cells remain
+        // active after a one-cell halo is removed, and fourteen are masked.
+        {
+            using namespace wrf::sdirk3;
+            const auto saved_config = g_sdirk3_config;
+            std::ostringstream log;
+            auto* saved_stream = std::cerr.rdbuf(log.rdbuf());
+            try {
+                g_sdirk3_config.debug_level = 1;
+                g_sdirk3_config.jvp_method = decltype(g_sdirk3_config)::JVP_DUAL_NUMBER;
+                g_sdirk3_config.use_autograd = false;
+                g_sdirk3_config.precond_type = 0;
+                g_sdirk3_config.gmres_warmstart = false;
+                g_sdirk3_config.direct_u_solve_thresh = 0.0f;
+                g_sdirk3_config.halo_width = 1;
+                WRFNewtonKrylovOptions options;
+                options.nx = options.ny = 4;
+                options.nz = 1;
+                options.nx_u = options.ny_v = 5;
+                options.nz_w = 2;
+                options.is_multi_tile = true;
+                options.use_preconditioner = false;
+                options.use_adaptive_tolerances = false;
+                options.max_newton_iter = 1;
+                options.gmres_restart = 10;
+                options.max_krylov_iter = 20;
+                options.newton_tol = options.krylov_tol = 1e-6f;
+                const auto layout = StateLayout::from_grid_dims(4, 4, 1, 5, 5, 2);
+                auto U = torch::zeros({layout.total_size}, torch::kFloat64);
+                U.slice(0, 0, 20).fill_(1.0);
+                auto history = torch::zeros({1, layout.total_size}, torch::kFloat64);
+                const auto rhs = [](const torch::Tensor& x) { return 0.9 * x; };
+                WRFNewtonKrylovSolver solver(options);
+                solver.set_physics_scaling(torch::ones_like(U));
+                solver.solve_stage_with_status(U, history, rhs, 1.0, 1.0, 1);
+                check(log.str().find("[HALO MASK] Activated") != std::string::npos &&
+                      check_direction_receipt(log.str(), std::sqrt(14.0 / 20.0)),
+                      "halo masking reports the actual direction's independently counted residual");
+                g_sdirk3_config = saved_config;
+                std::cerr.rdbuf(saved_stream);
+            } catch (...) {
+                g_sdirk3_config = saved_config;
+                std::cerr.rdbuf(saved_stream);
+                throw;
+            }
+        }
         const auto identity = run_linear_newton(0.0f, true);
         check(identity.second.find("[LINEAR DIRECTION] ") == std::string::npos,
               "unchanged GMRES direction emits no modification receipt");
@@ -897,7 +943,7 @@ int main() {
               "fallback result is invariant under equivalent physical-unit rescaling");
     }
 
-    const int kExpected = 96;
+    const int kExpected = 101;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;
