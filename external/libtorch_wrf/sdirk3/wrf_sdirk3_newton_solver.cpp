@@ -12597,8 +12597,8 @@ public:
                 float dK_scaled_norm_check = dK_scaled.norm().to(torch::kCPU).item<float>();
                 if (dK_scaled_norm_check < 1e-15f) {
                     stagnation_count++;
-                    // v7-fix: GMRES total failure → K unchanged → next iter identical.
-                    // Break immediately instead of waiting for stall_limit (saves ~4s/iter).
+                    // A standing failure with no accepted update leaves K unchanged.
+                    // Break immediately rather than repeating the same iteration.
                     if (it.failure_stands()) {
                         // v20.14r62: Stage-2 hopeless promotion at N=0.
                         // Promote capped Stage-2 budget mode immediately so the next
@@ -12622,14 +12622,18 @@ public:
                             }
                         }
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                            std::cerr << "[Newton] GMRES total failure + zero update at iter "
-                                      << newton_iter << ". K unchanged → breaking early." << std::endl;
+                            std::cerr << "[Newton] no accepted update at iter " << newton_iter
+                                      << ": raw_krylov_success=" << raw_krylov_success
+                                      << " direction_modified=" << direction_modified
+                                      << " effective_success=" << gmres_success
+                                      << " entry_check_rejected=" << it.candidate.entry_check_rejected
+                                      << "; K unchanged, breaking early." << std::endl;
                         }
                         // R13.17: the exit `not_recorded` was reporting at dt=600.
                         // R13.18 (round 7, P0-B) -- NAMED FOR WHAT IT MEASURES. This site is
                         // gated by ||dK|| < 1e-15 (the accepted update is numerically ZERO) AND
-                        // `it.failure_stands()`, which under the default configuration is
-                        // `raw > 1 || rel >= 0.999` on ||r||/||b||. It therefore does NOT mean
+                        // `it.failure_stands()`, which can reflect the effective direction's
+                        // residual ratio or a rejected entry check. It does NOT mean
                         // "the linear solve produced nothing": in the 12x-budget run that carried
                         // this stamp the worst solve removed 13.8% of its own residual. It was
                         // called LinearSolveFailure and used to retract a standing claim; the
