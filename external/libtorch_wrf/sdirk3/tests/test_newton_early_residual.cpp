@@ -64,6 +64,49 @@ int main() {
             ok &= pass;
         }
     }
+    // Direct API edge case only: zero Newton budget is not a model configuration claim.
+    for (bool production : {false, true}) {
+        auto zero_opt = opt;
+        zero_opt.max_newton_iter = 0;
+        WRFNewtonKrylovSolver solver(zero_opt);
+        solver.set_physics_scaling(scale);
+        const auto rhs = [](const torch::Tensor& x) { return 2.0 * x; };
+        WRFNewtonKrylovSolver::NewtonResult result{};
+        if (production) (void)solver.solve_stage(u, k, rhs, 0.125, 0.25, 1);
+        else result = solver.solve_stage_with_status(u, k, rhs, 0.125, 0.25, 1);
+        const auto stats = solver.get_stats();
+        const bool pass = !stats.converged && !stats.final_residual_measured &&
+            std::isnan(stats.final_residual) &&
+            (production || (!result.converged && std::isnan(result.final_residual)));
+        std::cout << (pass ? "PASS" : "FAIL") << " zero_budget production="
+                  << production << '\n';
+        ok &= pass;
+    }
+    // FP64 residual is finite, but its unscaled norm overflows the float receipt.
+    // The already-computed scaled RMS remains finite and is the final metric.
+    for (bool production : {false, true}) {
+        WRFNewtonKrylovSolver solver(opt);
+        solver.set_physics_scaling(torch::full_like(u, 1.0e40));
+        int calls = 0;
+        const auto rhs = [&](const torch::Tensor& x) {
+            ++calls;
+            return torch::full_like(x, 1.0e39);
+        };
+        WRFNewtonKrylovSolver::NewtonResult result{};
+        torch::Tensor returned;
+        if (production) returned = solver.solve_stage(u, k, rhs, 0.125, 0.25, 1);
+        else { result = solver.solve_stage_with_status(u, k, rhs, 0.125, 0.25, 1); returned = result.K; }
+        const auto stats = solver.get_stats();
+        const bool pass = returned.defined() && torch::equal(returned, k.select(0, 0)) &&
+            calls == 1 && !stats.converged && stats.initial_residual_measured &&
+            !stats.initial_residual_finite && stats.final_residual_measured &&
+            std::isfinite(stats.final_residual) && std::abs(stats.final_residual - 0.1f) < 1e-6f &&
+            stats.newton_termination == static_cast<int>(NewtonTerminationReason::NonfiniteResidual) &&
+            (production || (!result.converged && result.final_residual == stats.final_residual));
+        std::cout << (pass ? "PASS" : "FAIL") << " scaled_overflow production="
+                  << production << " calls=" << calls << " final=" << stats.final_residual << '\n';
+        ok &= pass;
+    }
     g_sdirk3_config = saved;
     return ok ? 0 : 1;
 }
