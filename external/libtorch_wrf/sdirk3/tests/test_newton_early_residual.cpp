@@ -43,7 +43,7 @@ int main() {
             else { result = solver.solve_stage_with_status(u, k, rhs, 0.125, 0.25, 1); returned = result.K; }
             const auto stats = solver.get_stats();
             const float expected = (2.0 * u / scale).norm().item<float>() / std::sqrt(10.0f);
-            bool pass = returned.defined() && torch::equal(returned, k) && !stats.converged &&
+            bool pass = returned.defined() && torch::equal(returned, k.select(0, 0)) && !stats.converged &&
                 stats.newton_iterations == 1 && stats.initial_residual_measured &&
                 stats.final_residual_measured;
             if (kind == 0) {
