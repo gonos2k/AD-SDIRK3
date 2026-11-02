@@ -1,0 +1,12 @@
+{
+  "cwd": "/private/tmp/matched-pressure-cost-20261102",
+  "command": "clang++ -std=c++17 -O0 -DWRF_SDIRK3_LINEAR_DELAY_AUDIT -DWRF_SDIRK3_PRESSURE_STAGE_PROBE -I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include -I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include/torch/csrc/api/include external/libtorch_wrf/sdirk3/tests/test_matched_capture_policy.cpp -L/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib -Wl,-rpath,/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/lib -ltorch -ltorch_cpu -lc10 -o /private/tmp/test_matched_capture_policy && /private/tmp/test_matched_capture_policy",
+  "test_sha256": "f103fe80e6df58d55884a84ac9026a3e34c971102b2b2ec6dde71993f081a6fa",
+  "header_sha256": "2fcc3ecb6c49bb344d8eac1412d04b6f63094e4243bc5d59e848ad0da571d40b",
+  "binary_sha256": "dc68705c8972c833690515dff944c17eea1603288868a1479f5b41576ae7bfb4",
+  "exit_code": 0,
+  "output": "matched capture policy passed",
+  "warnings": "two upstream PyTorch C++20 bit-field extension warnings",
+  "initial_compile": "failed because PRESSURE_STAGE_PROBE macro was omitted; corrected command above",
+  "model_run": false
+}

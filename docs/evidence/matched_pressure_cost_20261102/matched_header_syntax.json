@@ -1,0 +1,10 @@
+{
+  "cwd": "/private/tmp/matched-pressure-cost-20261102",
+  "header_sha256": "fda17270921a32b5b2e58e116e68fc55118e0b41311d8335c8aa0ea9fcbaa690",
+  "test_sha256": "9c32a8da02bca776f04d2cac27a86b0d9982087b7b6b8c66581d7a7a50bd3824",
+  "exit_code": 0,
+  "warnings": "two upstream PyTorch C++20 bit-field extension warnings",
+  "model_run": false,
+  "command": "clang++ -std=c++17 -fsyntax-only -DWRF_SDIRK3_MATCHED_PRESSURE_PROBE -DWRF_SDIRK3_PRESSURE_A5 -DWRF_SDIRK3_PRESSURE_REFERENCE_STAGE -DWRF_SDIRK3_PRESSURE_STAGE_PROBE -DWRF_SDIRK3_LINEAR_DELAY_AUDIT -I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include -I/Users/yhlee/Library/Python/3.10/lib/python/site-packages/torch/include/torch/csrc/api/include external/libtorch_wrf/sdirk3/tests/test_matched_pressure_sketch.cpp",
+  "scope": "syntax only, macro-enabled standalone inclusion"
+}

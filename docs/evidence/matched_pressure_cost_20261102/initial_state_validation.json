@@ -1,0 +1,69 @@
+{
+  "status": "passed",
+  "reference_label": "archived_rk3",
+  "labels": [
+    "archived_rk3",
+    "initial_capture_failure",
+    "corrected_matched"
+  ],
+  "timestamp": "0001-01-01_00:00:00",
+  "source_kind": "wrfout",
+  "gate_scope": "post-initialization first history frame",
+  "grid": {
+    "nx": 40,
+    "ny": 80,
+    "nz": 64,
+    "dx_m": 100000.0,
+    "dy_m": 100000.0
+  },
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "fields_checked": [
+    "DN",
+    "DNW",
+    "F",
+    "MAPFAC_M",
+    "MAPFAC_MX",
+    "MAPFAC_MY",
+    "MAPFAC_U",
+    "MAPFAC_V",
+    "MU",
+    "MUB",
+    "P",
+    "PB",
+    "PH",
+    "PHB",
+    "QVAPOR",
+    "T",
+    "U",
+    "V",
+    "W",
+    "ZNU",
+    "ZNW"
+  ],
+  "signed_zero_equivalent": true,
+  "helper_sha256": "823ed95d2b312eb7e9ec3719dd13cc6d84f84ab0c87439ffd0895d21f9dd15c3",
+  "scope": "post-initialization T0 only; no RK3 forecast/time comparison",
+  "state_files": {
+    "archived_rk3": [
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/linear-delay-audit-20261101/reference/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "bytes": 1989217
+      }
+    ],
+    "initial_capture_failure": [
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "bytes": 1989217
+      }
+    ],
+    "corrected_matched": [
+      {
+        "path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/wrfout_d01_0001-01-01_00:00:00",
+        "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+        "bytes": 1989217
+      }
+    ]
+  }
+}

@@ -1,10 +1,10 @@
 #ifndef WRF_SDIRK3_TERMINAL_JVP_PROBE_H
 #define WRF_SDIRK3_TERMINAL_JVP_PROBE_H
 
-#if defined(WRF_SDIRK3_TERMINAL_JVP_PROBE) && !defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT)
+#if (defined(WRF_SDIRK3_TERMINAL_JVP_PROBE) || defined(WRF_SDIRK3_MATCHED_PRESSURE_PROBE)) && !defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT)
 #error "terminal JVP probe requires WRF_SDIRK3_LINEAR_DELAY_AUDIT"
 #endif
-#ifdef WRF_SDIRK3_TERMINAL_JVP_PROBE
+#if defined(WRF_SDIRK3_TERMINAL_JVP_PROBE) || defined(WRF_SDIRK3_MATCHED_PRESSURE_PROBE)
 #include <torch/torch.h>
 #include <sys/resource.h>
 #include <fcntl.h>

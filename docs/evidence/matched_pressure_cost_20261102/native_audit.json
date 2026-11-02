@@ -1,0 +1,139 @@
+{
+  "status": "pass",
+  "errors": [],
+  "blocks": [
+    {
+      "commit": "11b71a6b5854afa047fe3bee2b5086fe458d9c66",
+      "registration_sha256": "48a0788cdf44c40b779113123f22725434b8862473aaa8101cb2ae8294779a68",
+      "build_receipt_sha256": "c0697a852c0e6e891b1e343602799ff82dbc676d74f10fe55eb29051e2d8c389",
+      "executable_sha256": "3bc0fb9d7e5d789020f86ad773bcc20207119d495734074a1a39b9afffebfa65",
+      "archive_sha256": "e907a0c083509f270af720ba6bf96c7b7e52b34c9adcc531cc6b364102043daf",
+      "immutable_inputs_checked": 20,
+      "immutable_mismatches": [],
+      "object_count": 31,
+      "recompiled": [
+        "wrf_sdirk3_tile_unified_impl.cpp",
+        "wrf_sdirk3_newton_solver.cpp"
+      ],
+      "reused_count": 29,
+      "object_source_mismatches": [],
+      "artifact_count": 12,
+      "artifact_mismatches": [],
+      "attempts_registered": 1,
+      "result": "inconclusive",
+      "cost_decision": "INCONCLUSIVE",
+      "exit": 89,
+      "native_calls": 0,
+      "tape_constructor_rhs_calls": 0,
+      "arms": [
+        {
+          "kind": "P0",
+          "solved": false,
+          "A_calls": 0,
+          "M_calls": 0,
+          "iterations": 0,
+          "native_checked": false
+        },
+        {
+          "kind": "P1",
+          "solved": false,
+          "A_calls": 0,
+          "M_calls": 0,
+          "iterations": 0,
+          "native_checked": false
+        },
+        {
+          "kind": "P1",
+          "solved": false,
+          "A_calls": 0,
+          "M_calls": 0,
+          "iterations": 0,
+          "native_checked": false
+        },
+        {
+          "kind": "P0",
+          "solved": false,
+          "A_calls": 0,
+          "M_calls": 0,
+          "iterations": 0,
+          "native_checked": false
+        }
+      ],
+      "stages": 0,
+      "steps": 0
+    },
+    {
+      "commit": "d0bfa40b997a2cf34e2660de2119daf1cfbc8d73",
+      "registration_sha256": "edb9ccf51ce894b10d86a72a46ecd03779582debccd182b84a6a4df0f659aa6e",
+      "build_receipt_sha256": "e7bd36347ca44fdeadb926acba45db4dd8a2b1aef2c3cd0f02846a64cff0eb0f",
+      "executable_sha256": "17c22e45c1019a4b493752cf1dcef8176ede648b80c64a3dd2d0dcf4ba639c5b",
+      "archive_sha256": "33f0e73eae6ec508991be3c1841bb80c230ee1cac843ff06038e0a6971834656",
+      "immutable_inputs_checked": 26,
+      "immutable_mismatches": [],
+      "object_count": 31,
+      "recompiled": [
+        "wrf_sdirk3_tile_unified_impl.cpp",
+        "wrf_sdirk3_newton_solver.cpp"
+      ],
+      "reused_count": 29,
+      "object_source_mismatches": [],
+      "artifact_count": 12,
+      "artifact_mismatches": [],
+      "attempts_registered": 1,
+      "result": "diagnostic_completed",
+      "cost_decision": "NO_GO",
+      "exit": 88,
+      "native_calls": 15,
+      "tape_constructor_rhs_calls": 1,
+      "arms": [
+        {
+          "kind": "P0",
+          "solved": true,
+          "A_calls": 23,
+          "M_calls": 21,
+          "iterations": 21,
+          "native_checked": true
+        },
+        {
+          "kind": "P1",
+          "solved": true,
+          "A_calls": 14,
+          "M_calls": 13,
+          "iterations": 13,
+          "native_checked": true
+        },
+        {
+          "kind": "P1",
+          "solved": true,
+          "A_calls": 14,
+          "M_calls": 13,
+          "iterations": 13,
+          "native_checked": true
+        },
+        {
+          "kind": "P0",
+          "solved": true,
+          "A_calls": 23,
+          "M_calls": 21,
+          "iterations": 21,
+          "native_checked": true
+        }
+      ],
+      "stages": 0,
+      "steps": 0
+    }
+  ],
+  "native_attempts_total": 2,
+  "attempts_per_source_block": 1,
+  "only_second_reached_fgmres": true,
+  "audit_header_consumers": [
+    "wrf_sdirk3_newton_solver.cpp",
+    "wrf_sdirk3_tile_unified_impl.cpp"
+  ],
+  "terminal_header_consumers": [
+    "wrf_sdirk3_newton_solver.cpp"
+  ],
+  "namelist_only_change": "sdirk3_reuse_linearization .false. to .true.",
+  "old_worktree_immutable_method": "git show first registered commit",
+  "scope": "identity and recorded diagnostic results; no forecast or numerical correctness claim"
+}

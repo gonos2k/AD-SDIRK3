@@ -1,0 +1,59 @@
+{
+  "one_attempt": true,
+  "retry": false,
+  "source_commit": "d0bfa40b997a2cf34e2660de2119daf1cfbc8d73",
+  "registration_sha256": "edb9ccf51ce894b10d86a72a46ecd03779582debccd182b84a6a4df0f659aa6e",
+  "build_receipt_sha256": "e7bd36347ca44fdeadb926acba45db4dd8a2b1aef2c3cd0f02846a64cff0eb0f",
+  "executable_sha256": "17c22e45c1019a4b493752cf1dcef8176ede648b80c64a3dd2d0dcf4ba639c5b",
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "namelist_sha256": "a43ddbc716a08430e0302be8b30845c568af241a80db24e596bc9cddff81dda6",
+  "disk_free_start": 8173789184,
+  "command": [
+    "/opt/homebrew/bin/mpirun",
+    "--timeout",
+    "360",
+    "--report-state-on-timeout",
+    "-np",
+    "1",
+    "--bind-to",
+    "none",
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/rank_rusage.log",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/native_matched/wrf.exe"
+  ],
+  "effective_environment": {
+    "HOME": "/Users/yhlee",
+    "USER": "yhlee",
+    "LOGNAME": "yhlee",
+    "TMPDIR": "/var/folders/k4/qf6g1w213_x9dq8ht2rkg3z00000gn/T/",
+    "LANG": "ko_KR.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "WRF_SDIRK3_STAGE_OPERAND_DIAG": "0",
+    "WRF_SDIRK3_EW_ETA_INITIAL": "0.1",
+    "WRF_SDIRK3_GMRES_ESTIMATE_PROBE": "0",
+    "WRF_SDIRK3_REUSE_LINEARIZATION": "1"
+  },
+  "clock_info": {
+    "monotonic": {
+      "implementation": "mach_absolute_time()",
+      "monotonic": true,
+      "adjustable": false,
+      "resolution": 4.166666666666667e-08
+    },
+    "time": {
+      "implementation": "clock_gettime(CLOCK_REALTIME)",
+      "monotonic": false,
+      "adjustable": true,
+      "resolution": 1.0000000000000002e-06
+    }
+  },
+  "max_endpoint_span_ns": 10000000,
+  "gap_limit_ns": 1000000000
+}

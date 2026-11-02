@@ -1,0 +1,3 @@
+
+# Preserve the exact hashed native namelist fixture, including original trailing blanks.
+docs/evidence/matched_pressure_cost_20261102/inputs/namelist.input whitespace=-blank-at-eol

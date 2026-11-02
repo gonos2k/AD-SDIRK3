@@ -95,6 +95,12 @@
 #include "wrf_sdirk3_pressure_v_direct.h"
 #endif
 #include "wrf_sdirk3_terminal_jvp_probe.h"
+#ifdef WRF_SDIRK3_MATCHED_PRESSURE_PROBE
+#if !defined(WRF_SDIRK3_PRESSURE_REFERENCE_STAGE) || !defined(WRF_SDIRK3_PRESSURE_A5) || !defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT)
+#error "matched pressure terminal experiment requires existing native EOS/reference/A5/audit context"
+#endif
+#include "wrf_sdirk3_matched_pressure_probe.h"
+#endif
 #include <cstdlib>
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
@@ -5090,8 +5096,15 @@ public:
         if (options_.reuse_linearization) {
             decorated_rhs = [&](const torch::Tensor& x) {
                 if (active_prepared && *active_prepared) {
+#ifdef WRF_SDIRK3_MATCHED_PRESSURE_PROBE
+                    rhs_interleaved = true;
+                    // The terminal experiment never repairs or replaces its one A.
+                    // Throw before touching Tile buffers or destroying a live tape.
+                    throw std::runtime_error("RHS interleaving during matched prepared operator");
+#else
                     active_prepared->reset();
                     rhs_interleaved = true;
+#endif
                 }
                 return rhs_callback(x);
             };
@@ -5853,12 +5866,17 @@ public:
         frozen_ab_fired_this_solve_ = false;
         for (int newton_iter = 0; newton_iter < options_.max_newton_iter; ++newton_iter) {
 #ifdef WRF_SDIRK3_LINEAR_DELAY_AUDIT
-            static std::atomic_flag delay_fifth_fired=ATOMIC_FLAG_INIT;
+            static std::atomic_flag delay_selected_fired=ATOMIC_FLAG_INIT;
             wrf::sdirk3::linear_delay_audit::Frame delay_frame;
             delay_frame.stage=stage; delay_frame.newton=newton_iter;
             delay_frame.refinement_passes=wrf::sdirk3::g_sdirk3_config.precond_refinement_passes;
+#ifdef WRF_SDIRK3_MATCHED_PRESSURE_PROBE
+            delay_frame.selected=stage==2 && newton_iter==0 &&
+                !delay_selected_fired.test_and_set(std::memory_order_relaxed);
+#else
             delay_frame.selected=stage==4 && newton_iter==0 &&
-                !delay_fifth_fired.test_and_set(std::memory_order_relaxed);
+                !delay_selected_fired.test_and_set(std::memory_order_relaxed);
+#endif
             wrf::sdirk3::linear_delay_audit::IterationScope delay_iteration(delay_frame);
 #endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
@@ -9228,6 +9246,110 @@ public:
                 const int pressure_refinement = wrf::sdirk3::g_sdirk3_config.precond_refinement_passes;
                 const bool pressure_apinv_probe = apinv_probe_armed();
                 if (pressure_capture_here) {
+#ifdef WRF_SDIRK3_MATCHED_PRESSURE_PROBE
+                    // A different, explicitly registered terminal experiment: one exact
+                    // prepared A shared by all arms. Do not use the legacy !reuse digest.
+                    try {
+                        torch::NoGradGuard no_grad;
+                        auto& f=delay_frame;
+                        const auto& cfg=wrf::sdirk3::g_sdirk3_config;
+                        const auto* raw=dynamic_cast<const UnifiedPreconditioner*>(preconditioner_);
+                        TORCH_CHECK(stage==2 && newton_iter==0 && global_timestep_==0 && raw &&
+                            options_.reuse_linearization && cfg.reuse_linearization && use_autograd_jvp &&
+                            layout_initialized_ && !halo_mask_initialized_ && scaling_initialized_ &&
+                            pressure_refinement==1 && !pressure_apinv_probe && !jvp_check_this_iter &&
+                            cfg.gmres_block_scale==0 && krylov_tol_adaptive==static_cast<float>(1e-7) &&
+                            cfg.internal_fp64 && cfg.internal_fp64_state_carry && cfg.stage_fail_action==1 &&
+                            !cfg.retain_graph_for_adjoint && !cfg.save_trajectory &&
+                            !cfg.omega_update_ref_per_newton && !cfg.enable_ad_halo_exchange &&
+                            f.selected && f.have_base && f.prepared && f.split==3 && f.n_moist==0 &&
+                            !f.has_physics && !f.full_halo.value.defined() &&
+                            f.topology[14]==1 && f.topology[15]==1 && f.flags[0] && !f.flags[1] &&
+                            f.flags[4] && f.flags[5] && f.flags[15] &&
+                            at::get_num_threads()==1 && at::get_num_interop_threads()==1 && dt==600 &&
+                            pressure_eos_context.captured && !pressure_eos_context.failed &&
+                            !pressure_eos_context.duplicate, "unsupported matched prepared pressure profile");
+                        f.U.set_owner(U_eval); f.F.set_owner(F); f.K.set_owner(K);
+                        f.b.set_owner(gmres_rhs); f.x0.set_owner(gmres_x0);
+                        f.S.set_owner(S_diag_); f.Sinv.set_owner(S_inv_diag_);
+                        f.mask.set(torch::Tensor());
+                        auto check_context=[&](bool full) {
+                            TORCH_CHECK(!f.invalid && f.ref_base.owner && f.ref_base.unchanged() &&
+                                cfg.reuse_linearization && options_.reuse_linearization &&
+                                !cfg.omega_update_ref_per_newton && !cfg.enable_ad_halo_exchange &&
+                                cfg.effective_imex_split_mode()==3 && cfg.gmres_block_scale==0 &&
+                                cfg.precond_refinement_passes==1 &&
+                                at::get_num_threads()==1 && at::get_num_interop_threads()==1,
+                                "matched native context changed");
+                            std::ostringstream signature;
+                            signature << "observed_native_subset;prepared_A_shared;stage=2;Newton=0;dt="
+                                      << std::setprecision(17) << dt << ";gamma=" << gamma << ';';
+                            const auto add=[&](const char* name,const wrf::sdirk3::linear_delay_audit::Handle& h) {
+                                TORCH_CHECK(h.unchanged(),"fixed owner/version changed: ",name);
+                                if(full) signature << name << '=' << std::hex <<
+                                    wrf::sdirk3::linear_delay_audit::audit_hash_tensor(h.owner?*h.owner:h.value)
+                                    << std::dec << ';';
+                            };
+                            add("U",f.U);add("F",f.F);add("K",f.K);add("b",f.b);add("x0",f.x0);
+                            add("S",f.S);add("Sinv",f.Sinv);add("mask",f.mask);add("actual_ref",f.ref_base);
+                            add("Fphys",f.Fphys);add("Fexp",f.Fexp);add("halo",f.full_halo);
+                            for(const auto& entry:f.context) {
+                                const bool scratch=entry.first.find("_work")!=std::string::npos ||
+                                    entry.first=="ru_tend" || entry.first=="rv_tend" || entry.first=="rw_tend" ||
+                                    entry.first=="t_tend" || entry.first=="mu_tend" || entry.first=="ph_tend" ||
+                                    entry.first=="qv_tend";
+                                if(!scratch) add(entry.first.c_str(),entry.second);
+                            }
+                            if(full) {
+                                const auto& e=pressure_eos_context;
+                                for(const auto& t:{e.ph,e.t,e.mu,e.mu_base,e.alb,e.p_base,e.c1h,e.c2h,e.rdnw,
+                                    e.alt,e.p_pert,e.geometry.c1f,e.geometry.c2f,e.geometry.rdn,
+                                    e.geometry.msftx,e.geometry.msfty,e.geometry.msfux,e.geometry.msfuy,
+                                    e.geometry.msfvx,e.geometry.msfvy,e.geometry.ground_phi})
+                                    signature << std::hex << wrf::sdirk3::linear_delay_audit::audit_hash_tensor(t) << ';';
+                                const auto& v=e.v_primary;
+                                for(const auto& t:{v.cqv_at_v,v.level_mass_v,v.velocity_mass_v,v.alpha_v,
+                                    v.msf_ratio_v,v.dpy_primary})
+                                    signature << std::hex << wrf::sdirk3::linear_delay_audit::audit_hash_tensor(t) << ';';
+                                signature << raw->pressure_probe_raw_digest() << std::dec << ';';
+                                signature << e.rd << ':' << e.cv << ':' << e.cp << ':' << e.p0 << ':' << e.t0
+                                    << ':' << e.geometry.rdx << ':' << e.geometry.rdy << ':' << e.geometry.gravity
+                                    << ':' << e.geometry.whole_single_rank << ':' << e.geometry.packed_periodic_x_symmetric_y
+                                    << ':' << v.rdy << ':' << v.velocity_eps << ':' << v.canonical_packed_dry
+                                    << ':' << v.base_state_branch << ':' << v.use_wrf_mass_flux << ':' << v.native_nh
+                                    << ':' << v.captured << ':' << v.failed << ':' << v.duplicate << ';';
+                                TORCH_CHECK(v.project_native && v.avg_y_3d && v.avg_y_2d && v.level_mass_v_of,
+                                            "captured native preparation callback missing");
+                                signature << v.project_native.target_type().hash_code() << ':'
+                                    << v.avg_y_3d.target_type().hash_code() << ':' << v.avg_y_2d.target_type().hash_code()
+                                    << ':' << v.level_mass_v_of.target_type().hash_code() << ';';
+                                for(bool flag:f.flags)signature << flag;
+                                for(int n:f.topology)signature << ':' << n;
+                            }
+                            return signature.str();
+                        };
+                        wrf::sdirk3::matched_pressure::Inputs input;
+                        input.U=U_eval;input.F=F;input.b=gmres_rhs;input.x0=gmres_x0;
+                        input.S=S_diag_;input.Sinv=S_inv_diag_;input.layout=cached_layout_;
+                        input.raw=raw;input.eos=&pressure_eos_context;input.a=dt*gamma;
+                        input.dt=dt;input.gamma=gamma;input.restart=effective_restart;
+                        input.max_restarts=effective_max_restarts;input.tol=krylov_tol_adaptive;
+                        input.ru_share=ru_share;input.px=options_.periodic_x;input.py=options_.periodic_y;
+                        input.rhs=compute_rhs;
+                        input.native_jvp=[&](const torch::Tensor& u,const torch::Tensor& v,torch::Tensor* primal) {
+                            return compute_jvp_forward_mode(compute_rhs,u,v,primal);
+                        };
+                        input.fallback_count=[&]() {return g_jvp_fd_fallback_count.load(std::memory_order_relaxed);};
+                        input.rhs_count=[&]() {return static_cast<long long>(f.rhs_all);};
+                        input.guard=check_context;input.active_slot=&active_prepared;
+                        input.rhs_interleaved=&rhs_interleaved;
+                        wrf::sdirk3::matched_pressure::run(input);
+                    } catch(const std::exception& error) {
+                        wrf::sdirk3::matched_pressure::fail_exit("profile_or_outer_exception",error.what());
+                    } catch(...) {
+                        wrf::sdirk3::matched_pressure::fail_exit("profile_or_outer_exception","unknown exception");
+                    }
+#endif
                     const auto preflight_start = std::chrono::steady_clock::now();
                     torch::NoGradGuard no_grad;
                     const auto* raw = dynamic_cast<const UnifiedPreconditioner*>(preconditioner_);

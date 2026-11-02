@@ -1,0 +1,47 @@
+{
+  "argv": [
+    "/usr/bin/g++",
+    "-fsyntax-only",
+    "-DWRF_SDIRK3_MATCHED_PRESSURE_PROBE",
+    "-DWRF_SDIRK3_LINEAR_DELAY_AUDIT",
+    "-DWRF_SDIRK3_PRESSURE_A5",
+    "-I/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/B",
+    "-DWRF_SDIRK3_PRESSURE_REFERENCE_STAGE",
+    "-DWRF_SDIRK3_PRESSURE_A4",
+    "-std=c++17",
+    "-O3",
+    "-DMACOS",
+    "-DDMPARALLEL",
+    "-DUSE_SDIRK3",
+    "-DWRF_SDIRK3_PRESSURE_STAGE_PROBE",
+    "-I/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+    "-I/opt/homebrew/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+    "-D_GLIBCXX_USE_CXX11_ABI=0",
+    "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp"
+  ],
+  "cwd": "/private/tmp/matched-pressure-cost-20261102/external/libtorch_wrf/sdirk3",
+  "returncode": 0,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_sha256_before": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "e4399601291d72816ec702968d61938b9f553ae4d3480f2eeef3ca3dec67873e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "4e2c9d1148abd629b0a08395299edfcb02f0975ec8f26788a14f8dd6411e173e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_matched_pressure_probe.h": "42b4edc710208dc0e451ae10099bda31fac6811e7ead7c4cb46db4b9482630f9",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "4fa1dc3db83457ecd44d2cdd3bf36f3cefe7497bc0aa60a366e21ff3f9661162",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_linear_delay_audit.h": "2fcc3ecb6c49bb344d8eac1412d04b6f63094e4243bc5d59e848ad0da571d40b"
+  },
+  "source_sha256_after": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "e4399601291d72816ec702968d61938b9f553ae4d3480f2eeef3ca3dec67873e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "4e2c9d1148abd629b0a08395299edfcb02f0975ec8f26788a14f8dd6411e173e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_matched_pressure_probe.h": "42b4edc710208dc0e451ae10099bda31fac6811e7ead7c4cb46db4b9482630f9",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "4fa1dc3db83457ecd44d2cdd3bf36f3cefe7497bc0aa60a366e21ff3f9661162",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_linear_delay_audit.h": "2fcc3ecb6c49bb344d8eac1412d04b6f63094e4243bc5d59e848ad0da571d40b"
+  },
+  "source_stable": true,
+  "sdk_path": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+  "sdk_version": "27.2",
+  "completed_local": "2026-11-02T11:17:30.047947+09:00"
+}

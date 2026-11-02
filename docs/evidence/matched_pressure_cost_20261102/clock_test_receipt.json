@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-11-02T08:57:31.812372+09:00",
+  "cwd": "/private/tmp/matched-pressure-cost-20261102/tools",
+  "argv": [
+    "/opt/local/bin/python3",
+    "-m",
+    "unittest",
+    "-v",
+    "test_sdirk3_run_measurement"
+  ],
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "test_capture_order_and_values (test_sdirk3_run_measurement.MeasurementTest) ... ok\ntest_consistent_jump_boundary_and_invalid (test_sdirk3_run_measurement.MeasurementTest) ... ok\ntest_interruption_before_and_after_realtime (test_sdirk3_run_measurement.MeasurementTest) ... ok\ntest_start_pause_reproduces_naive_negative_gap (test_sdirk3_run_measurement.MeasurementTest) ... ok\ntest_stream_dedup_and_empty (test_sdirk3_run_measurement.MeasurementTest) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.005s\n\nOK\n",
+  "source_sha256": {
+    "/private/tmp/matched-pressure-cost-20261102/tools/sdirk3_run_measurement.py": "8b9e1c579da4147f6c0dd20cd777b6c40b5552f3d3f36904e51a68c3e6b5ac76",
+    "/private/tmp/matched-pressure-cost-20261102/tools/test_sdirk3_run_measurement.py": "1e2505ad2437fb328978e43476d7c113a321ebc2fcdf22966264745ed1528491"
+  },
+  "model_run": false
+}

@@ -1,0 +1,313 @@
+{
+  "created_local": "2026-11-02T11:40:16.048655+09:00",
+  "base_main": "9292c6c896fcec0f338d0fec7d27bd803e4c620f",
+  "completed_native_source": "d0bfa40b997a2cf34e2660de2119daf1cfbc8d73",
+  "initial_failed_native_source": "11b71a6b5854afa047fe3bee2b5086fe458d9c66",
+  "native_attempts_total": 2,
+  "native_attempts_per_registered_source": 1,
+  "unchanged_source_retry": false,
+  "first_verdict": "INCONCLUSIVE preflight capture wiring; native0 M0",
+  "corrected_verdict": "diagnostic_completed / NO_GO",
+  "scope": "common PreparedJvp A + fresh M modeled cost; not native-FWAD speed, whole forecast or all-direction equivalence",
+  "forecast_complete": false,
+  "Gate_B_approved": false,
+  "records": [
+    {
+      "path": "registration.json",
+      "bytes": 7988,
+      "sha256": "edb9ccf51ce894b10d86a72a46ecd03779582debccd182b84a6a4df0f659aa6e",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/registration.json",
+      "normalization": "none"
+    },
+    {
+      "path": "source_commit.txt",
+      "bytes": 41,
+      "sha256": "71ff403b56ebcab6aba7079b9e7b5b08fa9c4e3e319c7da84bce04a351cac4f5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/source_commit.txt",
+      "normalization": "none"
+    },
+    {
+      "path": "prior_failure_link.json",
+      "bytes": 1475,
+      "sha256": "0b666911fb6bad0f6c6e7ece53629b6e4af733d0215e5c3459eafbdf7a6f4df3",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/prior_failure_link.json",
+      "normalization": "none"
+    },
+    {
+      "path": "build_matched.py",
+      "bytes": 13186,
+      "sha256": "3e0536d9682f7d6b8f2af84ef34432cea2efb1f19027450800e5874c957bab2c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/build_matched.py",
+      "normalization": "none"
+    },
+    {
+      "path": "run_matched.py",
+      "bytes": 13489,
+      "sha256": "265378a2697dffdf786015132b37f5a0b352fe1e5c2a24f556063020845c5890",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run_matched.py",
+      "normalization": "none"
+    },
+    {
+      "path": "run_matched_ast.json",
+      "bytes": 788,
+      "sha256": "39f96e15ce66b461e350489b5c1949ed4769397421e99afb4b123035eff06d2d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run_matched_ast.json",
+      "normalization": "none"
+    },
+    {
+      "path": "capture_policy_test.json",
+      "bytes": 1185,
+      "sha256": "15954849940ebbb47cae6f2e6c0f0345769929c89b2dcd5fd2cb39d256b41252",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/capture_policy_test.json",
+      "normalization": "none"
+    },
+    {
+      "path": "newton_syntax.json",
+      "bytes": 2936,
+      "sha256": "3923dce549a0930e8729cc058f3db63b1505f51ac4bce2a925fc71acffec73b5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/newton_syntax.json",
+      "normalization": "none"
+    },
+    {
+      "path": "graph_after_pins.json",
+      "bytes": 5190,
+      "sha256": "183f260a1c37829599906f3aeeaab1ab3fbd06b3bef7767acb80d1808c59131c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/graph_after_pins.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_matched/build_receipt.json",
+      "bytes": 88269,
+      "sha256": "e7bd36347ca44fdeadb926acba45db4dd8a2b1aef2c3cd0f02846a64cff0eb0f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/native_matched/build_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "native_matched/otool.txt",
+      "bytes": 2096,
+      "sha256": "798a58d4ebeeed01a53655fe36e2ed9600ca8ee56247696a2f4845e28f358d5d",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/native_matched/otool.txt",
+      "normalization": "none"
+    },
+    {
+      "path": "native_audit.json",
+      "bytes": 4114,
+      "sha256": "ca8700b0c483b936fe62f70f5571a8743f225b7b548ba3240dca0abdb09846b7",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/native_audit.json",
+      "normalization": "none"
+    },
+    {
+      "path": "red_native_audit.json",
+      "bytes": 3435,
+      "sha256": "8344b9c5a8d6bbe8558a807462505fe34aff61337dcdc43a44ab3eea806da95f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/red_native_audit.json",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_state_validation.json",
+      "bytes": 1829,
+      "sha256": "88b1486cb0a739b2bce10ed060558973bba652b30f4394a8dada05729c4b8a7f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/initial_state_validation.json",
+      "normalization": "none"
+    },
+    {
+      "path": "inputs/namelist.input",
+      "bytes": 6097,
+      "sha256": "a43ddbc716a08430e0302be8b30845c568af241a80db24e596bc9cddff81dda6",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/inputs/namelist.input",
+      "normalization": "none"
+    },
+    {
+      "path": "analyze_matched.py",
+      "bytes": 4931,
+      "sha256": "c7242a9bcd62a7c2d29a8f4fcf975446d1548055ba0b7a94f9883ff970d12c11",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/analyze_matched.py",
+      "normalization": "none"
+    },
+    {
+      "path": "analysis/arms.csv",
+      "bytes": 1927,
+      "sha256": "cb3eeeceec8431046ad961b1176f6f10173866c4e5287e89d7d82624257bf683",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/analysis/arms.csv",
+      "normalization": "none"
+    },
+    {
+      "path": "analysis/summary.json",
+      "bytes": 2111,
+      "sha256": "88970d7a160ff0aca6fa4c024cb3e823f25c307cc1086df476a95134d23c9202",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/analysis/summary.json",
+      "normalization": "none"
+    },
+    {
+      "path": "analysis/matched_cost.png",
+      "bytes": 93485,
+      "sha256": "4324f84edfc84ce754934ad6748d063168fc9522b9880af8061f4b56ea59b9f5",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/analysis/matched_cost.png",
+      "normalization": "none"
+    },
+    {
+      "path": "run/attempt.json",
+      "bytes": 2026,
+      "sha256": "1e0455920004407ec8d7e3c97b9a570bc18de7cd96159e2a24d80480f78d1c9c",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/attempt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "run/result.json",
+      "bytes": 17406,
+      "sha256": "492abc03a469dc258cec8b655d676a09b12bf0c297e54fe8b3cfefc684d5e842",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/result.json",
+      "normalization": "none"
+    },
+    {
+      "path": "run/matched_pressure_probe.json",
+      "bytes": 9897,
+      "sha256": "d82bb9999d5d8767464a05f3326c837eb024eee8297ab1af182587aba12b6325",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/matched_pressure_probe.json",
+      "normalization": "none"
+    },
+    {
+      "path": "run/rank_rusage.log",
+      "bytes": 777,
+      "sha256": "e84b134b83a28d7cbc22353e0df6cb8663ea015a9d395c658a5c880b4b48eeba",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/rank_rusage.log",
+      "normalization": "none"
+    },
+    {
+      "path": "build_driver.log",
+      "bytes": 65,
+      "sha256": "98a171fe8874c096b95cc71c63a4675eb4543febf830bf377fdf9e683ee693e9",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/build_driver.log",
+      "normalization": "none"
+    },
+    {
+      "path": "run_driver.log",
+      "bytes": 103,
+      "sha256": "366b71c7c4d54a5555cce4c92d43518a6f79599cb1a452ef2821017f5ba737ad",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run_driver.log",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/registration.json",
+      "bytes": 6271,
+      "sha256": "48a0788cdf44c40b779113123f22725434b8862473aaa8101cb2ae8294779a68",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/registration.json",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/source_commit.txt",
+      "bytes": 41,
+      "sha256": "1d316e59fb80b5861762b67175578f3f4e0eeee2f7ef1aeaa8e891d16e9282f0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/source_commit.txt",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/build_matched.py",
+      "bytes": 12880,
+      "sha256": "109de150d4b5b1af02d5c0b2298c84095e63ed64631109667d01440a9cd54495",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/build_matched.py",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/run_matched.py",
+      "bytes": 13477,
+      "sha256": "02d7a1d61c8a0365aa0b7bed9023aaa398e1ee8bb3a6ad5a4996e6eb7eb490c7",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run_matched.py",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/native_matched/build_receipt.json",
+      "bytes": 87933,
+      "sha256": "c0697a852c0e6e891b1e343602799ff82dbc676d74f10fe55eb29051e2d8c389",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/native_matched/build_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/run/attempt.json",
+      "bytes": 2002,
+      "sha256": "4344ab1b6f6a910624c6fc0e37d9d0e5980d18c290004ff645879f11ff675f66",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/attempt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/run/result.json",
+      "bytes": 16301,
+      "sha256": "b4f1e3065c1318db5403ae44fb5d7bf4ee4ebc55df89a28db3281eaabfc93b09",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/result.json",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/run/matched_pressure_probe.json",
+      "bytes": 8659,
+      "sha256": "812d0a27be0c6cc3dd164be60a60b7cf67eccf51f028c6e263a83031f32560ec",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/matched_pressure_probe.json",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/run/rank_rusage.log",
+      "bytes": 777,
+      "sha256": "851c596fbbe1149c06dcdec777456ebb0fb8b013b4d3bbfa2834461739a94f15",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/rank_rusage.log",
+      "normalization": "none"
+    },
+    {
+      "path": "initial_capture_failure/run_driver.log",
+      "bytes": 475,
+      "sha256": "3020117dad586ef0d4f57e1c20ae87ca5263d4f312e5725f0bc9081d60503305",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run_driver.log",
+      "normalization": "none"
+    },
+    {
+      "path": "clock_test_receipt.json",
+      "bytes": 1201,
+      "sha256": "1aacb0be38e89e5d401f36345fbfc1504824b1544d6bae2df23ec4076ec3e25f",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/clock_test_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "prior_stage_recount.json",
+      "bytes": 1331,
+      "sha256": "338eb06c4cbd643ca107cf521b9015791cfa3bef6b7b2cae9bb91d4a8709a694",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/prior_stage_recount.json",
+      "normalization": "none"
+    },
+    {
+      "path": "sketch_test_receipt.json",
+      "bytes": 2250,
+      "sha256": "702dd7cc18afbb03b5bf30b2d50f8c2e91e6dec534d7df7a14eb6668e063dcf0",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/sketch_test_receipt.json",
+      "normalization": "none"
+    },
+    {
+      "path": "matched_header_syntax.json",
+      "bytes": 859,
+      "sha256": "9b81289d13b90ad2d9c761120bf2e30d8c46e3da5e5eedec2a29547efcfbb59b",
+      "original_path": "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/matched_header_syntax.json",
+      "normalization": "none"
+    },
+    {
+      "path": "run/selected_log.txt",
+      "bytes": 9995,
+      "sha256": "44a5619d08449f6dcbee062708f55ad4b0860058b2ddf973c9408cc19385b776",
+      "original_paths": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/rsl.out.0000",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/rsl.error.0000",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/launcher.stdout.log",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102_capture_fix/run/launcher.stderr.log"
+      ],
+      "normalization": "selected original lines by file, deduplicated; not chronological merge"
+    },
+    {
+      "path": "initial_capture_failure/run/selected_log.txt",
+      "bytes": 8757,
+      "sha256": "c5e35bd7918cb80c6e0eff8b613c2d1860770196ea34a6c95229de2f0d6aa0eb",
+      "original_paths": [
+        "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/rsl.out.0000",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/rsl.error.0000",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/launcher.stdout.log",
+        "/Users/yhlee/AD-SDIRK3-review-evidence/matched-pressure-cost-20261102/run/launcher.stderr.log"
+      ],
+      "normalization": "selected original lines by file, deduplicated; not chronological merge"
+    }
+  ]
+}
