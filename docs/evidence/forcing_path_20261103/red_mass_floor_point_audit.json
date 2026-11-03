@@ -1,0 +1,54 @@
+{
+  "time_scope": "archived observed selected point; no new model",
+  "ueval_path": "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/run/linear_delay_u_eval.npy",
+  "ueval_sha256": "36066354aab639372f4eee8f4a47bde6f8047f39557062c6402c80b7dfb50e86",
+  "reference_path": "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103/run/linear_delay_u_ref_first_jvp.npy",
+  "reference_sha256": "9514b1510b5784349fc15c0e8ec91b5ab83cbf7166ec3dfbd7344be791822a6a",
+  "run_log_sha256": "f20248a920eee074b64ad3540d9a5af0a35ae70cdc24803373ae0b24b45234f3",
+  "point_reuse_audit_sha256": "4b77a36dcd2dd6fcdeb10cd41bef8cb936a985923fa8f0105bb94da2e727a69a",
+  "netcdf": "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103_scope_fix/run/wrfout_d01_0001-01-01_00:00:00",
+  "netcdf_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+  "mub_shape": [
+    81,
+    41
+  ],
+  "mub_audit_hash_expected": "87f1b77d980beefe",
+  "mub_audit_hash_actual": "87f1b77d980beefe",
+  "mub_reconstruction": "WRF MUB float32 physical [80,40], append periodic X first column and symmetric Y last physical row; promote exactly to binary64. Constant field means digest does not independently discriminate alias rules.",
+  "layout": "packed mu offset 1077170, size 3321, [81,41]; Q uses physical core, periodic first-column X and last-row Y",
+  "rounding": "Exact rational binary inputs plus separately evaluated binary64 addition; assumes IEEE 754 round-to-nearest ties-to-even, gradual underflow and matching implementation.",
+  "ueval": {
+    "minimum_exact": {
+      "numerator": "2850337",
+      "denominator": "32",
+      "decimal": 89073.03125
+    },
+    "minimum_index_j_i": [
+      58,
+      0
+    ],
+    "exact_nonpositive_count": 0,
+    "ieee_binary64_sum_min": 89073.03125,
+    "ieee_binary64_nonpositive_count": 0,
+    "all_positive": true
+  },
+  "reference": {
+    "minimum_exact": {
+      "numerator": "2850337",
+      "denominator": "32",
+      "decimal": 89073.03125
+    },
+    "minimum_index_j_i": [
+      58,
+      0
+    ],
+    "exact_nonpositive_count": 0,
+    "ieee_binary64_sum_min": 89073.03125,
+    "ieee_binary64_nonpositive_count": 0,
+    "all_positive": true
+  },
+  "limits": [
+    "Corrected attempt shares U and reference byte hashes with these saved arrays only; no complete-context identity.",
+    "No p/direction bound or nearby-point claim; no new model, build, or runtime probe."
+  ]
+}

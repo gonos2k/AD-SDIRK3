@@ -1,0 +1,26 @@
+{
+  "source_commit": "bc0f66461efddded7ffd181265d44f7e6caa7add",
+  "result_sha256": "5b9cc02fd5a6030f2e21b9de4147a11cac267e179fc25291d6dcb80ed0878615",
+  "native_scaled_rms_before": 0.0019075394375249743,
+  "native_scaled_rms_after": 1.056651210973314e-09,
+  "native_merit_ratio": 5.539341363994629e-07,
+  "outcome": "accepted_trust",
+  "outer_update_alpha_is_not_trust_scale": true,
+  "step3_completed": false,
+  "logged_converged_stages": [
+    2
+  ],
+  "completed_timesteps": 0,
+  "receipt_extra_calls": [
+    0,
+    0,
+    0
+  ],
+  "mu_floor_lower_conditional_pa": 89063.88575467332,
+  "conditional_mu_branch_only": true,
+  "exact_forcing_certified": false,
+  "full_RHS_error_bound": false,
+  "L_or_inverse_bound_inferred": false,
+  "performance_eligible": false,
+  "new_RK3_or_endpoint_comparison": false
+}

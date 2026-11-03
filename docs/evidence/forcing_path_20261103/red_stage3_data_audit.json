@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-11-03T18:50:31.203394+09:00",
+  "status": "PASS_BOUNDED_DATA",
+  "critical_findings": [],
+  "sha256": {
+    "run/accepted_step_probe.json": "23b52dafdf399193dd3ff93540868e49596928f0bd816da57c49c388446cee8c",
+    "run/result.json": "5b9cc02fd5a6030f2e21b9de4147a11cac267e179fc25291d6dcb80ed0878615",
+    "mass_tube_analysis.json": "1f3b668a7d3c84f54059b63e299ab51258636b83f2deec0c24e0ffa1293a8d9f",
+    "mass_tube_bound.py": "d3783546ba406f3259cde46c2983d22f0edd59075f48aef17e736afcc046ccca",
+    "link_receipt.json": "47e91218f7e4ab273dbe2d9bf4784f925e0407e832fbdd99280f7e87074c1b9d"
+  },
+  "findings": [
+    "Independent exact Fraction recomputation matches lower bound 89063.88575467332 Pa and envelope 89100.49851781964 Pa < 2^39; five ULP budget 5/4096 Pa < 1 Pa allowance.",
+    "Native RMS ratio = 5.539341363994629e-7 from 0.0019075394375249743 and 1.056651210973314e-9; accepted trust and outer alpha=1 are distinct from any trust scaling.",
+    "Raw probe equals result diagnostic; receipt RHS/JVP/preconditioner deltas each 0; stage2 converged, stage3 and forecast not completed.",
+    "Executable hash matches attempt and link; map hash matches receipt; direct Tile and Newton symbols originate from current archive IDs 465/466, archive and Newton member match build receipts."
+  ],
+  "limitations": [
+    "The positive mu-floor margin is conditional on recorded IEEE binary64, fixed-context, Q-copy and actual-pair assumptions; it is not an error bound for the full RHS or forcing.",
+    "One accepted stage3 step does not infer L or M or certify stage2 exact forcing.",
+    "No model or tests rerun."
+  ]
+}

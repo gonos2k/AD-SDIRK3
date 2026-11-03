@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-11-03T17:46:31.161895+09:00",
+  "status": "no_exact_forcing_certificate",
+  "worktree": "/private/tmp/forcing-path-20261103",
+  "source_revision": "3a82d601",
+  "scope": "selected stage 2 Newton 0, h=600, single tile, FP64 mode 3, reference update and reuse off; no inference about other states or Stage 3",
+  "sample_summary": {
+    "path": "/Users/yhlee/AD-SDIRK3-review-evidence/operator-gap-20261103_scope_fix/analysis_summary.json",
+    "sha256": "89a9fbe26c9fbe7657104ae871f560bc232d640fcad1048437913d8f7348ab33",
+    "implemented_eta": 1.6527321827977203e-08,
+    "requested_eta": 1.0000000116860974e-07,
+    "remaining_gap_over_G_for_requested_eta": 8.347267934063254e-08,
+    "sampled_gap_over_G_min": 1.9784757589622152e-10,
+    "sampled_gap_over_G_max": 1.9978106698934923e-08,
+    "samples_are_bounds": false
+  },
+  "bound": {
+    "formula": "eta_true <= eta_implemented + ||S^-1 (A_true-Ahat) p||_2 / ||S^-1 G||_2, plus any explicitly bounded floating-point residual/norm evaluation error",
+    "required_gap_budget": 8.347267934063254e-08,
+    "condition": "Only valid with independent upper bounds in matching S and H metric and same exact state/context. Sampled FD gaps are not such bounds.",
+    "contraction_only": "eta_true < 1 is sufficient for a linearized descent direction in the same Euclidean scaled norm, conditional on differentiability, exact arithmetic, and unchanged metric; it is neither proof of accepted nonlinear decrease nor a 1e-7 certificate."
+  },
+  "source_observations": [
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_jvp_fwad_or_fd.h:111",
+      "finding": "forward AD makes dual u,v and calls live F under NoGradGuard, unpacks tangent; only a completely undefined tangent or thrown exception triggers FD fallback. A defined tangent does not certify that every dependency survived."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp:6040",
+      "finding": "same-stage U_eval = U_stage + dt*gamma*K, residual R=K-F; selected Ahat p = p - J_selected(U_eval)(dt*gamma*p)."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:16062",
+      "finding": "mass-floor comparison is detached and drives torch::where; forward AD differentiates active branch but no source proof establishes uniform branch stability at the tested state. Other detaches must be checked for actual active dataflow; do not infer a missing derivative merely from diagnostics."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:15884",
+      "finding": "grid reciprocal spacings are stored as float; FP64 tensor state does not imply all constants were computed or stored in FP64. Whether a float constant is fixed model data or an error depends on the definition of exact target."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp:6557",
+      "finding": "Newton metric uses dtype-dependent norm, sqrt_N formed from float and various scalar extractions as float; Krylov safe_tensor_norm_fp64 promotes operands but not a rigorously rounded reduction, and reported rho/tolerance may be float. No a posteriori reduction-error bound or full RHS operation-roundoff certificate is present."
+    }
+  ],
+  "why_not_certified": [
+    "Forward AD is an algorithmic derivative of executed differentiable operations, not itself an error bound against an exact mathematical full RHS; partial detaches, branches, custom operators, mutation, floating rounding and library reduction semantics need proof.",
+    "The three observed finite differences show inverse-epsilon-like behavior; agreement cannot bound truncation/rounding or unobserved common systematic errors. No smaller-epsilon sweep is proposed.",
+    "Exact algebra for Q alone does not certify the interior QFQ derivative; Qp=p at this state is a useful observed invariant, not a bound for the full operator."
+  ],
+  "minimum_next_experiment": {
+    "question": "Does the actual accepted update reduce the same complete native stage residual, under the actual operational metric and context?",
+    "method": "At the intended Stage 3 state, record the existing base residual and accepted trial residual from the live production path at the exact accepted, possibly damped/clipped update; capture alpha, direction, residuals, active masks/metric, context and source/executable inputs. Bracket repeated base/trial evaluations or fail closed on observable context or output drift; do not add an epsilon sweep. This is a bounded direct nonlinear merit measurement, not a derivative or rigorous floating-point certificate.",
+    "qualification": "Only after confirming the current source path and stage identity, acceptance, admissibility and no perturbation by observer. If rejection or no accepted update occurs, report that result rather than imply a direction was accepted. For a 1e-7 exact derivative certificate, separately derive independently audited branch/primitive and directional roundoff bounds, or an equivalent validated high-precision/interval evaluation with controlled context; this is not established here."
+  },
+  "model_run": false,
+  "source_edits": false,
+  "new_RK3_comparison": false
+}

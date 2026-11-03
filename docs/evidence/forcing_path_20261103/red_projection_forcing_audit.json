@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-11-03T17:46:34.899578+09:00",
+  "source_commit": "3a82d60130d3c48c6492ae863a66187f26f905f3",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "194365634d17e9a5eaefc38e577bccd0b6c606f4ace3de4cabdf102981bb01ad",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_boundary_ad.h": "55d1e669307c3fb8aac6b40a478005de7ea02f8110f67ade292490c503ffe775"
+  },
+  "scope": "Single whole-domain packed periodic-X symmetric-Y mode; no full-halo, other boundary policy or broad energy proof",
+  "range_constraints": [
+    "mass-like W, PH, T, MU retain rows 0..m-1 columns 0..n-1 and copy x endpoint from x0 and y endpoint from y=m-1, including corner",
+    "U retains same core with two x aliases from columns 0,1 and final y row copied from y=m-1",
+    "V retains rows 0..m and columns 0..n-1 after symmetric normal wall zeroing; x endpoint copies x0 and extra y row negates y=m-1; y wall indices at physical ends are zero"
+  ],
+  "weighted_projection_norm": "For positive diagonal S and disjoint source-root alias groups, P=S^-1 Q S; for each retained root j and alias set I_j, ||I-P||_2 on its block is sqrt(1 + sum_i (S_j/S_i)^2); zeroed fixed outputs contribute identity norm 1. Take the maximum over nonempty groups and fixed outputs. Signs of copies do not affect this norm. No orthogonality of Q is assumed.",
+  "exact_conditional_algebra": [
+    "If complete F output lies in range Q and is differentiable on considered path, (I-Q)G=(I-Q)K and (I-Q)A*v=(I-Q)v even when context depends on unprojected Y; P=S^-1QS is the corresponding scaled projector.",
+    "Observed Qp=p implies (I-Q)A*p=0, and complement of G+A*p equals (I-Q)K; zero requires independent QK=K evidence."
+  ],
+  "limitations": [
+    "Projection and identities are exact-real algebra with source assumptions; floating-point evaluation and non-smooth/history-dependent callbacks require separate handling.",
+    "Actual selected JVP agreement, interior forcing, FD error and complete context are not bounded. Qp=0 error for one sample is not a universal constraint proof.",
+    "No runtime tests or model rerun; no changes made."
+  ]
+}
