@@ -2,9 +2,10 @@
 
 작성: 2026-11-02T13:16:08.084142+09:00.
 최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
-최신 갱신: 2026-11-02T23:31:24.698152+09:00, 기준 maineca8f6fc(PR340 병합).
+최신 갱신: 2026-11-03T08:43:44.265059+09:00, 기준 mainb98a0e81(PR341 병합).
 링크 귀속 정정·O1: [보고서]((202611022330)_link_origin_o1_resolution.md).
 이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
+O1 표현 정정·O2/O3 선택점: [진행 보고]((202611030842)_operator_contract_directional_gap.md).
 Green·Red: GPT-6.1-Terra, medium.
 기준 자료는 사용자가 제공한 수렴 이론 검토 본문이다. sandbox 첨부 전체 파일은 로컬에서
 확보하지 못했으므로, 그 전체를 직접 읽거나 모든 독립 계산을 재실행했다고 주장하지 않는다.
@@ -49,13 +50,19 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
 
 - [x] O1 정의·소스 대응: 실제 stage base B, Y=B+aK, G_K=K−F_C(Y), G_Y=aG_K,
   projection·문맥·S/H/N 및 GMRES/merit norm 차이를 [계약](design/mode3_residual_operator_contract.md)에 고정했다.
+  고정 C와 갱신 C(Y), exact A*와 selected Ahat을 분리하는 두 표현을 추가 정정했다.
   고정 c와 미분 동일성의 증명은 O2/O3, 허용 공간의 작용은 O4에 남긴다.
 - [ ] O2 활성 참조/omega/halo/cache 경로의 상태 의존성과 AD 연결을 확정한다.
   frozen reference가 수학적 독립 입력인지, update를 미분해야 하는지 경로별로 구분한다.
+  진행: mode3·single-tile·FP64·AD·ref-update/reuse off의 source 역할과 관측 입력 불변성,
+  중심 RHS4회 bitwise 반복 일치 확인. transitive cache/모든 설정의 고정성은 미입증이다.
 - [ ] O3 native JVP의 가법성/동차성·residual 미분 일치·오차 gap을 관련 방향에서 확인한다.
   A10의 한 방향 반복, prepared graph 검증은 그 범위만 재사용한다.
+  진행: stage2/Newton0의 후보p/Qseed/boundary-complement와 ε3개, 총9개 FD gap 측정.
+  completed는 integrity 판정이며 FD 오차 상계·exact forcing 인증·전체방향 증명은 아니다.
 - [ ] O4 periodic seam/대칭벽/고정 슬롯/halo의 제약 공간과 projector 접선을 검증한다.
   에너지 내적에서 orthogonal하다고 가정하지 않는다.
+  진행: 이 표본에서 Qp=p, Q²seed=Qseed, Q(I−Q)seed=0을 관측했다. 전체 공간 증명은 아니다.
 
 ## E — stage 가역성과 전처리
 
@@ -106,6 +113,7 @@ R1과 R3의 이번 변경 범위는 완료다. Direct-U/S=4/실제 halo/warm-ent
 이번 후속은 R4의 특정 예외·NaN/Inf·zero-budget 및 관측 전 예외, R2의 raw/방향 로그·집계,
 R5의 3상태 정책 연결을 닫았다. 생산 API의 Impl 예외 전파는 유지하며, 혼합 MPI 실행과
 rank-local 예외의 동시 중단, Impl 반환 후 public wrapper 예외는 이번 범위 밖이다.
-O1의 소스 정의는 완료했고, 다음은 O2/O3/O4의 실제 문맥·제약 공간·residual/JVP 연결이다.
+O1의 두 조건/기호 정정을 완료했다. O2/O3는 실제 경로의 제한된 source/관측 및 sampled FD 근거를
+추가했으며, 다음은 전이 cache·다른 상태/방향·FD 오차 통제와 O4/E/T/A/F의 연결이다.
 E/T/A/F의 증명·실험이 모두 완료된 것처럼 묶지 않는다.
 검증 결과와 source/executable/input hash는 별도 진행 보고서에 연결해 상태를 한 항목씩 갱신한다.

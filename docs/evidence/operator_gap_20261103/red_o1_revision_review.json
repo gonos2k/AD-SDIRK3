@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-03T07:59:01.856468+09:00",
+  "review": "Red O1 mathematical revision",
+  "base": "b98a0e81df0e3ca7fc59499d9246aa42f03038ab",
+  "document_sha256": "a5ab3c924b6f2b0745812cb269a5fa3d7ab6714f7940db42321aae11f7168238",
+  "status": "PASS_BOUNDED",
+  "critical_findings": [],
+  "findings": [
+    "Source confirms optional callback reference update clones unprojected U before packed input boundary projection; reference is extracted independently.",
+    "Fixed versus updated context chain rule is conditional on fixed linear Q, differentiability and a well-defined context map.",
+    "Exact Jacobian and sampled selected JVP are correctly separated; finite-difference operator need not be linear.",
+    "Pointwise triangle inequality requires nonzero RHS, same norm, base, context and direction; it does not require linear sampled operator.",
+    "Stage 2 directional experiments cannot certify full Jacobian, global forcing, or energy/stability properties."
+  ],
+  "validation": "Read-only source and math review; no model or tests."
+}

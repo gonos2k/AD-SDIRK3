@@ -1,0 +1,20 @@
+{
+  "timestamp_local": "2026-11-03T08:44:43.644036+09:00",
+  "scope": "Green staged report and evidence review; no build/test/model rerun or independent vector replay",
+  "blocking_findings": [],
+  "manifest_check": "50 entries verified for size and SHA-256 at review time; two helper logs are being added and final manifest must be rechecked",
+  "checks": [
+    "O1 fixed versus updated context and exact versus selected operator corrections are marked complete; O2/O3 remain partial and O4/E/T/A/F open.",
+    "Report labels epsilon as dimensionless directional perturbation with dt fixed at 600, not a timestep sweep.",
+    "Corrected native probe terminates diagnostically with zero completed stages and steps; no new RK3, endpoint or performance claim.",
+    "Selected run uses raw principal preconditioning; README disclaims P0/P1 comparison. Probe is compile-time default-off.",
+    "First attempted run remains inconclusive, separately preserved and registered from corrected run; no spurious forecast failure claim.",
+    "Reused helper tests are identified as not rerun in corrected revision.",
+    "Sampled gap and proxy are not certified bounds; unmeasured FD error and limited observed-context scope remain explicit."
+  ],
+  "prior_data_audit": "green_data_audit.json",
+  "limits": [
+    "Manifest count and hashes are a point-in-time result before two helper logs are added.",
+    "Scalar values were checked independently from recorded scalars, not reproduced from raw vectors."
+  ]
+}

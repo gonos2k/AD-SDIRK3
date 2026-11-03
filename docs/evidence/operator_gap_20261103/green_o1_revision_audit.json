@@ -1,0 +1,16 @@
+{
+  "timestamp_local": "2026-11-03T07:52:53.872782+09:00",
+  "source_revision": "b98a0e81df0e3ca7fc59499d9246aa42f03038ab",
+  "scope": "source-derived O1 revision; non-split-explicit ARK324 mode 3",
+  "contract_sha256": "a5ab3c924b6f2b0745812cb269a5fa3d7ab6714f7940db42321aae11f7168238",
+  "findings": [
+    "Updated reference copies unprojected callback input before separate RHS input projection; reference extraction is independent.",
+    "Fixed-context and state-dependent-context derivatives require distinct chain rules, including DC term.",
+    "Production JVP and scaled matvec are denoted separately from exact residual Jacobian; finite-epsilon differences are not assumed linear.",
+    "Pointwise forcing inequality requires a common norm, same base/context/direction and nonzero denominator."
+  ],
+  "limitations": [
+    "No proof of fixed mutable context, differentiability, actual AD chain rule, JVP identity, constrained operator equivalence or production forcing bound.",
+    "No build, test or model run."
+  ]
+}

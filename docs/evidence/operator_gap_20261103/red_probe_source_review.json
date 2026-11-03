@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-11-03T08:12:23.917407+09:00",
+  "review": "Red terminal operator-gap probe final source",
+  "source_commit": "85df46805c6129b2ab0c0d86b90f91ef30f8ce0f",
+  "status": "PASS_BOUNDED",
+  "critical_findings": [],
+  "file_sha256": {
+    "docs/design/mode3_residual_operator_contract.md": "a5ab3c924b6f2b0745812cb269a5fa3d7ab6714f7940db42321aae11f7168238",
+    "external/libtorch_wrf/sdirk3/tests/test_operator_gap_probe.cpp": "38b91761b455fbc37e6349df69d7cfe995e02c2170839e3194e79d26667bb44c",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_operator_gap_probe.h": "bdf09ca469269e068c8e8e66d895d377b8f09b83dc4bb7491396b462d035c42c",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "4ba3036855877525539aba77d1ff999213c8191e4814a9017733529cea54aa6d",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "9f1b42c5b33c3a79797b5958a126367120c9d66916e00938fc89b9277202d886"
+  },
+  "observations": [
+    "Centered differences use complete G(K)=K-F(B+aK), compare selected apply_jacobian in same S norm, with G denominator and applied tolerance recorded.",
+    "Reusable RHS, selected JVP and projector outputs are cloned; selected input metadata and centered RHS repeats are checked.",
+    "Initial and live guards include mode3, no split explicit, FP64 carry, selected AD mode, no retain/reuse, scaling/layout and thread counts.",
+    "Checks cover only named observed inputs and settings, not all configuration, stateful cache or callback behavior.",
+    "Probe terminates without forecast continuation; three directional finite differences are data, not full-Jacobian, global forcing or stability proof."
+  ],
+  "validation": "Read-only final source review. Helper test/build/link pass reported by parent, not repeated here; no model run."
+}

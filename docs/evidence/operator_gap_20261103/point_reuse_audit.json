@@ -1,0 +1,28 @@
+{
+  "scope": "two observed array byte-hash comparisons, not full-context replay proof",
+  "audit_hash_warning": "legacy linear_delay hash includes metadata; terminal_jvp hash is data bytes only. Their recorded integers cannot be compared directly. This audit recomputes old NPY byte hash with the terminal algorithm.",
+  "observations": {
+    "U_eval": {
+      "old_npy_sha256": "36066354aab639372f4eee8f4a47bde6f8047f39557062c6402c80b7dfb50e86",
+      "old_bytes_fnv64": "9227350765751078771",
+      "corrected_bytes_fnv64": "9227350765751078771",
+      "match": true,
+      "shape": [
+        1080491
+      ],
+      "dtype": "float64"
+    },
+    "reference": {
+      "old_npy_sha256": "9514b1510b5784349fc15c0e8ec91b5ab83cbf7166ec3dfbd7344be791822a6a",
+      "old_bytes_fnv64": "8886539761853532748",
+      "corrected_bytes_fnv64": "8886539761853532748",
+      "match": true,
+      "shape": [
+        1080491
+      ],
+      "dtype": "float64"
+    }
+  },
+  "all_two_match": true,
+  "other_inputs_not_cross_compared": true
+}

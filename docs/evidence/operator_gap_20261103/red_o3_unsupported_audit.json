@@ -1,0 +1,26 @@
+{
+  "time_local": "2026-11-03T08:18:46.410984+09:00",
+  "head": "85df46805c6129b2ab0c0d86b90f91ef30f8ce0f",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_linear_delay_audit.h": "2fcc3ecb6c49bb344d8eac1412d04b6f63094e4243bc5d59e848ad0da571d40b",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "acbe8c9b766aa82c538538f72a5a7ebe7bf11f26a7423e50a0cfc4232da00257",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "194365634d17e9a5eaefc38e577bccd0b6c606f4ace3de4cabdf102981bb01ad"
+  },
+  "run_log_sha256": "f20248a920eee074b64ad3540d9a5af0a35ae70cdc24803373ae0b24b45234f3",
+  "result_sha256": "2bb01b322b3d5d180467154b120dd136425220432e42b2fe1e5a2ffb761b9b87",
+  "observation": {
+    "stage": 2,
+    "newton": 0,
+    "solve_ordinal": 1,
+    "raw_npy_written": true,
+    "context_stable": true,
+    "EOS_captured": true,
+    "timing_eligible": false,
+    "nested_scope": false,
+    "clock_valid": true
+  },
+  "root_cause": "linear_delay_audit::report unconditionally sets f.invalid when ordinal != 5; selected O3 stage2 solve has ordinal 1. report executes before operator gap profile check, which requires !delay_frame.invalid. Thus this check necessarily rejects the preserved attempt before measurement.",
+  "v_capture": "EOS true does not establish V-primary status or callback. source scopes selected stage2 EOS despite pressure_capture_here=false, allows A5 when selected stage2, and captures V only when use_wrf_mass_flux and A5 compiled. V captured/failed/duplicate were not recorded, so cannot conclude their values from this run.",
+  "followup": "Make observer expected ordinal profile-specific preserving stage4 ordinal5 and stage2 ordinal1; rebuild/relink every affected header dependent with matched macros; explicitly log V and all profile subchecks for any separately registered next attempt. Preserve original result.",
+  "limits": "No build, code edit, rerun or model performed; fixing known failure does not prove other profile gates pass."
+}
