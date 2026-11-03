@@ -1,0 +1,24 @@
+{
+  "diagnostic_sha256": "23b52dafdf399193dd3ff93540868e49596928f0bd816da57c49c388446cee8c",
+  "runner_result_sha256": "5b9cc02fd5a6030f2e21b9de4147a11cac267e179fc25291d6dcb80ed0878615",
+  "mass_tube_code_sha256": "d3783546ba406f3259cde46c2983d22f0edd59075f48aef17e736afcc046ccca",
+  "source_contract": "native profile/fixed-context checks; Q_mu copy map requires reviewed source",
+  "bound": {
+    "scope": "mu floor along real accepted segment and binary64 states in its coordinate box only",
+    "conditional_on": [
+      "fixed a, B, MUB and source Q_mu copy map with infinity norm <=1",
+      "finite IEEE binary64 basic multiply/add within one ULP; no overflow; exact conversion of captured extrema",
+      "stored accepted K/R pair is the checked production pair"
+    ],
+    "magnitude_condition": true,
+    "magnitude_envelope_exact": "112948300426748522429042419006427137/1267650600228229401496703205376",
+    "magnitude_limit": "549755813888",
+    "five_operation_rounding_budget_pa": "5/4096",
+    "conservative_rounding_allowance_pa": 1,
+    "mass_lower_exact_pa": "112901888235570085447431996028197667/1267650600228229401496703205376",
+    "mass_lower_outward_float_pa": 89063.88575467332,
+    "mu_floor_inactive_under_stated_conditions": true,
+    "full_RHS_or_forcing_certified": false
+  },
+  "full_RHS_or_forcing_certified": false
+}

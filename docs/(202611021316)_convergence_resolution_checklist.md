@@ -2,10 +2,11 @@
 
 작성: 2026-11-02T13:16:08.084142+09:00.
 최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
-최신 갱신: 2026-11-03T08:43:44.265059+09:00, 기준 mainb98a0e81(PR341 병합).
+최신 갱신: 2026-11-03T19:01:19.100354+09:00, 기준 main3a82d601(PR342 병합).
 링크 귀속 정정·O1: [보고서]((202611022330)_link_origin_o1_resolution.md).
 이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
 O1 표현 정정·O2/O3 선택점: [진행 보고]((202611030842)_operator_contract_directional_gap.md).
+Forcing source 조건·Stage3 수용 갱신: [진행 보고]((202611031859)_forcing_conditions_stage3_accepted_step.md) · [지원 조건](design/forcing_support_conditions.md).
 Green·Red: GPT-6.1-Terra, medium.
 기준 자료는 사용자가 제공한 수렴 이론 검토 본문이다. sandbox 첨부 전체 파일은 로컬에서
 확보하지 못했으므로, 그 전체를 직접 읽거나 모든 독립 계산을 재실행했다고 주장하지 않는다.
@@ -55,7 +56,10 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
 - [ ] O2 활성 참조/omega/halo/cache 경로의 상태 의존성과 AD 연결을 확정한다.
   frozen reference가 수학적 독립 입력인지, update를 미분해야 하는지 경로별로 구분한다.
   진행: mode3·single-tile·FP64·AD·ref-update/reuse off의 source 역할과 관측 입력 불변성,
-  중심 RHS4회 bitwise 반복 일치 확인. transitive cache/모든 설정의 고정성은 미입증이다.
+  중심 RHS4회 bitwise 반복 일치 확인. 현재 source에서 omega memo의 call-local 재생성,
+  현재 EOS pressure 게시 후 V-PGF 읽기, NH override→Tile snapshot 순서를 확인했다.
+  저장점 mass-floor는 inactive이고, Stage3 accepted segment의 조건부 μ 하한도 양수다.
+  transitive cache/모든 branch·설정의 고정성 및 full RHS FP 오차는 미입증이다.
 - [ ] O3 native JVP의 가법성/동차성·residual 미분 일치·오차 gap을 관련 방향에서 확인한다.
   A10의 한 방향 반복, prepared graph 검증은 그 범위만 재사용한다.
   진행: stage2/Newton0의 후보p/Qseed/boundary-complement와 ε3개, 총9개 FD gap 측정.
@@ -91,6 +95,8 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
 ## A — 물리 오차에서 반복 허용오차까지
 
 - [ ] A1 물리량별 stage 해오차 예산→A inverse bound→실제 rate/state/scaled 잔차 예산을 연결한다.
+  진행: Stage2 ηhat/δ 표본의 잔여 예산은 정리했으나 tau/rho/norm의 full-RHS 상계가 없어
+  exact forcing1e-7 인증은 미완료다. μ floor의 조건부 1Pa branch allowance는 이 예산의 대체가 아니다.
 - [ ] A2 균일한 조건 아래 rate defect O(h³), state defect O(h⁴)의 충분조건과,
   S=O(h⁻¹)/O(1) 체제의 scaled criterion을 구분한다. 고정tol이 곧3차 보장이라는 주장은 하지 않는다.
 - [ ] A3 FP64 내부·FP32 interface/출력/전처리의 정밀도 바닥과 norm equivalence를 예산에 포함한다.
@@ -115,5 +121,8 @@ R5의 3상태 정책 연결을 닫았다. 생산 API의 Impl 예외 전파는 �
 rank-local 예외의 동시 중단, Impl 반환 후 public wrapper 예외는 이번 범위 밖이다.
 O1의 두 조건/기호 정정을 완료했다. O2/O3는 실제 경로의 제한된 source/관측 및 sampled FD 근거를
 추가했으며, 다음은 전이 cache·다른 상태/방향·FD 오차 통제와 O4/E/T/A/F의 연결이다.
+Stage3/Newton0의 실제 trust-accepted K/R 쌍과 native RMS 감소를 추가 관측했다(추가 RHS/JVP/PC0).
+Stage2 CONVERGED 로그는 있으나 Stage3·시간스텝은 완료하지 않았다. 한 computed merit 감소로
+정확한 forcing·inverse/Lipschitz 상계나 전체 Newton 수렴을 추론하지 않는다.
 E/T/A/F의 증명·실험이 모두 완료된 것처럼 묶지 않는다.
 검증 결과와 source/executable/input hash는 별도 진행 보고서에 연결해 상태를 한 항목씩 갱신한다.

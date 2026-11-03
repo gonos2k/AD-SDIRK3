@@ -1,0 +1,17 @@
+{
+  "timestamp_local": "2026-11-03T18:50:47.274583+09:00",
+  "source": "bc0f66461efddded7ffd181265d44f7e6caa7add",
+  "scope": "independent scalar arithmetic and receipt metadata audit only; no tests or native rerun",
+  "findings": [
+    "Diagnostic run status completed with exit 86, stage 2 converged, stage 3 not completed and zero timesteps.",
+    "Accepted trust step native scaled RMS ratio recomputes to 5.539341363994629e-7 from 1.056651210973314e-9 / 0.0019075394375249743. Receipt reports no extra RHS, JVP, or preconditioner calls.",
+    "Recomputed exact rational mu lower formula from receipt inputs matches analysis; outward float 89063.88575467332 is not above exact rational lower. Three receipt/code SHA links match.",
+    "Mass result is conditional on fixed B, MUB and a, Q_mu infinity bound, finite binary64 within one ULP and accepted pair identity; it covers only mu-floor along real segment and stated coordinate box.",
+    "Earlier selected-point EOS bounds are separate point-only observations; actual nonhydrostatic setting is true after WRF override, subject to separately established canonical-horizontal profile."
+  ],
+  "limits": [
+    "The post-hoc L2/sqrt(N) computed with FP64 differs slightly from the native RMS reported; they use different reduction/scalar arithmetic and should not be presented as bitwise identical.",
+    "No FD/JVP discrepancy or forcing tau/rho bound, Lipschitz bound, full RHS proof, completed Stage 3, endpoint, or performance result follows.",
+    "Source/unit receipt and scalar algebra do not independently validate all underlying tensor observations or finite-point domain margins."
+  ]
+}

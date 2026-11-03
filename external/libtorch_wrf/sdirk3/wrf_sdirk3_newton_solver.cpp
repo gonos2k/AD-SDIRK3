@@ -95,6 +95,12 @@
 #include "wrf_sdirk3_pressure_v_direct.h"
 #endif
 #include "wrf_sdirk3_terminal_jvp_probe.h"
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+#if !defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT) || !defined(WRF_SDIRK3_PRESSURE_STAGE_PROBE) || defined(WRF_SDIRK3_OPERATOR_GAP_PROBE) || defined(WRF_SDIRK3_TERMINAL_JVP_PROBE) || defined(WRF_SDIRK3_MATCHED_PRESSURE_PROBE)
+#error "accepted step probe requires audit and EOS capture, exclusively"
+#endif
+#include "wrf_sdirk3_accepted_step_probe.h"
+#endif
 #ifdef WRF_SDIRK3_OPERATOR_GAP_PROBE
 #if !defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT) || !defined(WRF_SDIRK3_PRESSURE_STAGE_PROBE) || !defined(WRF_SDIRK3_PRESSURE_A5) || defined(WRF_SDIRK3_TERMINAL_JVP_PROBE) || defined(WRF_SDIRK3_MATCHED_PRESSURE_PROBE)
 #error "operator gap probe requires the audit and A5 context, exclusively"
@@ -5085,6 +5091,9 @@ public:
         int stage,
         const torch::Tensor& F_phys = torch::Tensor()) try {  // Added F_phys with default
 
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+        wrf::sdirk3::accepted_step_probe::TerminalGuard accepted_guard(stage==3 && global_timestep_==0);
+#endif
         reset_stats();
 
         TORCH_CHECK(!options_.reuse_linearization ||
@@ -5879,7 +5888,10 @@ public:
             wrf::sdirk3::linear_delay_audit::Frame delay_frame;
             delay_frame.stage=stage; delay_frame.newton=newton_iter;
             delay_frame.refinement_passes=wrf::sdirk3::g_sdirk3_config.precond_refinement_passes;
-#if defined(WRF_SDIRK3_MATCHED_PRESSURE_PROBE) || defined(WRF_SDIRK3_OPERATOR_GAP_PROBE)
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+            delay_frame.selected=stage==3 && newton_iter==0 && global_timestep_==0 &&
+                !delay_selected_fired.test_and_set(std::memory_order_relaxed);
+#elif defined(WRF_SDIRK3_MATCHED_PRESSURE_PROBE) || defined(WRF_SDIRK3_OPERATOR_GAP_PROBE)
             delay_frame.selected=stage==2 && newton_iter==0 &&
                 !delay_selected_fired.test_and_set(std::memory_order_relaxed);
 #else
@@ -5890,7 +5902,7 @@ public:
 #endif
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
             static std::atomic_flag pressure_probe_fired = ATOMIC_FLAG_INIT;
-#ifdef WRF_SDIRK3_OPERATOR_GAP_PROBE
+#if defined(WRF_SDIRK3_OPERATOR_GAP_PROBE) || defined(WRF_SDIRK3_ACCEPTED_STEP_PROBE)
             const bool pressure_capture_here = false; // base EOS capture still uses selected audit frame
 #else
             const bool pressure_capture_here = stage == 2 && newton_iter == 0 &&
@@ -6619,6 +6631,37 @@ public:
                 stats_.final_residual_measured = true;
                 return stats_.final_residual;
             };
+
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+            torch::Tensor receipt_base_k, receipt_base_r, receipt_sinv;
+            std::vector<std::pair<const wrf::sdirk3::linear_delay_audit::Handle*,uint64_t>> receipt_inputs;
+            std::vector<std::string> receipt_input_names;
+            wrf::sdirk3::linear_delay_audit::Handle receipt_B;
+            const int receipt_threads=torch::get_num_threads(), receipt_interop=torch::get_num_interop_threads();
+            const int receipt_jvp_method=wrf::sdirk3::g_sdirk3_config.jvp_method;
+            const bool receipt_grad_mode=at::GradMode::is_enabled();
+            if (delay_frame.selected) {
+                receipt_base_k=K.detach().clone(); receipt_base_r=R.detach().clone();
+                TORCH_CHECK(scaling_initialized_ && S_inv_diag_.defined() && !halo_mask_initialized_,
+                            "accepted receipt requires S and identity H");
+                receipt_sinv=S_inv_diag_.detach().clone(); receipt_B.set_owner(U_stage);
+                auto add_receipt_input=[&](const std::string& name,const auto& h) {
+                    TORCH_CHECK(h.unchanged(), "invalid base input handle");
+                    receipt_inputs.emplace_back(&h,h.value.defined()?wrf_terminal_jvp::hash(h.value):0);
+                    receipt_input_names.push_back(name);
+                };
+                add_receipt_input("B",receipt_B); add_receipt_input("reference",delay_frame.ref_base);
+                add_receipt_input("Fphys",delay_frame.Fphys); add_receipt_input("Fexp",delay_frame.Fexp);
+                add_receipt_input("full_halo",delay_frame.full_halo);
+                for(const auto& entry:delay_frame.context) {
+                    const auto& n=entry.first;
+                    const bool scratch=n.find("_work")!=std::string::npos || n=="ru_tend" ||
+                        n=="rv_tend" || n=="rw_tend" || n=="t_tend" || n=="mu_tend" ||
+                        n=="ph_tend" || n=="qv_tend";
+                    if(!scratch) add_receipt_input(n,entry.second);
+                }
+            }
+#endif
 
             // NOTE: k_norm_tensor and rel_res_norm removed (2026-02-03).
             // Convergence now uses scaled norm ||S⁻¹R||; relative ||R||/||K|| is no longer needed.
@@ -10022,7 +10065,7 @@ public:
                     }
                 }
 #endif
-#if defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT) && !defined(WRF_SDIRK3_OPERATOR_GAP_PROBE)
+#if defined(WRF_SDIRK3_LINEAR_DELAY_AUDIT) && !defined(WRF_SDIRK3_OPERATOR_GAP_PROBE) && !defined(WRF_SDIRK3_ACCEPTED_STEP_PROBE)
                 {
                     wrf::sdirk3::linear_delay_audit::SolveInfo info;
                     info.timestep=global_timestep_; info.solver_id=solver_id_; info.generation=diag_solve_generation_;
@@ -12756,6 +12799,103 @@ public:
             // Update K with damped and scaled step
             K = K + alpha * dK_scaled;  // Functional operation to preserve autograd graph
 
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+            if (delay_frame.selected) {
+                using namespace wrf::sdirk3::accepted_step_probe;
+                try {
+                    const auto& cfg=wrf::sdirk3::g_sdirk3_config;
+                    const auto& e=pressure_eos_context;
+                    const bool trust=it.candidate.outcome==wrf::sdirk3::TrialOutcome::AcceptedTrust;
+                    const bool recovery=it.candidate.outcome==wrf::sdirk3::TrialOutcome::AcceptedRecovery;
+                    TORCH_CHECK(stage==3 && newton_iter==0 && global_timestep_==0 && dt==600 &&
+                        delay_frame.ordinal==3 && delay_frame.have_base && !delay_frame.invalid &&
+                        delay_frame.split==3 && delay_frame.n_moist==0 && !delay_frame.has_physics &&
+                        !delay_frame.prepared && delay_frame.topology[14]==1 && delay_frame.topology[15]==1 &&
+                        !delay_frame.flags[13] && !delay_frame.flags[14] && delay_frame.flags[15] &&
+                        cfg.imex_split_mode==3 && !cfg.split_explicit && cfg.internal_fp64 && cfg.internal_fp64_state_carry &&
+                        !cfg.omega_update_ref_per_newton && !cfg.enable_ad_halo_exchange &&
+                        !cfg.reuse_linearization && !options_.reuse_linearization &&
+                        !cfg.retain_graph_for_adjoint && !cfg.save_trajectory && cfg.jvp_method==receipt_jvp_method &&
+                        receipt_threads==1 && receipt_interop==1 &&
+                        torch::get_num_threads()==receipt_threads && torch::get_num_interop_threads()==receipt_interop &&
+                        at::GradMode::is_enabled()==receipt_grad_mode && use_autograd_jvp &&
+                        scaling_initialized_ && layout_initialized_ && !halo_mask_initialized_ &&
+                        torch::equal(S_inv_diag_,receipt_sinv) && e.captured && !e.failed && !e.duplicate &&
+                        delay_frame.have_first_ref && delay_frame.have_last_ref &&
+                        delay_frame.ref_first.unchanged() && delay_frame.ref_last.unchanged() &&
+                        delay_frame.ref_base.value.is_same(delay_frame.ref_first.value) &&
+                        delay_frame.ref_first.value.is_same(delay_frame.ref_last.value) &&
+                        delay_frame.ref_handle_changes==0 && delay_frame.ref_version_changes==0 &&
+                        it.step_applied() && (trust || recovery), "unsupported or unaccepted stage3 receipt");
+                    std::ostringstream inputs; inputs << "[";
+                    for(size_t i=0;i<receipt_inputs.size();++i) {
+                        const auto& h=*receipt_inputs[i].first;
+                        TORCH_CHECK(h.unchanged() && (!h.value.defined() ||
+                            wrf_terminal_jvp::hash(h.value)==receipt_inputs[i].second), "fixed context changed");
+                        if(i) inputs << ',';
+                        inputs << "{\"name\":" << wrf_terminal_jvp::quote(receipt_input_names[i])
+                               << ",\"fnv64\":" << wrf_terminal_jvp::quote(std::to_string(receipt_inputs[i].second))
+                               << ",\"defined\":" << (h.value.defined()?"true":"false") << "}";
+                    }
+                    inputs << "]";
+                    const auto mu=std::find_if(cached_layout_.blocks.begin(),cached_layout_.blocks.end(),
+                        [](const auto& block) {return block.name=="mu";});
+                    TORCH_CHECK(cached_layout_.is_exact && cached_layout_.total_size==K.numel() &&
+                                mu!=cached_layout_.blocks.end(), "mu layout unavailable");
+                    const int diag_rhs_before=delay_frame.rhs_all, diag_jvp_before=jvp_call_count;
+                    const int diag_precond_before=precond_total_calls_;
+                    const auto diag_k_hash=wrf_terminal_jvp::hash(K);
+                    const auto diag_r_hash=wrf_terminal_jvp::hash(accepted_residual);
+                    const auto diag_s_hash=wrf_terminal_jvp::hash(S_inv_diag_);
+                    const float native_base_rms=compute_scaled_rms_norm(receipt_base_r);
+                    auto body=measure(receipt_base_k,receipt_base_r,receipt_sinv,K,accepted_residual,
+                                      observed_K,observed_R,e.mu,e.mu_base,U_stage,mu->start,mu->size,
+                                      native_base_rms,residual_after_step_val);
+                    TORCH_CHECK(wrf_terminal_jvp::hash(K)==diag_k_hash &&
+                        wrf_terminal_jvp::hash(accepted_residual)==diag_r_hash &&
+                        wrf_terminal_jvp::hash(S_inv_diag_)==diag_s_hash,
+                        "receipt changed data or invoked solver operations");
+                    for(const auto& input:receipt_inputs)
+                        TORCH_CHECK(input.first->unchanged() && (!input.first->value.defined() ||
+                            wrf_terminal_jvp::hash(input.first->value)==input.second),
+                            "receipt changed fixed input");
+                    const int diag_rhs_delta=delay_frame.rhs_all-diag_rhs_before;
+                    const int diag_jvp_delta=jvp_call_count-diag_jvp_before;
+                    const int diag_precond_delta=precond_total_calls_-diag_precond_before;
+                    TORCH_CHECK(diag_rhs_delta==0 && diag_jvp_delta==0 && diag_precond_delta==0,
+                                "receipt unexpectedly invoked solver operations");
+                    body.pop_back();
+                    body += ",\"stage\":3,\"newton\":0,\"timestep\":0,\"solve_ordinal\":" +
+                        std::to_string(delay_frame.ordinal) + ",\"outcome\":\"" + (trust?"accepted_trust":"accepted_recovery") +
+                        "\",\"outer_update_alpha\":" + wrf_terminal_jvp::json_number(alpha) +
+                        ",\"dt\":" + wrf_terminal_jvp::json_number(dt) +
+                        ",\"gamma\":" + wrf_terminal_jvp::json_number(gamma) +
+                        ",\"a\":" + wrf_terminal_jvp::json_number(dt*gamma) +
+                        ",\"gmres_effective_relative\":" + wrf_terminal_jvp::json_number(gmres_raw_rel_error) +
+                        ",\"gmres_raw_relative\":" + wrf_terminal_jvp::json_number(raw_krylov_rel_error) +
+                        ",\"direction_modified\":" + (direction_modified?"true":"false") +
+                        ",\"trust_attempted\":" + (it.candidate.trust_attempted?"true":"false") +
+                        ",\"recovery_attempted\":" + (it.candidate.recovery_attempted?"true":"false") +
+                        ",\"base_context_hashes\":" + inputs.str() +
+                        ",\"reference_hash\":" + wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(delay_frame.ref_base.value))) +
+                        ",\"profile\":\"mode3_single_tile_fp64_ref_update_off_reuse_off\"" +
+                        ",\"grad_mode\":" + (receipt_grad_mode?"true":"false") +
+                        ",\"torch_threads\":" + std::to_string(receipt_threads) +
+                        ",\"torch_interop_threads\":" + std::to_string(receipt_interop) +
+                        ",\"jvp_method\":" + std::to_string(receipt_jvp_method) +
+                        ",\"receipt_fingerprints_unchanged\":true" +
+                        ",\"receipt_rhs_delta\":" + std::to_string(diag_rhs_delta) +
+                        ",\"receipt_jvp_delta\":" + std::to_string(diag_jvp_delta) +
+                        ",\"receipt_preconditioner_delta\":" + std::to_string(diag_precond_delta) +
+                        ",\"rhs_calls_through_accept\":" + std::to_string(delay_frame.rhs_all) +
+                        ",\"jvp_calls\":" + std::to_string(jvp_call_count) + "}";
+                    finish(true,body);
+                } catch(const std::exception& error) {
+                    std::fprintf(stderr,"[ACCEPTED_STEP] error=%s\n",error.what());
+                } catch(...) { std::fprintf(stderr,"[ACCEPTED_STEP] unknown error\n"); }
+                finish(false,"{\"status\":\"failed\",\"forecast_complete\":false}");
+            }
+#endif
 
             // PR 8: per-iteration update record (opt-in). Emitted after the
             // update is applied; reads only.

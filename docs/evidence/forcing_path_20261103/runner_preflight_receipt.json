@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-11-03T18:35:39.585291+09:00",
+  "status": "passed",
+  "error": null,
+  "source_commit": "bc0f66461efddded7ffd181265d44f7e6caa7add",
+  "runner_sha256": "cfcfb5fa140d0cb724b0f16b46532fe0a4dbb2dafa69cc3df780dceb54348ca7",
+  "build_receipt_sha256": "57c8957f9f58a9fc89b5fe0bd9e6dafd96672e30be02a9d63b5193a0b66182b8",
+  "link_receipt_sha256": "47e91218f7e4ab273dbe2d9bf4784f925e0407e832fbdd99280f7e87074c1b9d",
+  "helper_receipt_sha256": "0fbb1a8db0cafc6d3e6123e9dccdb404ec04e5209ff4228f33a0e8654733e0cc",
+  "executable_sha256": "5864415fe7a3936041606ad70ee1ed418018fdc979f73719e7dfbe6f4fefc933",
+  "map_sha256": "e81a044b50f299030fdf177e66fa641f30b3f136ba9e1247521b1f5a0614e49a",
+  "scope": "read-only source, archive, link, direct-method origin and helper checks; no model run"
+}

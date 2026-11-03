@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-11-03T18:22:28.332730+09:00",
+  "status": "PASS_BOUNDED_SOURCE",
+  "critical_findings": [],
+  "sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "1ab697a6de450c6416cc9416f3523227fcb3679112cf6bf8f76fbd67c7568c71",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h": "65c89d8c8b352a2305d17f905d68dda76c0afc528e9bd7255eda20d03d4d8737",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "032155596dcf783065191cd1ab2fca34c1f02d833fc9ec00afadb53219f09628",
+    "external/libtorch_wrf/sdirk3/tests/test_accepted_step_probe.cpp": "43a1960e398fce6fe53d323f3ef40c3522df05ca44cf7591d8fbe9ae064bf761"
+  },
+  "findings": [
+    "Post-update K and accepted residual are checked against observed accepted-trial pair; mismatched alpha/pair fails closed.",
+    "Native RMS calls native norm authority with identical scaling and H identity; analysis FP64 L2 is separate.",
+    "Same-call base EOS mu and mub are cloned in pressure capture.",
+    "Receipt takes no explicit RHS/JVP/preconditioner call and checks observed counters and hashes; this is instrumentation, not total execution identity.",
+    "Terminal guard stops rather than continues if selected stage cannot produce qualifying receipt.",
+    "Frozen source additionally checks mu, mub and observed pair tensor FP64 types."
+  ],
+  "limitations": [
+    "outer_update_alpha is not trust alpha; mu extrema are of projected base EOS inputs.",
+    "Stage3 observation cannot certify stage2 forcing or entire context.",
+    "Rational mu tube, numerical rounding, other branches, whole-Jacobian and full forecast remain unproved.",
+    "No build, tests or model run by reviewer."
+  ],
+  "source_commit": "bc0f66461efddded7ffd181265d44f7e6caa7add"
+}

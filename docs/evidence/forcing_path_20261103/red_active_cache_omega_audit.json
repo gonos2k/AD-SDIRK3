@@ -1,0 +1,30 @@
+{
+  "time_local": "2026-11-03T17:46:36.745611+09:00",
+  "source_head": "3a82d60130d3c48c6492ae863a66187f26f905f3",
+  "files_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "194365634d17e9a5eaefc38e577bccd0b6c606f4ace3de4cabdf102981bb01ad",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "7118ed441204b2c2f7cfc7460fe84bb781d81c24ea73d1357ce3a9b097e68490"
+  },
+  "prior_profile_log_sha256": "8822b4c9952a7ea6f49b551938b9d9549470017b76e6526f1d35122dba267121",
+  "prior_namelist_sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+  "scope": "source audit of continuity/omega/theta and damping for supplied PR342 stage2 selected point; no new model data",
+  "active_profile": [
+    "Effective mass_coordinate_mode=1 overrides raw false omega and horizontal-only flags; mode3, no HEVI, ImplicitOnly, reference-update off, reuse off, AD on, FP64 carry on; nprocx=nprocy=1, dry packed periodic-X symmetric-Y.",
+    "WRF w_damping=0 and wrf_damp_opt=0 disable the respective implicit W damping and Rayleigh terms despite implicit_wdamp=1 and nonzero coefficients; mode3 fast excludes do_explicit advection/Coriolis/diffusion.",
+    "mu_tend_fortran_parity and ph_use_rdnw_not_rdzw defaults true; effective values not explicitly emitted in cited log, so treat as assumptions unless runtime configuration evidence confirms."
+  ],
+  "source_closed_uncertainty": [
+    "WRFMassFlux mass_flux_memo is local to each computeUnifiedRHS call and initially undefined; when evaluated it constructs omega and mass tendency from current projected u/v/mu and fixed base/metrics, so no cross-call frozen-omega memo exists. This source conclusion is conditional on fixed input/context and branch and is not a full determinism proof.",
+    "diagnose_wrf_mass_flux contains tensor algebra for stagger, flux, div, sum and cumsum; NoGrad scalar sanity checks use geometry/coefficient operands, not state-derived transport values, and do not themselves detach that algebra.",
+    "With parity effective and no HEVI, fast mu tendency uses horizontal mass flux; state theta slot comes from current U, and physical theta conversion divides by hybrid mass and uses mu tendency; these tensor paths remain connected in inspected code.",
+    "Phi vertical-advection helper consumes current ph and diagnosed omega via tensor operations, with fixed metric/fnm/fnp and configured branch; it does not alone prove all active RHS forward-AD operations or Q constrained derivative correct."
+  ],
+  "remaining_risks": [
+    "mu_floor_mask=(mu_full<=0).detach() and torch::where make a piecewise map with a branch change; its explanatory comment cannot establish differentiability at zero or stable branch under perturbation. Actual point and probe margin were not measured in this audit. WRF mass flux uses current raw mu plus base, whereas other expressions use corrected mu_full: do not assume identical floor semantics.",
+    "Map-factor caches and coefficient/base alignment are reused mutable state; the observed input subset and terminal repeat checks do not cover all caches or establish their equivalence under every call. Reference is legitimately fixed by mode3 update-off branch; replacing or detaching state variables to achieve a test would change the operator.",
+    "Prior chosen point U and reference hashes match archived comparison only; full context not established by those two values. Small-epsilon FD plots are not rigorous truncation/roundoff bounds.",
+    "No analytical exact-forcing 1e-7 certificate, finite precision bound, new native/forecast/RK3 run, build or source edit."
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-11-03T18:39:24.858339+09:00",
+  "status": "PASS_CONDITIONAL",
+  "source_commit": "bc0f66461efddded7ffd181265d44f7e6caa7add",
+  "bound_script_sha256": "d3783546ba406f3259cde46c2983d22f0edd59075f48aef17e736afcc046ccca",
+  "algebra": "For the accepted K0 to K1 real segment, Q_mu is a copy map with infinity norm 1, so the lower mass bound is min(mu_base_evaluated)+min(MUB)-a*(||K0_mu||inf+||K1_mu||inf)-1 Pa.",
+  "rounding": "Magnitude envelope below 2^39 leaves all basic-operation intermediates below 2^40; at most five binary64 multiply/add roundings cost at most 5*2^-12 Pa, less than the 1 Pa allowance.",
+  "conditions": [
+    "IEEE binary64 basic operations within one ULP, finite and no overflow",
+    "Packed Q_mu copy branch; fixed B, MUB and positive coefficient a",
+    "Actual accepted pair and verified FP64 tensor metadata (torch dtype enum 7)",
+    "The stated extrema and source mapping accurately correspond to the captured evaluation"
+  ],
+  "limits": [
+    "Only proves mu_full <= 0 floor branch inactive when computed lower bound is strictly positive; 1000 is replacement, not threshold.",
+    "Does not prove other RHS branches, full floating-point error, derivative gap or forcing.",
+    "Read-only math review; no model or tests repeated."
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "script_sha256": "d3783546ba406f3259cde46c2983d22f0edd59075f48aef17e736afcc046ccca",
+  "status": "passed",
+  "checks": [
+    "exact positive synthetic lower=90",
+    "negative lower rejected",
+    "magnitude envelope rejected",
+    "NaN/Inf rejected"
+  ],
+  "model_run": false,
+  "scope": "scalar algebra/metadata, not a full RHS test"
+}

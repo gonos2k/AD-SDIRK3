@@ -1,0 +1,20 @@
+{
+  "scope": "selected point only, no model run; binary input reconstructions checked against recorded hashes",
+  "time": "2026-11-03T18:06:34.248411+09:00",
+  "ueval_sha256": "36066354aab639372f4eee8f4a47bde6f8047f39557062c6402c80b7dfb50e86",
+  "ph_base_fnv64": "56aa110cd24e8725",
+  "c1h_fnv64": "e581f25d019bd1eb",
+  "c2h_fnv64": "30613798fac7f3eb",
+  "mu_base_fnv64": "87f1b77d980beefe",
+  "conservative_exact_real_lower_bounds": {
+    "theta_plus_300": 258.83935546874994,
+    "total_geopotential_layer_difference": 2110.515136718749,
+    "hybrid_mass_c1_times_muts_plus_c2": 89073.03124999996
+  },
+  "method": "IEEE binary64 nearest operations widened down one representable number after each subtraction/addition/multiplication; c1 nonnegative; exact-real lower bounds assuming standard rounding, finite inputs and gradual underflow",
+  "limits": [
+    "Selected point only, no direction-neighborhood or full input context proof.",
+    "Does not directly evaluate EOS inverse density alt or certify EOS power argument, FP operation error, FD error, or forcing residual.",
+    "Reconstruction of base and coefficients uses initialized wrfout and verified FNV hashes; U_eval uses separately verified byte SHA."
+  ]
+}
