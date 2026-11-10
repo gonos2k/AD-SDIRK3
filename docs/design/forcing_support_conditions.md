@@ -206,3 +206,30 @@ input formation, scaling/norm/float conversion and e0/e1 remain open. Thus exact
 merit decrease and full Stage3/forecast convergence are still uncertified.
 The old native source/link/run scope, P1 NO-GO and E/T/A/F status are preserved.
 [Input evidence, component bounds and portable replay](../evidence/alb_error_20261110/README.md).
+
+
+## Recovered native al_pert and first W input component (PR345 follow-up)
+
+For the same FP64 endpoints, source alt=al_pert+alb implies
+u_hat−u*=(alpha_hat−alpha*)−(alb_hat−alb*)−eta_add. Reconstructing the original
+rounded-operation tube before the final addition bounds both its exact operand
+sum and rounded output inside magnitude8. Under the existing source-ordered
+one-ULP binary64 conditions, Eadd=2^-50 yields native al_pert Linf upper bounds
+3.833649509045476e-15 and3.829031194395618e-15m³/kg. These are conditional
+recovery bounds, not direct samples or new MPFR runs. Induced shifts are not added.
+
+The active ImplicitOnly WPGF uses pressure differences; inverse-alt diffusion is
+in do_explicit. W interior/top real-algebra input sensitivities are respectively
+|g*rdn_k|/m_k*(Ep_k+Ep_{k−1}) and2|g*rdnw_top|/m_top*Ep_top for dry cq1=1.
+Using the recorded candidate geometry, positive mass bounds and specified Qw,
+source-profile inverse-weight cap and H=I gives a conditional mathematical
+weighted component near2.40e-13/2.36e-13. Runtime RDN/g identity and scale-floor
+path assumptions are explicit, not measured coefficient/weight claims. This
+piece excludes native W arithmetic/coefficient formation and every other RHS
+term, as well as native scaling/norm/float-conversion errors.
+
+Native al_pert recovery does not close full residual error. Actual coefficient/
+weight evidence, U/V primary and NH4, other RHS and metric remainder still need
+bounds before e0+e1 or Stage3 convergence can be certified. No native or RK3 was
+rerun; the original accepted-pair scope and historical NO-GO results are preserved.
+[Replay and source/data conditions](../evidence/eos_rhs_20261110/README.md).

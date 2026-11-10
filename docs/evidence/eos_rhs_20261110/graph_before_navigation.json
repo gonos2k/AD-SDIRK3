@@ -1,0 +1,46 @@
+{
+  "source_commit": "9e7d69d8d0cd1c335420a79f62c25c5b99ce83e6",
+  "relationships": [
+    {
+      "from": "evaluate_eos_domain.py:10",
+      "to": "eos_domain_bounds.evaluate",
+      "kind": "Python import; extrema packet gives per-level domain only"
+    },
+    {
+      "from": "run_eos_mpfr.py:79",
+      "to": "eos_mpfr executable",
+      "kind": "subprocess consuming captured raw EOS inputs; output excludes full RHS/state formation"
+    },
+    {
+      "from": "evaluate_alb.py:131",
+      "to": "alb_mpfr executable",
+      "kind": "subprocess; output bounds alb/composed EOS at rounded captured inputs"
+    },
+    {
+      "from": "widen_alb_tube.py:24",
+      "to": "receipt, eos_domain_analysis, alb_analysis",
+      "kind": "conditional exact-real tube widening; outputs level bounds"
+    },
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp:20492",
+      "to": "calc_p_rho_wrf",
+      "kind": "production thermodynamic calculation; subsequent active callers require source and branch checks"
+    },
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp:20769",
+      "to": "acoustic::horizontal_pgf_primary",
+      "kind": "pressure-gradient consumer, branch/stagger/mask semantics not established by graph"
+    },
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp:22280",
+      "to": "vertical pressure gradient and w forcing",
+      "kind": "candidate propagation path; active mode and boundary scope must be source-verified"
+    }
+  ],
+  "gaps": [
+    "The graph omits most Fortran and unselected source files; graph call edges do not establish selected runtime branches, tensor shapes, staggering or boundary topology.",
+    "Existing interval domain, rounded-input MPFR and upstream-alb analyses have different assumptions and do not themselves bound active RHS, residual norm or exact descent.",
+    "Pressure/alt use, floating-point rounding and state/cache mutation must be checked in authoritative source before composing any bound.",
+    "Historical registration/packaging scripts contain prior worktree and evidence paths; their presence is not evidence they execute in the current worktree."
+  ]
+}

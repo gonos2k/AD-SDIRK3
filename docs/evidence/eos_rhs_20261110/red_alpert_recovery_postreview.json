@@ -1,0 +1,26 @@
+{
+  "time_local": "2026-11-10T14:15:37.949529+09:00",
+  "status": "passed",
+  "scope": "conditional endpoint native al_pert error, not full RHS or forcing",
+  "result_sha256": "e9dbe424030f4e151e4942a52d67ee121d01a4aa8d114ee993fd5b6112d047c4",
+  "registration_sha256": "714912aa2234d3806fc5c29fe414f68c8bc77b3a973de424e1f1349f450a63d5",
+  "execution_sha256": "30e3f0f83c4cac17e73a5bed46400c3b22494bd76b2ca7ad0cc5857bc811e7ff",
+  "all_registered_pins_verified": 9,
+  "levels_verified": 64,
+  "maximum_envelope_abs_exact": "3549908249763591/562949953421312",
+  "maximum_envelope_abs_binary64_nearest": 6.305903798710927,
+  "endpoint_upper_bounds": [
+    3.833649509045476e-15,
+    3.829031194395618e-15
+  ],
+  "checks": [
+    "Independently rebuilt 64 source-order intervals using pinned prior I, checked pre-round exact sums, frozen alpha intervals and <8 envelope.",
+    "Recomputed endpoint Fractions from prior recorded binary64 bounds and 2^-50; confirmed upward binary64, hex and <4e-15.",
+    "Registered inputs and execution/registration hashes match."
+  ],
+  "limitations": [
+    "Uses same pinned interval arithmetic implementation; not independent implementation proof.",
+    "Theta input fingerprint-qualified; finite separate binary64 source operations assumed.",
+    "No new MPFR, native model or forecast run."
+  ]
+}

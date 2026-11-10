@@ -1,0 +1,20 @@
+{
+  "timestamp_local": "2026-11-10T14:07:34.851224+09:00",
+  "scope": "conditional endpoint native al_pert recovery from old rounded-operation tube and existing MPFR bounds",
+  "source_baseline": "9e7d69d8d0cd1c335420a79f62c25c5b99ce83e6",
+  "native_runs": 0,
+  "maximum_evaluations": 1,
+  "target_upper_exact": "1/250000000000000",
+  "inputs": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-rhs-propagation-20261110/recover_alpert_bound.py": "c24185562cc58cef8f69a4bb4b57ff904a6c2290f5e405c8b091530d2e063af0",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-rhs-propagation-20261110/test_recover_alpert_bound.py": "4b6651f53affbacbc9c98d0eda02b3909f3c974a1b6877efad949aa4c879df41",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-rhs-propagation-20261110/red_alpert_recovery_plan.json": "a848dd80188cbe3b28684a9fbc8b6cac3de86ec1ee3f784d2c93b6d26dcb373a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-rhs-propagation-20261110/red_alpert_recovery_preflight.json": "a5a418a25c2d052e9caff3ffc6665778790bb067a4fc7afb195cf20b63c4bed1",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-rhs-propagation-20261110/docs/evidence/eos_descent_20261110/eos_domain_bounds.py": "4c1b7d0f78054b3699ec91c18e8aa4510ecbfb41e35d919f75d86e58516cce08",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-rhs-propagation-20261110/docs/evidence/eos_descent_20261110/run/accepted_step_probe.json": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-rhs-propagation-20261110/docs/evidence/eos_descent_20261110/eos_domain_analysis.json": "684aac4c879859731bede2367e27245c4de4fc20cec3f6121b2a1f7e4c73800b",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-rhs-propagation-20261110/docs/evidence/alb_error_20261110/alb_analysis.json": "2f9f9de1110de620c1725c2bb7727ee87c3773fa69aca6cc68b5ff4d8db051a2",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-rhs-propagation-20261110/external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b"
+  },
+  "synthetic_validation": "PASS exact addition recovery, upward conversion, binade refusal and hex mismatch; current source/test hashes pinned"
+}

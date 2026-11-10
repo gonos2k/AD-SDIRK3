@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-11-10T14:00:06.245546+09:00",
+  "status": "SOURCE_AUDIT_CONDITIONAL",
+  "source_commit": "9e7d69d8",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "7118ed441204b2c2f7cfc7460fe84bb781d81c24ea73d1357ce3a9b097e68490"
+  },
+  "profile_evidence": [
+    "Retained native run namelist uses mode3, non_hydrostatic=true, diff_opt=1, km_opt=1, damp_opt=0; log shows HEVI off, WRFParity mass mode1, wrf_w_damping=0, implicit_wdamp=1. Earlier non_hydrostatic off print predates subsequent true setter and Tile construction, per prior authority audit.",
+    "ImplicitOnly sets do_implicit=true and do_explicit=false; Steps7-10 diffusion and Rayleigh are in do_explicit block. This does not mean diffusion is globally disabled or irrelevant to slow explicit stages.",
+    "WRF W damping requires wrf_w_damping==1 and implicit_wdamp; it is off under logged effective setting. Additional test top damping code is commented out."
+  ],
+  "routes": [
+    "Within active implicit block EOS p_pert_mass feeds U PGF, synchronized p_pert_ feeds V PGF, and p_pert_mass feeds W interior and top PGF; U/V owner should establish their full routes.",
+    "W live pressure force uses p(k)-p(k-1), top one-sided pressure, and column-mass buoyancy. Its old EOS-alt interpolation is dead as documented in source; al_pert/alt affect U/V PGF, not directly this W PGF.",
+    "p_pert_w/p_full_w computed for diagnostics but do not enter W forcing; debug sanitization of p_pert_ is a conditional separate path.",
+    "alt reciprocal density in diffusion and pressure from p_pert_ for diffusion live in do_explicit; they are not active for Newton ImplicitOnly. Avoid importing slow-RHS bound into fast-only sum."
+  ],
+  "w_bound": {
+    "exact_interior": "|delta W_k| <= |g*cq1_k*rdn_k/level_mass_w,k|*(E_p,k+E_p,k-1) for 1<=k<nz, fixed state/coefficients",
+    "exact_top": "|delta W_top| <= 2*|g*cq1_(nz-1)*rdnw_(nz-1)/level_mass_w,top|*E_p,nz-1; bottom zero",
+    "conversion": "At fixed coefficients, WRFParity path has msfty^-1*g pressure factor, times velocity_mass/(level_mass/msfty), then final division by velocity_mass; cancellation is exact-real only. Must account independently for all native FP operations and any sanitizer/branch.",
+    "projection": "Final packed Q_w extends mass-grid values by copy: infinity norm 1, unweighted L2 norm at most 2 for standard two-axis alias groups; weighted S_inv requires actual per-cell weights or a proved bound.",
+    "units": "E_p in Pa; resulting W tendency error in the solver W tendency units after actual hybrid-mass and map factors; convert through recorded inverse S and same N before comparing dimensionless RMS."
+  },
+  "missing": [
+    "Numeric same-call g, cqw/cq1, rdn and top rdnw, c1f/c2f, mu/mub, msfty, actual S_inv and ownership layout; recorded context hashes are not values. EOS raw bundle includes pressure/alt/alb, mu/mub, c1h/c2h and rdnw, but no raw c1f/c2f,cqw,rdn,msfty or S_inv.",
+    "Map/level mass/velocity denominator positivity and no sanitizer activation, finite coefficients, identity of reference states, signs and exact active terms require verification at each captured endpoint.",
+    "A bound on native arithmetic roundoff in W path and other RHS terms and complete L2 weighted accumulation remains necessary for e_i. All-array vs physically owned cells must be identified; avoid assigning saved alias-inclusive EOS norm directly to owned-cell norm."
+  ],
+  "limitations": [
+    "Source-derived conditional component only, not full implicit RHS, numerical exact forcing, or forecast claim.",
+    "No code edits, build, test, or model run."
+  ]
+}

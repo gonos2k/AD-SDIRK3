@@ -1,0 +1,17 @@
+{
+  "timestamp_local": "2026-11-10T14:16:07.960249+09:00",
+  "status": "PASS_BOUNDED",
+  "scope": "Independent saved-result scalar arithmetic and provenance review; no replay",
+  "checks": [
+    "21 W and 9 alpert registered input hashes match; execution return codes zero and registration hashes match.",
+    "Each 65-level W maximum equals saved physical upper; weighted exact rational equals max*(1+2^-23)/2. Base/accepted physical approx 4.802262241646415e-13 and 4.729164593016812e-13; weighted approx 2.4011314070603423e-13 and 2.3645825783885814e-13.",
+    "alpert exact endpoint bounds equal previous composed-alpha bound plus upstream-alb bound plus 2^-50; both less than 4e-15 and corresponding binary64 hex values are outward.",
+    "Runtime RDN and gravity identity remain explicitly unverified and inverse-S upper is a source-profile conditional bound, not an actual saved weight measurement."
+  ],
+  "limits": [
+    "W value is exact-real sensitivity to pressure-input error at fixed state/coefficient assumptions; it excludes native PGF arithmetic, state/coefficient formation, other RHS and norm errors.",
+    "alpert recovery depends on IEEE one-ULP addition/no reassociation, input/identity and retained domain assumptions; native alpert itself was not captured.",
+    "No full RHS e_i, exact descent, Stage3 convergence, or forecast claim.",
+    "No test, data recomputation or native run repeated beyond independent scalar arithmetic and hash checks."
+  ]
+}

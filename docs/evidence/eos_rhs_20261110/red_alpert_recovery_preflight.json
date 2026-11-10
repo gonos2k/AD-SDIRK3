@@ -1,0 +1,19 @@
+{
+  "time_local": "2026-11-10T14:07:05.109295+09:00",
+  "verdict": "approve for registered actual-case evaluation under stated assumptions",
+  "source_sha256": {
+    "recover_alpert_bound.py": "c24185562cc58cef8f69a4bb4b57ff904a6c2290f5e405c8b091530d2e063af0",
+    "test_recover_alpert_bound.py": "4b6651f53affbacbc9c98d0eda02b3909f3c974a1b6877efad949aa4c879df41"
+  },
+  "findings": [
+    "Prior source-ordered I arithmetic reconstructs actual rounded al_pert interval before final addition and compares reconstructed denominator and rounded alpha exactly to original frozen domain tube.",
+    "Exact rational pre-round sum u+alb and rounded output must each remain within absolute 8; under stated finite one-ULP binary64 operation contract addition error <= 2^-50.",
+    "Prior composed alpha and upstream alb bounds are parsed as binary64 and cross-checked with exact hex, summed with addition allowance as exact Fractions, converted upward and checked against 4e-15.",
+    "Historical receipt/domain/composed analysis and source I are SHA guarded; helper requires FP64 ph/alt/alb, identity mask and positive coefficient and denominator.",
+    "Input theta is fingerprint-qualified; result bounds endpoint component error, not whole RHS, exact forcing or merit."
+  ],
+  "limitations": [
+    "Review is source-only. Reported synthetic PASS not independently rerun; no actual-case, native or model execution.",
+    "Assumes prior state-box/source-matching and finite separate binary64 operations in source order; no reassociation or hidden precision."
+  ]
+}

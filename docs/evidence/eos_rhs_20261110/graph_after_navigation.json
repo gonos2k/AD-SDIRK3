@@ -1,0 +1,42 @@
+{
+  "source_commit": "9e7d69d8d0cd1c335420a79f62c25c5b99ce83e6",
+  "graph_sha256": "f4cbfe142f0a64be920eb6ae89f9853a56c4d28d83e208551643a7c7e1d6933f",
+  "pins_sha256": "6c3db42db75faca61c14ad275cbaa38e67a44f379a95b1dc0257f9afbff7cb78",
+  "relationships": [
+    {
+      "from": "README.md:12",
+      "to": "recover_alpert_bound.py and its test",
+      "kind": "documented evaluation using prior receipt, EOS domain and ALB analysis"
+    },
+    {
+      "from": "README.md:16",
+      "to": "w_pressure_sensitivity.py and its test",
+      "kind": "documented component analysis with recorded coefficient inputs"
+    },
+    {
+      "from": "test_recover_alpert_bound.py:7",
+      "to": "recover_alpert_bound.recover",
+      "kind": "Python import"
+    },
+    {
+      "from": "test_w_pressure_sensitivity.py:3",
+      "to": "w_pressure_sensitivity.compute and validate_profile",
+      "kind": "Python imports"
+    },
+    {
+      "from": "publish_eos_rhs.py:4",
+      "to": "explicit analysis source, test and evidence list",
+      "kind": "historical packaging copies"
+    },
+    {
+      "from": "README.md:75",
+      "to": "prepare_w_coefficients.py",
+      "kind": "original wrfinput and xarray required to reconstruct coefficient inputs"
+    }
+  ],
+  "gaps": [
+    "AST relationships do not establish active runtime branches, tensor staggering, boundary behavior or floating-point validity.",
+    "Analysis covers selected EOS/pressure components and does not by itself establish full RHS, norm, forcing or descent bounds.",
+    "Fortran and non-selected sources remain outside this corpus; explicitly enumerated ignored/untracked files and modified documents are pinned from their actual filesystem content."
+  ]
+}

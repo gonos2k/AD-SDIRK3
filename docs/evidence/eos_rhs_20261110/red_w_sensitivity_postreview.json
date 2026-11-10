@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-11-10T14:16:00.426475+09:00",
+  "status": "PASS_CONDITIONAL_OFFLINE",
+  "critical_findings": [],
+  "sha256": {
+    "w_pressure_component.json": "c8acb0199c55d2678d95c2e78f6d41aaeaa173f33665ce73974d0386ce2c123f",
+    "w_coefficients.json": "190db442624907c7b541ff8a34a96ff6bb52b83da50814230a151f6430c3fdbe",
+    "w_sensitivity_execution.json": "9405bee4d637d6b94e83e85d910db5bee969b66981549af1463c655241d8586b",
+    "w_sensitivity_registration.json": "22ba50dc408500db7e064681406b5d0942c914e901bd076375d89405c8a96e0c"
+  },
+  "checks": [
+    "Independently recomputed all 65 exact Fraction per-level values for both base and accepted state; coefficients, historical receipt and MPFR pressure analysis SHA match output pins.",
+    "Physical Linf bounds 4.802262241646415e-13 and 4.729164593016812e-13; corresponding mathematical weighted pieces 2.4011314070603423e-13 and 2.3645825783885814e-13.",
+    "4*(81*65*41)<1080491; 1/2 RMS factor valid for full packed W count under identity H and stated weight bound.",
+    "Recorded execution exit zero and immutable inputs unchanged."
+  ],
+  "limits": [
+    "RDN, gravity and momentum-scale floor/no replacement are explicit unverified runtime assumptions; c1/c2/map/cqw fingerprints are collision-qualified.",
+    "These are exact-real W pressure-input sensitivities only; no native W operation roundoff, backend norm error, U/V/other RHS or full endpoint e_i certificate.",
+    "No native model or tests rerun."
+  ]
+}

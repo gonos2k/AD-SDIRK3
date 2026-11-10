@@ -1,0 +1,22 @@
+{
+  "timestamp_local": "2026-11-10T14:11:34.952662+09:00",
+  "status": "PASS_SYNTHETIC",
+  "returncode": 0,
+  "stdout": "PASS interior/top exact rational, weight allowance, nonpositive denominator/error, RMS size gate\nPASS receipt H/N and positive-count gates\n",
+  "stderr": "",
+  "sha256": {
+    "prepare_w_coefficients.py": "90745c05bd1cca3c1a6e2b9f9426253a6d169c0ce67106120efe3fceb36485fd",
+    "w_pressure_sensitivity.py": "30f14a15f0df7fef76de63d9ff084fecf48816ce6c2fce8019474bd73367a501",
+    "test_w_pressure_sensitivity.py": "838988ddab6c8344857e23ed3a6753622917cbb35bfef783db02da98109bb832"
+  },
+  "scope": "exact-real pressure-input sensitivity W only; not native W arithmetic/full RHS/norm error",
+  "conditions": [
+    "dry cq1=1; Qw copy and H identity; same endpoint fixed state and coefficients",
+    "candidate runtime RDN identity is NOT verified",
+    "candidate gravity identity is NOT verified",
+    "source-profile scale floor implies reciprocal upper <=1+2^-23 under specified rounding assumptions, not a measured scale",
+    "no floating backend norm or full forcing bound"
+  ],
+  "no_real_data_analysis": true,
+  "additional_gates": "receipt mask identity and N=1080491; positive Nw,N and 4*Nw<N"
+}

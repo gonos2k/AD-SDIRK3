@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/opt/local/bin/python3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-rhs-propagation-20261110/w_pressure_sensitivity.py",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-rhs-propagation-20261110/w_coefficients.json",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-rhs-propagation-20261110/docs/evidence/alb_error_20261110/alb_analysis.json",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-rhs-propagation-20261110/docs/evidence/eos_descent_20261110/run/accepted_step_probe.json",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/eos_raw",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-rhs-propagation-20261110/w_pressure_component.json"
+  ],
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "registration_sha256": "22ba50dc408500db7e064681406b5d0942c914e901bd076375d89405c8a96e0c",
+  "immutable_inputs_unchanged": true
+}

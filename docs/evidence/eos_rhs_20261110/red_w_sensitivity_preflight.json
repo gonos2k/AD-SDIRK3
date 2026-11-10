@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-11-10T14:12:55.357899+09:00",
+  "status": "PASS_CONDITIONAL_PREFLIGHT",
+  "critical_findings": [],
+  "sha256": {
+    "w_pressure_sensitivity.py": "30f14a15f0df7fef76de63d9ff084fecf48816ce6c2fce8019474bd73367a501",
+    "prepare_w_coefficients.py": "90745c05bd1cca3c1a6e2b9f9426253a6d169c0ce67106120efe3fceb36485fd",
+    "test_w_pressure_sensitivity.py": "838988ddab6c8344857e23ed3a6753622917cbb35bfef783db02da98109bb832"
+  },
+  "checks": [
+    "Exact-real dry W pressure-only interior and top coefficients and positive hybrid-denominator interval are consistent with source under fixed-coefficient WRFParity assumptions.",
+    "H identity/N=1080491 profile and positive counts with 4*Nw<N are checked; Qw infinity nonexpansive and wmax*(max B)/2 provides conservative RMS conditional bound.",
+    "Runtime RDN/gravity identity flags must remain false; FNV-derived candidate inputs are not direct runtime-byte proof.",
+    "scale_u floor >=1 and no replacement physics scaling remain conditional profile/source assumptions; actual S_inv not measured.",
+    "Pressure-only sensitivity is not native W arithmetic, backend norm, U/V/NH, other RHS or full e_i."
+  ],
+  "limits": [
+    "Registration binds exact receipt/analysis/coefficient inputs and profile; underlying input/call provenance and no unobserved selector changes remain conditional.",
+    "Parent reports synthetic tests PASS; no test/native run repeated by reviewer."
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "timestamp_local": "2026-11-10T13:58:51.087955+09:00",
+  "source_revision": "9e7d69d8d0cd1c335420a79f62c25c5b99ce83e6",
+  "scope": "read-only U/V primary PGF input-error propagation; fixed geometry and state, selected single-tile WRFParity dry ImplicitOnly profile; no native execution or RHS error certificate",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.h": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+  },
+  "source_path": [
+    "tile_unified_impl.cpp:15491-15500: effective omega flag plus periodic-X/symmetric-Y selects canonical_horizontal; mode3 wrapper selects ImplicitOnly",
+    "tile_unified_impl.cpp:20490-20539 computes current p_pert, alt and al_pert; U consumes local values and V reads newly refreshed p_pert_ at 21141, conditional sanitation separately matters",
+    "tile_unified_impl.cpp:20753-20772,20862-20886 U interior and periodic seam use two neighboring mass points; acoustic_substep.h:270-278 defines shared primary kernel",
+    "tile_unified_impl.cpp:21153-21154,21200-21207,21250-21304 V uses y-face averaging with factor 2 in kernel, and symmetric boundary zero-gradient handling",
+    "tile_unified_impl.cpp:20904,21314 native NH term added separately; it also consumes p and is outside this primary-only bound",
+    "tile_unified_impl.cpp:21025-21035,21415-21421 rescales coupled PGF by velocity_mass/alpha_face; :26330-26345 then divides by velocity_mass and subtracts state times mass rate; these cancellations hold only in exact real arithmetic with fixed inputs and nonzero denominators",
+    "tile_unified_impl.cpp:26649,26724 packs rates and applies Q output projection; Q output copies/reflections/zero normal faces, not global L2 orthogonal projection"
+  ],
+  "pointwise_primary_bound": {
+    "notation": "P=neighbor difference of captured p_pert; A=neighbor sum captured alt; B=neighbor difference fixed p_base; E_p,E_a,E_l are per-cell Linf errors of native p_pert, alt, al_pert versus chosen same-state real EOS. Deltas are signed errors; each difference or sum involves at most two terms.",
+    "inequality": "|delta(A*P+L*B)| <= |A|*2*E_p + 2*E_a*(|P|+2*E_p) + |B|*2*E_l. This retains the cross product.",
+    "physical_rate_coefficient": "C_face=abs(0.5*spacing_inverse*map_ratio*level_mass*cq_face/alpha_face), so primary U or V physical-rate sensitivity <= C_face times bracket in exact arithmetic. For fixed finite nonzero canonical alpha and unguarded map ratios it simplifies algebraically to abs(0.5*rdx*msfux*cqu_face) for U and abs(0.5*rdy*msfvy*cqv_face) for V; verify actual map guards/cq and domain before cancellation.",
+    "important": "U uses alt sums directly; V uses 2*face averages, so bound on resulting sum coefficients must follow actual avg_y_to_v boundary stencils, not assume interior at every face. Q is a copy/reflection/zero map, so its infinity norm <=1 for each block under this topology."
+  },
+  "packed_norm_bound": {
+    "condition": "Given valid max component errors Bu,Bv after primary physical-rate conversion and Q, fixed positive stored S_inv, identity H, total packed N and block element counts nu,nv",
+    "formula": "sqrt(nu*(max_u_Sinv*Bu)^2 + nv*(max_v_Sinv*Bv)^2)/sqrt(N); a norm bound for these U/V terms only, before adding other components and independently certified floating arithmetic/conversion/norm error",
+    "limitation": "Observed receipt contains S_inv hash, not the S_inv array or values; cannot substitute guessed scales. If masks or scaling vary, use their actual actions."
+  },
+  "available_and_missing": {
+    "available": "16 archived EOS arrays include base/accepted pressure and alt, p_base, phi/t/mu, mu_base/c1/c2/rdnw; prior MPFR composed native p/alt error bounds at rounded input and induced-only al_pert shift. Initial WRF output includes map fields; reference logs include selected-context hashes; N=1080491 and S_inv hash recorded.",
+    "missing": "native al_pert output and its composed error bound; retained Stage3 S_inv values or independently source-verified scale extrema; proof/validated values for geometry/map/cq_face and pressure boundary stencils at both endpoints; supported treatment of map guard and nonzero conversion factors; branch-specific NH correction and other EOS consumers; FP error from every PGF/packing operation and correlation with upstream errors. Initial fields alone or hashes without matching arrays do not prove exact active map values.",
+    "scope": "Do not add induced-only al_pert to a bound that purports to include native al_pert arithmetic. Prior composed p/alt bounds already contain alb and EOS arithmetic at captured rounded arguments; adding their induced components would double count."
+  },
+  "recommendation": "Obtain bounded native al_pert arithmetic first from captured raw inputs via faithful offline reconstruction or a new direct receipt with exact provenance; derive U/V per-face coefficients and validate reference map/scales before attempting a weighted RHS component bound. Coordinate NH/W and diffusion audits separately. No e_i or full residual decrease claim.",
+  "actions": "No code edits, build, test, native run or new FD"
+}
