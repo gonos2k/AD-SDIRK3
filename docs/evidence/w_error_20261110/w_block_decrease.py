@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 from norm_exact import sum_squares, sqrt_bounds, exact
 
+REFERENCE_SOURCE_SHA256 = '8b24158b6390a01baa03bb5e2603eb76e694d46ea6f74d2ddb127c734f339341'
+
 
 def sha(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -17,6 +19,10 @@ def validate_metadata(packet, manifest, error, packet_sha, manifest_sha):
         raise ValueError('different or unsupported target')
     if manifest['origins']['packet_sha256'] != packet_sha:
         raise ValueError('packet is not the source of this normalized case')
+    if error['input_sha256'] != {k: v['sha256'] for k, v in manifest['files'].items()}:
+        raise ValueError('reference input hashes differ from normalized inputs')
+    if error['reference_source_sha256'] != REFERENCE_SOURCE_SHA256:
+        raise ValueError('different reference source')
     if len(error['analysis']['states']) != 2:
         raise ValueError('two error endpoints required')
     rw = next(b for b in packet['w_reference']['layout'] if b['name']=='rw')
@@ -24,6 +30,18 @@ def validate_metadata(packet, manifest, error, packet_sha, manifest_sha):
         raise ValueError('different W block')
     if not 0 < exact(rw['sinv_min']) <= exact(rw['sinv_max']):
         raise ValueError('invalid inverse-weight range')
+    analysis = error['analysis']
+    metric = packet['w_runtime']['metric']
+    if not analysis['packed_N'] == manifest['grid']['packed_N'] == packet['N']:
+        raise ValueError('different packed size')
+    if not analysis['W_count_per_state'] == manifest['grid']['W_count'] == metric['count'] == rw['size']:
+        raise ValueError('different W count')
+    if metric['block'] != 'rw' or metric['start'] != rw['start']:
+        raise ValueError('different W metric layout')
+    if not exact(analysis['max_W_inverse_weight']) == exact(manifest['W_inverse_weight_extrema']['max']) == exact(metric['max']) == exact(rw['sinv_max']):
+        raise ValueError('different maximum W inverse weight')
+    if not exact(manifest['W_inverse_weight_extrema']['min']) == exact(metric['min']) == exact(rw['sinv_min']):
+        raise ValueError('different minimum W inverse weight')
     return rw
 
 

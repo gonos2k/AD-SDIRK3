@@ -295,3 +295,35 @@ For this fixed-input pair only, exact stored W-block norms plus epsilon_W give
 strictly separated target W-merit intervals (before lower about6.0547284e-5,
 accepted upper about1.0551043e-9). This conditional W-only decrease is not a
 full-merit or Stage3 convergence certificate; global nu is not added again.
+
+
+## Mass and perturbation-temperature residual blocks (PR348 follow-up)
+
+The original W-reference source, numerical results and norm gap are unchanged.
+The W-decrease consumer now cross-binds the full reference input-SHA map, pinned
+source SHA, packed/W sizes and metric layout/extrema. Fourteen inconsistent
+metadata cases fail; a platform-specific rebuilt binary hash remains allowed.
+The real decrease replay is byte-identical. This is a metadata consistency fix.
+
+A separate MPFR256 reference reuses the captured fixed binary B/a/C/K and forms
+exact Q(B+aK), recomputes current continuity and compares full raw-K-minus-QF
+mass/T residual blocks at both endpoints. In this guarded fast profile,
+F_mu=Q Mdot and F_t=Q[-t_pert*c1h*Mdot/(c1h*(mu+MUB)+c2h+epsilon)]. Coupled T
+starts zero here; explicit omega/theta transport is not added. All aliases and
+final raw packed K are included. Full packed N normalizes every block.
+
+The Tile-local epsilon helper can return promoted binary32 1e-10f or 1e-4f.
+Since autocast was not captured, the result uniformly encloses every fixed
+choice in their interval. It does not claim an observed epsilon. Conditional
+weighted mathematical RMS upper bounds for mu are3.6580367994881326e-16 and
+3.61929848876647e-16; T bounds are9.210741413599433e-15 and9.656070767402656e-15.
+Upward binary64/hex endpoints are authoritative. A single registered offline
+full-grid evaluation passed with all24 pins unchanged; no native run was made.
+
+U/V and PH evaluation errors remain open. PH needs active horizontal and vertical
+advection and exact coefficient/selector provenance; U/V need primary/NH4, mass
+conversion and post-pack damping. The existing W and stored-input nu results are
+reused, not recomputed. Full epsilon_G/e_i and whole merit decrease remain open;
+within-block terms cannot be combined as disjoint vector blocks. Exact forcing,
+Stage3 iterative convergence, E/T/A/F and forecast claims remain uncertified.
+[Inputs, epsilon family, replay and audit correction](../evidence/scalar_blocks_20261110/README.md).

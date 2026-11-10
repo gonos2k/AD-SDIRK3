@@ -104,6 +104,16 @@ w_block_decrease.json. This conditional corollary does not use the global native
 RMS or add nu again. It checks packet origin/reference association and certifies
 only the W block, with full-merit and Stage3 flags explicitly false.
 
+The PR348 follow-up additionally compares the reference's complete input-SHA
+map against the normalized manifest, pins the reference source SHA, and
+cross-checks packed size, W count, layout and inverse-weight extrema against
+the packet. A rebuilt reference binary may have a different hash. Fourteen
+contradictory-metadata cases are rejected; the original real-data decrease
+output is byte-identical. This is a consistency check, not authentication of
+an arbitrarily forged reference result. The old reference source and numerical
+results are unchanged; the original evidence inventory is retained with the
+follow-up validation record.
+
 ## Execution, provenance and limits
 
 Source/header ABI change rebuilt all five recorded consumers with matching flags;

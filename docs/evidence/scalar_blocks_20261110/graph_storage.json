@@ -1,0 +1,18 @@
+{
+  "scope": "lossless storage only; graph navigation SHA values refer to decompressed JSON bytes",
+  "compression": "gzip, mtime=0",
+  "graphs": {
+    "graph_before.json": {
+      "stored_file": "graph_before.json.gz",
+      "decompressed_sha256": "014850c847748455fb7ae0f94f9839229ff63c2a0f1ff4b7dc5962a86238eac8",
+      "decompressed_bytes": 2506251,
+      "stored_sha256": "e2c751096c2b4f85b3170fef5942650d4b30f8ccfd7daca28ad2a6c5666ec17f"
+    },
+    "graph_after.json": {
+      "stored_file": "graph_after.json.gz",
+      "decompressed_sha256": "7cdfdb6e957e34c4dca5def7787a2b327e45b324c4728a4193a9bc10dc1a42dd",
+      "decompressed_bytes": 2626307,
+      "stored_sha256": "3dde831ca9cd0857ec4d7d0649dbd2c31ccd1f7b84d31058d6253a277d7afa1f"
+    }
+  }
+}

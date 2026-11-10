@@ -1,0 +1,28 @@
+{
+  "timestamp_local": "2026-11-10T21:47:59.654566+09:00",
+  "verdict": "PASS bounded code/evidence review",
+  "source_commit": "326347dd334a321f2523edbf5af1c9b182bc1b6d",
+  "checks": {
+    "registered_inputs_current": true,
+    "registered_input_count": 24,
+    "registration_hash_matches_execution": true,
+    "execution_exit0_no_native_and_unchanged": true,
+    "synthetic_receipt_pass": true,
+    "public_sources_match_receipt": true,
+    "analysis_source_binary_match_receipt": true,
+    "prior_input_hashes_match_manifest": true,
+    "prior_packet_manifest_validator_match": true,
+    "two_endpoints_and_full_packed_counts": true,
+    "graph_pins_current": true,
+    "p3_replay_byte_equal": true
+  },
+  "mismatched_registered_inputs": [],
+  "analysis_scope": "mu/T residual for each fixed eps in source-choice hull at exact Q(B+aK); captured B,K and C treated as exact; excludes prior formation, other residual blocks and native norm",
+  "epsilon_scope": "uniform enclosure for every fixed eps in [binary32(1e-10),binary32(1e-4)]; actual autocast state not observed",
+  "limitations": [
+    "The prior W reference and shared interval utilities are reused, not an independent second implementation.",
+    "PH/U/V and whole-residual, forcing, exact descent, convergence and forecast cost remain unproven.",
+    "Review verifies retained source/evidence identity and stated scope; no tests, reference calculations or native runs repeated."
+  ],
+  "graph_after_pins_sha256": "3235617f5a852d027af03eab5ddb60812907520192059c1b281e6317555db923"
+}

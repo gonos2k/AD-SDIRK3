@@ -1,0 +1,36 @@
+{
+  "time_local": "2026-11-10T21:45:27.776843+09:00",
+  "verdict": "PASS conditional selected-pair mu/T reference and P3 source review",
+  "mu_theta_analysis_sha256": "72662000a0312c1490bc33ffbd4f5c80430fb16c3ca89aaf9a43712f1f34c76b",
+  "execution_sha256": "b650d87c2791f6f0cd92abfd050c50cd80da46dde393ca930e3ab4162db5908f",
+  "registration_sha256": "003db002cc974de309c1ff7a99b3c0c8ec3540d19ba82d9f5aeadb550d1466c3",
+  "pins_verified": 24,
+  "prior_p3_review_sha256": "e01ec54a7c83b72f3292cfa3d101274ff4a77b6cd0640ac7298394a981788d08",
+  "counts": {
+    "N": 1080491,
+    "theta": 212544,
+    "mu": 3321,
+    "endpoints": 2
+  },
+  "weighted_rms_upper": [
+    {
+      "mu_weighted_math_rms_upper": 3.6580367994881326e-16,
+      "theta_weighted_math_rms_upper": 9.210741413599433e-15
+    },
+    {
+      "mu_weighted_math_rms_upper": 3.61929848876647e-16,
+      "theta_weighted_math_rms_upper": 9.656070767402656e-15
+    }
+  ],
+  "checks": [
+    "24 registered input SHA pins match and one offline execution reports rc0 and immutable inputs unchanged. Source/binary/wrapper/test hash pins bind synthetic PASS receipt.",
+    "mu/T reference source recomputes exact target Q(B+aK), WRFParity mass flux, original unprojected K in residual and physical-core projection. Fast theta uses perturbation t and source-local epsilon hull, not a frozen Mdot or slow omega transport.",
+    "Packed counts, 64 theta levels, mu single level, upward binary64 encodings and conservative weighted-N normalization sanity verified; all captured metric maxima are 1.",
+    "Tile-local epsilon helper returns binary32 1e-10f or 1e-4f; interval encloses every fixed epsilon in between without claiming observed autocast state. Previous 1e-3 note is superseded by correction receipt.",
+    "P3 metadata fix checks reference input SHA map/source identifier, layout and metric consistency without changing W math; does not authenticate forged metadata."
+  ],
+  "limits": [
+    "No duplicate full-grid run, native model, or forecast comparison.",
+    "MPFR, selected fixed C and prior capture/provenance assumptions remain; U/V and PH and whole RHS/merit/Stage3 convergence remain open."
+  ]
+}

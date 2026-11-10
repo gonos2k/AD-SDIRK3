@@ -1,0 +1,123 @@
+{
+  "scope": "P3 W metadata consistency and conditional complete mu/T residual evaluation at selected fixed-input pair; no full-merit/Stage3 certificate",
+  "baseline": "326347dd334a321f2523edbf5af1c9b182bc1b6d",
+  "reused_native_source": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
+  "files": {
+    "README.md": {
+      "bytes": 7017,
+      "sha256": "de0ff835005b77a521f9eb6b298090c86381187ac24d7520a4d4dc76be9f3bc1"
+    },
+    "graph_after.json.gz": {
+      "bytes": 72725,
+      "sha256": "3dde831ca9cd0857ec4d7d0649dbd2c31ccd1f7b84d31058d6253a277d7afa1f"
+    },
+    "graph_after_navigation.json": {
+      "bytes": 1498,
+      "sha256": "ddca39e5efb39a3286e508082792d40deba85d8b8a3cbc981b19f036a6b9d990"
+    },
+    "graph_after_pins.json": {
+      "bytes": 19748,
+      "sha256": "3235617f5a852d027af03eab5ddb60812907520192059c1b281e6317555db923"
+    },
+    "graph_before.json.gz": {
+      "bytes": 69954,
+      "sha256": "e2c751096c2b4f85b3170fef5942650d4b30f8ccfd7daca28ad2a6c5666ec17f"
+    },
+    "graph_before_navigation.json": {
+      "bytes": 2374,
+      "sha256": "163acf98228988a8b528256893432dc1dc0661ad98df91740bf4a50351055dd4"
+    },
+    "graph_before_pins.json": {
+      "bytes": 14862,
+      "sha256": "ff5539db17a2a1ffecc42cea643f6e8bfc5a88ac377b1e70d0ee3f1a114f084d"
+    },
+    "graph_storage.json": {
+      "bytes": 757,
+      "sha256": "3ee9650fec479785ac54141dd6a04c7f86bc9156ee2414c46d786ca42c460ca0"
+    },
+    "graph_validator_before.json": {
+      "bytes": 46181,
+      "sha256": "859e2528533badccb66295a9cd96db1b653e39b0827bdce3efc369951eba4081"
+    },
+    "green_final_review.json": {
+      "bytes": 1546,
+      "sha256": "17e5e50eb3c01dede850b218ef960d72dbfbf17dba5544ca9f050d08b1406ab1"
+    },
+    "green_mu_theta_source_plan.json": {
+      "bytes": 5466,
+      "sha256": "5de67be11cff77764623732de6dac26951b804e26ee3421ba9b669d14b539ace"
+    },
+    "green_p3_validation_review.json": {
+      "bytes": 1602,
+      "sha256": "296fa885f515615da4a38435798276fdca245d6f5bace7c3136bfc7f10af210b"
+    },
+    "green_packaging_review.json": {
+      "bytes": 4031,
+      "sha256": "9122b3cf2e8bfcb9abcac973967b6ed7e1b95340173aad95735ac9bd9888fa00"
+    },
+    "mu_theta_analysis.json": {
+      "bytes": 14280,
+      "sha256": "72662000a0312c1490bc33ffbd4f5c80430fb16c3ca89aaf9a43712f1f34c76b"
+    },
+    "mu_theta_execution.json": {
+      "bytes": 1003,
+      "sha256": "b650d87c2791f6f0cd92abfd050c50cd80da46dde393ca930e3ab4162db5908f"
+    },
+    "mu_theta_mpfr.cpp": {
+      "bytes": 12664,
+      "sha256": "599bf86ae23e8b2565cec14fc99a56a60bd616de9cfd509b705457a31357d672"
+    },
+    "mu_theta_preanalysis_test_receipt.json": {
+      "bytes": 1191,
+      "sha256": "c8d685d8e3f174a1ea633dd945977cb49a60dd60ab16d6a63d04612567b8db53"
+    },
+    "mu_theta_registration.json": {
+      "bytes": 4818,
+      "sha256": "003db002cc974de309c1ff7a99b3c0c8ec3540d19ba82d9f5aeadb550d1466c3"
+    },
+    "p3_validation.json": {
+      "bytes": 1252,
+      "sha256": "62c5af5935b0b17c7da9a40763f8eafd2009f94dce870f229177e38fedcb9341"
+    },
+    "prior_w_evidence_manifest.json": {
+      "bytes": 12638,
+      "sha256": "be8723f4c3fbe5254f8eb5cfd85141fc17ff7c5bd179a3c649e7ec93716fa721"
+    },
+    "red_final_docs_review.json": {
+      "bytes": 1390,
+      "sha256": "e4447fb229dac3497ce2aa009d990c036733fa6df21b2ca56f41da09c039ea19"
+    },
+    "red_mu_theta_epsilon_correction.json": {
+      "bytes": 1149,
+      "sha256": "607e92dbfbd0ac26b58f8eeda8d437c70a3d5704bd8e2c79bc8a12a95bfdc5d4"
+    },
+    "red_mu_theta_reference_plan.json": {
+      "bytes": 3020,
+      "sha256": "205de45f94d4a0e812fdafa3da6fc4a01f5e8b42c2e737818f082f14caeff513"
+    },
+    "red_mu_theta_result_review.json": {
+      "bytes": 2165,
+      "sha256": "47986c2274449ac3fb476dfc3000c5ecb0c1376c067a6ca88bf74fe3d97733c3"
+    },
+    "red_p3_review.json": {
+      "bytes": 1100,
+      "sha256": "e01ec54a7c83b72f3292cfa3d101274ff4a77b6cd0640ac7298394a981788d08"
+    },
+    "red_phi_uv_source_plan.json": {
+      "bytes": 4204,
+      "sha256": "c4acf577b2076d0ea238b82ab8c7dba74d0d32b293c58ac52082126cf1166fb4"
+    },
+    "run_mu_theta.py": {
+      "bytes": 5745,
+      "sha256": "22ab70e5c56bf8beb666a06adb14aa693e079b40c35c7fe0eddb89069938d7db"
+    },
+    "test_mu_theta_mpfr.py": {
+      "bytes": 3004,
+      "sha256": "4f0b6423391cc8a487f0fe782b30b7c35341abdc4c56edd34446cde63dc5cf4e"
+    },
+    "toolchain.json": {
+      "bytes": 1713,
+      "sha256": "1fa236a461a38f36e65af554a53ac554bff3329b434e1eb1bf7661d3fc20397d"
+    }
+  }
+}

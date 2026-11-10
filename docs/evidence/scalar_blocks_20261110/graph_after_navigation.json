@@ -1,0 +1,38 @@
+{
+  "source_commit": "326347dd334a321f2523edbf5af1c9b182bc1b6d",
+  "graph_sha256": "7cdfdb6e957e34c4dca5def7787a2b327e45b324c4728a4193a9bc10dc1a42dd",
+  "pins_sha256": "3235617f5a852d027af03eab5ddb60812907520192059c1b281e6317555db923",
+  "relationships": [
+    {
+      "from": "run_mu_theta.py",
+      "to": "run_w_full_mpfr.validate",
+      "kind": "imports SHA-pinned prior W input validator before selected scalar reference"
+    },
+    {
+      "from": "run_mu_theta.py",
+      "to": "mu_theta_mpfr executable",
+      "kind": "offline checker on normalized captured inputs"
+    },
+    {
+      "from": "test_mu_theta_mpfr.py",
+      "to": "mu_theta_mpfr",
+      "kind": "manufactured scalar reference checks"
+    },
+    {
+      "from": "w_block_decrease.py",
+      "to": "norm_exact and previous W reference",
+      "kind": "selected W-only decrease metadata and triangle-bound computation"
+    },
+    {
+      "from": "scalar_blocks_20261110/README.md",
+      "to": "scalar reference",
+      "kind": "documented fixed-context Stage3 scope"
+    }
+  ],
+  "gaps": [
+    "Graph does not establish source-to-reference equation equivalence, positivity, rounding enclosure or same-pair identity.",
+    "Fortran, PH/U/V and full residual remain outside selected scalar result unless independently bounded.",
+    "Native W, norm and previous numerical reference artifacts are reused; no rerun is implied.",
+    "Public documentation claims and conclusions still require independent evidence review."
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "timestamp_local": "2026-11-10T21:38:34.672406+09:00",
+  "baseline": "326347dd334a321f2523edbf5af1c9b182bc1b6d",
+  "scope": "P3 reference metadata consistency only; W numerical calculation unchanged",
+  "test": {
+    "command": "python3 docs/evidence/w_error_20261110/test_w_block_decrease.py",
+    "returncode": 0,
+    "stdout": "PASS 14 contradictory metadata cases and platform-independent source binding\n"
+  },
+  "real_replay": {
+    "output_sha256": "517cc99d6ed1f5c0325f8d09fe7e40a3624bf12cb587f93dd18f2a63c925dc1c",
+    "archived_output_sha256": "517cc99d6ed1f5c0325f8d09fe7e40a3624bf12cb587f93dd18f2a63c925dc1c",
+    "byte_identical": true
+  },
+  "files": {
+    "w_block_decrease.py": "ec5b856cbe00d635a748f6765c01aba23d4263ec841b7463cbbe7a254dc27b77",
+    "test_w_block_decrease.py": "69b15367e2dbf784e48dd20cd899e9c99b66c4818171543bc0ad432cada55afc",
+    "w_full_mpfr.cpp": "8b24158b6390a01baa03bb5e2603eb76e694d46ea6f74d2ddb127c734f339341",
+    "full_w_error.json": "eec91b1f6eec96e89ac6287f843d739b59116a2659d7a8cf80b1a1aa4719ad63",
+    "normalized_manifest.json": "1737005ed45133e7a2b84d6c115d23f8d876d816cc10c062faa0b719f4d906c6"
+  },
+  "reference_executable_hash_required_equal": false,
+  "new_W_MPFR_or_native_or_RK3_run": false
+}

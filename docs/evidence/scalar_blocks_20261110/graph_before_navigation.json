@@ -1,0 +1,51 @@
+{
+  "source_commit": "326347dd334a321f2523edbf5af1c9b182bc1b6d",
+  "relationships": [
+    {
+      "from": "w_block_decrease.py validate_metadata",
+      "to": "packet, normalized manifest, full_w_error",
+      "kind": "checks passed_conditional, manifest hash, packet origin, endpoint count, W block and positive weight range"
+    },
+    {
+      "from": "w_block_decrease.py main",
+      "to": "R0.npy/R1.npy, norm_exact, weighted_math_rms_upper",
+      "kind": "checks residual file hashes and dtype/shape/finiteness, computes W-only norm and triangle bound"
+    },
+    {
+      "from": "test_w_block_decrease.py",
+      "to": "validate_metadata",
+      "kind": "tests packet-origin, two-endpoint and positive-weight rejection"
+    },
+    {
+      "from": "run_w_full_mpfr.py",
+      "to": "full_w_error.json",
+      "kind": "emits checker source/binary hashes, input hashes, weight and analysis states"
+    },
+    {
+      "from": "README.md:22",
+      "to": "w_block_decrease.py",
+      "kind": "documented offline replay"
+    },
+    {
+      "from": "manifest.json and publish_w_error.py",
+      "to": "public W files",
+      "kind": "historical package manifest and original publishing list; review after edits"
+    },
+    {
+      "from": "Tile computeUnifiedRHS",
+      "to": "mu_tend_for_conversion, theta_tend, ph_tend, combined RHS",
+      "kind": "candidate selected-fast remaining-block reference path; selected branches, boundaries and mass flux require source audit"
+    },
+    {
+      "from": "Newton compute_base_rhs and receipt_trial_rhs",
+      "to": "F and accepted pair",
+      "kind": "base/trial callback context; source residual uses K-F and F_phys must not be added twice"
+    }
+  ],
+  "gaps": [
+    "Metadata validation currently consumes selected output fields but does not itself establish every source, input hash, count or weight relation; inspect run_w_full_mpfr.py and actual receipts before hardening.",
+    "Data hashes, source identities, numerical reference bounds and fixture sizes must be checked independently; graph edges do not certify them.",
+    "Theta/PH/mass paths involve split mode, boundaries, conversion and fixed versus state-dependent context; active path is unresolved until source review.",
+    "Fortran callers and unselected source files lie outside this bounded graph; no runtime or full residual conclusion follows."
+  ]
+}

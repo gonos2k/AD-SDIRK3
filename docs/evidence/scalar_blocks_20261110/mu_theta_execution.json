@@ -1,0 +1,20 @@
+{
+  "timestamp_local": "2026-11-10T21:43:33.145717+09:00",
+  "command": [
+    "python3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/run_mu_theta.py",
+    "/Users/yhlee/SDIRK3-review-worktrees/residual-blocks-20261110/docs/evidence/w_error_20261110/normalized_manifest.json",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case",
+    "/Users/yhlee/SDIRK3-review-worktrees/residual-blocks-20261110/docs/evidence/w_error_20261110/run/accepted_step_probe.json",
+    "/Users/yhlee/SDIRK3-review-worktrees/residual-blocks-20261110/docs/evidence/w_error_20261110/run_w_full_mpfr.py",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/mu_theta_analysis.json"
+  ],
+  "registration_sha256": "003db002cc974de309c1ff7a99b3c0c8ec3540d19ba82d9f5aeadb550d1466c3",
+  "elapsed_seconds": 18.25652320869267,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "immutable_inputs_unchanged": true,
+  "status": "completed",
+  "native_runs": 0
+}

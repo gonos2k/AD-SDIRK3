@@ -1,0 +1,26 @@
+{
+  "time_local": "2026-11-10T21:35:14.193206+09:00",
+  "source_head": "326347dd334a321f2523edbf5af1c9b182bc1b6d",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "1141d7df1aa8502cde79c084cad28c9b319fca65d520a8c1db217e70b6eb99d1",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_metric_utils.h": "84fdebe1be821c7ef99d1b80b3f255108cee68898de1535bb840a3474cef2c29"
+  },
+  "scope": "selected mode3 WRFParity packed single-tile ImplicitOnly fast mu and theta reference plan",
+  "equations": [
+    "Physical core Mdot=msfty*sum_k(msftx*(-1/RDNW_k)*(rdx*(CU_e-CU_w)+rdy*(CV_n-CV_s))), CU=(c1h*M_u+c2h)*u/msfuy, CV=(c1h*M_v+c2h)*v/msfvx; M_face from current projected mu+MUB, periodic X seam/symmetric Y replicate. Recompute from exact target Q(B+aK) and captured fixed C.",
+    "mu_tend_for_conversion is assigned unscaled mu_tend, and mu_tend_scaled aliases it; output F_mu=Q_mu(Mdot), no 1/88000. With parity true mean subtraction/clamp not taken.",
+    "Fast t_tend is initialized zero; horizontal/vertical theta advection and its omega are inside do_explicit and do not feed this ImplicitOnly path when HEVI/implicit transport are off. Theta output at physical core is F_t=\u2212t_pert*c1h*Mdot/(c1h*(mu_pert+MUB)+c2h+eps_theta); apply final Q_t. Do not replace t_pert with t_pert+300, or freeze native Mdot/Omega.",
+    "Post-pack implicit divergence damping can be enabled, but implementation modifies ru/rv and repacks original t/mu; final projectStateBoundaries is still required. nan_sanitize_mode=0 is captured; require finite domain."
+  ],
+  "context_and_gaps": [
+    "Existing normalized_case stores B,K0,K1,R0,R1,MUB,c1h,c2h,mass_rdnw and observed rdx/rdy/profile/unit maps, six S_inv block extrema and N; use exact captured source dtype, Q association and identity mask.",
+    "eps_theta is returned by getAutocastAwareEps(mu_3d) as float: FP64/no autocast uses binary32 representation of 1e-10f, not exact decimal 1e-10. If CPU autocast enables BF16/FP16, kMetricEps differs; no explicit autocast state/eps was observed in existing normalized manifest. Establish actual runtime setting from authoritative evidence or use a conservative interval covering allowed choices; do not claim one selected value without evidence.",
+    "Fixed C includes actual effective constants and excludes their upstream construction; target exact B+aK, flux, reciprocal, sum and conversion remain within reference. Native rounded operations and reduction must be covered via direct captured R vs interval target, not assumed gamma bound.",
+    "For per-block residual bound, use correctly matched R_mu and R_t and exact S_inv extrema, native Q alias cells and packed N; form component norms rigorously and do not double count norm nu."
+  ],
+  "limitations": [
+    "No source edit, model run or tests.",
+    "This is a source plan, not a full RHS or merit proof."
+  ]
+}

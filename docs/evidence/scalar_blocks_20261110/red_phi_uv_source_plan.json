@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-11-10T21:37:31.965992+09:00",
+  "status": "PARTIAL_FEASIBILITY_SOURCE_PLAN",
+  "source_commit": "326347dd",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "1141d7df1aa8502cde79c084cad28c9b319fca65d520a8c1db217e70b6eb99d1",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_phi_horizontal.h": "b8a658b161bf792eb1b6e64026050b093b6ff9caf7ea6aa4f58a7258421bd433",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_acoustic_substep.cpp": "2e6f687a7b4a5671384b49b3d76b21a22ce031f0bd8ddf8ae860b2070bcceffb",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_nonhydrostatic_pressure.h": "a16391b08ffaf355af22ecf409696ca9fb3c8e3bab196614baa685414737c616",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "7118ed441204b2c2f7cfc7460fe84bb781d81c24ea73d1357ce3a9b097e68490"
+  },
+  "phi_active_path": [
+    "Mode3 ImplicitOnly includes PH horizontal advection inside implicit Step4; canonical native_w_phi_horizontal computes phi=Qphi+PHB, staggered current U/V and mu_full, maps, C1F/C2F, horizontal order 2/4/6 from advection_order, and top extrapolation cfn1=-r_below/(r_top+r_below), cfn=1-cfn1.",
+    "Vertical PH advects total geopotential using current wrf_ww_cp omega and signed -RDNW; native_phi_adv_z=1 logged for run, so destagger omega, multiply metric*dphi and restagger with FNM/FNP (option2 is different).",
+    "Add (C1F*mu_full+C2F)*g*w_selected/msfty, where current W versus frozen W_ref is selected by buoyancy_use_current_w; final multiply msfty/level_mass_w, project final packed scalar Q. Horizontal, vertical and g*w must all be included; no generic vertical PH boundary zero projection should be assumed.",
+    "Mode3 callback excludes Fphys from fast part; HEVI off and implicit mass conservation/omega use WRFParity; source-default flags that were not recorded remain conditions rather than measurements."
+  ],
+  "data_feasibility": [
+    "Existing full B,K0,K1,R0,R1, captured fixed theta/pbase/mub/C1F/C2F and mass RDNW, observed rdx/rdy/g and six block scale extrema provide much of fixed target.",
+    "PHB wrfinput [k,j,i] transposed and periodic-X/symmetric-Y padded then FP64 promoted gives FNV 17014116917428750934, matching prior Stage3 ph_base; source arrays not directly retained so match is collision-qualified and initial-to-stage immutability remains conditional.",
+    "wrfinput FNM/FNP have length64; production setter uses length65, 64 supplied values plus zero top or derived FP32 weights from runtime RDNW. Stage3 context does not fingerprint FNM/FNP, nor current phi transport or advection selector beyond logged phi_adv_z=1. Same-call capture/independent authoritative reconstruction and proof of actual setter path remain necessary for strict source target.",
+    "Logged NH=false early is preoverride; later non_hydrostatic=true setter plus constructor ordering establishes selected NH-on path under previous source audit; exact same-call selector still not independently captured."
+  ],
+  "uv_feasibility": [
+    "U/V primary uses perturbation pressure, inverse-density alpha and al_pert, base pressure gradients and staggered current hybrid mass; EOS ideal values must be recomputed at Q(B+aK), not frozen stored intermediate pressure.",
+    "Active native NH4 under non_hydrostatic_ && canonical_horizontal calls native_nonhydrostatic_pressure_core with pressure, compute_php(ph,PHB), face maps, mu, C1H, negative mass-RDNW, rdx/rdy, CF1/CF2/CF3, FNM/FNP, top_lid, cfn/cfn1; pressure interpolation and top wall behavior require direct source implementation.",
+    "CF1/CF2/CF3 native transport log records 2.02355766,-1.55567443,0.53211689 as formatted decimals, not proof of exact binary coefficients; cfn/cfn1 from mutable metric-based setter, flags/values need actual exact provenance.",
+    "Coupled\u2192physical conversion and \u2212velocity*mass-rate, U periodic aliases and V symmetric-normal zeros/odd ghosts plus post-pack U/V divergence damping may affect total U/V target."
+  ],
+  "limits": [
+    "No claim of PH, U/V or full-RHS bound, exact descent or model stability.",
+    "Input reconstructions and source defaults are conditional; no new native case, code change or repeated test."
+  ]
+}

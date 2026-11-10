@@ -1,0 +1,41 @@
+{
+  "timestamp_local": "2026-11-10T21:35:36.276240+09:00",
+  "status": "SOURCE_DERIVED_CONDITIONAL",
+  "source_commit": "326347dd334a321f2523edbf5af1c9b182bc1b6d",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "1141d7df1aa8502cde79c084cad28c9b319fca65d520a8c1db217e70b6eb99d1",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_state_layout.h": "0f536cdd6343b046e8fa1bb395aadda7da4fb27b402d5db29444008e1096934b"
+  },
+  "scope": "complete fast-only mu and temperature perturbation residual target for selected native pair; not an error bound or full RHS proof",
+  "target_definition": "Y=Q_in(B+aK), using captured B,K,a and fixed C as exact given binary values; G*=K-F*(Y;C). Input formation inside Q(B+aK) belongs inside target; formation before captured B,K,C is excluded.",
+  "mass_flux": {
+    "source": "tile_unified_impl.cpp:15975-16026,17630,18810-18816; wrf_sdirk3_ww_cp.h:282-316",
+    "formula": "On 80x40 independent physical core, M=mu+MUB (mu-floor inactive); C_u=(c1h*avg_x(M)+c2h)*u/msfuy and C_v=(c1h*avg_y(M)+c2h)*v/msfvx. divv=msftx*(-1/rdnw)*(rdx*Delta_x(C_u)+rdy*Delta_y(C_v)); Mdot=extend_mass(msfty*sum_k(divv)). Recorded profile has all six maps exactly one, periodic-X/symmetric-Y; Q enforces V wall zeros, aliases according to source.",
+    "conditional": "Recompute from exact Q(B+aK) at each endpoint. Never substitute captured rounded Mdot or Omega without an explicit separate error bound. Current wrapper norm/eta etc from W target may be adapted without rerunning W."
+  },
+  "mu": {
+    "source": "tile_unified_impl.cpp:16170-16390,18810-18816,19380-19481,26321,26574,26709-26758,270xx",
+    "formula": "For HEVI off, parity true, no floor/sanitize, F_mu=Q_mass(Mdot); G_mu=K_mu-F_mu. The packed alias mu_tend_scaled is unscaled mu_tend_for_conversion.",
+    "gates": "mu_tend_fortran_parity true skips mean subtraction and clamp. Divergence damping modifies U/V only and repacks mu unchanged. Q output copies periodic-X and symmetric-Y aliases.",
+    "sanitizer_caveat": "mu_tend_for_conversion aliases the tensor before check_tend reassigns mu_tend; if sanitization is enabled and mu is nonfinite, mu_tend_scaled may still refer to the earlier tensor. Captured sanitize_off avoids this ambiguity."
+  },
+  "temperature": {
+    "source": "tile_unified_impl.cpp:923-964,16170-16390,17651,18780,23094,26420-26438,26495,26709-26758",
+    "formula": "For mode3, usesImplicitTransport false and do_explicit false, so coupled t_tend=0 (no horizontal/vertical theta advection or diffusion in this callback). F_t=Q_mass[-t_pert*c1h*Mdot/(c1h*(mu+MUB)+c2h+eps_theta)] and G_t=K_t-F_t; t_pert is the projected packed variable, not absolute theta.",
+    "omega": "Omega is diagnosed as part of shared WRFMassFlux but no vertical Omega advection contributes to t_tend on this implicit-only path. Do not import explicit-stage advection or freeze a rounded Omega.",
+    "epsilon": "eps_theta is getAutocastAwareEps applied to FP64 CPU mu tensor. If CPU FP16 autocast is disabled, exact promoted float32 1e-10 is 0x1.b7cdfe0000000p-34; if FP16 autocast is enabled source uses float32 1e-4. Old W reference manifest does not directly record autocast state; no active setter found in repository search. Either establish the thread state or model/bound both choices; do not silently assert observed default.",
+    "domain": "Require finite positive source denominator c1h*(mu+MUB)+c2h+eps_theta, actual no-floor branch and fixed positive map denominators. Exact-real reference is not bitwise native arithmetic; compare directly against stored native R."
+  },
+  "retained_data": {
+    "reference": "docs/evidence/w_error_20261110/normalized_manifest.json and w_full_inputs.tar.gz",
+    "available": "B,K0,K1,R0,R1 full packed; theta_base,pbase,mub,c1h,c2h,c1f,c2f,mass_rdnw/eos_rdnw/pressure_rdn/top_rdnw; exact captured a,rdx,rdy and profile/unit-map gates. Original native W reference ensures correct U/V/mu/w hashes and Q mapping at both endpoints.",
+    "scaling": "capture layout records T min=max=1 and mu min=max=1 for actual S_inv; identity mask and N=1080491; sizes T=212544 and mu=3321. This is block extrema, not a saved full S_inv array; constancy follows exact equal min/max when all finite.",
+    "availability_caveat": "Archive and manifest verification needed before execution; external profile/receipt chain is bounded to selected pair and does not prove all hidden context or earlier B/K/C formation."
+  },
+  "recommendation": "An independent offline directed MPFR reference can calculate mu and T errors from retained full vectors and mass-flux coefficients without a native rerun or rerunning W. Reuse/adapt interval utilities with source attribution in a new standalone reference, but resolve or explicitly condition/bound eps_theta/autocast and branch assumptions before interpreting a bound. Build synthetic checks for nonzero K, seam/V walls, constant theta, zero/nonzero Mdot, sign/epsilon, alias rows and nonfinite/domain rejection.",
+  "limitations": [
+    "These equations concern exact-real target for recorded source and selected profile; no bound on native rounding, reducer operations, full residual e_i or convergence follows until MPFR comparison and norm combination are completed.",
+    "No new native execution, experiments, code changes or tests."
+  ]
+}
