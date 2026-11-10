@@ -1,6 +1,7 @@
 #pragma once
 #ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
 #include "wrf_sdirk3_terminal_jvp_probe.h"
+#include "wrf_sdirk3_pressure_stage_probe.h"
 #include <cmath>
 
 namespace wrf::sdirk3::accepted_step_probe {
@@ -31,6 +32,86 @@ inline Extremes extremes(const Tensor& x) {
                 torch::isfinite(x).all().item<bool>(), "invalid scalar-extrema input");
     auto d=x.detach().to(torch::kFloat64);
     return {d.min().item<double>(),d.abs().max().item<double>()};
+}
+// Endpoint EOS data comes from the original RHS calls. These are measured
+// extrema, not an error bound or a statement about the power implementation.
+inline std::string eos_scalars(const wrf::sdirk3::pressure_stage_probe::PressureEosContext& b,
+                               const wrf::sdirk3::pressure_stage_probe::PressureEosContext& t,
+                               const Tensor& B,const Tensor& K0,const Tensor& K1,
+                               int64_t ph_start,int64_t ph_size,int64_t t_start,int64_t t_size) {
+    torch::NoGradGuard guard;
+    using Context=wrf::sdirk3::pressure_stage_probe::PressureEosContext;
+    TORCH_CHECK(b.captured && !b.failed && !b.duplicate && t.captured && !t.failed && !t.duplicate,
+                "EOS endpoint capture unavailable");
+    const auto same=[](const Tensor& x,const Tensor& y) {
+        return x.defined() && y.defined() && x.is_cpu() && y.is_cpu() &&
+            x.scalar_type()==y.scalar_type() && x.sizes()==y.sizes() &&
+            torch::isfinite(x).all().item<bool>() && torch::isfinite(y).all().item<bool>() &&
+            torch::equal(x,y) && wrf_terminal_jvp::hash(x)==wrf_terminal_jvp::hash(y);
+    };
+    TORCH_CHECK(std::isfinite(b.rd) && std::isfinite(b.cv) && std::isfinite(b.cp) &&
+        std::isfinite(b.p0) && std::isfinite(b.t0) && same(b.c1h,t.c1h) && same(b.c2h,t.c2h) && same(b.rdnw,t.rdnw) &&
+        same(b.mu_base,t.mu_base) && same(b.p_base,t.p_base) && same(b.alb,t.alb) &&
+        std::memcmp(&b.rd,&t.rd,sizeof(float))==0 && std::memcmp(&b.cv,&t.cv,sizeof(float))==0 &&
+        std::memcmp(&b.cp,&t.cp,sizeof(float))==0 && std::memcmp(&b.p0,&t.p0,sizeof(float))==0 &&
+        std::memcmp(&b.t0,&t.t0,sizeof(float))==0, "EOS coefficients changed");
+    TORCH_CHECK(b.t.dim()==3 && t.t.sizes()==b.t.sizes() && b.ph.dim()==3 &&
+        t.ph.sizes()==b.ph.sizes() && b.ph.size(0)==b.t.size(0) &&
+        b.ph.size(1)==b.t.size(1)+1 && b.ph.size(2)==b.t.size(2) &&
+        b.alb.sizes()==b.t.sizes() && b.alt.sizes()==b.t.sizes() &&
+        t.alt.sizes()==b.t.sizes() && b.p_pert.sizes()==b.t.sizes() &&
+        t.p_pert.sizes()==b.t.sizes() && b.c1h.dim()==1 && b.c2h.dim()==1 && b.rdnw.dim()==1 &&
+        b.c1h.numel()>=b.t.size(1) && b.c2h.numel()>=b.t.size(1) && b.rdnw.numel()>=b.t.size(1) &&
+        ph_size==b.ph.numel() && t_size==b.t.numel() && ph_start>=0 && t_start>=0 &&
+        B.defined() && B.dim()==1 && B.sizes()==K0.sizes() && B.sizes()==K1.sizes() &&
+        ph_start+ph_size<=B.numel() && t_start+t_size<=B.numel(), "invalid EOS or block shape");
+    const auto vector_json=[](const Tensor& x) {
+        (void)extremes(x); auto y=x.detach().to(torch::kFloat64).contiguous();
+        std::ostringstream z; z << std::setprecision(17) << "[";
+        for(int64_t i=0;i<y.numel();++i) {if(i) z << ','; z << y[i].item<double>();}
+        z << "]"; return z.str();
+    };
+    const auto level_json=[](const Tensor& x) {
+        TORCH_CHECK(x.dim()==3, "per-level tensor must be rank 3");
+        std::ostringstream z; z << std::setprecision(17) << "[";
+        for(int64_t i=0;i<x.size(1);++i) {
+            auto level=x.select(1,i); auto ex=extremes(level);
+            if(i) z << ','; z << "{\"min\":" << ex.min << ",\"max\":"
+                << level.max().item<double>() << ",\"absmax\":" << ex.max_abs << "}";
+        }
+        z << "]"; return z.str();
+    };
+    const auto endpoint=[&](const Context& e) {
+        TORCH_CHECK(e.t.scalar_type()==torch::kFloat64 && e.ph.scalar_type()==torch::kFloat64 &&
+            e.alt.scalar_type()==torch::kFloat64 && e.p_pert.scalar_type()==torch::kFloat64,
+            "EOS state/output requires FP64");
+        const auto dz=e.ph.slice(1,1,e.ph.size(1))-e.ph.slice(1,0,e.ph.size(1)-1);
+        return std::string("{\"theta_pert\":")+level_json(e.t)+
+            ",\"dphi_pert_computed\":"+level_json(dz)+",\"alb\":"+level_json(e.alb)+
+            ",\"alt\":"+level_json(e.alt)+",\"p_pert\":"+level_json(e.p_pert)+"}";
+    };
+    const auto block=[](const Tensor& x,int64_t start,int64_t size) {
+        return extremes(x.slice(0,start,start+size)).max_abs;
+    };
+    std::ostringstream out; out << std::setprecision(17)
+        << "{\"scope\":\"same_call_EOS_endpoint_outputs_no_error_bound\",\"levels\":" << b.t.size(1)
+        << ",\"c1h_dtype\":" << int(b.c1h.scalar_type()) << ",\"c1h_hash\":"
+        << wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(b.c1h)))
+        << ",\"c1h\":" << vector_json(b.c1h) << ",\"c2h_dtype\":" << int(b.c2h.scalar_type())
+        << ",\"c2h_hash\":" << wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(b.c2h)))
+        << ",\"c2h\":" << vector_json(b.c2h) << ",\"rdnw_dtype\":" << int(b.rdnw.scalar_type())
+        << ",\"rdnw_hash\":" << wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(b.rdnw)))
+        << ",\"rdnw\":" << vector_json(b.rdnw)
+        << ",\"rd\":" << b.rd << ",\"cv\":" << b.cv << ",\"cp\":" << b.cp
+        << ",\"p0\":" << b.p0 << ",\"t0\":" << b.t0
+        << ",\"B_ph_absmax\":" << block(B,ph_start,ph_size)
+        << ",\"K0_ph_absmax\":" << block(K0,ph_start,ph_size)
+        << ",\"K1_ph_absmax\":" << block(K1,ph_start,ph_size)
+        << ",\"B_t_absmax\":" << block(B,t_start,t_size)
+        << ",\"K0_t_absmax\":" << block(K0,t_start,t_size)
+        << ",\"K1_t_absmax\":" << block(K1,t_start,t_size)
+        << ",\"base\":" << endpoint(b) << ",\"accepted\":" << endpoint(t) << "}";
+    return out.str();
 }
 inline std::string measure(const Tensor& base_k,const Tensor& base_r,const Tensor& scale_inv,
                            const Tensor& post_k,const Tensor& post_r,
