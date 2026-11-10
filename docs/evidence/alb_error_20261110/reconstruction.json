@@ -1,0 +1,20 @@
+{
+  "scope": "reconstruction only; theta matches recorded FNV, not a retained byte-for-byte original",
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "receipt_sha256": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+  "theta_fnv64": "4185430885422016772",
+  "pb_fnv64": "14087318007462321114",
+  "pb_bitwise_equal_to_captured": true,
+  "theta_file_sha256": "f3d7d9d7ab0f091d99db3f603ad51020451c18bf7e76996ff9e1f7eeb20a084f",
+  "theta_shape": [
+    81,
+    64,
+    41
+  ],
+  "theta_dtype": "float64",
+  "method": "T_INIT fp32+300 fp32 then exact fp64 promotion; periodic X and symmetric Y copy",
+  "limits": [
+    "theta original data not retained: FNV match is fingerprint evidence, not collision-free proof",
+    "excludes upstream T_INIT/PB formation and full RHS"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "time_local": "2026-11-10T12:46:25.817773+09:00",
+  "status": "passed",
+  "analysis_sha256": "2f9f9de1110de620c1725c2bb7727ee87c3773fa69aca6cc68b5ff4d8db051a2",
+  "registration_sha256": "cefd40316241a3f3a353b5c60e5fb9342275bbe959763644144bd28073ba5528",
+  "execution_sha256": "ea84b7db699f4ae87de19560d0b9a76d4f80d912ad82f8956f707126c12cf80f",
+  "immutable_pins_verified": 38,
+  "raw_files_verified": 16,
+  "cells_per_state": 212544,
+  "bound_groups_verified": 11,
+  "all_decimal_binary64_hex_match": true,
+  "constants": {
+    "rd": 287,
+    "cv": 717.5,
+    "cp": 1004.5,
+    "eos_p0": 100000,
+    "t0": 300
+  },
+  "p1000mb": 100000,
+  "upstream_alb_linf": 1.245771593971007e-15,
+  "composed_native_p_pert_linf": [
+    6.555505427197812e-11,
+    6.656069455240462e-11
+  ],
+  "scope": "Ideal alb and induced/composed EOS comparison at rounded captured inputs. Original theta is collision-qualified by FNV; al_pert reported induced only as native al_pert was not captured. No full RHS e_i, exact merit, or descent certificate.",
+  "limitations": [
+    "Checks registered source and result metadata without redoing MPFR computation; preflight reviewed arithmetic.",
+    "No new native model, build, RK3 comparison or extra MPFR execution."
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-11-10T12:30:04.501128+09:00",
+  "status": "SOURCE_MATH_PLAN",
+  "source_commit": "2c1dcce1d82560297b3259a5e7687dd52b2e38c2",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+    "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e"
+  },
+  "source": [
+    "compute_inverse_density: float inputs rd/cv/cp/p1000, double scalar coeff=rd/p1000 and exponent=-cv/cp, then coeff*theta*pow(pressure/p1000, exponent). Wrapped C++ double scalars do not promote tensor dtype.",
+    "Caller uses th_base_, p_base_, rd_,cv_,cp_,100000.f; 100000 reference must not be conflated with separate EOS p0.",
+    "calc_p_rho_wrf promotes tensor inputs to double then computes native arithmetic, pow and output cast; preserve source order for interpretation."
+  ],
+  "propagation": {
+    "definitions": "D=c1*(MUB+mu)+c2; beta=c1*MUB+c2; r=rdnw_abs; alpha=(beta*alb+r*dph)/D; alpha_pert=alpha-alb.",
+    "conditions": "D is bounded away from zero and widened alpha interval positive; theta, rd, p0, cp, cv and power base strictly positive; all fixed captured arguments and shape/dtypes proven.",
+    "bounds": "|delta alpha| <= |beta/D| E_alb; |delta alpha_pert| <= |c1*mu/D| E_alb; pressure endpoint MPFR intervals or |dp/dalpha|=kappa*p/alpha with kappa=cp/cv>0 on widened alpha range."
+  },
+  "minimum_method": "At preserved same-call th_base/p_base and EOS args, build directed MPFR exact-real composed alb* then alpha/al_pert/p_pert interval and compare against captured native EOS outputs cellwise (if output exists); corroborate beta/D and positivity. Model scalar rounding separately if comparing to a native-intermediate reference, and do not assume libtorch pow ULP.",
+  "limits": [
+    "MPFR interval trust and input identity assumptions explicit; other input formation and upstream base field uncertainty excluded.",
+    "Do not infer widened alpha domain from prior fixed-alb domain without revalidation.",
+    "EOS output Pa or alpha is not a bound on full RHS, scaled residual RMS, e0/e1 or merit descent; downstream propagation remains open.",
+    "Read-only source/math review; no tests, native or code edits."
+  ]
+}

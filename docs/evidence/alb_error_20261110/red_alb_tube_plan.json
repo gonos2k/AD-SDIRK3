@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-10T12:34:37.666924+09:00",
+  "status": "PASS_CONDITIONAL_LEMMA",
+  "derivation": "At fixed state and coefficients, alpha(alb)=alpha(alb_hat)+(beta/D)*(alb-alb_hat), beta=c1*MUB+c2, D=c1*(MUB+mu)+c2. Given |alb*-alb_hat|<=E_j for each cell at level j and positive D>=D_lo over the original box, bound B_j=max_{MUB interval}|c1*MUB+c2|/D_lo using exact signed-rational endpoint extrema. Then [l_j-B_j E_j,u_j+B_j E_j] encloses the exact alpha at exact base alb throughout that box.",
+  "assumptions": [
+    "Original [l,u], theta and denominator intervals remain valid for the original state box and captured fixed alb; fixed coefficient/mu/mub and Q assumptions remain in force.",
+    "E_j is a rigorous pointwise per-level maximum over every relevant horizontal cell for exact alb vs corresponding captured alb, same fixed base fields; preserve outward representation when converting MPFR values.",
+    "D_lo>0, E_j>=0, finite positive rd,p0 and positive theta lower and widened alpha lower.",
+    "Recompute positive exact-real pow-base interval from positive rd*theta/(p0*alpha); any claim for newly executed binary64 arithmetic requires separate rounded-operation enclosure."
+  ],
+  "limits": [
+    "No assertion about native counterfactual alb execution, pow accuracy, full RHS error, exact forcing or merit descent.",
+    "Box must not silently change; failure of widened lower positivity is unresolved, not a relaxed threshold.",
+    "Read-only mathematical review, no code or native run."
+  ]
+}

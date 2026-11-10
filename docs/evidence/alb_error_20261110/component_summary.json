@@ -1,0 +1,20 @@
+{
+  "status": "bounded_component_only",
+  "base_source": "2c1dcce1d82560297b3259a5e7687dd52b2e38c2",
+  "cells_per_endpoint": 212544,
+  "shape": [
+    81,
+    64,
+    41
+  ],
+  "theta_identity": "reconstructed and FNV-qualified, not retained original bytes",
+  "upstream_alb_linf": 1.245771593971007e-15,
+  "upstream_alb_l2": 1.515964469670452e-13,
+  "tube_levels": 64,
+  "tube_alpha_lower_display_down": 0.7352597028172149,
+  "tube_pow_base_lower_display_down": 0.19870572374355447,
+  "maximum_tube_alpha_shift_approx": 1.24605184706512e-15,
+  "full_endpoint_error_bounds_available": false,
+  "exact_decrease_certified": false,
+  "native_runs": 0
+}

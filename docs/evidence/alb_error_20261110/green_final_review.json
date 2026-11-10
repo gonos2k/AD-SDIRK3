@@ -1,0 +1,18 @@
+{
+  "timestamp_local": "2026-11-10T12:52:25.212302+09:00",
+  "status": "PASS_BOUNDED",
+  "blocking_findings": [],
+  "checks": [
+    "No production numerical source files changed from main 2c1dcce1.",
+    "P3 descent replay resolves bundled receipt relative to script and writes stdout; isolated-cwd and negative-control receipt recorded.",
+    "Previous EOS manifest 64 listed file hashes and sizes match; new compressed theta decompresses to reconstructed theta SHA, and all 16 prior EOS archive members match new analysis SHA.",
+    "Prior Green result review checked 38 registered immutable pins, 212544 cells/state and all bound hex encodings; no data analysis repeated here.",
+    "Report explicitly distinguishes induced versus composed outputs, unretained native al_pert, reconstructed theta fingerprint qualification, conditional exact-real widened tube, and open e_i/descent.",
+    "Portable README uses explicit paths to prior EOS packet, compressed theta and reconstruction metadata and identifies software prerequisites.",
+    "Final 33-file public manifest matches all recorded sizes and SHA-256; graph navigation hashes match decompressed graph and pin file, and all 53 pinned files match worktree at source 400877e49ebb00f69e99082206a5efd663ff8cc1."
+  ],
+  "limits": [
+    "No build, test, MPFR or native replay performed in this review; prior receipts remain the evidence.",
+    "Manifest was checked before adding this final Green receipt; the resulting 34-file manifest requires its own final verification."
+  ]
+}

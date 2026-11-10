@@ -1,0 +1,26 @@
+{
+  "time_local": "2026-11-10T12:38:45.977432+09:00",
+  "verdict": "approved for one registered offline analysis under stated input and MPFR assumptions",
+  "artifact_sha256": {
+    "alb_mpfr.cpp": "3e72481bf236d0e7245f49ea8b71e446cef43886c4284ffbdef083d7df02d376",
+    "alb_mpfr": "188173e0ff31945a6213fb38c49f1c9b89d45555cae8c8e8b0bfd5b42458961a",
+    "evaluate_alb.py": "0329f54d0910e03b0019cce08211523abb6a7b7f5486434a9eee187b7a985610",
+    "test_alb_mpfr.py": "0d6573155a3725ddbdf3e8504c416a96b852f687dcb22562bff56f94885266a5",
+    "reconstruct_alb_inputs.py": "ecc0b77f4ae52a95915b1ab462d1cae31b48b9ee16c79932c89c4d8dcb335953",
+    "reconstructed/theta_base.npy": "f3d7d9d7ab0f091d99db3f603ad51020451c18bf7e76996ff9e1f7eeb20a084f",
+    "reconstructed/reconstruction.json": "64b144b67797e6d31622faacc4edbf79e196199d1b3e1ed0e4786377c2b1e09a"
+  },
+  "test_receipt_sha256": "392e6ddbdad6e3012494924ebff09ea37723010b5711e3c96b20b206c2dedfbd",
+  "review": [
+    "Directed interval operations and absolute-error maxima/squares/sums/sqrt are outward; four-corner positive-base power bounds variable exponent.",
+    "For D=c1*(mub+mu)+c2, alpha=alb-(alb*c1*mu-rdnw*dph)/D; beta=(c1*mub+c2)/D and delta alpha=beta*delta alb, delta al_pert=-(c1*mu/D)*delta alb. Induced pressure encloses subtraction of two interval EOS results; direct composed compares ideal-alb EOS against captured native alpha/pressure.",
+    "Upstream ideal alb uses rd/p1000 * theta_base * (pb/p1000)^(-cv/cp), p1000=100000 distinct from captured EOS p0. Theta original was not retained, so reconstruction fingerprint is collision-qualified.",
+    "Wrapper validates 16-file shapes, dtype and FNV, exact FP32 promotion, reconstruction theta metadata and receipt identity. Synthetic test receipt hashes match reviewed artifacts.",
+    "MPFR bounds at rounded captured state and coefficients only; no native al_pert retained, so induced al_pert is not a composed-native error."
+  ],
+  "limitations": [
+    "No new real-data analysis, native run or test rerun by reviewer.",
+    "No complete RHS e_i, norm or descent bound follows.",
+    "Trusted MPFR directed rounding and input provenance assumed; fixed denominator floor 1e-100 is an explicit applicability gate."
+  ]
+}

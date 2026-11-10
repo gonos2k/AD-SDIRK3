@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "timestamp_local": "2026-11-10T12:31:27.687382+09:00",
+  "script_sha256": "bc34cc5abdc98f7484c94db840311c3d4c091ffdb820ca6e3786b69d04d62282",
+  "scope": "copied script and bundled receipt in arbitrary temporary checkout, run from unrelated cwd; stdout JSON equals preserved historical result; no files written",
+  "unchanged_sha256": {
+    "descent_budget.json": "464bf5fbe10f88fed7ea704fc028742673d69129218342d45ff0ec6eaebf88f0",
+    "accepted_step_probe.json": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56"
+  },
+  "exact_gap": "4295394570649/2251799813685248",
+  "full_endpoint_error_bounds_available": false,
+  "native_runs": 0,
+  "local_input_negative_control": "Changing only the copied local receipt causes the fixed historical-pair assertion to reject; no use of original absolute receipt."
+}

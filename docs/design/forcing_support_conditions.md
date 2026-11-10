@@ -170,3 +170,39 @@ exact forcing, Stage3 completion, or E/T/A/F. Native exit86 follows the first
 accepted Stage3 update; completed stages in logs are [2], completed steps0.
 
 [Evidence and independent replay scope](../evidence/eos_descent_20261110/README.md).
+
+
+## Base-alb component and widened real domain (2026-11-10 follow-up)
+
+The follow-up to main2c1dcce1 uses no new native execution. For the same354748d6
+Stage3 accepted pair, reconstructed PB matches captured p_base bitwise. Base theta
+is reconstructed by the source FP32 T_INIT+300 then exact FP64 promotion and
+matches the recorded data fingerprint; the original array was not retained, so
+this is collision-qualified input evidence. The conditional target treats these
+rounded theta/pb and stored float constants as exact, excluding their formation.
+
+For rd=287, cv=717.5, cp=1004.5, the upstream real expression is
+alb*=rd/100000*theta_b*(p_b/100000)^(-cv/cp). This explicit100000 must be
+kept distinct from the EOS p0. MPFR256 directed intervals bound captured native
+alb error at all212544 cells by Linf1.245771593971007e-15 m^3/kg.
+
+For D=c1(MUB+mu)+c2 and beta=c1*MUB+c2, exact input shifts satisfy
+Delta(alpha)=(beta/D)Delta(alb) and
+Delta(al_pert)=-(c1*mu/D)Delta(alb). Pressure shifts are evaluated with directed
+EOS intervals rather than a sampled derivative. Direct composed comparison of
+native alpha/p against EOS(alb*) includes upstream alb and native EOS arithmetic;
+it is not added again to the previously bounded EOS arithmetic component.
+Native al_pert was not retained, so its reported shift is only input sensitivity.
+
+The original64-level state box is widened with per-level Ea and a conservative
+|beta/D| bound using the original positive D lower endpoint. Alpha remains
+strictly positive at all64 levels; the exact-real power base is recomputed from
+the widened interval. Old frozen-alb lower endpoints are not silently reused.
+This does not bound a counterfactual floating execution; the previous state-box,
+source-copy/basic-rounding and input identity assumptions remain necessary.
+
+Full downstream PGF/buoyancy/mass and other RHS, native al_pert arithmetic,
+input formation, scaling/norm/float conversion and e0/e1 remain open. Thus exact
+merit decrease and full Stage3/forecast convergence are still uncertified.
+The old native source/link/run scope, P1 NO-GO and E/T/A/F status are preserved.
+[Input evidence, component bounds and portable replay](../evidence/alb_error_20261110/README.md).

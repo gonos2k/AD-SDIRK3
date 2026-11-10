@@ -1,0 +1,55 @@
+{
+  "timestamp_local": "2026-11-10T12:30:33.765203+09:00",
+  "source_revision": "2c1dcce1d82560297b3259a5e7687dd52b2e38c2",
+  "native_revision": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "status": "feasible_with_recorded_fingerprint_qualification",
+  "source_chain": [
+    "dyn_em/module_implicit_sdirk3.F:803,901 supplies grid%pb and grid%t_init through the base-state interface.",
+    "wrf_sdirk3_tile_unified_impl.cpp:31265,31335,31412 clones tile FP32 PB and forms th_base_=FP32(t_init+300).",
+    "tile_unified_impl.cpp:16544-16548 aligns p_base and th_base to state dtype; at this FP64 profile, both are promoted to FP64.",
+    "tile_unified_impl.cpp:20490 computes alb=compute_inverse_density(th_base_,p_base_,rd,cv,cp,100000.0f), and EOS context snapshots alb and p_base.",
+    "wrf_hydrostatic_pressure.cpp:205 forms (double(rd)/double(p1000mb))*theta*pow(pressure/p1000mb,-double(cv)/double(cp))."
+  ],
+  "source_hashes": {
+    "dyn_em/module_implicit_sdirk3.F": "3ac269a16728908bee61a4172e7a25163864694023cc21b0eede9ace0204c092",
+    "wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e",
+    "wrf_hydrostatic_pressure.cpp": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2"
+  },
+  "reconstruction": {
+    "input": "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/wrfinput_d01",
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "variables": "T_INIT and PB, both float32, original shape [1,64,80,40]",
+    "method": "transpose [k,j,i] to [j,k,i]; extend to [81,64,41] by periodic X first column and symmetric Y last physical row; theta computed with FP32 addition of 300 then promoted FP64, PB promoted FP64",
+    "stage3_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/accepted_step_probe.json",
+    "receipt_sha256": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+    "theta_bytes_fnv64": "4185430885422016772",
+    "pressure_bytes_fnv64": "14087318007462321114",
+    "fingerprints_match_receipt": true,
+    "pressure_bitwise_equal_to_captured_p_base_npy": true,
+    "theta_base_range": [
+      281.1815490722656,
+      442.7613525390625
+    ],
+    "pressure_base_range": [
+      11080.0244140625,
+      98357.734375
+    ],
+    "alb_npy_sha256": "687ec8caca6b378a785aabe29aef2c648cf421e435a337e8b93c33cdf941ed5f",
+    "captured_alb_and_pb_dtype": "FP64 [81,64,41]",
+    "constants": {
+      "rd": 287,
+      "cv": 717.5,
+      "cp": 1004.5,
+      "p1000mb": 100000
+    }
+  },
+  "qualifications": [
+    "th_base is reconstructed and matches recorded FNV-1a64 bytes; actual th_base NPY was not retained, so this is fingerprint evidence, not a collision-free direct byte comparison.",
+    "Pressure reconstruction is bitwise equal to retained EOS p_base NPY; scalar constants come from captured EOS context and the hardcoded p1000mb source call.",
+    "Source from native 3547 to current differs only in Tile comments, not the relevant formula.",
+    "Full RHS, residual e_i, propagation and descent remain open.",
+    "Exact finite-domain/error verification and accounting for upstream T_INIT/PB formation remain subsequent tasks."
+  ],
+  "recommendation": "Reuse retained input and existing alb/p_base NPY for an offline per-cell MPFR enclosure of compute_inverse_density at these reconstructed FP64 operands, after pinning FNV reconstruction and review; do not launch another native run for this component.",
+  "actions": "read-only source/array checks; no code edit, checker implementation, build, or native model run"
+}

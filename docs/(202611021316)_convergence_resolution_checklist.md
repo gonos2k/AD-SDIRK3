@@ -2,7 +2,7 @@
 
 작성: 2026-11-02T13:16:08.084142+09:00.
 최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
-최신 갱신: 2026-11-10T11:24:19.335735+09:00, 기준 main4907880c(PR343 병합).
+최신 갱신: 2026-11-10T12:49:30.298100+09:00, 기준 main2c1dcce1(PR344 병합).
 Stage3 EOS 정의역·산술 오차 성분: [진행 보고]((202611101123)_stage3_eos_domain_and_error_component.md).
 링크 귀속 정정·O1: [보고서]((202611022330)_link_origin_o1_resolution.md).
 이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
@@ -132,15 +132,33 @@ Stage2 CONVERGED 로그는 있으나 Stage3·시간스텝은 완료하지 않았
 E/T/A/F의 증명·실험이 모두 완료된 것처럼 묶지 않는다.
 검증 결과와 source/executable/input hash는 별도 진행 보고서에 연결해 상태를 한 항목씩 갱신한다.
 
+alb 산술·EOS 전파 후속: [보고서]((202611101248)_alb_error_propagation_and_replay_fix.md) · [자료](evidence/alb_error_20261110/README.md).
+
 ## PR343 후속의 좁은 해소 상태
 
 - [x] P3: mass-floor mask detach/where의 부정확한 미분가능성 주석과 Pa 단위 설명 정리. 수치식 불변.
 - [x] 같은 Stage3 K/R 쌍의 EOS 자료를 원래 trial 호출에서 확보하고 기존 hash·native RMS와 대응.
 - [x] 지정 profile·fixed coefficients·FP64 basic-operation 가정 아래 EOS 정의역64층 조건부 양수.
 - [x] 저장된 반올림 EOS 입력에서의 arithmetic-only 오차를 양 endpoint 전체점의 MPFR 구간으로 제한.
-- [ ] 상류 inverse-density/alb 생성 입력·정의역·산술 오차와 실제 RHS로의 전파를 제한.
+- [ ] 상류 inverse-density/alb 생성과 실제 RHS로의 전파를 제한.
+  고정 반올림 base 입력의 alb 산술·EOS induced shift·native alpha/p 합성 성분은 조건부 상계를 확보했다.
+  theta는 직접 byte 포착 대신 FNV-일치 재구성이라는 조건이 남고, 하류/다른 RHS는 미완료다.
 - [ ] 전체 RHS/state/scaling/norm error e0,e1를 묶어 같은 수용 쌍의 정확한 감소 충분조건 인증.
 
 새 실행은 Stage2만 수렴 로그가 있고 Stage3 첫 수용 갱신 뒤 종료86, 완료 timestep0이다.
 초기21장·계수의 보관 RK3/A9 비교를 재사용했으며 새 RK3·endpoint·속도 비교는 없다.
 기존 회귀와 P1 NO-GO를 다시 열지 않았고 E/T/A/F는 미완료다.
+
+## PR344 후속의 좁은 해소 상태
+
+- [x] P3 재현 경로: 동봉된 receipt를 script-relative로 읽고 stdout만 출력. 임의 cwd/복사본 교란 검사 통과.
+- [x] 보존 base 입력의 source/dtype 대응. PB는 captured bytes 일치, theta는 FNV-일치 재구성으로 한정.
+- [x] 그 입력을 정확한 실수로 정의한 alb 오차와 두 endpoint EOS 전파의 조건부 MPFR 상계.
+- [x] alb 오차로 기존64층 alpha 구간을 실제로 넓혀 exact-real 양수 domain 재확보.
+- [ ] native al_pert 산술 및 PGF·부력·질량 변환·나머지 RHS까지의 출력별 오차 전파.
+- [ ] input formation과 같은 metric의 scaling/norm/float 변환을 포함한 e0,e1 및 정확한 감소 충분조건.
+
+새 native/RK3·endpoint·비용 비교는 없다. 기존354748d6 자료를 오프라인에서만 분석했다.
+induced al_pert는 실수식의 입력 민감도이고 native al_pert 오차가 아니다. 새 composed alpha/p는
+alb와 EOS 산술을 직접 함께 감싼 값이므로 이전 EOS 성분을 다시 더하지 않는다.
+전체 Newton/Stage3 반복·시간 적분 수렴, W 잡음·실용 비용·5일 미완료를 유지한다.
