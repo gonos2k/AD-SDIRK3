@@ -1,0 +1,26 @@
+{
+  "timestamp_local": "2026-11-10T18:49:27.095910+09:00",
+  "status": "PREANALYSIS_SYNTHETIC_ONLY",
+  "formula": "R*_W=K_W-Q_W[(G_W-W*c1f*Dm)/L], with exact-real Y=Q_in(B+aK), ideal alb/EOS and source WRF mass flux",
+  "scope": [
+    "unit-map, dry CQW zero, mode3 ImplicitOnly single tile FP64, reference update and reuse off, parity true, W-damping and HEVI off",
+    "bottom coupled force is zero but W product-rule term retained; physical U periodic seam and V wall normal zero; Q_W horizontal copy aliases only",
+    "B, K, coefficients and measured weight extrema are treated as exact captured binary values; B/K provenance and formation before capture excluded",
+    "all W entries and aliases are compared to native stored R; weighted mathematical RMS uses observed inverse-weight maximum times Linf and RNDU sqrt(Nw/N); native backend norm rounding excluded"
+  ],
+  "interval_method": "MPFR 256 RNDD/RNDU throughout. Positive-base sign-definite power uses mathematically monotone selected endpoints, four-corner fallback when exponent crosses zero; built-in tests compare exact MPFR endpoints against four-corner reference. Ideal alb is cached only by exact positive theta_base/pbase pair with fixed constants.",
+  "inputs": "Normalized manifest expected: 16 flat FP64 files B,K0,K1,R0,R1,theta_base,pbase,mub,c1h,c2h,c1f,c2f,mass_rdnw,eos_rdnw,pressure_rdn,top_rdnw, top_rdnw is one actual scalar; plus constants a/rdx/rdy/g/rd/cv/cp/p0/t0 and observed W scale min/max. Metadata records original dtype and each file SHA; wrapper checks supported profile and bitwise equality EOS/mass rdnw and derives uniform weight-upper scratch file.",
+  "runtime_estimate": "Uniform 10x10x8 synthetic, noninteger exponent: before optimization 3.31s, after 0.29s; naive linear extrapolation ~58s is not an upper bound and actual coefficient diversity/cache/RSS unmeasured. Raw arrays ~48MB, plus O(unique theta,pbase) MPFR cache and process overhead.",
+  "hashes": {
+    "w_full_mpfr.cpp": "8b24158b6390a01baa03bb5e2603eb76e694d46ea6f74d2ddb127c734f339341",
+    "w_full_mpfr": "2f2fd62fb7e5acc907d91066b3d26d94673093823a796caa306c1de8fcc67b9d",
+    "run_w_full_mpfr.py": "5ae180bad34712bb1f8aaadfdef65fd10ad59391227c73ca808c5989e28a2b32",
+    "test_w_full_mpfr.py": "5f062045abc98de7d0088e9e46674ab26e3c7d60a67c9b9fb9f400ce78757c59",
+    "w_full_preanalysis_test_receipt.json": "338b2eac9a363982de71a4dd1b397004626e4d6779de2773c6bb53f247b1ea55"
+  },
+  "limitations": [
+    "No actual data or full-grid evaluation before registered preflight.",
+    "No proof of whole RHS error, backend norm rounding, e_i descent or forecast convergence.",
+    "Flags/context in normalized manifest must be established by capture, not inferred from configuration intent."
+  ]
+}

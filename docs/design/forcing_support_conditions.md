@@ -263,3 +263,35 @@ and2.364582296508406e-13, with exact Fractions authoritative. Full native W erro
 U/V primary/NH4/other RHS, formation, norm error and e0/e1 are still open. Thus
 exact merit decrease, Stage3 convergence, E/T/A/F and forecast claims remain open.
 [Replay, source and data contract](../evidence/w_runtime_20261110/README.md).
+
+
+## Complete W residual and stored-input norm gap (PR347 follow-up)
+
+Native source d05130c0 captures exact binary B,K0,K1,R0,R1 and actual fixed inputs,
+including theta_base and pre-reciprocal mass RDNW. The same old pair/context and16
+EOS files match. Actual flags establish the dry unit-map ImplicitOnly parity
+profile. Native formed inputs and Q are separately digest-validated; the reference
+forms exact Q(B+aK), recomputes mass continuity from U/V and ideal EOS, and includes
+hybrid mass/ratio conversion plus K_W−F_W. It retains the bottom product term.
+The pointwise target fixes the captured binary B/a/C/K; formation before these
+inputs and global time/physical accuracy are outside this target.
+
+Directed MPFR256 comparison bounds the complete W residual evaluation error on
+all215865 entries per state. Mathematical weighted W upper bounds are
+2.3907853519229967e-13 and2.4285918370791415e-13. Unlike the earlier intermediate
+model, native W arithmetic and inside-evaluation state/coefficient formation are
+included by direct stored-R versus target-G comparison; backend gamma is not used.
+This is conditional on correct source mapping, guarded profile, faithful capture
+and MPFR, not a global operator/trajectory certificate.
+
+Using the full stored R arrays and actual per-block S_inv extrema, an exact-integer
+sum and 256-bit dyadic isqrt enclosure bound the stored-input native norm gap nu
+by7.583206822826292e-11 and7.827930118980624e-18. This is not epsilon_G and must
+be added only once. Other blocks' evaluation errors remain open, so full e_i,
+strict merit decrease, Stage3 convergence and E/T/A/F are still uncertified.
+[Inputs, replay and limitations](../evidence/w_error_20261110/README.md).
+
+For this fixed-input pair only, exact stored W-block norms plus epsilon_W give
+strictly separated target W-merit intervals (before lower about6.0547284e-5,
+accepted upper about1.0551043e-9). This conditional W-only decrease is not a
+full-merit or Stage3 convergence certificate; global nu is not added again.

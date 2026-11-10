@@ -2,7 +2,7 @@
 
 작성: 2026-11-02T13:16:08.084142+09:00.
 최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
-최신 갱신: 2026-11-10T16:03:32.302776+09:00, 기준 maine5567710(PR346 병합).
+최신 갱신: 2026-11-10T19:45:00.929268+09:00, 기준 main3d4f7857(PR347 병합).
 Stage3 EOS 정의역·산술 오차 성분: [진행 보고]((202611101123)_stage3_eos_domain_and_error_component.md).
 링크 귀속 정정·O1: [보고서]((202611022330)_link_origin_o1_resolution.md).
 이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
@@ -197,3 +197,27 @@ alb와 EOS 산술을 직접 함께 감싼 값이므로 이전 EOS 성분을 다�
 새 source ddc9475 진단1회는 exit86, Stage2 수렴, Stage3 미완료·완료 timestep0이다.
 기존 h600 one-step/174장 비교, P1 NO-GO를 새로 수행하거나 소급 변경하지 않았다.
 전체 merit 감소·Stage3 반복·시간지도/예보 안정성·실용 비용·5일은 계속 미완료다.
+
+
+## PR347 후속: 정의한 W 잔차 전체와 stored norm gap
+
+[진행 보고]((202611101943)_complete_w_residual_and_norm_gap.md) · [재현·target 입력 정의](evidence/w_error_20261110/README.md).
+
+- [x] 같은 수용 쌍의 full B/K0/K1/R0/R1, actual theta_base/c1f/c2f/mass RDNW와 profile/layout을 확보.
+  native formed Q 입력 digest 검증은 별도이고 reference target은 exact Q(B+aK)다.
+- [x] 주어진 binary B/a/C,K의 지원 profile에서 전체 W 잔차 평가오차를 MPFR256 구간으로 제한.
+  현재 Mdot를 projected U/V에서 재계산하고 bottom product 및 alias를 포함한다.
+  가중 mathematical W bound before2.3907853519229967e-13 /accepted2.4285918370791415e-13.
+- [x] stored R/S와 native RMS의 nu를 exact integer/dyadic sqrt로 제한.
+  before7.583206822826292e-11 /accepted7.827930118980624e-18, backend gamma 가정 없음.
+- [ ] U/V primary·NH4·PH·T·MU 등 다른 residual 블록의 epsG를 같은 target/W/N에서 제한.
+- [ ] epsG와 nu를 한 번씩 결합해 전체 e0+e1 감소 예산을 판정.
+
+B/a/C가 입력으로 주어지기 전의 형성 오차와 PDE/시간지도 정확도는 이 pointwise target 밖이다.
+정의한 평가 안의 B+aK/EOS/mass/변환/residual뺄셈은 직접 비교에 포함된다. Stage3/시간스텝은
+이번 native에서도 완료하지 않았다. W와 nu가 작다는 이유로 다른 블록 오차를0으로 두거나
+전체 merit/반복 수렴·W 잡음·실용 비용·5일 E/T/A/F를 완료 처리하지 않는다.
+
+- [x] 같은 fixed-input/profile 두 상태의 W 블록 target merit는 엄격히 감소함을 조건부로 확인했다.
+  Exact native W norm과 epsilon_W의 분리 구간 증명이며, global nu를 중복 더하지 않는다.
+  전체 merit 감소/Stage3 수렴 상태는 여전히 미인증이다.

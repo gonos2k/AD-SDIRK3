@@ -1,0 +1,156 @@
+{
+  "scope": "native_stage3_w_reference_inputs_v1",
+  "grid": {
+    "m": 80,
+    "n": 40,
+    "nz": 64,
+    "packed_N": 1080491,
+    "W_count": 215865
+  },
+  "profile": {
+    "mode3_implicit_only": true,
+    "single_tile": true,
+    "fp64": true,
+    "dry_cqw_zero": true,
+    "unit_maps": true,
+    "periodic_x_symmetric_y": true,
+    "mu_parity": true,
+    "identity_halo": true,
+    "reference_update_off": true,
+    "reuse_off": true,
+    "hevi_off": true,
+    "wdamp_off": true,
+    "sanitize_off": true,
+    "transport_off": true,
+    "fixed_context": true,
+    "accepted_pair_verified": true
+  },
+  "files": {
+    "B": {
+      "path": "B.npy",
+      "sha256": "3aec1713e0be4dc00873d4b102ffcd3211bae25cc916b81a7614f14f9e538e37",
+      "source_dtype": 7
+    },
+    "K0": {
+      "path": "K0.npy",
+      "sha256": "b3fc181a8fd1bc8921f7ec8dffdff6a840d3c4100ae795d7be36b967a1970592",
+      "source_dtype": 7
+    },
+    "K1": {
+      "path": "K1.npy",
+      "sha256": "3cfb5b8af3995b08cb58757f286b9f43f3f0b26bfe014f23e1bc968d650a9f92",
+      "source_dtype": 7
+    },
+    "R0": {
+      "path": "R0.npy",
+      "sha256": "2d948e7332befcb250473d4b41e7d415c1b4b1eb4a0aca84492c4aaf5525675f",
+      "source_dtype": 7
+    },
+    "R1": {
+      "path": "R1.npy",
+      "sha256": "63cb3f0d4af7b3ca0223ade091ea6fa959317235c03ce593bfa7459ef95c2ade",
+      "source_dtype": 7
+    },
+    "theta_base": {
+      "path": "theta_base.npy",
+      "sha256": "c2b7b7d3a38b3f89fadc7b704e01ffa4a7702afe0f8c5de348cb15ab3071eeb6",
+      "source_dtype": 7
+    },
+    "c1f": {
+      "path": "c1f.npy",
+      "sha256": "331490ce20c33bd7aff7c4834af8c993298c698fd903d42c9d6c71f4814dfaec",
+      "source_dtype": 6
+    },
+    "c2f": {
+      "path": "c2f.npy",
+      "sha256": "dc0b777f43c3254504b48c6081f6b5f99072b29756d8e49ba832fa5b9b55ebd0",
+      "source_dtype": 6
+    },
+    "mass_rdnw": {
+      "path": "mass_rdnw.npy",
+      "sha256": "6112c5ee0e8b7a29147673eb0b395a17b04959b521170a3d20428be23ba5dac1",
+      "source_dtype": 7
+    },
+    "pbase": {
+      "path": "pbase.npy",
+      "sha256": "806e3fc6452a8599dca5e80dd2f9f5cc0fdb2948cf9cc5dfe0e2a98b61a7385c",
+      "source_dtype": 7
+    },
+    "mub": {
+      "path": "mub.npy",
+      "sha256": "3e0ceae9c377de1ae00d2fbb69aa8919c71c2cd30ff9516f19bdc1911215bebc",
+      "source_dtype": 7
+    },
+    "c1h": {
+      "path": "c1h.npy",
+      "sha256": "b36051fa0ea3cb84a995a33f5cd77795ed5250beb034af9165802efb308e1b99",
+      "source_dtype": 6
+    },
+    "c2h": {
+      "path": "c2h.npy",
+      "sha256": "dcaedfc3666faabdb036c88f51d6ceb83c97c724316629023f2e23bd21b5a406",
+      "source_dtype": 6
+    },
+    "eos_rdnw": {
+      "path": "eos_rdnw.npy",
+      "sha256": "6112c5ee0e8b7a29147673eb0b395a17b04959b521170a3d20428be23ba5dac1",
+      "source_dtype": 7
+    },
+    "pressure_rdn": {
+      "path": "pressure_rdn.npy",
+      "sha256": "237b3434792d6745b6ed395bcb81b1b57174b582663c8b9f99fba83780765800",
+      "source_dtype": 6
+    },
+    "top_rdnw": {
+      "path": "top_rdnw.npy",
+      "sha256": "c655b3a7d0e82da666a22376fdaf21502f351aef9005d7248042085f759d827b",
+      "source_dtype": 6
+    }
+  },
+  "constants": {
+    "a": 261.5199129050754,
+    "rdx": 9.999999747378752e-06,
+    "rdy": 9.999999747378752e-06,
+    "g": 9.8100004196167,
+    "rd": 287,
+    "cv": 717.5,
+    "cp": 1004.5,
+    "p0": 100000,
+    "t0": 300
+  },
+  "W_inverse_weight_extrema": {
+    "min": 1,
+    "max": 1
+  },
+  "endpoint_proofs": {
+    "base": {
+      "input_hashes_match": true,
+      "eos_ph_t_mu_bitwise_match": true,
+      "full_formed_y_fnv64": "9366814439819622683",
+      "v_ghost_constructed_by_signed_negation": true
+    },
+    "accepted": {
+      "input_hashes_match": true,
+      "eos_ph_t_mu_bitwise_match": true,
+      "full_formed_y_fnv64": "14222454359460597046",
+      "v_ghost_constructed_by_signed_negation": true
+    }
+  },
+  "origins": {
+    "packet_sha256": "5ba7abf1e36ddf631ad41e837387b46c928413168f997cb9f3510478f327149e",
+    "build_receipt_sha256": "8012af2618ebdd3da1a3e20cdabc8691d1114b387264c5f8300f2210b27c3be4",
+    "source_revision": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
+    "result_sha256": "d5bdd13678b1415a175ce19fedcaff8faa19ad09e991814daa0a2f93f7369785",
+    "old_packet_sha256": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+    "runtime_packet_sha256": "6262589381b5dd12161a35a7e6856766ca13d591bd7b8e9bee1c201637c26058",
+    "old_new_raw_count_bitwise_identical": 16
+  },
+  "assumptions": [
+    "native binary64 multiply then add and Q copy semantics match NumPy validation",
+    "all fixed context flags refer only to the observed guarded subset",
+    "captured B,K and fixed C are exact binary target inputs; prior formation excluded",
+    "EOS and mass RDNW same bits; native W runtime getter operands from same accepted pair",
+    "all maps exactly unit, dry CQW present and zero, H identity; no unsupported branch"
+  ],
+  "validation_scope": "Native Q digests are matching checks only. MPFR independently forms exact-real Q(B+aK)."
+}

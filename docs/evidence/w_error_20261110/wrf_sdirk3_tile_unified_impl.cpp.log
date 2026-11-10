@@ -1,0 +1,25 @@
+/Users/yhlee/SDIRK3-review-worktrees/w-error-envelope-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:8562:38: warning: captured structured bindings are a C++20 extension [-Wc++20-extensions]
+ 8562 |                             auto p = alt_pgf.detach().amin(dims).to(torch::kCPU).contiguous();
+      |                                      ^
+/Users/yhlee/SDIRK3-review-worktrees/w-error-envelope-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:8447:42: note: 'alt_pgf' declared here
+ 8447 |                     auto [p_pgf, al_pgf, alt_pgf] = acoustic::diag_p_al(
+      |                                          ^
+/Users/yhlee/SDIRK3-review-worktrees/w-error-envelope-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:15979:31: warning: captured structured bindings are a C++20 extension [-Wc++20-extensions]
+ 15979 |         const int64_t nxu_o = u.size(2);
+       |                               ^
+/Users/yhlee/SDIRK3-review-worktrees/w-error-envelope-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:15689:11: note: 'u' declared here
+ 15689 |     auto [u, v, w, ph, t, mu] = extractStateVariables(constrained_state);
+       |           ^
+/Users/yhlee/SDIRK3-review-worktrees/w-error-envelope-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:15980:31: warning: captured structured bindings are a C++20 extension [-Wc++20-extensions]
+ 15980 |         const int64_t nyv_o = v.size(0);
+       |                               ^
+/Users/yhlee/SDIRK3-review-worktrees/w-error-envelope-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:15689:14: note: 'v' declared here
+ 15689 |     auto [u, v, w, ph, t, mu] = extractStateVariables(constrained_state);
+       |              ^
+/Users/yhlee/SDIRK3-review-worktrees/w-error-envelope-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:16021:17: warning: captured structured bindings are a C++20 extension [-Wc++20-extensions]
+ 16021 |                 mu.slice(0,0,m).slice(1,0,n),mu_base_.to(dev,dtp).slice(0,0,m).slice(1,0,n),
+       |                 ^
+/Users/yhlee/SDIRK3-review-worktrees/w-error-envelope-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:15689:27: note: 'mu' declared here
+ 15689 |     auto [u, v, w, ph, t, mu] = extractStateVariables(constrained_state);
+       |                           ^
+4 warnings generated.

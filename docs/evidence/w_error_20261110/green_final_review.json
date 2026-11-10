@@ -1,0 +1,33 @@
+{
+  "timestamp_local": "2026-11-10T20:00:24.211144+09:00",
+  "status": "PASS",
+  "source_revision": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
+  "scope": "Green final review of staged W-only capture, reference, exact stored-input norm gap and conditional W-only decrease; no native, MPFR or test rerun",
+  "checks": [
+    "All 83 manifest entries match staged bytes and SHA-256; no unlisted files. diff --cached --check passes.",
+    "Normalized 16-file tar inventory exactly matches manifest paths and SHA-256. Portable replay source, tests and input files exist; commands inspected rather than repeated.",
+    "All 93 final graph pins match the worktree; decompressed graph SHA matches graph navigation, and decompressed link-map SHA is recorded. Source d051 changes six files (+217/-1) from 3d4f; build receipt identifies five rebuilt ABI consumers and matching helper success.",
+    "Prior independent capture review rehashed nine raw and 16 EOS arrays, compared original pair and directly reconstructed rounded B+aK, native Q consumer input hashes and EOS endpoint bits; actual theta_base matches native source handle.",
+    "Reference output/registration/source/binary/16 normalized input hashes and 65-level hex encodings were independently checked in numeric review. W physical/weighted values are scoped to defined exact-real fixed B/a/C W target; source and mathematical completeness requires the separate reviewed assumptions.",
+    "Checked norm enclosure endpoints and nu rational arithmetic against native exact-binary reported values, and verified both W-only target intervals and positive exact separation by rational arithmetic. Full-merit and Stage3-convergence flags remain false.",
+    "One native terminal accepted-step run returned 86 after Stage2 convergence with zero complete timesteps; no new forecast, endpoint/RK3 or performance result is claimed."
+  ],
+  "hashes": {
+    "manifest": "0f8309c2b24dec7d67407e03ad16acbff3b39b1d145711cfcdf0a3cd736fb2ca",
+    "report": "42be0866850a1ca7c748402680c59ff9e55fe84ec6585adfaed1975a58ac8864",
+    "packet": "5ba7abf1e36ddf631ad41e837387b46c928413168f997cb9f3510478f327149e",
+    "result": "d5bdd13678b1415a175ce19fedcaff8faa19ad09e991814daa0a2f93f7369785",
+    "norm_gap": "3970acef6eba9aa83da55d71f093b25d3551b7f6b149680f8f5c237fcc6d4bb1",
+    "full_w_error": "eec91b1f6eec96e89ac6287f843d739b59116a2659d7a8cf80b1a1aa4719ad63",
+    "w_decrease": "517cc99d6ed1f5c0325f8d09fe7e40a3624bf12cb587f93dd18f2a63c925dc1c",
+    "capture_review": "a23ca79f7567e4e4b3450b1c7a388d9c23aadb43617abbe66541d5517e422968",
+    "numeric_review": "d3450d2a209b59d7655e10ff31520cf01f782be4f7c963822f016d982771aff6"
+  },
+  "limits": [
+    "Full RHS/other blocks evaluation errors and global exact merit decrease remain open. W-only conditional decrease does not establish Stage3 convergence, stability or forecast behavior.",
+    "No full native WRF rerun can be obtained from the portable numerical fixture without the archived external stack."
+  ],
+  "manifest_entries_reviewed": 83,
+  "source_or_document_edits": false,
+  "native_mpfr_or_test_rerun": false
+}

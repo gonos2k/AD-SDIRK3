@@ -1,0 +1,20 @@
+{
+  "time_local": "2026-11-10T19:51:16.595774+09:00",
+  "verdict": "PASS selected-profile W-only strict decrease; replay guard gaps resolved",
+  "sha256": {
+    "w_block_decrease.py": "f52b7a7a8d8d4635d050461fe1243baadfd76d400192c7416e29c01909bf5681",
+    "test_w_block_decrease.py": "58b5a71e5bf0634890dd3ac5c2517cbf98affe9c616841e854d0a9b95bee2f7c",
+    "w_block_decrease.json": "517cc99d6ed1f5c0325f8d09fe7e40a3624bf12cb587f93dd18f2a63c925dc1c",
+    "w_block_decrease_initial.json": "d7711e4cb4183ac8527473e5873f738ee1cc210ac09c6920d9b7c7832a9b707e",
+    "full_w_error.json": "eec91b1f6eec96e89ac6287f843d739b59116a2659d7a8cf80b1a1aa4719ad63",
+    "normalized_case/manifest.json": "1737005ed45133e7a2b84d6c115d23f8d876d816cc10c062faa0b719f4d906c6",
+    "run/accepted_step_probe.json": "5ba7abf1e36ddf631ad41e837387b46c928413168f997cb9f3510478f327149e"
+  },
+  "checks": [
+    "Packet SHA must match normalized manifest origin; error record requires exactly two endpoints; weight extrema must be finite positive ordered; negative evaluation errors rejected.",
+    "Final state fractions and exact separation match independently recomputed initial result; explicit fixed-reference/profile condition true and full-merit and Stage3 flags false.",
+    "Synthetic packet mismatch, missing endpoint and zero weight tests independently rerun and pass."
+  ],
+  "scope": "Conditional W-block mathematical merit only at two observed stored B/a/C/K states, under source/capture/MPFR assumptions. Not full merit, whole RHS, forecast or Stage3 convergence.",
+  "limits": "No native or full MPFR rerun in this review."
+}

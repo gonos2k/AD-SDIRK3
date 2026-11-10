@@ -12,3 +12,6 @@ docs/evidence/eos_descent_20261110/run/namelist.input whitespace=-blank-at-eol
 # Preserve the hashed native namelist and original compiler failure verbatim.
 docs/evidence/w_runtime_20261110/run/namelist.input whitespace=-blank-at-eol
 docs/evidence/w_runtime_20261110/build_attempt_8706/wrf_sdirk3_newton_solver.cpp.log whitespace=-blank-at-eol
+
+# Preserve the exact hashed full-W native namelist fixture.
+docs/evidence/w_error_20261110/run/namelist.input whitespace=-blank-at-eol

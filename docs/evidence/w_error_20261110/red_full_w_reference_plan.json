@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-11-10T18:05:03.920524+09:00",
+  "source_commit": "3d4f",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "3f13b8c7cb5f4ccae7273411817da5944771d4a69ed43b0091aa86e609bdc225",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "52263f9a454b97e8d4b08eeda512b7495c9991a32efba799eff599583344b903",
+    "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b"
+  },
+  "status": "CONDITIONAL_DESIGN_ONLY",
+  "target": "G*_W(K)=K_W - Q_W F*_W(Q(B+aK);C), at two serialized accepted states; B,a,K,C treated as exact stored binary values. Compare to actual stored residual W block with directed interval MPFR.",
+  "required_paths": [
+    "Full current implicit mass tendency from projected U/V and current coefficient fields (not frozen Mdot), including active branch/mean/clamp guards.",
+    "W pressure and mass buoyancy including interior and dynamic top/bottom handling, EOS from exact ideal Y and fixed base fields, WRFParity coupled-to-physical conversion and final Q.",
+    "Implicit divergence damping checked: source updates U/V and leaves W untouched; other flags and any exceptions must be captured or rejected.",
+    "Mode3 dry ImplicitOnly callback excludes slow Fphys and explicit advection/diffusion/Rayleigh only under verified profile."
+  ],
+  "required_inputs": [
+    "Full packed B,K0,K1,R0,R1 with same-call provenance and shapes, coefficient a, S_inv W block if claiming measured metric.",
+    "Exact retained actual base theta (currently reconstructed and FNV-qualified), p_base, MUB, PHB if any active formula requires, c1/c2 h and f, rdn/rdnw, map factors, cqw, gravity, horizontal spacings, all effective selectors and sources.",
+    "All operands for mass flux and Mdot and branch identities including cache/halo and projection; not merely fingerprints for rdn/gravity."
+  ],
+  "method": [
+    "Directed interval evaluation of entire active W callback and subtract interval from recorded R; enclosure includes state B+aK, projected input, W ops and residual subtraction relative to exact-real target.",
+    "Per-cell signed enclosures can be combined with actual stored weights in MPFR directed norm or conditional wmax*maxabs/2 if 4*Nw<N, H identity, weight cap and full packed count hold.",
+    "Reject zero/crossing denominator, untracked branch, context mismatch, or missing source/dtype; no point numerical sample is an operator proof."
+  ],
+  "limitations": [
+    "No full G, full norm/backend rounding, Stage2 exact forcing, whole-Jacobian, stability or forecast claim.",
+    "Pre-C input formation and data-capture fidelity excluded by definition; same-state proof remains conditional on capture.",
+    "Full-grid MPFR arithmetic and source replication are substantial; runtime/memory and independent validation must be preflighted before asserting a single capture is sufficient.",
+    "No code edits, tests or native run."
+  ]
+}

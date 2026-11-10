@@ -1,0 +1,23 @@
+{
+  "time_local": "2026-11-10T18:58:21.040550+09:00",
+  "base": "3d4f7857f7683a42f355fee20550d2df04a1b322",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/tests/test_accepted_step_probe.cpp": "a56dada10d30adb628ba5b3624002627270dff779b67f2d71c718c60928177f2",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h": "acd3f5c21707a26126fb33a184479e2a4ea93f40c70d946c14d2d92a85f2d119",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "1c6239091b2caef98a237ed1c8b74816e2de7c877db059f1d3054764ee068cef",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_stage_probe.cpp": "37ad2e813473ae924f38c576a5134d2e79a53f8e5c5a0e5345f094bf50e56e26",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_stage_probe.h": "ae7ca1082630289be094780faf219edb1208dce96e1884edf6acfb7429cefc26",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "1141d7df1aa8502cde79c084cad28c9b319fca65d520a8c1db217e70b6eb99d1"
+  },
+  "verdict": "approve scoped capture candidate for freeze and clean build",
+  "findings": [
+    "Pre-EOS getter returns actual mass RDNW before reciprocal; Q physical U/V/mu/MUB views match shapes, and W full packed digest plus pre-PGF-zero captured in original call.",
+    "capture_eos moves w_reference into fresh context before EOS clone, preserving first capture. Last-trial reset and accepted-state input/K/R guards are retained.",
+    "Runtime gates require selected mode3 packed dry unit-map profile, finite operands, actual parity, no sanitize/HEVI/W damp, same base/trial coefficients and nine exclusive stored binary64 files; per-block cloned S_inv extrema checked.",
+    "No extra RHS/JVP or direct producer detachment/tolerance change found; observer clones/scans/hash/IO cause overhead and can fail the terminal diagnostic. PressureEosContext ABI changed; clean rebuild all consumers with matching macros."
+  ],
+  "limitations": [
+    "Offline reference must check retained B/K/R hashes, shape, source dtype and exact Q(fl(B+aK)) digests vs producer; input hash is collision-qualified.",
+    "No source edit, build, test, model, or reference evaluation in this review."
+  ]
+}

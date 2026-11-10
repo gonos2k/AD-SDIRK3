@@ -1,0 +1,33 @@
+{
+  "time_local": "2026-11-10T18:04:58.044801+09:00",
+  "head": "3d4f7857f7683a42f355fee20550d2df04a1b322",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "3f13b8c7cb5f4ccae7273411817da5944771d4a69ed43b0091aa86e609bdc225",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_boundary_ad.h": "55d1e669307c3fb8aac6b40a478005de7ea02f8110f67ade292490c503ffe775"
+  },
+  "scope": "dry single-tile WRFParity mode3 ImplicitOnly selected endpoint reference plan; not computed numerical bound",
+  "equations": [
+    "For physical mass cells j=0..m-1,i=0..n-1 (m=80,n=40), construct M=projected_mu+MUB. U face masses use 0.5*(left+right), periodic seam avg(last,first) at faces 0,n. V face masses use replicated M at south/north walls and interior 0.5*(south+north).",
+    "CU=(c1h*M_u+c2h)*projected_u/msfuy; CV=(c1h*M_v+c2h)*projected_v*(1/msfvx); per level d=msftx*dnw*(rdx*(CU_e-CU_w)+rdy*(CV_n-CV_s)); dnw=-1/getRdnwTensor(FP64). For no HEVI F_mu=msfty*sum_k(d).",
+    "Reference F_W canonical product correction is -W*extend_w(c1f*F_mu/level_mass_w), in addition to W pressure/buoyancy; Q_W is final copy/alias projection. Do not freeze mu_tend without bounding its input and arithmetic error.",
+    "Source column sum may use backend reduction order; directed MPFR exact-real sum evaluates target mathematical sum, but native-vs-real enclosure must explicitly cover floating-point reciprocal, products, differences, reduction, division and addition; no assumed backend gamma factor."
+  ],
+  "boundary": [
+    "Packed Q mass repeats x first column and y last physical row. U core keeps n faces then appends first two faces; V symmetric normal faces at global jds/jde are zeroed before core extraction, x first column repeated and north ghost reflected odd. Diagnose uses U first n+1 and V first m+1 physical faces.",
+    "Base state MUB is passed separately and cropped physical core, not automatically projected with state Q. dnw uses negative reciprocal RDNW, not raw positive RDNW or horizontal RDN."
+  ],
+  "profile": [
+    "Archived native logs show mode3, mass_coordinate_mode1 => omega WRF and horizontal-only mass, HEVI and split-explicit off, autograd FP64; wrapper fast mode excludes direct F_phys.",
+    "mu_tend_fortran_parity source default is true but archived log does not explicitly confirm its effective state; require observed/config pinned evidence or include mean-subtract/clamp branch. Require finite values and record sanitation/guard activation and fixed geometry/flags."
+  ],
+  "minimum_inputs": [
+    "Full source-matched CPU FP64 B, accepted K0/K1 (or both exact ideal Y and proven Q(B+aK) formation enclosure), actual accepted native residual/RHS W values and actual S_inv W values, stage coefficient and exact layout/provenance. Hash-only old K/R is insufficient.",
+    "Exact dtype/shape/value of base MUB, c1h,c2h,c1f,c2f, RDNW as actually returned by fallback, msftx,msfty,msfuy,msfvx, rdx/rdy scalars, Q/branch topology, dry flag and parity/sanitize flags; account fixed-value conversion and any roundoff in coefficient construction.",
+    "All EOS pressure/PH/base inputs and consumer coefficients required for pressure/buoyancy plus other active implicit W terms, so a \u03bcdot component is not mislabeled full W reference. Compare output using directed norms and account native formation and projection alias multiplicities."
+  ],
+  "limits": [
+    "Existing retained EOS arrays alone omit U/V and full B/K/R/S arrays.",
+    "No source edit, build, model, numeric evaluation, or new RK3 comparison."
+  ]
+}

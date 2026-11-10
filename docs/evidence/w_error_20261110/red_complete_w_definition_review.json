@@ -1,0 +1,23 @@
+{
+  "time_local": "2026-11-10T18:20:54.390899+09:00",
+  "head": "3d4f7857f7683a42f355fee20550d2df04a1b322",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "3f13b8c7cb5f4ccae7273411817da5944771d4a69ed43b0091aa86e609bdc225",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_stage_probe.cpp": "563c059dfbb0d591c4390814ec097d90efb96b9beb954992cb9329a3eead7155",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7"
+  },
+  "verdict": "definition viable after explicit W bottom product, post-pack and pre-EOS capture corrections",
+  "findings": [
+    "Define C as actual selected fixed geometry/coefficient inputs and exact real target Y=Q(B+aK), so B+aK formation is included relative to rounded native path; formation upstream of C is excluded explicitly. Recompute the full WRFParity continuity from Y; do not freeze native Mdot.",
+    "Implicit mode starts coupled rw_tend at zero after unconditional reset. Supported pressure branch adds interior/top PGF+buoyancy and masks bottom; simplified buoyancy is alternative if base-state fields absent, so require actual base branch. W damping and do_explicit slow terms disabled by effective conditions.",
+    "Bottom mask precedes final canonical product-rate subtraction on all W levels. Q projects horizontal aliases and horizontal normal velocity walls but does not by itself force vertical w(k=0)=0. Therefore include -w*rate_w at bottom unless actual W zero is separately established; prior pressure-only bottom-zero result is narrower.",
+    "Actual implicit_divergence=true and kdamp=0.2 trigger post-pack applyDivergenceDamping; that source recomputes U/V damping and repacks rw unchanged. Prove source/branch and unchanged W, not assume no postpack operator. Rayleigh is do_explicit gated.",
+    "check_tend can replace entire nonfinite W when nan_sanitize_mode=1; require finite branch/guard evidence. Enclose no-floor conditions if modeling the raw mathematical path; factor EOS/projected endpoint calculations through correct exact vs rounded definitions.",
+    "Mass-flux memo is evaluated before EOS capture. Existing capture_eos creates fresh PressureEosContext and assigns c=move(snapshot), which would erase any added pre-EOS mass-flux capture unless explicitly preserved. Also ensure last-trial capture and same K/R association."
+  ],
+  "inputs_and_guards": [
+    "Retain full B,K0,K1, native R0/R1 and S_inv, actual theta_base and all active geometry/constants with metadata/hashes; actual RDNW before reciprocal, RD, c1/c2, pbase,mub, msf and chosen float rdx/rdy. Gate zero qv/cqw, parity true, single tile canonical wall/periodic and no HEVI, no W damping and no slow transport.",
+    "Native output handling, all active terms, source-ordered rounding, and norm/reduction errors require explicit enclosure; exact MPFR target calculation alone does not bound native-vs-target error."
+  ],
+  "scope": "selected endpoints fixed context; no actual run/model/test/source modification"
+}

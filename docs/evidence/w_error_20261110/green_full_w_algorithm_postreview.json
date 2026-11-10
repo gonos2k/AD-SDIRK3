@@ -1,0 +1,19 @@
+{
+  "timestamp_local": "2026-11-10T19:35:53.349376+09:00",
+  "status": "PASS_BOUNDED",
+  "scope": "Green review of saved source-case and full-grid W reference result. This reviewer authored the reference; it is not an independent second implementation. No native or MPFR rerun.",
+  "checks": [
+    "34 registered immutable input hashes match; registration, normalized manifest, source/binary and all 16 normalized array SHA links match execution and saved result.",
+    "Capture/profile checks and normalized endpoint native projected input FNV digests match; EOS ph/t/mu operands and 16 old/new raw arrays are byte matched in normalizer. These are validation/provenance checks, not a substitute for independently forming exact-real Y.",
+    "Source-case algorithm forms Q(B+aK) with MPFR intervals, reconstructs unit-map WRF mass flux and Mdot from U/V/mu, ideal EOS, vertical interior/top pressure and dry mass term, retains bottom product rule, then applies horizontal QW and compares native captured R_W.",
+    "Reference reports 215865 packed W entries per endpoint, total N=1080491, maximum observed inverse W weight 1; all 65-level and aggregate binary64 bounds match companion hex encodings.",
+    "Base/accepted W physical Linf upper 5.348845419454588e-13 / 5.433428941262796e-13; mathematical weighted RMS upper 2.3907853519229967e-13 / 2.4285918370791415e-13.",
+    "The separate stored-input norm gap report concerns whole stored residual/metric conversion, not this W reference and not full residual formation error."
+  ],
+  "limits": [
+    "Conditional on trusted directed MPFR, selected unit-map/dry/branch/profile and observed fixed-context/provenance; no independent second implementation in this Green review.",
+    "Exact target treats captured B/K/a and fixed coefficients as given; formation before those inputs, all other RHS blocks and native norm/backend evaluation remain outside the W component.",
+    "The /usr/bin/time 52,953,088-byte observation covers the wrapper process only and does not bound the C++ child peak RSS; no full-analysis memory cap established.",
+    "No complete RHS e_i, strict whole-residual merit decrease, Stage3 iterative convergence or forecast conclusion follows from this component."
+  ]
+}

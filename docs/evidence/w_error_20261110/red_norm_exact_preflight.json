@@ -1,0 +1,17 @@
+{
+  "time_local": "2026-11-10T19:22:29.093088+09:00",
+  "verdict": "approved for registered selected-pair norm analysis",
+  "sha256": {
+    "norm_exact.py": "70a97279851b200ea317dc320e7cdb14b501f74b319befa6abeb88dfa98a3028",
+    "test_norm_exact.py": "51033fc1aff018b6aca60fbbaa63b78c55bbd0bd7c47b4214fc55700ecca7611"
+  },
+  "findings": [
+    "Loaded residual data-byte FNV now checked against file metadata and packet pair hash; shape, FP64 dtype, elements and byte count validated along with run artifact SHA. Nine expected distinct reference file names enforced.",
+    "Adaptive exact-dyadic sum of squares, six contiguous positive metric blocks, 256-bit isqrt bounds, exact native RMS distance and upward binary64 conversion implement reviewed plan.",
+    "Synthetic tests independently rerun and passed for subnormal square, exact/irrational roots, upward gap, overlapping layout and residual FNV/inventory mismatch."
+  ],
+  "limits": [
+    "Registration must bind native packet, result, source and all files externally; exact norm bound concerns stored R/S, not physics residual error.",
+    "No actual data, native or model run in preflight."
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "source_commit": "3d4f7857f7683a42f355fee20550d2df04a1b322",
+  "relationships": [
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp:15974",
+      "to": "wrf_sdirk3_ww_cp.h:181 diagnose_wrf_mass_flux",
+      "kind": "lazy per-RHS-call mass_flux_memo; cropped independent physical grid then packed aliases extended"
+    },
+    {
+      "from": "wrf_sdirk3_ww_cp.h:155",
+      "to": "omega and mass_tendency_over_map_y",
+      "kind": "mass flux result contains diagnosed W-staggered omega and continuity tendency"
+    },
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp:22280",
+      "to": "p_pert_mass and W pressure/buoyancy",
+      "kind": "candidate W contribution, active branch and indexing require full source audit"
+    },
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp:26333",
+      "to": "rw_tend and w_tend conversion",
+      "kind": "coupled/direct or canonical/noncanonical conversion conditional on configuration"
+    },
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp:26685",
+      "to": "combined packed RHS",
+      "kind": "W tendency enters state-vector result; later mutation/masking requires source audit"
+    },
+    {
+      "from": "wrf_sdirk3_newton_solver.cpp:6421",
+      "to": "callback F and residual K-F",
+      "kind": "source contract notes callback total forcing, avoiding duplicate F_phys"
+    },
+    {
+      "from": "wrf_sdirk3_pressure_stage_probe.h ScopedEosCapture",
+      "to": "accepted_step_probe.h and Newton base/trial",
+      "kind": "compile-gated scoped selected-point context; not proof of full mutable context identity"
+    }
+  ],
+  "gaps": [
+    "Mode-specific active W terms, extra downstream filters, damping, conversion and boundary operations require complete source and runtime audit before a whole-W reference/error bound.",
+    "Fortran callback/physics and split/non-split dispatch are not proved by structural graph; F_phys can be included in callback total and must not be counted twice.",
+    "Mass-flux caches, stagger aliases, maps and fixed-versus-state-dependent operands require explicit same-pair evidence.",
+    "No AST call edge proves a numerical error enclosure, reference rounding, norm bound or exact descent."
+  ]
+}
