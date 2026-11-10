@@ -24,8 +24,12 @@ python3 run_eos_mpfr.py run/accepted_step_probe.json replay_mpfr.json
 python3 evaluate_eos_domain.py run/accepted_step_probe.json > replay_domain.json
 python3 test_eos_domain_bounds.py
 python3 test_evaluate_eos_domain.py
-python3 descent_budget.py
+python3 descent_budget.py > replay_budget.json
 ```
+
+`descent_budget.py` reads the bundled `run/accepted_step_probe.json` relative to
+its own file and writes JSON only to stdout. It does not overwrite the archived
+`descent_budget.json`; the displayed command selects a separate output.
 
 The shown include/library paths are the recorded macOS install; adjust those two
 paths for another MPFR/GMP install. run_eos_mpfr.py refuses an existing output
@@ -72,3 +76,7 @@ Green/Red receipts are scoped reviews, not complete Jacobian proofs. The rejecte
 native-norm shortcut is retained as a limitation (`red_norm_component_math.json`):
 backend operation counts and libm dispatch were not certified. Full e0,e1 and the
 strict descent inequality remain open despite the small local EOS errors.
+
+The replay-budget path/stdout correction is a follow-up to PR344. The native
+registration, captured arrays, `descent_budget.json` and numerical results remain
+unchanged; the original script and manifest remain available at main2c1dcce1.
