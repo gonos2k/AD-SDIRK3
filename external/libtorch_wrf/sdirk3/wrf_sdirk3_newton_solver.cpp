@@ -12886,6 +12886,7 @@ public:
                                       native_base_rms,residual_after_step_val);
                     const auto eos_packet=eos_scalars(e,receipt_trial_eos,U_stage,receipt_base_k,K,
                                                        ph->start,ph->size,theta->start,theta->size);
+                    const auto eos_raw=write_eos_raw(e,receipt_trial_eos);
                     TORCH_CHECK(wrf_terminal_jvp::hash(K)==diag_k_hash &&
                         wrf_terminal_jvp::hash(accepted_residual)==diag_r_hash &&
                         wrf_terminal_jvp::hash(S_inv_diag_)==diag_s_hash,
@@ -12902,6 +12903,7 @@ public:
                     body.pop_back();
                     body += ",\"trial_input_hash\":" + wrf_terminal_jvp::quote(std::to_string(receipt_trial_input_hash)) +
                         ",\"eos_scalars\":" + eos_packet +
+                        ",\"raw_eos\":" + eos_raw +
                         ",\"stage\":3,\"newton\":0,\"timestep\":0,\"solve_ordinal\":" +
                         std::to_string(delay_frame.ordinal) + ",\"outcome\":\"" + (trust?"accepted_trust":"accepted_recovery") +
                         "\",\"outer_update_alpha\":" + wrf_terminal_jvp::json_number(alpha) +

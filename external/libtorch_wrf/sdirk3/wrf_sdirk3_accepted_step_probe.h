@@ -2,6 +2,8 @@
 #ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
 #include "wrf_sdirk3_terminal_jvp_probe.h"
 #include "wrf_sdirk3_pressure_stage_probe.h"
+#include "wrf_sdirk3_linear_delay_audit.h"
+#include <sys/stat.h>
 #include <cmath>
 
 namespace wrf::sdirk3::accepted_step_probe {
@@ -111,6 +113,44 @@ inline std::string eos_scalars(const wrf::sdirk3::pressure_stage_probe::Pressure
         << ",\"K0_t_absmax\":" << block(K0,t_start,t_size)
         << ",\"K1_t_absmax\":" << block(K1,t_start,t_size)
         << ",\"base\":" << endpoint(b) << ",\"accepted\":" << endpoint(t) << "}";
+    return out.str();
+}
+// Raw EOS subroutine inputs/outputs only. The exclusive directory makes the
+// existing NPY writer's files unique for this terminal diagnostic invocation.
+inline std::string write_eos_raw(
+        const wrf::sdirk3::pressure_stage_probe::PressureEosContext& base,
+        const wrf::sdirk3::pressure_stage_probe::PressureEosContext& accepted) {
+    torch::NoGradGuard guard;
+    TORCH_CHECK(::mkdir("eos_raw",0700)==0, "cannot create exclusive eos_raw directory");
+    const std::array<std::pair<const char*,const Tensor*>,16> fields={{
+        {"base_ph",&base.ph},{"base_t",&base.t},{"base_mu",&base.mu},
+        {"base_alt",&base.alt},{"base_p_pert",&base.p_pert},
+        {"accepted_ph",&accepted.ph},{"accepted_t",&accepted.t},{"accepted_mu",&accepted.mu},
+        {"accepted_alt",&accepted.alt},{"accepted_p_pert",&accepted.p_pert},
+        {"mu_base",&base.mu_base},{"alb",&base.alb},{"p_base",&base.p_base},
+        {"c1h",&base.c1h},{"c2h",&base.c2h},{"rdnw",&base.rdnw}
+    }};
+    std::ostringstream out;
+    out << "{\"scope\":\"rounded_EOS_subroutine_inputs_and_outputs_only\","
+        << "\"format\":\"flat_npy_little_endian_float64\",\"fnv_scope\":\"flat_data_bytes\",\"files\":[";
+    for(size_t i=0;i<fields.size();++i) {
+        const auto& x=*fields[i].second;
+        TORCH_CHECK(x.defined() && x.is_cpu() && x.numel()>0 &&
+            (x.scalar_type()==torch::kFloat32 || x.scalar_type()==torch::kFloat64) &&
+            torch::isfinite(x).all().item<bool>(), "invalid EOS raw input ",fields[i].first);
+        const auto flat=x.detach().to(torch::kFloat64).contiguous().view({-1});
+        const std::string path=std::string("eos_raw/")+fields[i].first+".npy";
+        TORCH_CHECK(wrf::sdirk3::linear_delay_audit::write_npy(path.c_str(),flat),
+                    "EOS raw write failed: ",path);
+        if(i) out << ',';
+        out << "{\"name\":" << wrf_terminal_jvp::quote(fields[i].first)
+            << ",\"path\":" << wrf_terminal_jvp::quote(path)
+            << ",\"source_dtype\":" << int(x.scalar_type()) << ",\"shape\":[";
+        for(int64_t j=0;j<x.dim();++j) {if(j) out << ','; out << x.size(j);}
+        out << "],\"elements\":" << x.numel() << ",\"data_bytes\":" << flat.nbytes()
+            << ",\"fnv64\":" << wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(flat))) << "}";
+    }
+    out << "]}";
     return out.str();
 }
 inline std::string measure(const Tensor& base_k,const Tensor& base_r,const Tensor& scale_inv,
