@@ -1,0 +1,143 @@
+{
+  "scope": "conditional recovered native al_pert and exact-real W pressure-input component; not actual full RHS, metric arithmetic, forcing or convergence certificate",
+  "baseline": "9e7d69d8d0cd1c335420a79f62c25c5b99ce83e6",
+  "native_data_source": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "files": {
+    "README.md": {
+      "bytes": 5021,
+      "sha256": "04a7b9d582593b5626120473f995e175431fce48c77de7b426fdea04bce4c666"
+    },
+    "alpert_bound.json": {
+      "bytes": 33818,
+      "sha256": "e9dbe424030f4e151e4942a52d67ee121d01a4aa8d114ee993fd5b6112d047c4"
+    },
+    "alpert_execution.json": {
+      "bytes": 711,
+      "sha256": "30e3f0f83c4cac17e73a5bed46400c3b22494bd76b2ca7ad0cc5857bc811e7ff"
+    },
+    "alpert_registration.json": {
+      "bytes": 2179,
+      "sha256": "714912aa2234d3806fc5c29fe414f68c8bc77b3a973de424e1f1349f450a63d5"
+    },
+    "graph_after.json.gz": {
+      "bytes": 56235,
+      "sha256": "36b4a5d02c5f947fab33be64496133c33aae655cac3321cb0d3514503fea0ce9"
+    },
+    "graph_after_navigation.json": {
+      "bytes": 1713,
+      "sha256": "aa03841b6b22e071454ab471f02b6d42b013257cde485804fd04f042b05e8fed"
+    },
+    "graph_after_pins.json": {
+      "bytes": 9825,
+      "sha256": "6c3db42db75faca61c14ad275cbaa38e67a44f379a95b1dc0257f9afbff7cb78"
+    },
+    "graph_before_navigation.json": {
+      "bytes": 2127,
+      "sha256": "8957aa8cf477ade19901a9953cff07440fcbeb8b40030736e18fd550b4fa7e7d"
+    },
+    "graph_before_pins.json": {
+      "bytes": 8672,
+      "sha256": "9383c76d8f7039bc8ada5a676168eccc87751d4d98ee033bec6a425a8224d0a2"
+    },
+    "green_metric_weight_bound_audit.json": {
+      "bytes": 4316,
+      "sha256": "815145e76990d4723e1d63f2e80fafb8bf40ce200c711f7a16fb0ac059cee720"
+    },
+    "green_result_review.json": {
+      "bytes": 1478,
+      "sha256": "a37f10fb1360e1035a3de203ced8009f38f526ea6de9ceb3b419946ec824703e"
+    },
+    "green_uv_rhs_path_audit.json": {
+      "bytes": 5438,
+      "sha256": "b39e92b5b4cc661ce8e0c0d1018c2fce7ffee6a57b6a5bfb27f2feec202fa3f0"
+    },
+    "prepare_w_coefficients.py": {
+      "bytes": 3646,
+      "sha256": "90745c05bd1cca3c1a6e2b9f9426253a6d169c0ce67106120efe3fceb36485fd"
+    },
+    "publish_eos_rhs.py": {
+      "bytes": 1618,
+      "sha256": "aadfade164ef8993858dc26fe818b93383d2ba816e12f11f8c4c9114f48e98b3"
+    },
+    "recover_alpert_bound.py": {
+      "bytes": 6478,
+      "sha256": "c24185562cc58cef8f69a4bb4b57ff904a6c2290f5e405c8b091530d2e063af0"
+    },
+    "red_alpert_recovery_plan.json": {
+      "bytes": 2694,
+      "sha256": "a848dd80188cbe3b28684a9fbc8b6cac3de86ec1ee3f784d2c93b6d26dcb373a"
+    },
+    "red_alpert_recovery_postreview.json": {
+      "bytes": 1330,
+      "sha256": "498c14fb0c0c68d3244ad4f61b93e6607341fb93d3f26d01af31926aa5ff8048"
+    },
+    "red_alpert_recovery_preflight.json": {
+      "bytes": 1558,
+      "sha256": "a5a418a25c2d052e9caff3ffc6665778790bb067a4fc7afb195cf20b63c4bed1"
+    },
+    "red_w_coeff_input_feasibility.json": {
+      "bytes": 1978,
+      "sha256": "12eff9a62d9e4e5e487362b947c513a1810ed389f77e5145229e5bccfcd6f698"
+    },
+    "red_w_eos_consumer_audit.json": {
+      "bytes": 3790,
+      "sha256": "4b51e97dfe219a8d16f84a5a6e0cd1d04425b1b6d39935364feee33206ea51ec"
+    },
+    "red_w_rdn_initial_evidence.json": {
+      "bytes": 1622,
+      "sha256": "60b4c09ed623b1afe58645d98e918a882da57f2a6fd9fd64a0675cb259225b50"
+    },
+    "red_w_sensitivity_postreview.json": {
+      "bytes": 1486,
+      "sha256": "1858ede877e3a95f41a32f3d03a8f7dfcde73b2a4bccfcfdf4edee042d202a21"
+    },
+    "red_w_sensitivity_preflight.json": {
+      "bytes": 1457,
+      "sha256": "e6ed2fcc921c57e5d28dd344882ea12c2dda0d0548127d55d30dbe8a7d8860d0"
+    },
+    "test_recover_alpert_bound.py": {
+      "bytes": 2505,
+      "sha256": "4b6651f53affbacbc9c98d0eda02b3909f3c974a1b6877efad949aa4c879df41"
+    },
+    "test_w_pressure_sensitivity.py": {
+      "bytes": 1641,
+      "sha256": "838988ddab6c8344857e23ed3a6753622917cbb35bfef783db02da98109bb832"
+    },
+    "w_coefficients.json": {
+      "bytes": 4951,
+      "sha256": "190db442624907c7b541ff8a34a96ff6bb52b83da50814230a151f6430c3fdbe"
+    },
+    "w_inputs.tar.gz": {
+      "bytes": 41986,
+      "sha256": "6343b140c7b70025ee8c5bf4c33b064d2370d1403086ef1d260a8991d14516a6"
+    },
+    "w_pressure_component.json": {
+      "bytes": 12795,
+      "sha256": "c8acb0199c55d2678d95c2e78f6d41aaeaa173f33665ce73974d0386ce2c123f"
+    },
+    "w_pressure_preanalysis_test_receipt.json": {
+      "bytes": 1225,
+      "sha256": "a06599e36c293c554609f8e802795cf0bd5bb24e32d37c1cb680ae0ad0796e29"
+    },
+    "w_pressure_sensitivity.py": {
+      "bytes": 8519,
+      "sha256": "30f14a15f0df7fef76de63d9ff084fecf48816ce6c2fce8019474bd73367a501"
+    },
+    "w_sensitivity_execution.json": {
+      "bytes": 871,
+      "sha256": "9405bee4d637d6b94e83e85d910db5bee969b66981549af1463c655241d8586b"
+    },
+    "w_sensitivity_registration.json": {
+      "bytes": 4319,
+      "sha256": "22ba50dc408500db7e064681406b5d0942c914e901bd076375d89405c8a96e0c"
+    },
+    "green_final_review.json": {
+      "bytes": 1539,
+      "sha256": "d761d4aed2e4a76eafd6c884bf7ff9e0933f51902d28de01727da00e5589bb71"
+    },
+    "red_final_review.json": {
+      "bytes": 983,
+      "sha256": "6a0e107649d78f922d368dea8e8a1705d4bd45a3c877d8ca49d2492cd71de412"
+    }
+  }
+}

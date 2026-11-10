@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-11-10T14:08:44.516057+09:00",
+  "status": "INITIAL_RDN_BITWISE_MATCH",
+  "source_commit": "9e7d69d8",
+  "source_sha256": {
+    "Registry/Registry.EM_COMMON": "289879a55bc46bb6b281751ab35878135856b9df362c0b47e62dfc4817aee77b",
+    "dyn_em/module_implicit_sdirk3.F": "3ac269a16728908bee61a4172e7a25163864694023cc21b0eede9ace0204c092",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e"
+  },
+  "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "initial_wrfout_sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+  "data": "RDN arrays float32 [1,64], full bitwise equal input versus initial output, both file hashes match native result artifact records.",
+  "source_trace": [
+    "Registry/Registry.EM_COMMON:367 declares RDN inverse eta distance; Fortran module_implicit_sdirk3.F:1456 passes C_LOC(grid%rdn(kds)).",
+    "C++ tile_unified_impl.cpp:5081-5083 normalizes sign to positive FP32 and sets leading sentinel 0; :5113 mirrors vector into grid tensor.",
+    "getRdnTensor at :3160 selects freshness-dependent Vec/Grid/GridDn/Fallback and W-PGF calls it as CPU Float32 at :21966; used at :22226."
+  ],
+  "limits": [
+    "Initial wrfout is post-initialization observation, not a Stage3 same-call RDN fingerprint or direct proof selected source stayed identical; runtime equality remains explicit assumption.",
+    "W gravity is source-initialized 9.81f but same-call no-mutation remains assumption.",
+    "No model or production-source changes."
+  ]
+}

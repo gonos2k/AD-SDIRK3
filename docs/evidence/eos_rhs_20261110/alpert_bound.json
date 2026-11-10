@@ -1,0 +1,867 @@
+{
+  "status": "bounded_conditional",
+  "levels": [
+    {
+      "level": 0,
+      "native_al_pert_interval": {
+        "lower_exact": "-2930329825056207/36028797018963968",
+        "upper_exact": "5411970579031977/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "26490522589025217/36028797018963968",
+      "pre_round_sum_upper_exact": "64253675407194825/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "3311315323628151/4503599627370496",
+        "upper_exact": "8031709425899355/9007199254740992"
+      }
+    },
+    {
+      "level": 1,
+      "native_al_pert_interval": {
+        "lower_exact": "-1503052376472759/18014398509481984",
+        "upper_exact": "5545669967731663/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "13611332900701669/18014398509481984",
+      "pre_round_sum_upper_exact": "66003211076429375/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "425354153146927/562949953421312",
+        "upper_exact": "4125200692276837/4503599627370496"
+      }
+    },
+    {
+      "level": 2,
+      "native_al_pert_interval": {
+        "lower_exact": "-3085858750562241/36028797018963968",
+        "upper_exact": "5680146908794739/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "27973177883362799/36028797018963968",
+      "pre_round_sum_upper_exact": "67798220176644819/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "3496647235420349/4503599627370496",
+        "upper_exact": "2118694380520151/2251799813685248"
+      }
+    },
+    {
+      "level": 3,
+      "native_al_pert_interval": {
+        "lower_exact": "-3169947668209281/36028797018963968",
+        "upper_exact": "5816254574712751/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "28742579779342979/36028797018963968",
+      "pre_round_sum_upper_exact": "69641309469817271/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "7185644944835743/9007199254740992",
+        "upper_exact": "8705163683727161/9007199254740992"
+      }
+    },
+    {
+      "level": 4,
+      "native_al_pert_interval": {
+        "lower_exact": "-3258313691926383/36028797018963968",
+        "upper_exact": "5954217822095827/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "29531337566697929/36028797018963968",
+      "pre_round_sum_upper_exact": "71533520339344451/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "461427149479655/562949953421312",
+        "upper_exact": "4470845021209029/4503599627370496"
+      }
+    },
+    {
+      "level": 5,
+      "native_al_pert_interval": {
+        "lower_exact": "-3351409404867467/36028797018963968",
+        "upper_exact": "6093553906335805/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "30339900052301809/36028797018963968",
+      "pre_round_sum_upper_exact": "73476172820674357/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "3792487506537725/4503599627370496",
+        "upper_exact": "4592260801292149/4503599627370496"
+      }
+    },
+    {
+      "level": 6,
+      "native_al_pert_interval": {
+        "lower_exact": "-6899262329600525/72057594037927936",
+        "upper_exact": "389549006637239/4503599627370496"
+      },
+      "pre_round_sum_lower_exact": "62337809479719459/72057594037927936",
+      "pre_round_sum_upper_exact": "2358432997359869/2251799813685248",
+      "rounded_alpha_interval": {
+        "lower_exact": "3896113092482465/4503599627370496",
+        "upper_exact": "1179216498679935/1125899906842624"
+      }
+    },
+    {
+      "level": 7,
+      "native_al_pert_interval": {
+        "lower_exact": "-3552879477400123/36028797018963968",
+        "upper_exact": "6371629830860117/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "32018935646258405/36028797018963968",
+      "pre_round_sum_upper_exact": "77515260078177173/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "8004733911564599/9007199254740992",
+        "upper_exact": "4844703754886075/4503599627370496"
+      }
+    },
+    {
+      "level": 8,
+      "native_al_pert_interval": {
+        "lower_exact": "-3661402199744867/36028797018963968",
+        "upper_exact": "203512353001883/2251799813685248"
+      },
+      "pre_round_sum_lower_exact": "32890567510555589/36028797018963968",
+      "pre_round_sum_upper_exact": "4976020919791323/4503599627370496",
+      "rounded_alpha_interval": {
+        "lower_exact": "8222641877638895/9007199254740992",
+        "upper_exact": "4976020919791325/4503599627370496"
+      }
+    },
+    {
+      "level": 9,
+      "native_al_pert_interval": {
+        "lower_exact": "-3777244135543859/36028797018963968",
+        "upper_exact": "6654988479905177/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "33782832874155821/36028797018963968",
+      "pre_round_sum_upper_exact": "81775142499304537/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "8445708218538953/9007199254740992",
+        "upper_exact": "638868300775817/562949953421312"
+      }
+    },
+    {
+      "level": 10,
+      "native_al_pert_interval": {
+        "lower_exact": "-7799367511473973/72057594037927936",
+        "upper_exact": "3397924815541969/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "69394780113547579/72057594037927936",
+      "pre_round_sum_upper_exact": "41994998628052745/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "8674347514193445/9007199254740992",
+        "upper_exact": "5249374828506595/4503599627370496"
+      }
+    },
+    {
+      "level": 11,
+      "native_al_pert_interval": {
+        "lower_exact": "-8058250145816765/72057594037927936",
+        "upper_exact": "3468816903488601/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "71269510829991059/72057594037927936",
+      "pre_round_sum_upper_exact": "43132697391392513/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "556793053359305/562949953421312",
+        "upper_exact": "2695793586962033/2251799813685248"
+      }
+    },
+    {
+      "level": 12,
+      "native_al_pert_interval": {
+        "lower_exact": "-8331939273828571/72057594037927936",
+        "upper_exact": "7079396627347483/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "73191382945171701/72057594037927936",
+      "pre_round_sum_upper_exact": "88602718846347755/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "4574461434073229/4503599627370496",
+        "upper_exact": "5537669927896737/4503599627370496"
+      }
+    },
+    {
+      "level": 13,
+      "native_al_pert_interval": {
+        "lower_exact": "-4310785233165717/36028797018963968",
+        "upper_exact": "3609559150928549/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "37581045602420875/36028797018963968",
+      "pre_round_sum_upper_exact": "45501389986515141/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "4697630700302607/4503599627370496",
+        "upper_exact": "5687673748314395/4503599627370496"
+      }
+    },
+    {
+      "level": 14,
+      "native_al_pert_interval": {
+        "lower_exact": "-4464114005346979/36028797018963968",
+        "upper_exact": "7354542617899679/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "38591738981035309/36028797018963968",
+      "pre_round_sum_upper_exact": "93466248590664255/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "1205991843157353/1125899906842624",
+        "upper_exact": "2920820268458259/2251799813685248"
+      }
+    },
+    {
+      "level": 15,
+      "native_al_pert_interval": {
+        "lower_exact": "-4626058948733469/36028797018963968",
+        "upper_exact": "7486661190066831/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "39629053532295059/36028797018963968",
+      "pre_round_sum_upper_exact": "95996886152123887/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "309601980721055/281474976710656",
+        "upper_exact": "5999805384507745/4503599627370496"
+      }
+    },
+    {
+      "level": 16,
+      "native_al_pert_interval": {
+        "lower_exact": "-4798710584957697/36028797018963968",
+        "upper_exact": "7616311097818111/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "40691759629916303/36028797018963968",
+      "pre_round_sum_upper_exact": "98597251527566111/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "317904372108721/281474976710656",
+        "upper_exact": "1540582055118221/1125899906842624"
+      }
+    },
+    {
+      "level": 17,
+      "native_al_pert_interval": {
+        "lower_exact": "-4984803517173185/36028797018963968",
+        "upper_exact": "7741712121212093/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "41778479671901759/36028797018963968",
+      "pre_round_sum_upper_exact": "101268278499361981/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "2611154979493859/2251799813685248",
+        "upper_exact": "3164633703105063/2251799813685248"
+      }
+    },
+    {
+      "level": 18,
+      "native_al_pert_interval": {
+        "lower_exact": "-5183190645581671/36028797018963968",
+        "upper_exact": "491227424430149/4503599627370496"
+      },
+      "pre_round_sum_lower_exact": "42893168782373953/36028797018963968",
+      "pre_round_sum_upper_exact": "3250386176462301/2251799813685248",
+      "rounded_alpha_interval": {
+        "lower_exact": "2680823048898371/2251799813685248",
+        "upper_exact": "1625193088231151/1125899906842624"
+      }
+    },
+    {
+      "level": 19,
+      "native_al_pert_interval": {
+        "lower_exact": "-5394864021795417/36028797018963968",
+        "upper_exact": "8012192662441109/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "44036270749140495/36028797018963968",
+      "pre_round_sum_upper_exact": "106874462204312933/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "86008341306915/70368744177664",
+        "upper_exact": "834956735971195/562949953421312"
+      }
+    },
+    {
+      "level": 20,
+      "native_al_pert_interval": {
+        "lower_exact": "-2810108418922131/18014398509481984",
+        "upper_exact": "8160387819349517/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "22604870158240249/18014398509481984",
+      "pre_round_sum_upper_exact": "109820302127999037/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "1412804384890015/1125899906842624",
+        "upper_exact": "3431884441499971/2251799813685248"
+      }
+    },
+    {
+      "level": 21,
+      "native_al_pert_interval": {
+        "lower_exact": "-5862944232346553/36028797018963968",
+        "upper_exact": "4152085868154747/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "46413456871041255/36028797018963968",
+      "pre_round_sum_upper_exact": "56428486971542555/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "5801682108880155/4503599627370496",
+        "upper_exact": "7053560871442821/4503599627370496"
+      }
+    },
+    {
+      "level": 22,
+      "native_al_pert_interval": {
+        "lower_exact": "-3058644506334347/18014398509481984",
+        "upper_exact": "2110347771522211/18014398509481984"
+      },
+      "pre_round_sum_lower_exact": "23827309466105425/18014398509481984",
+      "pre_round_sum_upper_exact": "28996301743961983/18014398509481984",
+      "rounded_alpha_interval": {
+        "lower_exact": "2978413683263177/2251799813685248",
+        "upper_exact": "3624537717995249/2251799813685248"
+      }
+    },
+    {
+      "level": 23,
+      "native_al_pert_interval": {
+        "lower_exact": "-6308565549849581/36028797018963968",
+        "upper_exact": "8568904253124919/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "49010691681264771/36028797018963968",
+      "pre_round_sum_upper_exact": "119207418715353623/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "3063168230079047/2251799813685248",
+        "upper_exact": "7450463669709603/4503599627370496"
+      }
+    },
+    {
+      "level": 24,
+      "native_al_pert_interval": {
+        "lower_exact": "-6464506078501631/36028797018963968",
+        "upper_exact": "8681855722320481/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "50456520280988193/36028797018963968",
+      "pre_round_sum_upper_exact": "122523908441300129/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "3153532517561761/2251799813685248",
+        "upper_exact": "1914436069395315/1125899906842624"
+      }
+    },
+    {
+      "level": 25,
+      "native_al_pert_interval": {
+        "lower_exact": "-3309149968028335/18014398509481984",
+        "upper_exact": "2195216167469099/18014398509481984"
+      },
+      "pre_round_sum_lower_exact": "25982614687415205/18014398509481984",
+      "pre_round_sum_upper_exact": "31486980822912639/18014398509481984",
+      "rounded_alpha_interval": {
+        "lower_exact": "6495653671853799/4503599627370496",
+        "upper_exact": "3935872602864081/2251799813685248"
+      }
+    },
+    {
+      "level": 26,
+      "native_al_pert_interval": {
+        "lower_exact": "-3390362622508451/18014398509481984",
+        "upper_exact": "4423686232890851/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "26767217605950533/18014398509481984",
+      "pre_round_sum_upper_exact": "64738846689808819/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "6691804401487631/4503599627370496",
+        "upper_exact": "1011544479528263/562949953421312"
+      }
+    },
+    {
+      "level": 27,
+      "native_al_pert_interval": {
+        "lower_exact": "-108377718445239/562949953421312",
+        "upper_exact": "8891808605762213/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "6896699685697457/4503599627370496",
+      "pre_round_sum_upper_exact": "133111351537912117/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "6896699685697455/4503599627370496",
+        "upper_exact": "8319459471119509/4503599627370496"
+      }
+    },
+    {
+      "level": 28,
+      "native_al_pert_interval": {
+        "lower_exact": "-911537665370607/4503599627370496",
+        "upper_exact": "1112244156291247/9007199254740992"
+      },
+      "pre_round_sum_lower_exact": "3543238667520267/2251799813685248",
+      "pre_round_sum_upper_exact": "17108274157113529/9007199254740992",
+      "rounded_alpha_interval": {
+        "lower_exact": "1771619333760133/1125899906842624",
+        "upper_exact": "4277068539278383/2251799813685248"
+      }
+    },
+    {
+      "level": 29,
+      "native_al_pert_interval": {
+        "lower_exact": "-1923223925865693/9007199254740992",
+        "upper_exact": "4424801975604323/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "14563165567030011/9007199254740992",
+      "pre_round_sum_upper_exact": "70370359947187139/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "1820395695878751/1125899906842624",
+        "upper_exact": "4398147496699197/2251799813685248"
+      }
+    },
+    {
+      "level": 30,
+      "native_al_pert_interval": {
+        "lower_exact": "-1016672592819297/4503599627370496",
+        "upper_exact": "4376725426251927/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "935281889791499/562949953421312",
+      "pre_round_sum_upper_exact": "72368147115462239/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "3741127559165995/2251799813685248",
+        "upper_exact": "565376149339549/281474976710656"
+      }
+    },
+    {
+      "level": 31,
+      "native_al_pert_interval": {
+        "lower_exact": "-8458648299492597/36028797018963968",
+        "upper_exact": "8651978867547077/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "61645105541552819/36028797018963968",
+      "pre_round_sum_upper_exact": "148859486549637909/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "1926409548173525/1125899906842624",
+        "upper_exact": "4651858954676187/2251799813685248"
+      }
+    },
+    {
+      "level": 32,
+      "native_al_pert_interval": {
+        "lower_exact": "-2111633013591253/9007199254740992",
+        "upper_exact": "8530466447298553/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "15961457488400323/9007199254740992",
+      "pre_round_sum_upper_exact": "153115190463231161/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "249397773256255/140737488355328",
+        "upper_exact": "598106212746997/281474976710656"
+      }
+    },
+    {
+      "level": 33,
+      "native_al_pert_interval": {
+        "lower_exact": "-7966390291190815/36028797018963968",
+        "upper_exact": "1043236241316725/9007199254740992"
+      },
+      "pre_round_sum_lower_exact": "66613187841375985/36028797018963968",
+      "pre_round_sum_upper_exact": "19688130774458425/9007199254740992",
+      "rounded_alpha_interval": {
+        "lower_exact": "2081662120042999/1125899906842624",
+        "upper_exact": "307627043350913/140737488355328"
+      }
+    },
+    {
+      "level": 34,
+      "native_al_pert_interval": {
+        "lower_exact": "-7534063933721827/36028797018963968",
+        "upper_exact": "8014139583343117/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "69476410688562013/36028797018963968",
+      "pre_round_sum_upper_exact": "162035088827910797/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "4342275668035125/2251799813685248",
+        "upper_exact": "2531798262936107/1125899906842624"
+      }
+    },
+    {
+      "level": 35,
+      "native_al_pert_interval": {
+        "lower_exact": "-7134622606113269/36028797018963968",
+        "upper_exact": "7563346653863447/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "72440329947185771/36028797018963968",
+      "pre_round_sum_upper_exact": "166713251760461527/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "4527520621699109/2251799813685248",
+        "upper_exact": "5209789117514425/2251799813685248"
+      }
+    },
+    {
+      "level": 36,
+      "native_al_pert_interval": {
+        "lower_exact": "-6718282550180859/36028797018963968",
+        "upper_exact": "7105031454648413/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "75504548755107941/36028797018963968",
+      "pre_round_sum_upper_exact": "171550694065226013/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "1179758574298561/562949953421312",
+        "upper_exact": "5360959189538315/2251799813685248"
+      }
+    },
+    {
+      "level": 37,
+      "native_al_pert_interval": {
+        "lower_exact": "-6219981590091577/36028797018963968",
+        "upper_exact": "6760641587267383/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "78674088769521079/36028797018963968",
+      "pre_round_sum_upper_exact": "176548782306492695/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "4917130548095065/2251799813685248",
+        "upper_exact": "5517149447077899/2251799813685248"
+      }
+    },
+    {
+      "level": 38,
+      "native_al_pert_interval": {
+        "lower_exact": "-5600807686410977/36028797018963968",
+        "upper_exact": "7853635651586867/72057594037927936"
+      },
+      "pre_round_sum_lower_exact": "81952455891832287/36028797018963968",
+      "pre_round_sum_upper_exact": "182960162808073395/72057594037927936",
+      "rounded_alpha_interval": {
+        "lower_exact": "1280507123309879/562949953421312",
+        "upper_exact": "714688135969037/281474976710656"
+      }
+    },
+    {
+      "level": 39,
+      "native_al_pert_interval": {
+        "lower_exact": "-4911353094762735/36028797018963968",
+        "upper_exact": "1139347089121903/9007199254740992"
+      },
+      "pre_round_sum_lower_exact": "85344309843622721/36028797018963968",
+      "pre_round_sum_upper_exact": "23703262823718267/9007199254740992",
+      "rounded_alpha_interval": {
+        "lower_exact": "2667009682613209/1125899906842624",
+        "upper_exact": "5925815705929569/2251799813685248"
+      }
+    },
+    {
+      "level": 40,
+      "native_al_pert_interval": {
+        "lower_exact": "-554247760639313/4503599627370496",
+        "upper_exact": "4993138318546695/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "11106778464457509/4503599627370496",
+      "pre_round_sum_upper_exact": "98281348119321271/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "347086827014297/140737488355328",
+        "upper_exact": "6142584257457581/2251799813685248"
+      }
+    },
+    {
+      "level": 41,
+      "native_al_pert_interval": {
+        "lower_exact": "-524085102847645/4503599627370496",
+        "upper_exact": "648686027259683/4503599627370496"
+      },
+      "pre_round_sum_lower_exact": "11560778538722515/4503599627370496",
+      "pre_round_sum_upper_exact": "12733549668829843/4503599627370496",
+      "rounded_alpha_interval": {
+        "lower_exact": "722548658670157/281474976710656",
+        "upper_exact": "1591693708603731/562949953421312"
+      }
+    },
+    {
+      "level": 42,
+      "native_al_pert_interval": {
+        "lower_exact": "-1099575495672463/9007199254740992",
+        "upper_exact": "2700775533338859/18014398509481984"
+      },
+      "pre_round_sum_lower_exact": "23946483097577761/9007199254740992",
+      "pre_round_sum_upper_exact": "52792892719839307/18014398509481984",
+      "rounded_alpha_interval": {
+        "lower_exact": "2993310387197219/1125899906842624",
+        "upper_exact": "6599111589979915/2251799813685248"
+      }
+    },
+    {
+      "level": 43,
+      "native_al_pert_interval": {
+        "lower_exact": "-4850112234095447/36028797018963968",
+        "upper_exact": "713684861068789/4503599627370496"
+      },
+      "pre_round_sum_lower_exact": "98893943658601593/36028797018963968",
+      "pre_round_sum_upper_exact": "13681691847655919/4503599627370496",
+      "rounded_alpha_interval": {
+        "lower_exact": "3090435739331299/1125899906842624",
+        "upper_exact": "3420422961913981/1125899906842624"
+      }
+    },
+    {
+      "level": 44,
+      "native_al_pert_interval": {
+        "lower_exact": "-5287972160178367/36028797018963968",
+        "upper_exact": "3027500310552941/18014398509481984"
+      },
+      "pre_round_sum_lower_exact": "102121817704974065/36028797018963968",
+      "pre_round_sum_upper_exact": "56732395243129157/18014398509481984",
+      "rounded_alpha_interval": {
+        "lower_exact": "6382613606560877/2251799813685248",
+        "upper_exact": "7091549405391147/2251799813685248"
+      }
+    },
+    {
+      "level": 45,
+      "native_al_pert_interval": {
+        "lower_exact": "-5776466802305241/36028797018963968",
+        "upper_exact": "1597740722695047/9007199254740992"
+      },
+      "pre_round_sum_lower_exact": "105452517203366295/36028797018963968",
+      "pre_round_sum_upper_exact": "29404986724112931/9007199254740992",
+      "rounded_alpha_interval": {
+        "lower_exact": "6590782325210391/2251799813685248",
+        "upper_exact": "7351246681028235/2251799813685248"
+      }
+    },
+    {
+      "level": 46,
+      "native_al_pert_interval": {
+        "lower_exact": "-3169097220612383/18014398509481984",
+        "upper_exact": "1672359212550081/9007199254740992"
+      },
+      "pre_round_sum_lower_exact": "54455133639609153/18014398509481984",
+      "pre_round_sum_upper_exact": "30484474642660849/9007199254740992",
+      "rounded_alpha_interval": {
+        "lower_exact": "3403445852475571/1125899906842624",
+        "upper_exact": "3810559330332607/1125899906842624"
+      }
+    },
+    {
+      "level": 47,
+      "native_al_pert_interval": {
+        "lower_exact": "-218604104888447/1125899906842624",
+        "upper_exact": "6947163276021973/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "7029783355586187/2251799813685248",
+      "pre_round_sum_upper_exact": "126419028321831269/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "7029783355586185/2251799813685248",
+        "upper_exact": "987648658764307/281474976710656"
+      }
+    },
+    {
+      "level": 48,
+      "native_al_pert_interval": {
+        "lower_exact": "-1937850145468975/9007199254740992",
+        "upper_exact": "7170175573034973/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "29036129081449133/9007199254740992",
+      "pre_round_sum_upper_exact": "131066092480707405/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "7259032270362281/2251799813685248",
+        "upper_exact": "8191630780044215/2251799813685248"
+      }
+    },
+    {
+      "level": 49,
+      "native_al_pert_interval": {
+        "lower_exact": "-4313212442091597/18014398509481984",
+        "upper_exact": "7348141534684069/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "59954174459132267/18014398509481984",
+      "pre_round_sum_upper_exact": "135882915337131797/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "7494271807391531/2251799813685248",
+        "upper_exact": "8492682208570739/2251799813685248"
+      }
+    },
+    {
+      "level": 50,
+      "native_al_pert_interval": {
+        "lower_exact": "-4810281723203379/18014398509481984",
+        "upper_exact": "3744667922598761/18014398509481984"
+      },
+      "pre_round_sum_lower_exact": "61890159432859509/18014398509481984",
+      "pre_round_sum_upper_exact": "70445109078661649/18014398509481984",
+      "rounded_alpha_interval": {
+        "lower_exact": "7736269929107437/2251799813685248",
+        "upper_exact": "2201409658708177/562949953421312"
+      }
+    },
+    {
+      "level": 51,
+      "native_al_pert_interval": {
+        "lower_exact": "-5083583270245333/18014398509481984",
+        "upper_exact": "118428309533381/562949953421312"
+      },
+      "pre_round_sum_lower_exact": "64171409677820235/18014398509481984",
+      "pre_round_sum_upper_exact": "1141323419580215/281474976710656",
+      "rounded_alpha_interval": {
+        "lower_exact": "8021426209727527/2251799813685248",
+        "upper_exact": "2282646839160431/562949953421312"
+      }
+    },
+    {
+      "level": 52,
+      "native_al_pert_interval": {
+        "lower_exact": "-5010377398652947/18014398509481984",
+        "upper_exact": "1909457259389411/9007199254740992"
+      },
+      "pre_round_sum_lower_exact": "66915727824376821/18014398509481984",
+      "pre_round_sum_upper_exact": "37872509870904295/9007199254740992",
+      "rounded_alpha_interval": {
+        "lower_exact": "8364465978047101/2251799813685248",
+        "upper_exact": "4734063733863039/1125899906842624"
+      }
+    },
+    {
+      "level": 53,
+      "native_al_pert_interval": {
+        "lower_exact": "-4788065992157285/18014398509481984",
+        "upper_exact": "477963991006363/2251799813685248"
+      },
+      "pre_round_sum_lower_exact": "69936908813486779/18014398509481984",
+      "pre_round_sum_upper_exact": "9818585841711871/2251799813685248",
+      "rounded_alpha_interval": {
+        "lower_exact": "8742113601685845/2251799813685248",
+        "upper_exact": "2454646460427969/562949953421312"
+      }
+    },
+    {
+      "level": 54,
+      "native_al_pert_interval": {
+        "lower_exact": "-569749864532881/2251799813685248",
+        "upper_exact": "238332959525227/1125899906842624"
+      },
+      "pre_round_sum_lower_exact": "9136441307910577/2251799813685248",
+      "pre_round_sum_upper_exact": "1272857136436739/281474976710656",
+      "rounded_alpha_interval": {
+        "lower_exact": "2284110326977643/562949953421312",
+        "upper_exact": "2545714272873479/562949953421312"
+      }
+    },
+    {
+      "level": 55,
+      "native_al_pert_interval": {
+        "lower_exact": "-2175423445123785/9007199254740992",
+        "upper_exact": "7604123799495393/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "38173315105387087/9007199254740992",
+      "pre_round_sum_upper_exact": "168999078001538881/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "596458048521673/140737488355328",
+        "upper_exact": "1320305296887023/281474976710656"
+      }
+    },
+    {
+      "level": 56,
+      "native_al_pert_interval": {
+        "lower_exact": "-8347118755021455/36028797018963968",
+        "upper_exact": "7546105947939915/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "159410795179813361/36028797018963968",
+      "pre_round_sum_upper_exact": "175304019882774731/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "2490793674684583/562949953421312",
+        "upper_exact": "684781327667089/140737488355328"
+      }
+    },
+    {
+      "level": 57,
+      "native_al_pert_interval": {
+        "lower_exact": "-2011415297418951/9007199254740992",
+        "upper_exact": "3735857665966681/18014398509481984"
+      },
+      "pre_round_sum_lower_exact": "41584709494340881/9007199254740992",
+      "pre_round_sum_upper_exact": "90928107249486345/18014398509481984",
+      "rounded_alpha_interval": {
+        "lower_exact": "162440271462269/35184372088832",
+        "upper_exact": "5683006703092899/1125899906842624"
+      }
+    },
+    {
+      "level": 58,
+      "native_al_pert_interval": {
+        "lower_exact": "-971300144179971/4503599627370496",
+        "upper_exact": "7387347567952453/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "21688555788728857/4503599627370496",
+      "pre_round_sum_upper_exact": "188666195031223077/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "1355534736795553/281474976710656",
+        "upper_exact": "5895818594725723/1125899906842624"
+      }
+    },
+    {
+      "level": 59,
+      "native_al_pert_interval": {
+        "lower_exact": "-7529652573415865/36028797018963968",
+        "upper_exact": "3648785365182673/18014398509481984"
+      },
+      "pre_round_sum_lower_exact": "180939958771732711/36028797018963968",
+      "pre_round_sum_upper_exact": "97883591037756961/18014398509481984",
+      "rounded_alpha_interval": {
+        "lower_exact": "5654373711616645/1125899906842624",
+        "upper_exact": "1529431109964953/281474976710656"
+      }
+    },
+    {
+      "level": 60,
+      "native_al_pert_interval": {
+        "lower_exact": "-1825152737732605/9007199254740992",
+        "upper_exact": "56172818649071/281474976710656"
+      },
+      "pre_round_sum_lower_exact": "47165024523375819/9007199254740992",
+      "pre_round_sum_upper_exact": "6348463432234837/1125899906842624",
+      "rounded_alpha_interval": {
+        "lower_exact": "5895628065421975/1125899906842624",
+        "upper_exact": "6348463432234839/1125899906842624"
+      }
+    },
+    {
+      "level": 61,
+      "native_al_pert_interval": {
+        "lower_exact": "-3549576121694277/18014398509481984",
+        "upper_exact": "7083619068222177/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "98327195847777179/18014398509481984",
+      "pre_round_sum_upper_exact": "210837163007165089/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "768181217560759/140737488355328",
+        "upper_exact": "6588661343973911/1125899906842624"
+      }
+    },
+    {
+      "level": 62,
+      "native_al_pert_interval": {
+        "lower_exact": "-863973237460223/4503599627370496",
+        "upper_exact": "3474550032039627/18014398509481984"
+      },
+      "pre_round_sum_lower_exact": "25622975855366965/4503599627370496",
+      "pre_round_sum_upper_exact": "109422346403348379/18014398509481984",
+      "rounded_alpha_interval": {
+        "lower_exact": "6405743963841739/1125899906842624",
+        "upper_exact": "1709724162552319/281474976710656"
+      }
+    },
+    {
+      "level": 63,
+      "native_al_pert_interval": {
+        "lower_exact": "-848205876760603/4503599627370496",
+        "upper_exact": "6814076648403867/36028797018963968"
+      },
+      "pre_round_sum_lower_exact": "26699300540297633/4503599627370496",
+      "pre_round_sum_upper_exact": "227194127984869755/36028797018963968",
+      "rounded_alpha_interval": {
+        "lower_exact": "3337412567537203/562949953421312",
+        "upper_exact": "3549908249763591/562949953421312"
+      }
+    }
+  ],
+  "addition_error_upper_exact": "1/1125899906842624",
+  "states": [
+    {
+      "name": "base",
+      "error_upper_exact": "4859728101206155/1267650600228229401496703205376",
+      "error_upper_binary64": 3.833649509045476e-15,
+      "error_upper_binary64_hex": "0x1.143e59f2d688bp-48"
+    },
+    {
+      "name": "accepted",
+      "error_upper_exact": "19415494767472873/5070602400912917605986812821504",
+      "error_upper_binary64": 3.829031194395618e-15,
+      "error_upper_binary64_hex": "0x1.13e9289303c3bp-48"
+    }
+  ],
+  "identity": "u_hat-u_star=(alpha_hat-alpha_star)-(alb_hat-alb_star)-eta_add",
+  "scope": "native al_pert endpoint component only; not sampled native al_pert or full RHS error",
+  "assumptions": [
+    "original fixed state box and faithful source-matched inputs",
+    "theta reconstruction remains fingerprint-qualified",
+    "separate finite binary64 operations in source order and FP64 output",
+    "one-ULP basic-operation contract; no reassociation or hidden intermediate precision",
+    "trusted previously recorded directed MPFR component bounds"
+  ],
+  "input_sha256": {
+    "receipt": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+    "domain": "684aac4c879859731bede2367e27245c4de4fc20cec3f6121b2a1f7e4c73800b",
+    "alb_analysis": "2f9f9de1110de620c1725c2bb7727ee87c3773fa69aca6cc68b5ff4d8db051a2"
+  },
+  "interval_source_sha256": "4c1b7d0f78054b3699ec91c18e8aa4510ecbfb41e35d919f75d86e58516cce08"
+}

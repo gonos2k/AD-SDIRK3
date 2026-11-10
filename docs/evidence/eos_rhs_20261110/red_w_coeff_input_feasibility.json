@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-11-10T14:03:45.347306+09:00",
+  "status": "PARTIALLY_RECONSTRUCTIBLE_CONDITIONAL",
+  "source_commit": "9e7d69d8",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e",
+    "dyn_em/module_implicit_sdirk3.F": "3ac269a16728908bee61a4172e7a25163864694023cc21b0eede9ace0204c092"
+  },
+  "input": "retained eos-descent-20261110/run/wrfinput_d01, SHA c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+  "fingerprint_matches": {
+    "c1f": "wrfinput C1F float32 FNV 9130836099822983576",
+    "c2f": "wrfinput C2F float32 FNV 16025486255888984053",
+    "msfty": "MAPFAC_MY padded x endpoint/y endpoint, FP64, FNV 10882926256560266296",
+    "cqw": "zero FP32 [81,64,41] FNV 17618125207852226341"
+  },
+  "other_inputs": [
+    "raw rdnw float64 exactly equals absolute retained wrfinput RDNW promoted FP64, shape64.",
+    "source initializes grid_info gravity 9.81f, no other production assignment found in repository search; binary32 value and no external mutation remain assumptions.",
+    "Fortran passes grid%rdn(kds), update normalizes abs to float32 with rdn[0]=0; getRdnTensor may choose vector/grid/dn/fallback according to source freshness. No recorded Stage3 rdn fingerprint or full runtime value was found; 21-field initial gate does not include RDN. Retained wrfinput RDN alone is not conclusive same-call evidence."
+  ],
+  "limits": [
+    "FNV data matches are collision-qualified, not direct byte comparisons against unavailable source tensors.",
+    "Any computed W bound using wrfinput |RDN| must explicitly condition on its equality to same-call active rdn or obtain new evidence.",
+    "Actual mass/coefficient bounds, Q and S scaling/ownership, positive denominators and error propagation through native FP and other RHS remain open.",
+    "Read-only reconstruction and source audit; no native run or production changes."
+  ]
+}

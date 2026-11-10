@@ -1,0 +1,43 @@
+{
+  "timestamp_local": "2026-11-10T14:02:22.363783+09:00",
+  "scope": "source/profile conditional bound for stored Stage3 W momentum metric, no model execution and no claim of its actual value",
+  "source_revision": "9e7d69d8d0cd1c335420a79f62c25c5b99ce83e6",
+  "native_revision": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "source_hashes": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "eae0918679b4b68901d2f09ffcdb0c3f4d79b273f179e55a2564b0b9e99a1644",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.h": "ed95906c98fbcc20a5c6027b596863b6b8cac5e629e497d7924e0787bcab5b26",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.cpp": "0d9af2b84dfd39da607182d83c81b6bd2e4cfeeda743bcc0741a63c7e2a9b6a4",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "7118ed441204b2c2f7cfc7460fe84bb781d81c24ea73d1357ce3a9b097e68490"
+  },
+  "source_chain": [
+    "config.h:915 default scale_u=1.0f. config.cpp:2045-2047 environment and :4051-4052 generic float setter enforce max(0.01f,value).",
+    "Tile constructor tile_unified_impl.cpp:3800 copies global scale_u into Newton options; stage entry :14300 clears physics_scaling_set_; optional physics scale construction has set_physics_scaling call commented out at :14409. No active production Tile caller of setter found in repository search.",
+    "newton_solver.cpp:5593 requires valid same-layout scale, and :6503-6554 iteration0 rebuilds each block scale; ru,rv,rw share grouped momentum RMS, scale=float(max(rms/(dt*gamma), options.scale_u)); S_diag has K dtype and S_inv=S_diag.reciprocal().",
+    "metric_scale_inv() returns S_inv_diag_ (:4600); convergence metric and accepted receipt both consume this pair. Numerical shadow S0 has separate diagnostic use and is not a replacement metric.",
+    "Recorded attempt environment contains no WRF_SDIRK3_SCALE_U override. Repository text search found no Fortran or other production setter of scale_u; the generic C float setter exists, so this conclusion is for the inspected caller/profile, not the public API generally."
+  ],
+  "result": {
+    "conditional_bound": "0 <= stored S_inv[i] <= 1 for W/rw block",
+    "justification": "floor is FP32 exactly 1; max and conversion to float preserve >=1; the FP64 scale is filled with that value and CPU binary64 reciprocal of a positive scale >=1 is in [0,1], including a zero reciprocal if float conversion overflows to infinity under standard correctly rounded IEEE semantics. This is an upper bound, not a measurement or reconstruction of the actual inverse weights.",
+    "conditions": [
+      "recorded sanitized environment and inspected Fortran/C++ configuration path are complete; no unobserved direct config mutation or alternate solver caller",
+      "stage3/Newton0 reaches normal initialization with exact complete layout, physics scaling disabled, finite RMS, dt*gamma positive, and no later scale mutation",
+      "CPU reciprocal obeys IEEE order-preserving correctly rounded binary64 (or an equivalent implementation guarantee)",
+      "selected receipt S_inv hash corresponds to the scale used by that stage; hash does not reveal its values"
+    ],
+    "identity_halo": "Accepted-step receipt reports mask_scope identity; this is separate from the scale argument."
+  },
+  "exceptions": [
+    "set_physics_scaling public API accepts any positive finite scale, so floor 1 cannot be inferred for arbitrary solver callers.",
+    "Even scaling_mode=1 constructs a candidate S, but the Tile setter is disabled; a source or runtime change can invalidate this conclusion.",
+    "General generic/env setter floor is binary32 0.01f, not exact decimal 0.01; a global reciprocal limit of exactly 100 is unjustified without rounding care.",
+    "No weighted-error magnitude, RHS propagation, reduction error, exact e_i or descent proof follows from a weight bound alone."
+  ],
+  "evidence": {
+    "attempt": "docs/evidence/eos_descent_20261110/run/attempt.json",
+    "accepted_receipt": "docs/evidence/eos_descent_20261110/run/accepted_step_probe.json",
+    "recorded_S_inv_hash": "14474524215718693222"
+  },
+  "actions": "source and archived input inspection only; no new model/test/experiment"
+}

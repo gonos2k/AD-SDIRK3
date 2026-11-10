@@ -1,0 +1,23 @@
+{
+  "time_local": "2026-11-10T13:58:45.070950+09:00",
+  "head": "9e7d69d8d0cd1c335420a79f62c25c5b99ce83e6",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+    "docs/evidence/eos_descent_20261110/eos_domain_bounds.py": "4c1b7d0f78054b3699ec91c18e8aa4510ecbfb41e35d919f75d86e58516cce08",
+    "docs/design/forcing_support_conditions.md": "66243308b594401b06c452af8297c53926842bddbc4dc89e957d85adaf1f107b"
+  },
+  "verdict": "valid conditional endpoint bound if actual rounded al_pert and addition are enclosed",
+  "derivation": [
+    "At captured FP64 profile source computes al_pert_native from basic tensor operations, alt_native=fl(al_pert_native+alb_stored), and returns both cast to ph output dtype; FP64 output cast preserves values.",
+    "Define \u03b4add=alt_native-(al_pert_native+alb_stored); ideal al_pert*=alpha*\u2212alb*. Then al_pert_native\u2212al_pert*=(alt_native\u2212alpha*)+(alb*\u2212alb_stored)\u2212\u03b4add; triangle gives E_alpert<=E_composed_alpha+E_upstream_alb+E_add.",
+    "Existing EOS domain I uses outward rounded operations for muts, denominator, numerator and pre-add neg/div; expose that exact pre-add interval, then add captured alb under exact rational arithmetic to bound the exact native addition input. Do not substitute the widened ideal-alb tube for the stored-alb rounded-operation tube.",
+    "If every exact pre-round sum has absolute value strictly below 8 and operation is finite IEEE binary64 RN, one full ulp 2^-50 is conservative, including near crossing 8; no assumption on sign. Capture FP64 output type; guard no unexpected fusion/reassociation or alternative arithmetic semantics.",
+    "For reported endpoint L-infinity bounds, 1.6996994953743442e-15 + 1.245771593971007e-15 + 2^-50 < 4e-15 when adding the actual binary64 upper bounds exactly/outward. Per-level bounds may tighten only if paired with corresponding per-level registered upper bounds."
+  ],
+  "conditions": [
+    "All tube input/shape/level/coefficient provenance must be verified and native source operation order and rounding semantics assumed; cross-endpoint input ranges must contain the observed endpoint.",
+    "Use binary64 hex encodings/Fraction.from_float for existing upper bounds and exact rational aggregation, not inward decimal reinterpretation or nearest-only floating accumulation.",
+    "Proves endpoint component al_pert error conditional on exact stored inputs and collision-qualified reconstructed theta; not full RHS, scaled residual, forcing or descent."
+  ],
+  "validation": "read-only source/math review; no execution of MPFR, model or tests"
+}

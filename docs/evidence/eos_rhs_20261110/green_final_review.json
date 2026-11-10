@@ -1,0 +1,19 @@
+{
+  "timestamp_local": "2026-11-10T14:24:03.987916+09:00",
+  "status": "PASS_BOUNDED",
+  "blocking_findings": [],
+  "scope": "Green final source/evidence/report/packaging review; no test, native, or numerical replay",
+  "checks": [
+    "All 32 public manifest entries match byte sizes and SHA-256.",
+    "w_inputs.tar.gz contains exactly four EOS arrays, each byte SHA matching the prior alb analysis; it is a fragment of prior capture, not new data.",
+    "No numerical production source changed from main 9e7d69d8. Graph-before 43 and graph-after 64 file pins match worktree; graph and pins hashes match navigation.",
+    "Report clearly labels recovered al_pert 3.83e-15 as conditional, using old rounded-operation tube and one-ULP addition, not a direct native capture.",
+    "W weighted ~2.4e-13 is conditional exact-real pressure-input sensitivity; runtime RDN/gravity identity and stored inverse weights remain unverified; native W arithmetic/full RHS/norm errors remain open.",
+    "README uses explicit portable replay paths, prior public receipt/domain/ALB inputs and included small four-file fragment; no full MPFR, native WRF or fresh RK3 is required.",
+    "New work does not claim completed Stage3, a forecast, full e_i, forcing, descent or cost result."
+  ],
+  "limitations": [
+    "The manifest was checked before final Green/Red receipts are added; resulting 34-entry manifest must be checked separately.",
+    "Existing preregistration and test receipts support computations; no independent rerun in final review."
+  ]
+}

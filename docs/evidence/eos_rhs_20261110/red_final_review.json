@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-10T14:23:48.477255+09:00",
+  "status": "PASS_BOUNDED_PUBLICATION",
+  "critical_findings": [],
+  "checks": [
+    "32/32 current evidence manifest files match size and SHA256; all four W fragment NPY members match previous EOS archive by SHA.",
+    "al_pert uses composed alpha plus upstream alb plus addition rounding, without re-adding induced shift; no native al_pert capture or backend-rounding proof claimed.",
+    "W pressure sensitivity is exact-real conditional only, including unverified Stage3 RDN, gravity, scaling floor and Float32 rdnw getter assumptions; no complete native RHS error claim.",
+    "U/V primary cross-product bound uses 2|A|Ep+2Ealpha(|P|+2Ep)+2|B|Eu; NH4 remains separate.",
+    "Graph and prior initial/native evidence retain their limited scopes."
+  ],
+  "limitations": [
+    "Parent will add two receipts; final 34-file manifest must be verified separately.",
+    "No tests, build or native run repeated during review."
+  ]
+}

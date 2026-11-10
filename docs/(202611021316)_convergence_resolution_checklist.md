@@ -2,7 +2,7 @@
 
 작성: 2026-11-02T13:16:08.084142+09:00.
 최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
-최신 갱신: 2026-11-10T12:49:30.298100+09:00, 기준 main2c1dcce1(PR344 병합).
+최신 갱신: 2026-11-10T14:19:39.086928+09:00, 기준 main9e7d69d8(PR345 병합).
 Stage3 EOS 정의역·산술 오차 성분: [진행 보고]((202611101123)_stage3_eos_domain_and_error_component.md).
 링크 귀속 정정·O1: [보고서]((202611022330)_link_origin_o1_resolution.md).
 이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
@@ -162,3 +162,19 @@ alb 산술·EOS 전파 후속: [보고서]((202611101248)_alb_error_propagation_
 induced al_pert는 실수식의 입력 민감도이고 native al_pert 오차가 아니다. 새 composed alpha/p는
 alb와 EOS 산술을 직접 함께 감싼 값이므로 이전 EOS 성분을 다시 더하지 않는다.
 전체 Newton/Stage3 반복·시간 적분 수렴, W 잡음·실용 비용·5일 미완료를 유지한다.
+
+
+## PR345 후속: 미저장 출력과 활성 W 성분
+
+[진행 보고]((202611101418)_native_alpert_and_w_pressure_component.md) · [재현·조건](evidence/eos_rhs_20261110/README.md).
+
+- [x] native al_pert를 직접 포착하지 않고도 기존 FP64 덧셈 항등식과 rounded-operation tube로
+  endpoint 조건부 상계를 계산했다. 3.83365e-15/3.82904e-15m³/kg 미만, induced shift를 중복 합산하지 않는다.
+- [x] ImplicitOnly에서 W는 pressure 차, U/V는 primary와 NH4, inverse-alt diffusion은 explicit-only라는 source 소유를 구분했다.
+- [ ] W pressure-input 성분의 실제 RHS/metric 연결을 닫는다. 후보 RDN/g와 source scale-floor 조건 아래
+  실수 입력 민감도·가중 RMS 성분을 계산했으나 Stage3 RDN/g·실제 가중치 값은 미포착이다.
+- [ ] W 자체 산술/계수 형성, U/V primary·NH4 및 다른 RHS의 평가오차를 같은 W,N으로 제한한다.
+- [ ] epsG+nu로 full e_i를 조립하고 정확한 잔차 감소 충분조건을 인증한다.
+
+새 native·MPFR 전수·RK3·예보장·성능 재실행은 없다. 기존 데이터와 source 가정을 사용한
+조건부 성분 분석이며 실제 전체 W 오차, Stage3 반복 수렴 및 E/T/A/F는 완료가 아니다.
