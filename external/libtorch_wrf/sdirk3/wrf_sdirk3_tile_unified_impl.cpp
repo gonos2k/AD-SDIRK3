@@ -21519,6 +21519,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 const auto alpha_w = (c1 * mu_full.unsqueeze(1) + c2) /
                     msfty_.to(w.device(), w.scalar_type()).unsqueeze(1);
                 w_pgf_to_legacy = velocity_mass_w / alpha_w;
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+                wrf::sdirk3::pressure_stage_probe::capture_w_mass(level_mass_w,velocity_mass_w,alpha_w);
+#endif
             }
 
             // === Use hydrostatic pressure already computed ===
@@ -21975,6 +21978,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // PARITY FIX 2025-12-24: Use unified gravity value from grid_info_ or config fallback.
                 // This replaces hardcoded 9.81f to respect domain-specific g settings.
                 float g_val_wpgf = (grid_info_ && grid_info_->g > 0) ? grid_info_->g : g_;
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+                wrf::sdirk3::pressure_stage_probe::capture_w_interior(
+                    rdn_cpu_wpgf,nz_,g_val_wpgf,canonical_horizontal,cq1,msfty_);
+#endif
 
                 // v18 DIAG: Forward-mode AD tangent propagation check for W-PGF
                 // Only prints when forward-mode AD is active (mu has tangent from _make_dual)
@@ -22589,6 +22596,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         torch::NoGradGuard no_grad;
                         rdnw_km1_val = rdnw_for_top_cpu.index({k-1}).item<float>();
                     }
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+                    wrf::sdirk3::pressure_stage_probe::capture_w_top(rdnw_km1_val);
+#endif
                     // CRITICAL FIX 2026-01-27 (TOP BOUNDARY): Use PERTURBATION pressure for consistency
                     // Fortran: cq1*2.*rdnw(k-1)*(-p(i,k-1,j)) at module_big_step_utilities_em.F:2481
                     // The 'p' in WRF is PERTURBATION pressure. Using perturbation for both pressure and

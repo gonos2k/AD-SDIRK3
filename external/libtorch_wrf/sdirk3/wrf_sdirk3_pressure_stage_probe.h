@@ -26,11 +26,21 @@ struct PressureVPrimaryContext {
     std::function<torch::Tensor(const torch::Tensor&)> project_native,avg_y_3d,avg_y_2d,level_mass_v_of;
 };
 #endif
+struct WConsumerEvidence {
+    torch::Tensor rdn_f32;
+    float gravity=0, top_rdnw=0;
+    int64_t rdn_used_end=0;
+    double msfty_min=0, msfty_max=0, level_mass_min=0, level_mass_max=0;
+    double velocity_mass_min=0, velocity_mass_max=0, alpha_min=0, alpha_max=0;
+    bool canonical=false, cq1_is_one=false;
+    bool interior_seen=false, top_seen=false, mass_seen=false, duplicate=false, failed=false;
+};
 struct PressureEosContext {
     torch::Tensor ph,t,mu,mu_base,alb,p_base,c1h,c2h,rdnw,alt,p_pert;
     float rd=0,cv=0,cp=0,p0=0,t0=0;
     bool captured=false,duplicate=false,failed=false;
     PressureGeometryEvidence geometry;
+    WConsumerEvidence w_consumer;
 #ifdef WRF_SDIRK3_PRESSURE_A5
     PressureVPrimaryContext v_primary;
 #endif
@@ -50,6 +60,11 @@ void capture_v_primary(const PressureVPrimaryContext& input);
 void mark_v_primary_capture_failed() noexcept;
 #endif
 void mark_capture_failed() noexcept;
+void capture_w_interior(const torch::Tensor& rdn,int64_t used_end,float gravity,bool canonical,
+                        const torch::Tensor& cq1,const torch::Tensor& msfty) noexcept;
+void capture_w_top(float rdnw) noexcept;
+void capture_w_mass(const torch::Tensor& level_mass,const torch::Tensor& velocity_mass,
+                    const torch::Tensor& alpha) noexcept;
 void capture_eos(const torch::Tensor& ph,const torch::Tensor& t,const torch::Tensor& mu,
                  const torch::Tensor& mu_base,const torch::Tensor& alb,const torch::Tensor& p_base,
                  const torch::Tensor& c1h,const torch::Tensor& c2h,const torch::Tensor& rdnw,

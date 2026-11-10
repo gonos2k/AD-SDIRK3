@@ -12870,7 +12870,10 @@ public:
                         [](const auto& block) {return block.name=="ph";});
                     const auto theta=std::find_if(cached_layout_.blocks.begin(),cached_layout_.blocks.end(),
                         [](const auto& block) {return block.name=="t";});
+                    const auto rw=std::find_if(cached_layout_.blocks.begin(),cached_layout_.blocks.end(),
+                        [](const auto& block) {return block.name=="rw";});
                     TORCH_CHECK(ph!=cached_layout_.blocks.end() && theta!=cached_layout_.blocks.end() &&
+                        rw!=cached_layout_.blocks.end() &&
                         receipt_trial_evaluated && receipt_trial_eos.captured && !receipt_trial_eos.failed &&
                         !receipt_trial_eos.duplicate &&
                         wrf_terminal_jvp::hash(U_stage+dt*gamma*K)==receipt_trial_input_hash,
@@ -12886,6 +12889,8 @@ public:
                                       native_base_rms,residual_after_step_val);
                     const auto eos_packet=eos_scalars(e,receipt_trial_eos,U_stage,receipt_base_k,K,
                                                        ph->start,ph->size,theta->start,theta->size);
+                    const auto w_packet=w_runtime(e.w_consumer,receipt_trial_eos.w_consumer,
+                                                   receipt_sinv,rw->start,rw->size);
                     const auto eos_raw=write_eos_raw(e,receipt_trial_eos);
                     TORCH_CHECK(wrf_terminal_jvp::hash(K)==diag_k_hash &&
                         wrf_terminal_jvp::hash(accepted_residual)==diag_r_hash &&
@@ -12903,6 +12908,7 @@ public:
                     body.pop_back();
                     body += ",\"trial_input_hash\":" + wrf_terminal_jvp::quote(std::to_string(receipt_trial_input_hash)) +
                         ",\"eos_scalars\":" + eos_packet +
+                        ",\"w_runtime\":" + w_packet +
                         ",\"raw_eos\":" + eos_raw +
                         ",\"stage\":3,\"newton\":0,\"timestep\":0,\"solve_ordinal\":" +
                         std::to_string(delay_frame.ordinal) + ",\"outcome\":\"" + (trust?"accepted_trust":"accepted_recovery") +
