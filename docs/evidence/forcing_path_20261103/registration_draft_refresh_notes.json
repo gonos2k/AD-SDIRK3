@@ -1,0 +1,11 @@
+{
+  "changes": [
+    {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/forcing-path-20261103/red_stage3_source_review.json",
+      "draft_sha256": "f6d1e2542fbb755e992e6bf32548f8d501855ce9594c79ecfde3bd368566e3a9",
+      "registered_sha256": "db836587ac4132ae45daade75ac66f9393a92cc43bad70a2ee10c92d421eae01",
+      "reason": "review receipt refreshed for already-frozen bc0f FP64 guards before any registration/model"
+    }
+  ],
+  "model_run": false
+}

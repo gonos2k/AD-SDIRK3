@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-11-03T17:56:42.071559+09:00",
+  "status": "feasible_conditional",
+  "source_revision": "3a82d601",
+  "worktree": "/private/tmp/forcing-path-20261103",
+  "target": "IMEX ARK mode 3 stage_id=3 (i+1), timestep 0, Newton iteration 0, first accepted trust or recovery candidate; only after stage 2 gate passes",
+  "basis": [
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp:10362",
+      "finding": "ARK stage_id=i+1; loop breaks on ark_stage_aborted after handle_stage_gate, so reaching stage 3 follows stage 2 gate progression, not necessarily proof of stage convergence without recording its gate result."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp:6422",
+      "finding": "base observed_K/observed_R are assigned from K and R=K-F at Newton base."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp:11995",
+      "finding": "recovery computes K_trial=K+dK_recovery and R_trial=K_trial-compute_rhs(U_stage+a*K_trial), assigns observed pair only if AcceptedRecovery."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp:12209",
+      "finding": "trust evaluates K_trial=K+dK_scaled_candidate; accepted trust stamps that same K_trial/R_trial into observed pair and dK_scaled."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp:12734",
+      "finding": "alpha is initialized to 1 and no later assignment occurs in this region; after all trial paths the common update K=K+alpha*dK_scaled occurs at 12757. No active line-search RHS is present in this interval."
+    },
+    {
+      "path": "external/libtorch_wrf/sdirk3/wrf_sdirk3_trust_model.h:149",
+      "finding": "native trust actual merit is FP64 sum of squared S_inv*R with where-based H masking, no RMS normalization; recovery uses canonical scaled residual rule and should report its own acceptance outcome, not claim identical policy."
+    }
+  ],
+  "proposed_hook": "Immediately after K=K+alpha*dK_scaled at 12757 and before stage_diag or the next Newton iteration. Require it.step_applied(), candidate outcome AcceptedTrust or AcceptedRecovery, valid finite tensors, observed_K and observed_R defined, and exact value equality of observed_K with actual post-update K and observed_R with accepted_residual. Capture delta as K_after-base_K, rather than infer it from the raw GMRES p. Refuse measurement on mismatch or missing observation. Convergence at entry, exception, or no accepted step must terminate as unavailable; never continue forecast.",
+  "capture": "At base R calculation clone base K and R before any subsequent RHS might reuse storage. After iteration scaling is initialized (around res_norm_tensor 6610), snapshot S_inv and optional H and their hashes; compute both merit values from the SAME frozen copies using existing scaled_merit_sq_unchecked. Also record raw residual norms, RMS separately with exact labels and input N, objective outcome, alpha, recovery/trust, K/base/accepted residual hashes and norms, actual delta norm, and receipt status. For bit-level comparison do not treat ordinary numeric equality as byte identity without stating signed-zero/NaN semantics.",
+  "context": "Use existing audit base-call and fixed-input owner/version/hash inventory only if its macro is adapted to select stage 3 without the legacy stage4 ordinal validator and without A4/A5 observer side effects; capture reference identity and version/hash before and after the candidate. Require live config/threads and fixed input hashes unchanged; exclude known mutable scratch. Label context as observed subset, not a proof all hidden state is fixed. Base and accepted residual remain original native evaluations, not repeated or recomputed.",
+  "no_extra_rhs_or_jvp": "Hook reads only production-held tensors and production trial outcome; do not invoke compute_rhs, apply_jacobian or preconditioner. Record actual production RHS/JVP counts as audit, not claim counts must equal a prior case. Tensor clones/hash/norms are diagnostics and may have cost, so no timing/performance claim.",
+  "fail_closed": "New default-off compile macro, no public configuration or ABI. A terminal scope installed on target entry must cover convergence-before-trial, exception, rejected candidate, and any return/unwind; emit unavailable/failed once and _Exit with nonforecast status. Explicit successful receipt exits immediately. Profile gate verifies timestep, stage, iteration, dry single tile, precision, mode, reference-update/reuse off, exact scale/mask availability and suitable source assumptions. Any mismatch unavailable, never run on to later candidate without explicit protocol.",
+  "limits": [
+    "No exact Jacobian, forcing bound, true rho bound, forecast completion or endpoint validation.",
+    "One accepted trial does not establish global convergence or stability; trust acceptance can depend on model ratio and is distinct from monotonic decrease.",
+    "Stage3 entry alone does not prove stage2 converged; distinguish gate advanced, retry/fallback and convergence using existing records.",
+    "Direct branch enum remains in type but no current AcceptedDirect producer at this source revision; reject unsupported outcome rather than invent a label."
+  ],
+  "source_edits": false,
+  "extra_rhs": 0,
+  "new_model_run": false
+}

@@ -1,0 +1,53 @@
+{
+  "timestamp_local": "2026-11-03T17:45:44.453060+09:00",
+  "source_revision": "3a82d60130d3c48c6492ae863a66187f26f905f3",
+  "scope": "bounded source audit of thermodynamics/PGF/geopotential branches for prior h600 mode3 single-tile FP64 AD/reference-update-off dry profile; no finite-difference experiment or model execution",
+  "source_hashes": {
+    "wrf_hydrostatic_pressure.h": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+    "wrf_hydrostatic_pressure.cpp": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2",
+    "wrf_sdirk3_tile_unified_impl.cpp": "194365634d17e9a5eaefc38e577bccd0b6c606f4ace3de4cabdf102981bb01ad",
+    "wrf_sdirk3_acoustic_substep.h": "d4af5c7ec882f5b270351cf41e7b89efda6c17d65986d063c466817df1ac7410",
+    "dyn_em/module_implicit_sdirk3.F": "3ac269a16728908bee61a4172e7a25163864694023cc21b0eede9ace0204c092",
+    "wrf_sdirk3_config.cpp": "0d9af2b84dfd39da607182d83c81b6bd2e4cfeeda743bcc0741a63c7e2a9b6a4",
+    "wrf_sdirk3_interface_zerocopy.cpp": "9068e4a358fb796df2c4016eb6a83f290c490ee29d49f6888ab00fad482fd0ab"
+  },
+  "ledger": [
+    {
+      "site": "tile_unified_impl.cpp:14123-14143,15688-15710",
+      "observation": "Mode3 callback requests ImplicitOnly; input projection precedes state extraction; reference-update-off keeps U_ref_stage_ cloned from stage base. Frozen reference is independent of the current Newton direction only under this profile and unchanged context."
+    },
+    {
+      "site": "tile_unified_impl.cpp:16060-16069,16130",
+      "observation": "mu_full<=0 mask is detached and torch::where selects floor or state. The derivative is the selected piece derivative away from the switching surface, not proof of a positive branch margin. Full theta is state perturbation plus fixed 300."
+    },
+    {
+      "site": "tile_unified_impl.cpp:20490-20539; wrf_hydrostatic_pressure.h:83-117; wrf_hydrostatic_pressure.cpp:205-227",
+      "observation": "Current projected ph/t/mu flow through FP64 casts, alpha perturbation, EOS pow, p minus base, then output casts. No explicit detach in this calculation. alb from th_base/p_base and vertical coefficients are stage inputs fixed relative to this Newton direction, subject to context stability. Exact-real chain rule requires nonzero column denominator and positive finite EOS base; neither margins nor FP rounding bound measured here."
+    },
+    {
+      "site": "tile_unified_impl.cpp:20539-20552,20753-20776,20904-20968,21141-21142,21300-21314; wrf_sdirk3_acoustic_substep.h:270-278",
+      "observation": "U uses current pressure and alpha differences; V reads p_pert_ freshly assigned from current EOS and forms horizontal PGF; current pressure member is not inherently a frozen base. Optional nan_sanitize introduces a data-dependent finite branch, needing actual-config and branch-margin evidence. In-place scratch use and FWAD propagation across helpers/call sequences remain open."
+    },
+    {
+      "site": "tile_unified_impl.cpp:22081-22083,22279-22291",
+      "observation": "W pressure/buoyancy uses current p_pert_mass and current mass terms; rdn is copied as scalar from grid coefficient, which is independent only if context is fixed. No temperature buoyancy add should be inferred in this form."
+    },
+    {
+      "site": "tile_unified_impl.cpp:20352-20375,26326-26352",
+      "observation": "PH forcing selects current w or fixed reference by buoyancy_use_current_w; mass factors depend on current state. Coupled-to-velocity conversion uses current mass and mass-tendency ratios. Actual selected option, nonzero denominators, and tangent through all intermediate operations need further evidence."
+    },
+    {
+      "site": "dyn_em/module_implicit_sdirk3.F:622-643,710; wrf_sdirk3_config.cpp:4064,4390-4393; wrf_sdirk3_interface_zerocopy.cpp:664,744; wrf_sdirk3_tile_unified_impl.cpp:3513,3527,20451,20581",
+      "observation": "WRF non_hydrostatic flag overrides environment after configure/load and before tile creation; C setter updates global config, and Tile constructor copies it. Prior log pre-override effective=off is followed by [CONFIG] non_hydrostatic=true before tile provenance, so runtime tile snapshot is true for this run. Under the separately established canonical-horizontal profile, native NH correction branch is active. This follows Fortran/C interface source plus runtime ordering; bounded C++ graph did not capture Fortran cross-language edges."
+    }
+  ],
+  "conclusion": "No state-dependent detach found in inspected direct EOS formula. Selected-point conservative exact-real lower bounds for theta, total geopotential layer difference, hybrid mass are positive; they do not establish alt positivity, neighborhood margins, FP accuracy, full RHS JVP, or active-p forcing. NH is enabled via WRF override; canonical-horizontal activation still rests on separately established profile evidence.",
+  "not_performed": [
+    "build",
+    "test",
+    "native run",
+    "new FD sweep",
+    "production code edit"
+  ],
+  "point_margins": "green_eos_point_margins.json"
+}

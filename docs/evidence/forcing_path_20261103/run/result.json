@@ -1,0 +1,304 @@
+{
+  "status": "diagnostic_completed",
+  "errors": [],
+  "return_code": 86,
+  "model_completed": false,
+  "forecast_complete": false,
+  "performance_eligible": false,
+  "exact_forcing_certified": false,
+  "scope": "observed Stage 3 accepted pair in raw-principal profile; no exact forcing or whole-Jacobian claim",
+  "steps": 0,
+  "logged_converged_stages": [
+    2
+  ],
+  "stage_3_completed": false,
+  "mass_tube_bound": "pending offline conditional analysis",
+  "markers": [
+    "[ACCEPTED_STEP] status=completed forecast_complete=false"
+  ],
+  "initial_state_comparison": {
+    "status": "passed",
+    "reference_label": "new_terminal",
+    "labels": [
+      "new_terminal",
+      "archived_A9_old_binary",
+      "archived_RK3"
+    ],
+    "timestamp": "0001-01-01_00:00:00",
+    "source_kind": "wrfout",
+    "gate_scope": "post-initialization first history frame",
+    "grid": {
+      "nx": 40,
+      "ny": 80,
+      "nz": 64,
+      "dx_m": 100000.0,
+      "dy_m": 100000.0
+    },
+    "input_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "fields_checked": [
+      "DN",
+      "DNW",
+      "F",
+      "MAPFAC_M",
+      "MAPFAC_MX",
+      "MAPFAC_MY",
+      "MAPFAC_U",
+      "MAPFAC_V",
+      "MU",
+      "MUB",
+      "P",
+      "PB",
+      "PH",
+      "PHB",
+      "QVAPOR",
+      "T",
+      "U",
+      "V",
+      "W",
+      "ZNU",
+      "ZNW"
+    ],
+    "signed_zero_equivalent": true
+  },
+  "rank_peak_rss_bytes": 1988575232,
+  "disk_free_end": 59911004160,
+  "clock_triplets": {
+    "start": {
+      "monotonic_before": 3421672.397561083,
+      "wall": 1793699016.9255009,
+      "monotonic_after": 3421672.397561875
+    },
+    "end": {
+      "monotonic_before": 3421689.104587875,
+      "wall": 1793699033.6318998,
+      "monotonic_after": 3421689.104588666
+    }
+  },
+  "diagnostic": {
+    "status": "completed",
+    "forecast_complete": false,
+    "context_scope": "observed_subset",
+    "pair_equality": "numeric_finite",
+    "mask_scope": "identity",
+    "N": 1080491,
+    "scaled_l2_before": 1.9828237843424033,
+    "scaled_l2_after": 1.0983537450851132e-06,
+    "native_scaled_rms_before": 0.0019075394375249743,
+    "native_scaled_rms_after": 1.056651210973314e-09,
+    "delta_K_l2": 0.3017119617534542,
+    "delta_K_scaled_l2": 0.0681644601651611,
+    "S_inv_hash": "14474524215718693222",
+    "base_K_hash": "17417922780157811709",
+    "base_R_hash": "727529820566087362",
+    "post_K_hash": "13071984164251720277",
+    "post_R_hash": "10901376843368402629",
+    "mu_min": -11.390133797216556,
+    "mu_absmax": 11.390133797216556,
+    "mub_min": 89083.921875,
+    "mub_absmax": 89083.921875,
+    "B_mu_absmax": 11.112825812219008,
+    "K_before_mu_absmax": 0.01706874615331737,
+    "K_after_mu_absmax": 0.012167981729189148,
+    "mu_count": 3321,
+    "mu_dtype": 7,
+    "mub_dtype": 7,
+    "stage": 3,
+    "newton": 0,
+    "timestep": 0,
+    "solve_ordinal": 3,
+    "outcome": "accepted_trust",
+    "outer_update_alpha": 1,
+    "dt": 600,
+    "gamma": 0.435866521508459,
+    "a": 261.5199129050754,
+    "gmres_effective_relative": 3.267509995907858e-08,
+    "gmres_raw_relative": 3.267509995907858e-08,
+    "direction_modified": false,
+    "trust_attempted": true,
+    "recovery_attempted": false,
+    "base_context_hashes": [
+      {
+        "name": "B",
+        "fnv64": "549134641415184238",
+        "defined": true
+      },
+      {
+        "name": "reference",
+        "fnv64": "549134641415184238",
+        "defined": true
+      },
+      {
+        "name": "Fphys",
+        "fnv64": "3192544681114599701",
+        "defined": true
+      },
+      {
+        "name": "Fexp",
+        "fnv64": "0",
+        "defined": false
+      },
+      {
+        "name": "full_halo",
+        "fnv64": "0",
+        "defined": false
+      },
+      {
+        "name": "p_base",
+        "fnv64": "14087318007462321114",
+        "defined": true
+      },
+      {
+        "name": "th_base",
+        "fnv64": "4185430885422016772",
+        "defined": true
+      },
+      {
+        "name": "mu_base",
+        "fnv64": "4891263106911673159",
+        "defined": true
+      },
+      {
+        "name": "ph_base",
+        "fnv64": "17014116917428750934",
+        "defined": true
+      },
+      {
+        "name": "c1h",
+        "fnv64": "16932541126399192357",
+        "defined": true
+      },
+      {
+        "name": "c2h",
+        "fnv64": "15567473145155401509",
+        "defined": true
+      },
+      {
+        "name": "c1f",
+        "fnv64": "9130836099822983576",
+        "defined": true
+      },
+      {
+        "name": "c2f",
+        "fnv64": "16025486255888984053",
+        "defined": true
+      },
+      {
+        "name": "msftx",
+        "fnv64": "10882926256560266296",
+        "defined": true
+      },
+      {
+        "name": "msfty",
+        "fnv64": "10882926256560266296",
+        "defined": true
+      },
+      {
+        "name": "msfux",
+        "fnv64": "3194905367492187205",
+        "defined": true
+      },
+      {
+        "name": "msfuy",
+        "fnv64": "3194905367492187205",
+        "defined": true
+      },
+      {
+        "name": "msfvx",
+        "fnv64": "16728102147808516549",
+        "defined": true
+      },
+      {
+        "name": "msfvy",
+        "fnv64": "16728102147808516549",
+        "defined": true
+      },
+      {
+        "name": "cqu",
+        "fnv64": "12285353603625852197",
+        "defined": true
+      },
+      {
+        "name": "cqv",
+        "fnv64": "12285353603625852197",
+        "defined": true
+      },
+      {
+        "name": "cqw",
+        "fnv64": "17618125207852226341",
+        "defined": true
+      },
+      {
+        "name": "zx",
+        "fnv64": "16340274429668449653",
+        "defined": true
+      },
+      {
+        "name": "zy",
+        "fnv64": "16340274429668449653",
+        "defined": true
+      }
+    ],
+    "reference_hash": "549134641415184238",
+    "profile": "mode3_single_tile_fp64_ref_update_off_reuse_off",
+    "grad_mode": true,
+    "torch_threads": 1,
+    "torch_interop_threads": 1,
+    "jvp_method": 1,
+    "receipt_fingerprints_unchanged": true,
+    "receipt_rhs_delta": 0,
+    "receipt_jvp_delta": 0,
+    "receipt_preconditioner_delta": 0,
+    "rhs_calls_through_accept": 34,
+    "jvp_calls": 32
+  },
+  "artifacts": {
+    "accepted_step_probe.json": {
+      "sha256": "23b52dafdf399193dd3ff93540868e49596928f0bd816da57c49c388446cee8c",
+      "bytes": 2996
+    },
+    "attempt.json": {
+      "sha256": "edbc30b475fe4f397d69bc60da7380d9ad25702c3ad1cdcc6f5cea01fc660a95",
+      "bytes": 4075
+    },
+    "launcher.stderr.log": {
+      "sha256": "1436a6db28418193df4284b9053b9c954343fd5b90dda1e6ab25a6423ffd58df",
+      "bytes": 49
+    },
+    "launcher.stdout.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "namelist.input": {
+      "sha256": "68c2b63dc98de0a1d313919b8c6a57fd383a5bbf8508d4076dae0db15d4589cf",
+      "bytes": 6098
+    },
+    "namelist.output": {
+      "sha256": "f07ca977061445ef8f7657acf9d2a6bce3440ce4023fd353c2547674808daeb9",
+      "bytes": 93060
+    },
+    "rank_rusage.log": {
+      "sha256": "6e85a11019ad434b019e7aa3edb06c8ef62fd3801887cb7440b75c924f5fe679",
+      "bytes": 777
+    },
+    "rsl.error.0000": {
+      "sha256": "ac352eb37aae86cbc4fe11a819742bb950638fdaf01d3f921d9dbe78fc617a1c",
+      "bytes": 13944
+    },
+    "rsl.out.0000": {
+      "sha256": "a5f33581ba7cc39945990f3e6cb47582b0bffd15ffc629dd68f3e4657d336b90",
+      "bytes": 1946
+    },
+    "wrfinput_d01": {
+      "sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+      "bytes": 2065615
+    },
+    "wrfoutReady_d01_0001-01-01_00:00:00": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "wrfout_d01_0001-01-01_00:00:00": {
+      "sha256": "7a9c52880ee5491126f4ea76ddc4c1c045416c8a4af562feb99f590d5b3aef50",
+      "bytes": 1989217
+    }
+  }
+}

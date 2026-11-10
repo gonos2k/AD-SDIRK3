@@ -1,0 +1,18 @@
+{
+  "timestamp_local": "2026-11-03T19:02:40.510815+09:00",
+  "scope": "Green publication review of staged source conditions and recorded native receipt; no build/test/model rerun",
+  "blocking_findings": [],
+  "checks": [
+    "All 46 manifest files match listed size and SHA-256.",
+    "NH-on attribution follows authoritative Fortran post-env WRF override, C setter, constructor snapshot and ordered native log; local omega memo finding is scoped to named path, not all cache state.",
+    "Saved point mass/EOS margins are scoped to reconstructed fingerprinted inputs, not a neighborhood or inverse-density proof.",
+    "Stage 2 convergence and one Stage 3 trust-accepted native-computed merit drop are distinguished from incomplete Stage 3 and zero completed timesteps.",
+    "The mu-floor tube lower bound is explicitly conditional and uses its predefined 1 Pa allowance only; no claim of FD, full RHS, forcing, inverse/Lipschitz or all-branch bounds.",
+    "Native RMS is kept authoritative and FP64 analysis is not called bitwise identical. O2/O3 remain open."
+  ],
+  "limits": [
+    "No native replay, tensor reconstruction rerun, or full source proof was undertaken in this review."
+  ],
+  "status": "PASS_BOUNDED",
+  "clarification": "No additional packet artifact exists or is claimed; run/result.json and run/accepted_step_probe.json are included in the 46 verified manifest payloads."
+}
