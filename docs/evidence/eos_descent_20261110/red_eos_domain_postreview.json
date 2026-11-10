@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-11-10T11:19:31.702484+09:00",
+  "status": "PASS_CONDITIONAL_DATA",
+  "critical_findings": [],
+  "sha256": {
+    "run/accepted_step_probe.json": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+    "run/result.json": "9f6df4d73f016cc7160470a6a555c4224c6948f038f396d6edf4c9161456d907",
+    "eos_domain_analysis.json": "684aac4c879859731bede2367e27245c4de4fc20cec3f6121b2a1f7e4c73800b",
+    "evaluate_eos_domain.py": "a084fed735829976551cb764be6d7a94e093913d2a43d769c04eb183f259da28",
+    "eos_domain_bounds.py": "4c1b7d0f78054b3699ec91c18e8aa4510ecbfb41e35d919f75d86e58516cce08"
+  },
+  "findings": [
+    "64/64 computed level intervals positive; independent Fraction endpoint-enclosure and positive lower-bound checks pass; rerunning pinned wrapper reproduces analysis bytes.",
+    "Minimum level lower bounds: theta 257.8270518284963 K, hybrid denominator 89063.88575467323, alt 0.735259702817215, pow base 0.19870572374355433.",
+    "Captured 64 rdnw values positive, c1h/c2h dtype 6, rdnw dtype 7, mu/mub dtype 7; result diagnostic equals raw, observer RHS/JVP/preconditioner deltas zero.",
+    "Original accepted pair matched, terminal exit 86; stage2 logged convergence, stage3 incomplete and zero completed forecast steps."
+  ],
+  "limits": [
+    "Conditional on binary64 one-ULP basic operation/no overflow, fixed observed coefficients and B, Q copy and registered accepted-pair construction; no proof of all mutable context.",
+    "Stored computed alb is a fixed input to this analysis; its upstream pow/calculation accuracy, EOS pow output error, full RHS error and exact merit descent remain unbounded.",
+    "No new native model run or test performed; offline wrapper recomputation only."
+  ]
+}

@@ -1,0 +1,7 @@
+/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/tests/test_accepted_step_probe.cpp:3:9: warning: 'WRF_SDIRK3_PRESSURE_STAGE_PROBE' macro redefined [-Wmacro-redefined]
+    3 | #define WRF_SDIRK3_PRESSURE_STAGE_PROBE
+      |         ^
+<command line>:7:9: note: previous definition is here
+    7 | #define WRF_SDIRK3_PRESSURE_STAGE_PROBE 1
+      |         ^
+1 warning generated.

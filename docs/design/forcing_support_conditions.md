@@ -124,3 +124,49 @@ The observed native merit decrease is also a computed-value observation. It supp
 neither an inverse bound M nor a Jacobian Lipschitz constant L, and cannot be used
 to infer their upper bounds from one step. Full residual evaluation/norm error,
 other state/direction/branch conditions, E/T/A/F and forecast quality remain open.
+
+
+## Same accepted pair: bounded EOS domain and arithmetic component (2026-11-10)
+
+The follow-up uses main4907880c and native diagnostic source354748d6. The final
+Tile difference05aac9ac changes only the old mass-floor comments. A detached
+Boolean predicate does not remove the discontinuity at mu_full=0; the positive
+branch margin is the applicable differentiability condition.
+
+The chosen next target is exact merit decrease at the same Stage3 accepted pair,
+not a new forcing tolerance. If |m_i*−mtilde_i|≤e_i with e0<mtilde0, then
+m1*/m0*≤(mtilde1+e1)/(mtilde0−e0). The sufficient strict-decrease budget is
+`e0+e1 < 4295394570649/2251799813685248`. Full e_i are still unavailable.
+
+The EOS receives perturbation phi, not total PH. With positive captured rdnw r,
+its real expression is D=c1(MUB+mu)+c2 and
+alpha=alb−(alb*c1*mu−r*Delta(phi_pert))/D, followed by
+p'=p0*(rd*(t+t0)/(p0*alpha))^(cp/cv)−p_base. Positivity of total PH difference
+alone does not establish alpha>0 unless the needed hydrostatic identity is proved.
+The interval evaluator follows the original perturbation expression instead.
+
+A same-call snapshot of the original accepted trial retains both EOS endpoints
+and fixed coefficients. The archived K/R/S_inv/reference hashes and native RMS
+match; no extra RHS/JVP/preconditioner is called. This does incur copy/hash/I/O
+cost, and the process terminates rather than claiming safe continuation.
+For fixed captured B,a,coefficients and the stated source-copy and one-ULP basic
+arithmetic/magnitude assumptions, interval bounds establish positive D, alpha,
+theta and pow base over the selected segment/coordinate box at all64 levels.
+This is a domain condition, not a pow-accuracy or complete smoothness proof.
+
+A separate MPFR256 directed-rounding enclosure compares both native outputs to
+the real EOS at **captured rounded inputs**, at all212544 cells per endpoint.
+The pressure Linf upper bounds are 5.627079411241238e-11Pa (base) and
+4.990436858974591e-11Pa (accepted). Exact binary64 hex encodings accompany
+all output bounds. The real cp/cv ratio and power are enclosed; no uniform native
+libm accuracy contract is inferred from a symbol name.
+
+The captured alb is a computed inverse-density coefficient, not an assumption
+that the original ALB field is exact. Its upstream calculation, state formation,
+propagation through the full RHS, and native norm/float conversion errors remain
+outside this local component. A pressure-unit error cannot be added directly to
+a scaled-RMS budget. Thus this result does not yet certify exact merit decrease,
+exact forcing, Stage3 completion, or E/T/A/F. Native exit86 follows the first
+accepted Stage3 update; completed stages in logs are [2], completed steps0.
+
+[Evidence and independent replay scope](../evidence/eos_descent_20261110/README.md).

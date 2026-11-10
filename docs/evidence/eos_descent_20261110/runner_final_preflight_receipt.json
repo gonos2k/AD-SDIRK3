@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-11-10T11:16:15.102169+09:00",
+  "status": "passed",
+  "error": null,
+  "source_commit": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "runner_sha256": "c2b39f70eab775ea721e69cfd012978de24d5fd068946f7ca70d18eac33f83af",
+  "build_receipt_sha256": "83a6ed52a9f903f8ebd8eab21a80db053b4c8ca90a7edf2c5c4100a78fde1106",
+  "link_receipt_sha256": "c63bf81ced5d4ceb93e3bfd232215461e9938d3835020e6a42483a1fc990a57c",
+  "helper_receipt_sha256": "ed0d7325593cd7e0a1d205030aeab1ac072ed3b2b0cd8a6352e88d5cb9bd991c",
+  "mpfr_test_receipt_sha256": "22f0a4c9969912e2fd4f49290c9450656933508343dda69b36b1763a724c0373",
+  "executable_sha256": "8c90b83f7f08647ab92e72c8ac86b85e3cb7d1c19c86b204769bd9332e195c04",
+  "map_sha256": "0b22888ab20de51f5eafbcaf6248480c5b3815d91c89ab96712f7aa29500a7a9",
+  "scope": "read-only source, archive, link, helper and MPFR test receipt checks; no model run"
+}

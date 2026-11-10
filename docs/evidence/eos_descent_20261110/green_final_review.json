@@ -1,0 +1,19 @@
+{
+  "timestamp_local": "2026-11-10T11:25:40.727314+09:00",
+  "status": "PASS_BOUNDED",
+  "blocking_findings": [],
+  "scope": "Final Green source/report/evidence review; no test/model rerun",
+  "checks": [
+    "All 62 published manifest entries have matching byte lengths and SHA-256. The EOS archive contains exactly 16 NPY payloads, each matching the corresponding analysis SHA; README supplies extraction, build, and analysis commands.",
+    "Production diff from main extends existing default-off accepted-step probe only, with EOS trial capture inside the existing RHS invocation, plus Tile mass-floor comment corrections; no numerical controls changed.",
+    "Native source 354748d6, final 05aac9ac differs only in Tile comments; native executed 3547, not the later comment commit. Existing helper and link receipts pin source, archive, binary and native provenance.",
+    "Observed same accepted K/R pair and native RMS is scoped to Stage3 first accepted update, with Stage2 logged converged, Stage3 incomplete and zero timesteps.",
+    "Report scopes 64-level interval domain to stated fixed context/rounding assumptions; all-cell 256-bit EOS error bounds apply only to captured rounded EOS inputs.",
+    "Native RMS, conditional domain bounds, local EOS errors and unsatisfied full endpoint descent budget are kept distinct. No exact full-RHS residual, forcing, Stage3 convergence, cost or forecast claim.",
+    "Packaging supports the EOS-only replay given its documented compiler/MPFR/GMP/NumPy dependencies; full native WRF replay still requires external stack and artifacts."
+  ],
+  "limits": [
+    "Manifest and archive hashes reviewed; offline checker and native model not rerun by this final review.",
+    "Existing Green/Red reviews and helper/test receipts are evidence, not independent full RHS numerical verification."
+  ]
+}

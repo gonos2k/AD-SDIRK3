@@ -16036,8 +16036,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     auto wrf_ww_cp = [&]() { return wrf_mass_flux().omega; };
 
     // GRADIENT FIX: Compute mu_full safety check unconditionally (no control-flow .item())
-    // The torch::where() operation below is differentiable regardless of the condition
-    float mu_min = 1000.0f;  // Minimum safe column mass (kg/m^2)
+    // AD follows the selected branch while this predicate is fixed.
+    float mu_min = 1000.0f;  // Replacement for nonpositive column pressure mass (Pa)
 
     // Diagnostic logging only (wrap .item() calls in NoGradGuard)
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -16055,10 +16055,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
     }
 
-    // GRADIENT FIX: Apply mu_full safety correction unconditionally (differentiable torch::where)
-    // JVP FIX 2026-02-01: Detach the mask so the branching point (mu_full <= 0)
-    // doesn't create Jacobian discontinuity. The where() still passes gradients through
-    // the mu_full branch when mask=false, but the mask transition itself is invisible to JVP.
+    // A detached Boolean mask selects the local branch followed by AD.
+    // Detaching it does not remove the discontinuity at mu_full == 0.
+    // A positive branch margin is required for a smooth-derivative argument.
+    // The mu_full tangent is forwarded while mask=false.
     auto mu_floor_mask = (mu_full <= 0).detach();
     // DIAGNOSTIC 2026-02-01: Count mu_floor mask activations
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {

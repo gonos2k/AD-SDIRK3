@@ -1,0 +1,34 @@
+{
+  "source_commit": "05aac9acdbbe01302589f8f7fce1603795dd721c",
+  "native_source_commit": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "native_executable_uses_source_before_comment_only_tile_change": true,
+  "graph_sha256": "6b620c86a4e246273b608fbb5e0bf1707e342e66535635c6835bf06358e45727",
+  "pins_sha256": "368e2a3ba6eebc59d72a72e82f116ba14364f92e4305e427a33ec0a68e8d9a0b",
+  "navigation_nodes": [
+    {
+      "label": ".solve_stage_impl()",
+      "source_file": "/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp",
+      "incident_edges": 49
+    },
+    {
+      "label": "solveImplicitStage()",
+      "source_file": "/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp",
+      "incident_edges": 15
+    },
+    {
+      "label": "wrf_sdirk3_accepted_step_probe.h",
+      "source_file": "/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h",
+      "incident_edges": 12
+    },
+    {
+      "label": "test_accepted_step_probe.cpp",
+      "source_file": "/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/tests/test_accepted_step_probe.cpp",
+      "incident_edges": 6
+    }
+  ],
+  "gaps": [
+    "43 selected C++ sources/headers only; Fortran callers and other files are outside this graph.",
+    "Preprocessor conditions, runtime dispatch, callback state, and mutable caches require source-level verification.",
+    "References and calls are navigation aids and do not prove numerical correctness or native data provenance."
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "time_local": "2026-11-10T11:04:33.734736+09:00",
+  "head": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "reviewed_parent": "1502def5",
+  "files_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "eae0918679b4b68901d2f09ffcdb0c3f4d79b273f179e55a2564b0b9e99a1644",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h": "3752e2756f5407b534ef2e922aafe6e5b2c67b40a51377933c64a77a8d71e71c",
+    "external/libtorch_wrf/sdirk3/tests/test_accepted_step_probe.cpp": "b5448b5663313e6a1f6a3e363c9ecc7b08920a954194c909a526fc1dac6c0e78",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_linear_delay_audit.h": "2fcc3ecb6c49bb344d8eac1412d04b6f63094e4243bc5d59e848ad0da571d40b"
+  },
+  "verdict": "approve scoped terminal raw-EOS capture with post-run file and pair verification",
+  "findings": [
+    "The 16 arrays are base/accepted projected ph,t,mu, alt,p_pert, plus common mu_base,alb,p_base,c1h,c2h,rdnw. Original dtype and shape and flattened FP64 data byte FNV are emitted. Finite CPU FP32 coefficients convert exactly to FP64.",
+    "Exclusive newly created eos_raw directory precedes reuse of existing little-endian NPY writer, with failure on mkdir/write errors; partial files remain evidence if an error interrupts output.",
+    "eos_scalars and accepted K/R and fixed context checks execute before raw writing; after writing hash/solver-call counters verify no RHS, JVP or preconditioner call. Existing 1502 accepted-pair capture/equality/JSON hash logic is unchanged; actual cross-run old pair match remains for postvalidation.",
+    "Writing, tensor detaches/conversions/allocations, hashing and A5 trial instrumentation consume time/memory and can fail; zero solver calls does not mean zero overhead or continuation parity.",
+    "No direct I/O round-trip test added in this revision. Independently verify all 16 native NPY shapes, source dtype metadata, byte lengths and data hashes before use."
+  ],
+  "boundary": "MPFR arithmetic analysis applies only to rounded EOS subroutine inputs/outputs; it does not enclose upstream alb or state formation, full RHS, scaled norm or exact forcing.",
+  "validation": "source review and git diff --check; no tests, native build, model or RK3 comparison"
+}

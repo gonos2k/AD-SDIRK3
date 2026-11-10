@@ -2,7 +2,8 @@
 
 작성: 2026-11-02T13:16:08.084142+09:00.
 최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
-최신 갱신: 2026-11-03T19:01:19.100354+09:00, 기준 main3a82d601(PR342 병합).
+최신 갱신: 2026-11-10T11:24:19.335735+09:00, 기준 main4907880c(PR343 병합).
+Stage3 EOS 정의역·산술 오차 성분: [진행 보고]((202611101123)_stage3_eos_domain_and_error_component.md).
 링크 귀속 정정·O1: [보고서]((202611022330)_link_origin_o1_resolution.md).
 이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
 O1 표현 정정·O2/O3 선택점: [진행 보고]((202611030842)_operator_contract_directional_gap.md).
@@ -59,7 +60,9 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
   중심 RHS4회 bitwise 반복 일치 확인. 현재 source에서 omega memo의 call-local 재생성,
   현재 EOS pressure 게시 후 V-PGF 읽기, NH override→Tile snapshot 순서를 확인했다.
   저장점 mass-floor는 inactive이고, Stage3 accepted segment의 조건부 μ 하한도 양수다.
-  transitive cache/모든 branch·설정의 고정성 및 full RHS FP 오차는 미입증이다.
+  후속: 같은 Stage3 수용 쌍의 EOS 분모·alpha·theta·pow base는64층에서 조건부 양수다.
+  저장된 반올림 EOS 입력의 두 끝점 전체212544점씩 MPFR 산술 오차 상계를 확보했다.
+  상류 alb/state formation·전이 cache/다른 branch·설정 및 full RHS FP 오차는 미입증이다.
 - [ ] O3 native JVP의 가법성/동차성·residual 미분 일치·오차 gap을 관련 방향에서 확인한다.
   A10의 한 방향 반복, prepared graph 검증은 그 범위만 재사용한다.
   진행: stage2/Newton0의 후보p/Qseed/boundary-complement와 ε3개, 총9개 FD gap 측정.
@@ -97,6 +100,8 @@ Tile 문맥과 비용을 바꿀 수 있으므로 단순 실패 보고를 위해 
 - [ ] A1 물리량별 stage 해오차 예산→A inverse bound→실제 rate/state/scaled 잔차 예산을 연결한다.
   진행: Stage2 ηhat/δ 표본의 잔여 예산은 정리했으나 tau/rho/norm의 full-RHS 상계가 없어
   exact forcing1e-7 인증은 미완료다. μ floor의 조건부 1Pa branch allowance는 이 예산의 대체가 아니다.
+  다음 목표는 같은 Stage3 수용 쌍의 exact merit 감소다. e0+e1<0.0019075383808737634의
+  full endpoint error 상계는 아직 없다. EOS local Pa/alpha 오차를 RMS 예산에 직접 더하지 않는다.
 - [ ] A2 균일한 조건 아래 rate defect O(h³), state defect O(h⁴)의 충분조건과,
   S=O(h⁻¹)/O(1) 체제의 scaled criterion을 구분한다. 고정tol이 곧3차 보장이라는 주장은 하지 않는다.
 - [ ] A3 FP64 내부·FP32 interface/출력/전처리의 정밀도 바닥과 norm equivalence를 예산에 포함한다.
@@ -126,3 +131,16 @@ Stage2 CONVERGED 로그는 있으나 Stage3·시간스텝은 완료하지 않았
 정확한 forcing·inverse/Lipschitz 상계나 전체 Newton 수렴을 추론하지 않는다.
 E/T/A/F의 증명·실험이 모두 완료된 것처럼 묶지 않는다.
 검증 결과와 source/executable/input hash는 별도 진행 보고서에 연결해 상태를 한 항목씩 갱신한다.
+
+## PR343 후속의 좁은 해소 상태
+
+- [x] P3: mass-floor mask detach/where의 부정확한 미분가능성 주석과 Pa 단위 설명 정리. 수치식 불변.
+- [x] 같은 Stage3 K/R 쌍의 EOS 자료를 원래 trial 호출에서 확보하고 기존 hash·native RMS와 대응.
+- [x] 지정 profile·fixed coefficients·FP64 basic-operation 가정 아래 EOS 정의역64층 조건부 양수.
+- [x] 저장된 반올림 EOS 입력에서의 arithmetic-only 오차를 양 endpoint 전체점의 MPFR 구간으로 제한.
+- [ ] 상류 inverse-density/alb 생성 입력·정의역·산술 오차와 실제 RHS로의 전파를 제한.
+- [ ] 전체 RHS/state/scaling/norm error e0,e1를 묶어 같은 수용 쌍의 정확한 감소 충분조건 인증.
+
+새 실행은 Stage2만 수렴 로그가 있고 Stage3 첫 수용 갱신 뒤 종료86, 완료 timestep0이다.
+초기21장·계수의 보관 RK3/A9 비교를 재사용했으며 새 RK3·endpoint·속도 비교는 없다.
+기존 회귀와 P1 NO-GO를 다시 열지 않았고 E/T/A/F는 미완료다.

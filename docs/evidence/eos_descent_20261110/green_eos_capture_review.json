@@ -1,0 +1,14 @@
+{
+  "timestamp_local": "2026-11-10T11:06:10.089705+09:00",
+  "scope": "source-only capture review",
+  "findings": [
+    "pressure_stage_probe.cpp:97-132 clones same-call EOS arguments and outputs; ph is the projected perturbation phi from calc_p_rho_wrf, not physical total geopotential.",
+    "accepted_step_probe.h eos_scalars checks base/trial fixed arrays by shape, numeric equality, dtype and hash; raw_eos writes base/accepted phi,t,mu,alt,p_pert plus fixed inputs.",
+    "Stage3 receipt captures accepted trial using scoped EOS capture; clone/restore is observation only and does not freeze production RHS state.",
+    "Native rdnw is supplied directly; strictly require positive values, do not replace with abs. PHB is not an EOS input."
+  ],
+  "limits": [
+    "No runtime claim or full-context purity proof follows from source audit.",
+    "No EOS error or full RHS/forcing bound follows from capture alone."
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-11-10T11:25:41.889133+09:00",
+  "status": "PASS_BOUNDED_PUBLICATION",
+  "blockers": [],
+  "checks": [
+    "62/62 staged public manifest records match size and SHA256; link map decompressed hash and direct Tile ID465/Newton ID466 archive origins verified.",
+    "354748d6 to 05aac9ac changes only six comment lines in Tile; numerical code unchanged and native execution correctly attributed to earlier source.",
+    "EOS interval uses perturbation geopotential and original operator order, positive captured rdnw, per-level bounds, same-pair/fixed-coefficient and basic-operation assumptions; it is a conditional tube domain result.",
+    "MPFR bounds cover rounded captured inputs to local EOS outputs only, not upstream base-density or full RHS error.",
+    "Exact merit budget 4295394570649/2251799813685248 reported without treating EOS pressure units as RMS; exact descent and full e_i remain uncertified.",
+    "Stage3 ends before completion with zero steps; no speed, long-forecast or new RK3 inference."
+  ],
+  "limitations": [
+    "No tests, build or model rerun by reviewer.",
+    "Prior independent MPFR rerun used same checker binary, not an independent implementation."
+  ]
+}

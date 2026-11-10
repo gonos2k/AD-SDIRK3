@@ -1,0 +1,38 @@
+taskid: 0 hostname: 10.nate.com
+Quilting with   1 groups of   0 I/O tasks.
+ Ntasks in X            1 , ntasks in Y            1
+  Domain # 1: dx = ********* m
+WRF V4.7.0 MODEL
+No git found or not a git repository, git commit version not available.
+ *************************************
+ Parent domain
+ ids,ide,jds,jde            1          41           1          81
+ ims,ime,jms,jme           -4          46          -4          86
+ ips,ipe,jps,jpe            1          41           1          81
+ *************************************
+DYNAMICS OPTION: Eulerian Mass Coordinate
+   alloc_space_field: domain            1 ,             201436844  bytes allocated
+  med_initialdata_input: calling input_input
+   Input data is acceptable to use: wrfinput_d01
+ CURRENT DATE          = 0001-01-01_00:00:00
+ SIMULATION START DATE = 0001-01-01_00:00:00
+Timing for processing wrfinput file (stream 0) for domain        1:    0.23168 elapsed seconds
+Initializing SDIRK3 implicit time integration in start_em
+Max map factor in domain 1 =  1.00. Scale the dt in the model accordingly.
+Timing for Writing wrfout_d01_0001-01-01_00:00:00 for domain        1:    0.36226 elapsed seconds
+ Tile Strategy is not specified. Assuming 1D-Y
+WRF TILE   1 IS      1 IE     41 JS      1 JE     81
+WRF NUMBER OF TILES =   1
+Using SDIRK3 implicit time integration
+SDIRK3: init_implicit_sdirk3 called
+UNIFIED SDIRK3: Allocating space for 1 tile solvers
+SDIRK3: Configuration updated from namelist
+UNIFIED SDIRK3: Initialized 1 tile solvers
+UNIFIED SDIRK3: L-stable implicit integration; realized stability depends on the verified IMEX partition, the configured split-explicit acoustic operator, and sufficiently converged implicit stages
+SDIRK3: Solvers initialized for solve_em
+SDIRK3: Halo exchange initialized
+  Communicator: WRF Cartesian owned duplicate
+  Process grid: 1 x 1 (my position: 0,0)
+  Neighbors N/S/E/W: -1/-1/-1/-1
+  Periodic: X=yes Y=no
+  Halo width: 5

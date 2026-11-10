@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-10T10:39:03.574685+09:00",
+  "status": "SYNTHETIC_PASS_CONDITIONAL",
+  "source_commit": "4907880c",
+  "sha256": {
+    "eos_domain_bounds.py": "4c1b7d0f78054b3699ec91c18e8aa4510ecbfb41e35d919f75d86e58516cce08",
+    "test_eos_domain_bounds.py": "69025f27965bbaec8c2ccce05d9e9fa83b675ef926a1b01a86a9840eae9e255e"
+  },
+  "tests": "python3 test_eos_domain_bounds.py: PASS positive, denominator, total-PH counterexample, signed product, endpoint box, envelope, nonfinite",
+  "scope": "Offline interval enclosure of theta, hybrid denominator, alt and pow base in source order, under supplied fixed per-level extrema and binary64 basic-operation assumptions.",
+  "limits": [
+    "Needs same accepted pair and base/trial fixed coefficients; captures and source-order precision contracts must be verified separately.",
+    "1 K/Pa/m2s-2 state-construction margins and 2^39 envelopes are predefined; denominator/alpha/pow-base crossing zero returns unresolved.",
+    "No pow accuracy, pressure, full RHS error or merit descent certificate; no native run."
+  ]
+}

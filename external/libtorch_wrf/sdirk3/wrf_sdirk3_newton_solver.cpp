@@ -11756,6 +11756,22 @@ public:
             // later consumer. `recovered_with_fallback` is block-local and dead by :12360, so the
             // outcome cannot be recovered after the fact -- it has to be recorded where it happens.
              torch::Tensor accepted_residual;
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+            wrf::sdirk3::pressure_stage_probe::PressureEosContext receipt_trial_eos;
+            uint64_t receipt_trial_input_hash=0;
+            bool receipt_trial_evaluated=false;
+            auto receipt_trial_rhs=[&](const torch::Tensor& input) {
+                if (!delay_frame.selected) return compute_rhs(input);
+                receipt_trial_eos = {};
+                receipt_trial_input_hash=wrf_terminal_jvp::hash(input);
+                receipt_trial_evaluated=true;
+                wrf::sdirk3::pressure_stage_probe::ScopedEosCapture capture(receipt_trial_eos);
+                auto output=compute_rhs(input);
+                TORCH_CHECK(wrf_terminal_jvp::hash(input)==receipt_trial_input_hash,
+                            "trial RHS changed its input");
+                return output;
+            };
+#endif
             torch::Tensor accepted_residual_norm;
             float alpha = 1.0f;
             double last_rho = 0.0;
@@ -12037,7 +12053,11 @@ public:
                             it.candidate.recovery_attempted = true;   // a nonlinear residual IS evaluated below
                             auto K_trial = K + dK_recovery;
                             auto U_trial = U_stage + dt * gamma * K_trial;
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+                            auto F_trial = receipt_trial_rhs(U_trial);
+#else
                             auto F_trial = compute_rhs(U_trial);
+#endif
                             auto R_trial = K_trial - F_trial;
                             auto trial_norm_tensor = R_trial.norm();
                             float trial_res_norm = trial_norm_tensor.to(torch::kCPU).item<float>();
@@ -12252,7 +12272,11 @@ public:
                 auto K_trial = K + dK_scaled_candidate;
                 auto U_trial = U_stage + dt * gamma * K_trial;
 
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+                auto F_trial = receipt_trial_rhs(U_trial);
+#else
                 auto F_trial = compute_rhs(U_trial);
+#endif
                 --rhs_budget;  // Phase 3C: TR RHS budget
                 auto R_trial = K_trial - F_trial;
                 auto res_trial_tensor = R_trial.norm();
@@ -12842,6 +12866,15 @@ public:
                         [](const auto& block) {return block.name=="mu";});
                     TORCH_CHECK(cached_layout_.is_exact && cached_layout_.total_size==K.numel() &&
                                 mu!=cached_layout_.blocks.end(), "mu layout unavailable");
+                    const auto ph=std::find_if(cached_layout_.blocks.begin(),cached_layout_.blocks.end(),
+                        [](const auto& block) {return block.name=="ph";});
+                    const auto theta=std::find_if(cached_layout_.blocks.begin(),cached_layout_.blocks.end(),
+                        [](const auto& block) {return block.name=="t";});
+                    TORCH_CHECK(ph!=cached_layout_.blocks.end() && theta!=cached_layout_.blocks.end() &&
+                        receipt_trial_evaluated && receipt_trial_eos.captured && !receipt_trial_eos.failed &&
+                        !receipt_trial_eos.duplicate &&
+                        wrf_terminal_jvp::hash(U_stage+dt*gamma*K)==receipt_trial_input_hash,
+                        "accepted trial EOS input or layout unavailable");
                     const int diag_rhs_before=delay_frame.rhs_all, diag_jvp_before=jvp_call_count;
                     const int diag_precond_before=precond_total_calls_;
                     const auto diag_k_hash=wrf_terminal_jvp::hash(K);
@@ -12851,6 +12884,9 @@ public:
                     auto body=measure(receipt_base_k,receipt_base_r,receipt_sinv,K,accepted_residual,
                                       observed_K,observed_R,e.mu,e.mu_base,U_stage,mu->start,mu->size,
                                       native_base_rms,residual_after_step_val);
+                    const auto eos_packet=eos_scalars(e,receipt_trial_eos,U_stage,receipt_base_k,K,
+                                                       ph->start,ph->size,theta->start,theta->size);
+                    const auto eos_raw=write_eos_raw(e,receipt_trial_eos);
                     TORCH_CHECK(wrf_terminal_jvp::hash(K)==diag_k_hash &&
                         wrf_terminal_jvp::hash(accepted_residual)==diag_r_hash &&
                         wrf_terminal_jvp::hash(S_inv_diag_)==diag_s_hash,
@@ -12865,7 +12901,10 @@ public:
                     TORCH_CHECK(diag_rhs_delta==0 && diag_jvp_delta==0 && diag_precond_delta==0,
                                 "receipt unexpectedly invoked solver operations");
                     body.pop_back();
-                    body += ",\"stage\":3,\"newton\":0,\"timestep\":0,\"solve_ordinal\":" +
+                    body += ",\"trial_input_hash\":" + wrf_terminal_jvp::quote(std::to_string(receipt_trial_input_hash)) +
+                        ",\"eos_scalars\":" + eos_packet +
+                        ",\"raw_eos\":" + eos_raw +
+                        ",\"stage\":3,\"newton\":0,\"timestep\":0,\"solve_ordinal\":" +
                         std::to_string(delay_frame.ordinal) + ",\"outcome\":\"" + (trust?"accepted_trust":"accepted_recovery") +
                         "\",\"outer_update_alpha\":" + wrf_terminal_jvp::json_number(alpha) +
                         ",\"dt\":" + wrf_terminal_jvp::json_number(dt) +

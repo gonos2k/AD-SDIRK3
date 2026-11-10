@@ -1,0 +1,23 @@
+{
+  "time_local": "2026-11-10T11:15:38.288308+09:00",
+  "verdict": "approve for registered rounded-input EOS arithmetic analysis",
+  "reviewed_sha256": {
+    "eos_mpfr.cpp": "c0cb5b2e3bbe358f64aab99eaa40371d63f3e9698f040daaea3b75e0ceb492bb",
+    "eos_mpfr": "81ce0fc3b62d94ea0dd94c770e99c309cfb4f757fe7e9b027d8c0812de232fb5",
+    "test_eos_mpfr.py": "c676f79a981a4ddc013efa50c64475f7b9c5d19687f3bfe4e7dad3f60a12dbce",
+    "run_eos_mpfr.py": "0adaf096de84bc2e81d4c421680a546816976cd33681ac7460be2dfa171f50ac"
+  },
+  "test_receipt_sha256": "22f0a4c9969912e2fd4f49290c9450656933508343dda69b36b1763a724c0373",
+  "findings": [
+    "Source dtype restricted to 6/7; state/output FP64 required; FP32-marked values must round-trip bitwise through binary32 including signed zero.",
+    "Output encodes RNDU binary64 bounds with exact companion hexadecimal strings and explicitly specifies correctly rounded binary64 parsing of JSON decimals.",
+    "NPY reader checks little-endian host and little-endian float64 C-order flat data; wrapper checks shapes, counts, finite values and data hashes.",
+    "Directed interval operations, positive-base four-corner power, RNDA error and RNDU square/sum/sqrt reviewed; applies to both captured endpoints with stated positive-domain restrictions.",
+    "Prior synthetic receipt passes and hashes match these exact artifacts; no test repeated in this review."
+  ],
+  "scope": "EOS arithmetic at captured rounded inputs only; not upstream inverse-density/state formation, complete RHS, norm or exact forcing.",
+  "limits": [
+    "MPFR directed-rounding and faithful native captured inputs are assumptions.",
+    "No native/model run or new validation performed."
+  ]
+}
