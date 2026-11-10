@@ -1,0 +1,9 @@
+{
+  "target": "exact Stage3 merit decrease at the same stored pair",
+  "native_gap_exact": "4295394570649/2251799813685248",
+  "native_gap_approx": 0.0019075383808737634,
+  "sufficient_condition": "e0+e1 < native_gap; e0 includes all base RHS/scaling/norm/conversion error and e1 all accepted endpoint error",
+  "full_endpoint_error_bounds_available": false,
+  "exact_decrease_certified": false,
+  "EOS_error_scope": "a separate subroutine-local component cannot be directly summed with this RMS budget without propagation"
+}

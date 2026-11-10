@@ -1,0 +1,37 @@
+{
+  "status": "passed",
+  "tests_stdout": "PASS exact two-level, output mismatch, near-zero D, signed rdnw, perturbation-phi sign, NPY order, dtype and exact promotion, out-of-range, bound-hex, receipt wrapper\nsource_sha256 c0cb5b2e3bbe358f64aab99eaa40371d63f3e9698f040daaea3b75e0ceb492bb\n",
+  "tests_stderr": "",
+  "tests_returncode": 0,
+  "compile_argv": [
+    "clang++",
+    "-std=c++17",
+    "-O2",
+    "-I/opt/homebrew/include",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/eos_mpfr.cpp",
+    "-L/opt/homebrew/lib",
+    "-lmpfr",
+    "-lgmp",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/eos_mpfr"
+  ],
+  "compiler_version": "Apple clang version 21.0.0 (clang-2100.4.1.1)",
+  "sha256": {
+    "eos_mpfr.cpp": "c0cb5b2e3bbe358f64aab99eaa40371d63f3e9698f040daaea3b75e0ceb492bb",
+    "eos_mpfr": "81ce0fc3b62d94ea0dd94c770e99c309cfb4f757fe7e9b027d8c0812de232fb5",
+    "test_eos_mpfr.py": "c676f79a981a4ddc013efa50c64475f7b9c5d19687f3bfe4e7dad3f60a12dbce",
+    "run_eos_mpfr.py": "0adaf096de84bc2e81d4c421680a546816976cd33681ac7460be2dfa171f50ac"
+  },
+  "scope": "synthetic exact 2-level cases and receipt wrapper; not a native replay or full RHS bound",
+  "parser_attribution": "fd_mpfr.cpp uses SDIRKA53, not NPY; eos_mpfr.cpp implements its own strict flat little-endian f64 NPY reader",
+  "assumptions": [
+    "correct MPFR directed rounding 256 bits",
+    "correct captured native EOS args/constants",
+    "positive EOS power base, hybrid mass > 1e-100, positive rdnw",
+    "native target upper bounds only for calc_p_rho_wrf at captured rounded inputs"
+  ],
+  "timestamp_local": "2026-11-10T11:12:20.273092+09:00",
+  "bound_encoding": "MPFR_RNDU binary64; decimal JSON parsed as binary64 and verified against companion exact hexadecimal strings",
+  "metadata_checks": "source_dtype 6/7; state and outputs 7; 6 must equal exact binary32 promotion including signed zero; nonfinite/out-of-range rejected",
+  "npy_reader": "strict flat C-order little-endian f64 NPY and little-endian host"
+}

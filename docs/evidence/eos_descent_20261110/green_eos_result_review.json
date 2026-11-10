@@ -1,0 +1,18 @@
+{
+  "timestamp_local": "2026-11-10T11:21:18.317788+09:00",
+  "status": "PASS_BOUNDED",
+  "scope": "independent recorded-result, source-diff and hash review; no native/model replay or independent MPFR recalculation",
+  "checks": [
+    "All 16 NPY file SHA-256 values, accepted-step receipt SHA and checker source/binary SHA match analysis.",
+    "Both states contain 212544 cells; all 64 per-level and aggregate binary64 hex strings round-trip to recorded JSON binary64 values.",
+    "Base and accepted K/R hashes and native RMS observations match prior accepted-pair receipt. Stage2 converged; stage3 and timestep incomplete.",
+    "Source 354748d6 to 05aac9ac changes only comments for detached mu-floor predicate.",
+    "Base alt Linf/L2 upper 4.768452044508382e-16 / 6.322181707200999e-14; base p perturbation 5.627079411241238e-11 / 3.801457115247935e-9.",
+    "Accepted alt Linf/L2 upper 4.742962635239994e-16 / 6.312894563626115e-14; accepted p perturbation 4.990436858974591e-11 / 3.790213640174664e-9."
+  ],
+  "limits": [
+    "EOS component at captured rounded inputs only, conditional on trusted MPFR and capture validity; excludes state formation, alb computation, full RHS/norm and endpoint residual e_i bounds.",
+    "These results do not certify the desired descent inequality or a model forecast.",
+    "This review verifies recorded outputs and hashes, not separate recalculation of 425088 cells or detailed arithmetic proof."
+  ]
+}

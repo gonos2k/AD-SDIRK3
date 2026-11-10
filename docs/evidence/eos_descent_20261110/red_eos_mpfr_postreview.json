@@ -1,0 +1,64 @@
+{
+  "time_local": "2026-11-10T11:22:34.422367+09:00",
+  "status": "passed",
+  "verdict": "independent offline checker rerun matches all reported intervals exactly; native bundle and nine registered pair fields match",
+  "original_analysis_sha256": "e028faac8bf4a5ab9bbc46695bbeedfab570843578a9aedd7a50b9d976132126",
+  "independent_analysis_sha256": "e028faac8bf4a5ab9bbc46695bbeedfab570843578a9aedd7a50b9d976132126",
+  "native_receipt_sha256": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+  "old_pair_sha256": "23b52dafdf399193dd3ff93540868e49596928f0bd816da57c49c388446cee8c",
+  "checker_source_sha256": "c0cb5b2e3bbe358f64aab99eaa40371d63f3e9698f040daaea3b75e0ceb492bb",
+  "checker_binary_sha256": "81ce0fc3b62d94ea0dd94c770e99c309cfb4f757fe7e9b027d8c0812de232fb5",
+  "all_16_files_match": true,
+  "registered_pair_key_match": {
+    "base_K_hash": true,
+    "base_R_hash": true,
+    "post_K_hash": true,
+    "post_R_hash": true,
+    "S_inv_hash": true,
+    "reference_hash": true,
+    "native_scaled_rms_before": true,
+    "native_scaled_rms_after": true,
+    "N": true
+  },
+  "cells_per_endpoint": 212544,
+  "bounds_base_then_accepted": [
+    {
+      "alt": {
+        "linf_upper": 4.768452044508382e-16,
+        "l2_upper": 6.322181707200999e-14
+      },
+      "p_pert": {
+        "linf_upper": 5.627079411241238e-11,
+        "l2_upper": 3.801457115247935e-09
+      }
+    },
+    {
+      "alt": {
+        "linf_upper": 4.742962635239994e-16,
+        "l2_upper": 6.312894563626115e-14
+      },
+      "p_pert": {
+        "linf_upper": 4.990436858974591e-11,
+        "l2_upper": 3.790213640174664e-09
+      }
+    }
+  ],
+  "independent_argv": [
+    "python3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run_eos_mpfr.py",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/accepted_step_probe.json",
+    "/tmp/eos_mpfr_red_independent_20261110.json"
+  ],
+  "scope": "Enclosures of calc_p_rho_wrf arithmetic at captured rounded inputs, not upstream alb/state formation, full RHS, residual norm or exact forcing.",
+  "assumptions": [
+    "trusted correctly rounded MPFR at 256 bits",
+    "input files faithfully encode captured native arguments and outputs",
+    "positive EOS power base, hybrid mass strictly positive, rdnw strictly positive",
+    "near-zero hybrid mass <=1e-100 rejected"
+  ],
+  "limitations": [
+    "Independent rerun uses same checker binary, not a separately implemented interval reference.",
+    "Registered pair comparison establishes equality of named fields only and not complete context.",
+    "No native run, forecast, or RK3 comparison performed."
+  ]
+}

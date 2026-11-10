@@ -1,0 +1,45 @@
+{
+  "source_commit": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "source_hashes": {
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/tests/test_accepted_step_probe.cpp": "b5448b5663313e6a1f6a3e363c9ecc7b08920a954194c909a526fc1dac6c0e78",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h": "3752e2756f5407b534ef2e922aafe6e5b2c67b40a51377933c64a77a8d71e71c",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_terminal_jvp_probe.h": "032155596dcf783065191cd1ab2fca34c1f02d833fc9ec00afadb53219f09628"
+  },
+  "compile_argv": [
+    "/usr/bin/g++",
+    "-DWRF_SDIRK3_PRESSURE_A5",
+    "-I/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/B",
+    "-DWRF_SDIRK3_PRESSURE_REFERENCE_STAGE",
+    "-DWRF_SDIRK3_PRESSURE_A4",
+    "-std=c++17",
+    "-O3",
+    "-DMACOS",
+    "-DDMPARALLEL",
+    "-DUSE_SDIRK3",
+    "-DWRF_SDIRK3_PRESSURE_STAGE_PROBE",
+    "-I/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+    "-I/opt/homebrew/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include",
+    "-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include",
+    "-D_GLIBCXX_USE_CXX11_ABI=0",
+    "/Users/yhlee/SDIRK3-review-worktrees/eos-descent-20261110/external/libtorch_wrf/sdirk3/tests/test_accepted_step_probe.cpp",
+    "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-ltorch",
+    "-ltorch_cpu",
+    "-lc10",
+    "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/raw_capture/helper_build/test_accepted_step_probe"
+  ],
+  "compile_returncode": 0,
+  "compiler_version": "Apple clang version 21.0.0 (clang-2100.4.1.1)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+  "torch_library_sha256": {
+    "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch.dylib": "3cb51bdf67ca14c93a99c06d7b80f002ddeeb5f1212c8e9f00ce85c7aaea0899",
+    "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libtorch_cpu.dylib": "f8f2c1b648fafcac93cd01f47a5bfcb2bf8d816cec1f83f0eb0297299c66ff6d",
+    "/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib/libc10.dylib": "cb56ee731b2cbddf4e58dc42f4b8422735c414c6466d9902fc73e9633af767e6"
+  },
+  "executable_sha256": "64298af4ccce09695020c1467154b374eff3d14917d5c5cc426cd9405462b89c",
+  "run_returncode": 0
+}

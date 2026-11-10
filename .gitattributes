@@ -5,3 +5,6 @@ docs/evidence/matched_pressure_cost_20261102/inputs/namelist.input whitespace=-b
 docs/evidence/early_residual_status_20261102/test_trust_model_contract_run.log whitespace=-blank-at-eol
 # Keep the hashed extracted Darwin make fragment verbatim.
 docs/evidence/link_origin_o1_20261102/darwin_link_contract.mk whitespace=-blank-at-eol
+
+# Preserve the exact registered EOS native namelist, including original blanks.
+docs/evidence/eos_descent_20261110/run/namelist.input whitespace=-blank-at-eol

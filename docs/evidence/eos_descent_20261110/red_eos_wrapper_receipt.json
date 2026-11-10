@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-11-10T11:15:48.233754+09:00",
+  "status": "SYNTHETIC_PASS_PREREGISTRATION",
+  "sha256": {
+    "eos_domain_bounds.py": "4c1b7d0f78054b3699ec91c18e8aa4510ecbfb41e35d919f75d86e58516cce08",
+    "evaluate_eos_domain.py": "a084fed735829976551cb764be6d7a94e093913d2a43d769c04eb183f259da28",
+    "test_eos_domain_bounds.py": "69025f27965bbaec8c2ccce05d9e9fa83b675ef926a1b01a86a9840eae9e255e",
+    "test_evaluate_eos_domain.py": "b4e6e106a246a839dfe34c2a9975c90b3e75885edda2e94f9bb276ddecef9a2f"
+  },
+  "tests": [
+    "python3 test_eos_domain_bounds.py: PASS",
+    "python3 test_evaluate_eos_domain.py: PASS including negative and zero rdnw rejection"
+  ],
+  "scope": "Conditional EOS domain using same-call fixed captured data and original source operation order; rdnw must be positive and is never silently absolutized.",
+  "limits": [
+    "Stored alb is computed base inverse-density treated as fixed; its upstream pow and calculation error are unbounded.",
+    "Full tensor equality asserted by capture helper; no independent reconstruction.",
+    "No pow accuracy, full residual or merit certificate; no native run."
+  ]
+}

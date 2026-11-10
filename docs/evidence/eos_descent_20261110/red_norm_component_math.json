@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-11-10T10:35:01.425626+09:00",
+  "status": "REJECT_UNJUSTIFIED_NATIVE_CERTIFICATE",
+  "source_commit": "4907880c",
+  "source_sha256": "1ab697a6de450c6416cc9416f3523227fcb3679112cf6bf8f76fbd67c7568c71",
+  "algebra": "Given an independently established L*m-A <= q <= U*m+A, L>0, exact stored-vector RMS m lies in [max(0,q-A)/U,(q+A)/L] using outward rounding. Define nu=max(q-lower,upper-q); w0+w1<q0-q1-nu0-nu1 then suffices for exact merit descent, where w bounds full residual evaluation error in the same scaled norm.",
+  "blockers": [
+    "compute_scaled_rms_norm directly calls (S_inv*R).norm().to(CPU).item<float>() divided by sqrt(float(N)); backend norm reduction, square accumulation and sqrt are opaque from repository source.",
+    "Proposed 4N+32 binary64 and 16 binary32 rounding counts are not established for the actual backend or compiler; no internal overflow, underflow/flush-to-zero, conversion and sqrt contracts were shown.",
+    "An additive 1e-30 underflow allowance is not established for the entire pipeline merely from nominal FP32 subnormal size."
+  ],
+  "resolution": "Use the interval only as an explicitly conditional lemma after separately proving all backend numerical contracts and absolute allowance; otherwise do not report nu as a certified native bound. Stored residual error w_i remains independently unknown.",
+  "scope": "Read-only algebra/source review, no tests or model."
+}

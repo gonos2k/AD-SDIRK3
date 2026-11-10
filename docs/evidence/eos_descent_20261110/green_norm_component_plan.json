@@ -1,0 +1,50 @@
+{
+  "timestamp_local": "2026-11-10T10:36:02.312924+09:00",
+  "source_revision": "4907880c00e105f61e1b50296cc0f1d146479f0b",
+  "status": "conditional_bound_not_runtime_certified",
+  "accepted_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/forcing-path-20261103/run/accepted_step_probe.json",
+  "accepted_receipt_sha256": "23b52dafdf399193dd3ff93540868e49596928f0bd816da57c49c388446cee8c",
+  "scope": "error in native RMS reduction for stored finite residuals and stored inverse-scale, H=identity; not RHS or exact-forcing error",
+  "source_operation_order": {
+    "metric": "wrf_sdirk3_newton_solver.cpp metric_scale_inv returns S_inv_diag_ directly; accepted receipt uses same saved S_inv value and identity H",
+    "native": "compute_scaled_rms_norm: sqrt_N = std::sqrt(static_cast<float>(N)); R_scaled = S_inv_diag_ * R; norm = R_scaled.norm() in tensor dtype; scalar .item<float>(); return float division by sqrt_N. No explicit fwd_ad_safe_norm call here, irrespective of use_autograd.",
+    "other_norm": "fwd_ad_safe_norm in wrf_sdirk3_autograd_utils.h:260 uses t.norm(p,dims,true).squeeze(), not a source-level t*t sum; it is not the accepted-receipt operation.",
+    "N": 1080491,
+    "N_exact_in_float32": true,
+    "base_native_rms": 0.0019075394375249743,
+    "accepted_native_rms": 1.056651210973314e-09
+  },
+  "kernel_evidence": {
+    "local_headers": "ATen/native/SharedReduceOps.h NormTwoOps reduces acc + x*x and projects sqrt; ATen/native/cpu/Reduce.h serial binary_kernel_reduce does serial_for_each with single thread, other pathways include vectorized reduction.",
+    "local_library": "libtorch_cpu.dylib exports local binary_kernel_reduce<NormTwoOps<double,double,double>,double> and norm_kernel_tensor_iterator_impl symbols; installed header/symbol presence does not establish that this specific archived execution selected that kernel, the exact instruction order, FMA behavior or runtime library hash.",
+    "not_proven": "No archived kernel dispatch trace, complete compile options, bounds on reduction operations, floating environment or portable guarantee of normal/subnormal handling. Thus 4N+32 operation budget and IEEE model are explicit hypotheses, not certified facts."
+  },
+  "definition": "q_i^* = sqrt(sum_j (s_j*r_ij)^2/N), where stored finite S_inv components s_j and residual components r_ij are interpreted as exact reals. This does not substitute the real reciprocal of an independently defined ideal S.",
+  "conditional_derivation": {
+    "u64": "2^-53",
+    "u32": "2^-24",
+    "K64": 4321996,
+    "K32": 16,
+    "gamma64_exact": "1080499/2251799812604749",
+    "gamma32_exact": "1/1048575",
+    "assumptions": [
+      "Native CPU FP64 weighted element multiplication and p=2 norm follows nonnegative rounded square/add/sqrt path, with no more than K64=4N+32 effective FP64 rounding operations along an input-to-output path; FMA/reassociation are permitted only if separately shown to satisfy this bound.",
+      "FP32 scalar cast, sqrt(N), and final division collectively admit standard relative gamma_16 with round-to-nearest; N converts exactly, and std::sqrt(float) plus item<float> respect the assumed error model.",
+      "All operands and intermediates are finite without overflow; all underflow, subnormal, flush-to-zero and non-relative effects on final RMS are independently bounded in absolute value by 1e-30 per endpoint. This allowance is an explicit hypothesis, not verified by a captured per-element range.",
+      "Same stored S_inv and identity H at both endpoints; no extra change in weights or context."
+    ],
+    "logic": "Write g64=K64*u64/(1-K64*u64), g32=K32*u32/(1-K32*u32). Conditional on the above, q_native / q_exact lies between (1-g32)*sqrt(1-g64) and (1+g32)*sqrt(1+g64), before absolute underflow allowance. For 0<g64<1, sqrt(1-g64)>=1-g64, so an intentionally looser rational factor f=1/((1-g32)*(1-g64))-1 bounds both sides. Then nu_i <= q_native_i*f + 1e-30.",
+    "factor_exact": "30039103943509/31482383140923052260",
+    "factor_float_approx": 9.541559738043473e-07,
+    "nu_before_upper_conservative": "<1.821e-9",
+    "nu_after_upper_conservative": "<1.009e-15",
+    "nu_sum_upper_conservative": "<1.821e-9",
+    "nu_sum_nominal_fraction_without_underflow": "43009982311404929771941649/23630674830366040603002822365020160",
+    "nu_sum_float_approx_without_underflow": 1.8200911577919039e-09
+  },
+  "interpretation": "Conditional bound is substantially smaller than observed native RMS gap 0.0019075383808737633 and can be subtracted from the remaining budget. It does not bound error in computing either R, in stored physical inputs, or in approximating ideal inverse weights. No full exact-decrease certificate follows until those are independently bounded.",
+  "next_to_promote": "Pin actual archived libtorch and runtime dispatch/kernel to executable, verify reduction algorithm, N-dependent operation-depth and sqrt/cast rounding/floating environment; either establish the stated absolute underflow bound or compute a justified one from recorded elementwise extrema. These checks are independent of a fresh native RHS.",
+  "new_model_run": false,
+  "source_edits": false,
+  "rhs_replay": false
+}

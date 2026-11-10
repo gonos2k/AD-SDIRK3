@@ -1,0 +1,168 @@
+taskid: 0 hostname: 10.nate.com
+ ./module_io_quilt_old.F        2931 F
+Quilting with   1 groups of   0 I/O tasks.
+ Ntasks in X            1 , ntasks in Y            1
+  Domain # 1: dx = ********* m
+WRF V4.7.0 MODEL
+No git found or not a git repository, git commit version not available.
+ *************************************
+ Parent domain
+ ids,ide,jds,jde            1          41           1          81
+ ims,ime,jms,jme           -4          46          -4          86
+ ips,ipe,jps,jpe            1          41           1          81
+ *************************************
+DYNAMICS OPTION: Eulerian Mass Coordinate
+   alloc_space_field: domain            1 ,             201436844  bytes allocated
+  med_initialdata_input: calling input_input
+   Input data is acceptable to use: wrfinput_d01
+ CURRENT DATE          = 0001-01-01_00:00:00
+ SIMULATION START DATE = 0001-01-01_00:00:00
+Timing for processing wrfinput file (stream 0) for domain        1:    0.23168 elapsed seconds
+Initializing SDIRK3 implicit time integration in start_em
+Max map factor in domain 1 =  1.00. Scale the dt in the model accordingly.
+ mediation_integrate.G        1249 DATASET=HISTORY
+ mediation_integrate.G        1250  grid%id            1  grid%oid            1
+Timing for Writing wrfout_d01_0001-01-01_00:00:00 for domain        1:    0.36226 elapsed seconds
+ Tile Strategy is not specified. Assuming 1D-Y
+WRF TILE   1 IS      1 IE     41 JS      1 JE     81
+WRF NUMBER OF TILES =   1
+Using SDIRK3 implicit time integration
+SDIRK3: init_implicit_sdirk3 called
+UNIFIED SDIRK3: Allocating space for 1 tile solvers
+[CONFIG] wrf_w_damping = 0
+[CONFIG] wrf_damp_opt = 0
+[CONFIG] wrf_zadvect_implicit = 0
+[CONFIG] wrf_w_crit_cfl = 1
+[C++ CONFIG DEBUG] Setting precond_type = 2
+[CONFIG] precond_mu_coupling_damping = 0.1
+[CONFIG DEBUG] Setting jvp_method = 1 (from value 1), use_autograd = 1
+[CONFIG DEBUG] Setting use_autograd = 1 (from value 1), jvp_method = 1
+[CONFIG] enable_stage_halo_exchange = 0
+[CONFIG] stage_boundary_sync = false
+[CONFIG] stage2_gmres_restart = 0
+[CONFIG] stage2_max_krylov_restarts = 0
+[CONFIG] stage2_krylov_tol = 0
+[CONFIG] stage2_ew_eta_min = 1e-07
+[CONFIG] stage2_ew_eta_max = 0.1
+[CONFIG] stage3_gmres_restart = 0
+[CONFIG] stage3_max_krylov_restarts = 0
+[CONFIG] stage3_krylov_tol = 0
+[CONFIG] stage3_ew_eta_min = 1e-07
+[CONFIG] stage3_ew_eta_max = 0.1
+[CONFIG] IMEX raw: imex_split_mode=3, imex_enabled=0
+[CONFIG] IMEX effective: mode=3 (post-solve IMEX ARK324)
+[CONFIG] imex_slow_in_tangent = 0
+[CONFIG] imex_phys_in_tangent = 0
+[CONFIG] stage1_explicit = 0
+[CONFIG] stage3_warmstart = 0
+[CONFIG] stage_fail_action = 1 (0=continue, 1=abort, 2=retry_once_then_abort)
+[CONFIG] gate_metric_mode = 0 (0=wrms_growth, 1=scaled_abs, 2=legacy_rel)
+[CONFIG] stage3_gate_rel_threshold = 0 (0=use stage_gate_rel_threshold)
+[CONFIG] stagnation_gate_enable = false
+[CONFIG] stagnation_growth_floor = 0.9
+[CONFIG] stage_require_convergence = false
+[CONFIG] hevi_split = false
+[CONFIG] split_explicit = false
+[CONFIG] mu_horizontal_div_only = false
+[CONFIG] wrf_omega_ww_cp = false
+[CONFIG] mass_coordinate_mode = 1 (WRFParity)
+[CONFIG] split_explicit_time_step_sound = 4
+[CONFIG] split_explicit_epssm = 0.1
+[CONFIG] split_explicit_smdiv = 0.1
+[CONFIG] split_explicit_emdiv = 0.01
+[CONFIG] hopeless_relax = false
+[CONFIG] precond_ratio_guard_warn_only = false
+[CONFIG] jvp_auto_bench_calls = 0
+[CONFIG] jvp_auto_bench_quality_gate = false
+[CONFIG] jvp_auto_bench_warmup = 0
+[CONFIG] jvp_auto_bench_seed = 0
+[CONFIG] jvp_auto_bench_lock_reset_stage1 = false
+[CONFIG] solver_telemetry = true
+[CONFIG] stage2_rejection_snapshot_diag = false
+[CONFIG] internal_fp64 = true
+[CONFIG] reuse_linearization = 0
+[CONFIG] internal_fp64_state_carry = true
+[CONFIG] progress_invariant_enable = false
+[CONFIG] progress_invariant_min_ratio = 0
+[CONFIG] progress_invariant_streak_limit = 0
+[CONFIG] variable_pc_event_log = false
+[CONFIG] gmres_estimate_probe = false
+[CONFIG] gmres_warmstart = false
+[CONFIG] gmres_warmstart_quality_gate = 1
+[CONFIG] inn_warmstart_enable = false
+[CONFIG] inn_residual_gate_enable = true
+[CONFIG] inn_q_min = 0
+[CONFIG] inn_gate_rel_tol = 1e-06
+[CONFIG] inn_gate_q_noise = 5e-07
+[CONFIG] inn_beta_max = 0.25
+[CONFIG] inn_ood_guard_enable = false
+[CONFIG] inn_tol_ramp_enable = false
+[CONFIG] inn_tol_ramp_gamma = 1
+[CONFIG] rhs_bc_parity = false
+[CONFIG] mass_pgf_bc_guard = false
+[CONFIG] precond_horizontal_smooth_alpha = 0
+[CONFIG] precond_horizontal_smooth_iters = 1
+[CONFIG] precond_vertical_smooth_alpha = 0
+[CONFIG] precond_smooth_boundary_guard = false
+[CONFIG] trust_region_block_aware_thresh = 0
+[CONFIG] trust_fallback_relax = false
+[CONFIG] trust_fallback_ratio = 0.98
+[CONFIG] direct_u_solve_thresh = 0
+[CONFIG] enable_ad_halo_exchange = 0
+[CONFIG] obs_source_mode = 0
+[CONFIG] obs_window_sync_mode = 0
+SDIRK3: Configuration updated from namelist
+SDIRK3: MPI baseline thread established by sdirk3_mpi_safety_init, MPI thread level 0 (single-flight contract enforced regardless)
+[CONFIG ENV] gmres_estimate_probe = false
+[CONFIG ENV] stage_operand_diag = false
+[CONFIG EFFECTIVE] precond: gs_beta=0.5, theta_factor=0, w_boost=2, uv_vfrac=1, warmup_start=0, refinement=1, relaxation=0, coupled_phi_w=off, du_weak=1/0.95
+[CONFIG EFFECTIVE] reuse_linearization=off
+[CONFIG EFFECTIVE] rayleigh: wrf_damp_opt=0 (WRF applies rk_rayleigh_damp only when ==2) coef=0.2 depth=5000
+[CONFIG EFFECTIVE] wdamp_parity: wrf_w_damping=0 wrf_zadvect_implicit=0 w_damp_alpha=0.3 wrf_w_crit_cfl=1 legacy_w_crit_cfl=1 implicit_wdamp=1
+[CONFIG EFFECTIVE] stagnation_gate=off, growth_floor=0.9
+[CONFIG EFFECTIVE] stage_require_convergence=off (legacy soft-continue)
+[CONFIG EFFECTIVE] hevi_split=off (full implicit)
+[CONFIG AUTHORITY] use_autograd compiled_default=false effective=true  <-- OVERRIDDEN (registry/namelist/env)
+[CONFIG AUTHORITY] hevi_split compiled_default=false effective=false
+[CONFIG AUTHORITY] stage_require_convergence compiled_default=false effective=false
+[CONFIG AUTHORITY] non_hydrostatic compiled_default=false effective=false
+[CONFIG AUTHORITY] do_curvature compiled_default=false effective=false
+[CONFIG EFFECTIVE] mu_horizontal_div_only(raw)=off (mu tendency also carries the omega*rdnw column sum div_z)  [IGNORED: mode is the authority]
+[CONFIG EFFECTIVE] mass_coordinate_mode=1 (WRFParity) -> omega_ww_cp=ON, mu_horizontal_div_only=ON
+[CONFIG EFFECTIVE] wrf_omega_ww_cp(raw)=off (Omega = rom = mu*w, the coupled vertical momentum)  [IGNORED: mode is the authority]
+[CONFIG EFFECTIVE] non_hydrostatic=off, do_curvature=off, top_lid=off
+[CONFIG EFFECTIVE] split_explicit=off (ARK324 implicit)
+[CONFIG EFFECTIVE] solver: gmres_restart=30, max_krylov=50, max_newton=40, stage_fail=1, gate_metric_mode=0, s4_severe_abort=on, retry_nan_sanitize=off, firsthit_probe=off, s4_preclip=off, s4_clip_abs=1e+06, retry_handoff_clip=off, retry_handoff_clip_abs=1e+06, jvp_block_eps=off, estimate_probe=off, true_res=12+8, arnoldi_stag=3/0.995, mixed_fd=0
+[CONFIG EFFECTIVE] thresholds: near_fail=0.003, stall=0.003, catastrophic_cap=10000/abs100, explosion=10000/100, fd_samples=0
+[CONFIG EFFECTIVE] limits: zero_step_stall=3, gs_awphi_cap=1, stage_gate=100, stage3_gate=0, stage_damp=10, growth_cap=10, K_floor=1, gate_metric_mode=0, tr_max_rel=0.5
+[CONFIG EFFECTIVE] r49: stage2_budget=0/0/0, stage2_ew=1e-07/0.1, stage3_budget=0/0/0, stage3_ew=1e-07/0.1, stage3_warmstart=off, hopeless_relax=off, precond_guard_warn_only=off, jvp_bench=0, jvp_bench_qgate=off, jvp_bench_warmup=0, jvp_bench_seed=0, jvp_bench_reset_s1=off, solver_tel=on, p_inv=off/0/0, varpc_log=off, gmres_warmstart=off, gmres_ws_gate=1, inn_ws=off, inn_gate=on, inn_qmin=0, inn_gate_rel_tol=1e-06, inn_gate_q_noise=5e-07, inn_beta=0.25, inn_ood=off, inn_tol_ramp=off/1, rhs_bc_parity=off, mass_pgf_bc_guard=off, stage_bsync=off, h_smooth=0/1, v_smooth=0, smooth_bdy_guard=off, block_tr=0, tr_fb_relax=off, tr_fb_ratio=0.98, direct_u=0, blk_scale=0
+[CONFIG] split_explicit_top_lid = false
+[CONFIG] non_hydrostatic = true
+[CONFIG] do_curvature = true
+[CONFIG PROVENANCE] tile=1 experiment{uv_slow=none stage1_substeps=1} digest=0xd4cfc4696c08b97c diagnostics{trace_u_terms=0 dump_advect_u_split=0}
+[NATIVE TRANSPORT CONFIG] tile=1 native_set=1 phi_adv_z=1 v_sca_adv_order=3 cf1=2.02355766 cf2=-1.55567443 cf3=0.53211689
+[BC RECEIPT] first_emit_at_setter_call=1 proc_grid=1x1 my=(0,0) projection_is_identity=1 gcfg_matches_effective=1
+[BC RECEIPT] periodic     raw_x=1 raw_y=0 | eff_x=1 eff_y=0  (unprojected: global-domain metadata)
+[BC RECEIPT] symmetric    raw=0011 | eff=0011  (xs,xe,ys,ye)
+[BC RECEIPT] open         raw=0000 | eff=0000  (xs,xe,ys,ye)
+[BC RECEIPT] mode         specified=0 nested=0  consumers: grid_info_/newton<-EFFECTIVE, g_sdirk3_config<-RAW
+UNIFIED SDIRK3: Initialized 1 tile solvers
+UNIFIED SDIRK3: L-stable implicit integration; realized stability depends on the verified IMEX partition, the configured split-explicit acoustic operator, and sufficiently converged implicit stages
+SDIRK3: Solvers initialized for solve_em
+[RHS DEBUG GUARD] debug_level=0, ENABLE_RHS_DEBUG=FALSE
+[RHS CONFIG] split_mode=3 omega_update_ref_per_newton=0 omega_w_blend=1 imex_enabled=0 imex_split_mode=3 precond_relaxation=0 w_acoustic_boost=2
+[FGMRES] CONVERGED: ||x||=0.2874, ||r_true||=0.0000, ||b||=20.1474, rel_error=0.0000, tol=0.0000, rhs_norm_raw=2.014740543e+01, residual_norm_raw=3.329826535e-07, restarts=1, arnoldi=29
+[Newton] GMRES: 29 krylov iters, ||dK||=2.28803, raw_rel_error=1.65273e-08 (OK)
+[Newton] JVP calls: 32, total JVP time: 14604.4 ms, avg: 456.386 ms/call
+[SOLVER TELEMETRY] stage=2, newton=0, gmres_iters=29, gmres_rel=1.65273e-08, direction_modified=0, direction_rel=1.65273e-08, jvp_calls=32, jvp_ms=14604.4, warmstart=off, inn_status=off, inn_reason_code=0, inn_candidate=no, inn_used=no, inn_gate_pass=no, inn_q=0, inn_r_base=0, inn_r_cand=0, inn_x0_base_norm=0, inn_x0_cand_norm=0, inn_x0_delta_norm=0, inn_x0_rel_delta=0, inn_gate_rel_diff=0, inn_gate_non_degrade=no, inn_gate_quality_ok=no, inn_tol_ramped=no, inn_base_warmstart=no, inn_prev_shape_ok=no, inn_prev_quality_ok=no, inn_prev_varpc_ok=no, inn_prev_rel=0, inn_ru_share_base=0, inn_ru_share_cand=0, inn_rw_share_base=0, inn_rw_share_cand=0, inn_ph_share_base=0, inn_ph_share_cand=0, variable_pc=no, jvp_mode=unlocked, jvp_fd_mode=none, jvp_ad_calls=32, jvp_fd_calls=0, jvp_eps_mean=0, jvp_eps_min=0, jvp_eps_max=0, jvp_eps_auto_calls=0, jvp_eps_manual_calls=0, ew_eta_enabled=no, ew_eta=-1, ew_eta_updated=no, krylov_tol_final=1e-07, krylov_tol_stage_override=no, budget_coupled=no, budget_eta=-1, budget_scale=1
+[FGMRES] CONVERGED: ||x||=0.0000, ||r_true||=0.0000, ||b||=0.0001, rel_error=0.0000, tol=0.0000, rhs_norm_raw=8.260514325e-05, residual_norm_raw=9.280655768e-14, restarts=2, arnoldi=43
+[Newton] GMRES: 43 krylov iters, ||dK||=0.000187247, raw_rel_error=1.1235e-09 (OK)
+[Newton] JVP calls: 48, total JVP time: 20074.4 ms, avg: 418.217 ms/call
+[SOLVER TELEMETRY] stage=2, newton=1, gmres_iters=43, gmres_rel=1.1235e-09, direction_modified=0, direction_rel=1.1235e-09, jvp_calls=48, jvp_ms=20074.4, warmstart=off, inn_status=off, inn_reason_code=0, inn_candidate=no, inn_used=no, inn_gate_pass=no, inn_q=0, inn_r_base=0, inn_r_cand=0, inn_x0_base_norm=0, inn_x0_cand_norm=0, inn_x0_delta_norm=0, inn_x0_rel_delta=0, inn_gate_rel_diff=0, inn_gate_non_degrade=no, inn_gate_quality_ok=no, inn_tol_ramped=no, inn_base_warmstart=no, inn_prev_shape_ok=no, inn_prev_quality_ok=no, inn_prev_varpc_ok=no, inn_prev_rel=0, inn_ru_share_base=0, inn_ru_share_cand=0, inn_rw_share_base=0, inn_rw_share_cand=0, inn_ph_share_base=0, inn_ph_share_cand=0, variable_pc=no, jvp_mode=unlocked, jvp_fd_mode=none, jvp_ad_calls=48, jvp_fd_calls=0, jvp_eps_mean=0, jvp_eps_min=0, jvp_eps_max=0, jvp_eps_auto_calls=0, jvp_eps_manual_calls=0, ew_eta_enabled=no, ew_eta=-1, ew_eta_updated=no, krylov_tol_final=1e-07, krylov_tol_stage_override=no, budget_coupled=no, budget_eta=-1, budget_scale=1
+[Newton] CONVERGED stage=2 iters=3 ||S⁻¹R||_rms=6.333396e-14 [scaled-RMS] (||R||=6.583852e-11 [unscaled-L2])
+[STAGE METRIC TELEMETRY] stage=2, split_mode=3, converged=1, gate_metric_mode=0, gate_metric_used=wrms_growth, gate_metric_value=1.27771e-10, rho_newton_scaled_exit=6.3334e-14, rho_gate_current=2.41954e-11, metric_mismatch=2.41321e-11, rho_gate_raw=2.41954e-11, rho_gate_abs_scaled=6.33387e-14, wrms_norm=6.33238e-08, wrms_growth=1.27771e-10, rho_pred=6.3334e-14, rho_actual=6.33387e-14, rho_ratio=1.00008, r0_unscaled_l2=312.302, mypx=0, mypy=0
+[FGMRES] CONVERGED: ||x||=0.0682, ||r_true||=0.0000, ||b||=1.9828, rel_error=0.0000, tol=0.0000, rhs_norm_raw=1.982823784e+00, residual_norm_raw=6.478896452e-08, restarts=1, arnoldi=29
+[Newton] GMRES: 29 krylov iters, ||dK||=0.301712, raw_rel_error=3.26751e-08 (OK)
+[Newton] JVP calls: 32, total JVP time: 10318.2 ms, avg: 322.445 ms/call
+[SOLVER TELEMETRY] stage=3, newton=0, gmres_iters=29, gmres_rel=3.26751e-08, direction_modified=0, direction_rel=3.26751e-08, jvp_calls=32, jvp_ms=10318.2, warmstart=off, inn_status=off, inn_reason_code=0, inn_candidate=no, inn_used=no, inn_gate_pass=no, inn_q=0, inn_r_base=0, inn_r_cand=0, inn_x0_base_norm=0, inn_x0_cand_norm=0, inn_x0_delta_norm=0, inn_x0_rel_delta=0, inn_gate_rel_diff=0, inn_gate_non_degrade=no, inn_gate_quality_ok=no, inn_tol_ramped=no, inn_base_warmstart=no, inn_prev_shape_ok=no, inn_prev_quality_ok=no, inn_prev_varpc_ok=no, inn_prev_rel=0, inn_ru_share_base=0, inn_ru_share_cand=0, inn_rw_share_base=0, inn_rw_share_cand=0, inn_ph_share_base=0, inn_ph_share_cand=0, variable_pc=no, jvp_mode=unlocked, jvp_fd_mode=none, jvp_ad_calls=32, jvp_fd_calls=0, jvp_eps_mean=0, jvp_eps_min=0, jvp_eps_max=0, jvp_eps_auto_calls=0, jvp_eps_manual_calls=0, ew_eta_enabled=no, ew_eta=-1, ew_eta_updated=no, krylov_tol_final=1e-07, krylov_tol_stage_override=no, budget_coupled=no, budget_eta=-1, budget_scale=1
+[ACCEPTED_STEP] status=completed forecast_complete=false
