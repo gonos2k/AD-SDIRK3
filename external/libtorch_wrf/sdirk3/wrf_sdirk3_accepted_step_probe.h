@@ -158,7 +158,8 @@ inline std::string w_runtime(
         const wrf::sdirk3::pressure_stage_probe::WConsumerEvidence& a,
         const Tensor& sinv,int64_t start,int64_t count) {
     torch::NoGradGuard guard;
-    const auto valid=[](const auto& w) {
+    using WConsumer=wrf::sdirk3::pressure_stage_probe::WConsumerEvidence;
+    const auto valid=[](const WConsumer& w) {
         return w.interior_seen && w.top_seen && w.mass_seen && !w.duplicate && !w.failed &&
             w.canonical && w.cq1_is_one && w.rdn_f32.defined() && w.rdn_f32.is_cpu() &&
             w.rdn_f32.dim()==1 && w.rdn_f32.scalar_type()==torch::kFloat32 && w.rdn_f32.numel()>0 &&
@@ -183,7 +184,7 @@ inline std::string w_runtime(
         start>=0 && count>0 && start+count<=sinv.numel(), "invalid W inverse-scale layout");
     const auto w=sinv.slice(0,start,start+count);
     TORCH_CHECK(torch::isfinite(w).all().item<bool>() && w.gt(0).all().item<bool>(), "invalid W inverse-scale");
-    const auto endpoint=[](const auto& x) {
+    const auto endpoint=[](const WConsumer& x) {
         const auto r=x.rdn_f32.detach().to(torch::kFloat64).contiguous();
         std::ostringstream o; o << std::setprecision(17)
           << "{\"rdn_source_dtype\":" << int(x.rdn_f32.scalar_type()) << ",\"rdn_count\":" << r.numel()
