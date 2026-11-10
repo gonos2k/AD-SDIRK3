@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-11-10T19:59:22.593043+09:00",
+  "status": "PASS_BOUNDED_PUBLICATION",
+  "critical_findings": [],
+  "checks": [
+    "83/83 current public manifest files match sizes and SHA256; 16-file normalized archive inventory and uncompressed link map hash checked.",
+    "Target is W only at exact-real Q(B+aK), with stored B/a/K/C exact and pre-capture formation excluded; EOS, continuity and K-F are recomputed within target.",
+    "Bottom product-rule term retained, post-pack divergence damping preserves W under reviewed source and active conditions.",
+    "nu bounds stored-input mathematical full norm versus reported native scalar, separate from W evaluation error; W-only decrease uses reverse triangle without double adding global nu.",
+    "Exact W merit intervals are separated for this fixed profile/pair, without claiming full merit decrease or Stage3/forecast convergence.",
+    "No native or full-grid MPFR rerun by reviewer."
+  ],
+  "limits": [
+    "Future two receipt additions change manifest; final 85-record manifest needs independent check.",
+    "Directed MPFR, capture/source association, guarded subset of context and correct target mapping remain explicit assumptions."
+  ]
+}

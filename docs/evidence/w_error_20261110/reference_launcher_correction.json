@@ -1,0 +1,7 @@
+{
+  "stage": "Python launcher parse before any registered reference evaluation",
+  "timestamp_local": "2026-11-10T19:28:31.043428+09:00",
+  "source_sha256": "50a0a1407a610f4258ae1b83c0d37a4edb7b272729d1ac647a36c790d73df707",
+  "error": "SyntaxError in conditional expression: missing whitespace in else 1",
+  "reference_or_native_run": false
+}

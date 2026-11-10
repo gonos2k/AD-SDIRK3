@@ -1,0 +1,5 @@
+COMPILING wrf_sdirk3_native_pressure_reference.cpp
+COMPILING wrf_sdirk3_newton_solver.cpp
+COMPILING wrf_sdirk3_pressure_stage_probe.cpp
+COMPILING wrf_sdirk3_tile_unified_impl.cpp
+COMPILING wrf_sdirk3_v_primary_probe.cpp

@@ -1,0 +1,34 @@
+{
+  "time_local": "2026-11-10T19:30:36.814011+09:00",
+  "status": "passed",
+  "scope": "norm gap for stored native R and S only; not physics residual or exact merit",
+  "native_registration_pins_verified": 393,
+  "reference_registration_pins_verified": 34,
+  "packet_sha256": "5ba7abf1e36ddf631ad41e837387b46c928413168f997cb9f3510478f327149e",
+  "run_result_sha256": "d5bdd13678b1415a175ce19fedcaff8faa19ad09e991814daa0a2f93f7369785",
+  "norm_gap_sha256": "3970acef6eba9aa83da55d71f093b25d3551b7f6b149680f8f5c237fcc6d4bb1",
+  "states": [
+    {
+      "name": "R0",
+      "nu_upper_exact": "8780753611337270376322232667545767458059962884395590706638255793041/115792089237316195423570985008687907853269984665640564039457584007913129639936",
+      "nu_upper_binary64": 7.583206822826292e-11,
+      "residual_sha256": "2d948e7332befcb250473d4b41e7d415c1b4b1eb4a0aca84492c4aaf5525675f",
+      "block_weights_uniform": true,
+      "root_interval_width_exact": "1/115792089237316195423570985008687907853269984665640564039457584007913129639936"
+    },
+    {
+      "name": "R1",
+      "nu_upper_exact": "56650773930029969652753791963319454558838909218465287739965/7237005577332262213973186563042994240829374041602535252466099000494570602496",
+      "nu_upper_binary64": 7.827930118980624e-18,
+      "residual_sha256": "63cb3f0d4af7b3ca0223ade091ea6fa959317235c03ce593bfa7459ef95c2ade",
+      "block_weights_uniform": true,
+      "root_interval_width_exact": "1/115792089237316195423570985008687907853269984665640564039457584007913129639936"
+    }
+  ],
+  "method": "independent denominator-bucket exact binary64 square sum, Fraction weights, integer dyadic sqrt and upward bound verification",
+  "limits": [
+    "No reference MPFR rerun or native model run by reviewer.",
+    "H identity, per-block extrema and same-pair association are captured-input assumptions; no backend gamma.",
+    "Not full RHS e_i or Stage3 convergence proof."
+  ]
+}

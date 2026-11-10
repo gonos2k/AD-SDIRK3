@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-11-10T19:12:39.298662+09:00",
+  "status": "passed",
+  "runner_sha256": "2c4c2efd5ae8d5fbd8bcebb2000ba1090c7b4a564b908ff921fc2509bbaeb989",
+  "checks": [
+    "nine arrays and metadata accepted",
+    "unsupported profile rejected",
+    "bad payload hash rejected"
+  ],
+  "model_run": false
+}

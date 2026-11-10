@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-11-10T19:35:09.077661+09:00",
+  "status": "PASS_BOUNDED_POSTREVIEW",
+  "critical_findings": [],
+  "sha256": {
+    "full_w_error.json": "eec91b1f6eec96e89ac6287f843d739b59116a2659d7a8cf80b1a1aa4719ad63",
+    "reference_execution.json": "278c97c76616a32211fdd7771f5564d0fbbf98ee89d26121d545a84018684d6a",
+    "w_full_mpfr.cpp": "8b24158b6390a01baa03bb5e2603eb76e694d46ea6f74d2ddb127c734f339341",
+    "run_w_full_mpfr.py": "5ae180bad34712bb1f8aaadfdef65fd10ad59391227c73ca808c5989e28a2b32",
+    "prepare_w_full_manifest.py": "1488d9fe4ccf7783284fa931a2582a91549d77be2f760e1f5d4ee897ad563be6",
+    "normalized_case/manifest.json": "1737005ed45133e7a2b84d6c115d23f8d876d816cc10c062faa0b719f4d906c6"
+  },
+  "checks": [
+    "Reference forms ideal Q(B+aK) with MPFR and uses raw K_W in residual, including copied horizontal aliases and symmetric V-wall zeros; normalized native rounded Q is used only to associate captured operands.",
+    "Reference recomputes Mdot from current U/V mass flux, EOS and fixed coefficients; bottom W source zero but product-rule contribution remains. Dry unit-map, parity, no explicit/WDAMP, sanitizer-off and identity H are guarded profile requirements; post-pack divergence operation preserves W by reviewed source.",
+    "16 normalized input SHA match manifest and result; reference source SHA matches. Both 65-level arrays and hexadecimal binary64 upper bounds are valid, counts Nw=215865,N=1080491, captured W max inverse weight 1.",
+    "Weighted mathematical W RMS upper bounds 2.3907853519229967e-13 and 2.4285918370791415e-13. Reference execution exit 0 and immutable inputs unchanged.",
+    "Same-call actual theta_base is captured as binary data, replacing earlier reconstructed-theta FNV-only evidence for this reference; other input association fingerprints remain collision-qualified."
+  ],
+  "limitations": [
+    "W residual component only at two states with fixed captured B,a,C; prior formation of these inputs and unobserved context are excluded.",
+    "No full RHS, exact whole-merit decrease, backend norm error, Stage2 exact forcing, completed Stage3 or forecast claim.",
+    "MPFR implementation, source interpretation, data capture and directed rounding are explicit trust assumptions; no native or full MPFR rerun by reviewer."
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "source_commit": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
+  "native_source_commit": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
+  "graph_sha256": "a1d1c25be4ae7cdeadba1ee174299d2b776e39c19f55844692e261c2e771477d",
+  "pins_sha256": "bfd3a23340472f38e0919da49f012d59476dd7a1c3ff1495e38c51fe7e54bee2",
+  "relationships": [
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp",
+      "to": "diagnose_wrf_mass_flux and packed W RHS",
+      "kind": "source path including scoped capture and mass flux; runtime applicability requires recorded gates"
+    },
+    {
+      "from": "run_w_full_mpfr.py",
+      "to": "w_full_mpfr executable and normalized input",
+      "kind": "directed reference checker wrapper"
+    },
+    {
+      "from": "norm_exact.py",
+      "to": "captured B/K/R/weights",
+      "kind": "exact stored-value norm analysis"
+    },
+    {
+      "from": "w_block_decrease.py",
+      "to": "norm/error bounds",
+      "kind": "selected W-only triangle inequality corollary"
+    },
+    {
+      "from": "README.md",
+      "to": "reference, normalizer, tests and replay procedures",
+      "kind": "documented bounded analysis workflow"
+    },
+    {
+      "from": "publish_w_error.py",
+      "to": "explicit evidence package files",
+      "kind": "historical packaging helper"
+    }
+  ],
+  "gaps": [
+    "Full W reference and W-only corollary are conditioned on the fixed captured context and same selected pair; graph relations do not prove their arithmetic or global convergence.",
+    "Fortran and non-selected sources remain outside the bounded AST corpus; runtime branches, mass-flux assumptions and boundary behavior require source and evidence review.",
+    "Published scripts contain historical absolute paths; re-anchored graph source paths do not make those scripts portable."
+  ]
+}

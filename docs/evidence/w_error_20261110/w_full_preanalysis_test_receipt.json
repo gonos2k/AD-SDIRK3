@@ -1,0 +1,37 @@
+{
+  "timestamp_local": "2026-11-10T18:49:27.095910+09:00",
+  "status": "PASS_SYNTHETIC",
+  "returncode": 0,
+  "stdout": "PASS optimized MPFR power endpoints match four corners\nPASS continuity/seam/V-wall, pressure interior/top, bottom product rule, nonzero K formation, residual mismatch, domain rejection\nPASS unsupported profile capture rejected\nPASS EOS/mass RDNW exact equality gate\n",
+  "stderr": "",
+  "sha256": {
+    "w_full_mpfr.cpp": "8b24158b6390a01baa03bb5e2603eb76e694d46ea6f74d2ddb127c734f339341",
+    "w_full_mpfr": "2f2fd62fb7e5acc907d91066b3d26d94673093823a796caa306c1de8fcc67b9d",
+    "run_w_full_mpfr.py": "5ae180bad34712bb1f8aaadfdef65fd10ad59391227c73ca808c5989e28a2b32",
+    "test_w_full_mpfr.py": "5f062045abc98de7d0088e9e46674ab26e3c7d60a67c9b9fb9f400ce78757c59"
+  },
+  "source_attribution": "directed MPFR and strict NPY helpers adapted from eos_descent_20261110/eos_mpfr.cpp SHA c0cb5b2e3bbe358f64aab99eaa40371d63f3e9698f040daaea3b75e0ceb492bb",
+  "compile_argv": [
+    "clang++",
+    "-std=c++17",
+    "-O2",
+    "-I/opt/homebrew/include",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/w_full_mpfr.cpp",
+    "-L/opt/homebrew/lib",
+    "-lmpfr",
+    "-lgmp",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/w_full_mpfr"
+  ],
+  "benchmark_planning_only": {
+    "grid": "10x10 physical x 8 levels, uniform synthetic base, noninteger EOS exponent",
+    "unoptimized_seconds": 3.309954791329801,
+    "optimized_seconds": 0.29014091612771153,
+    "naive_linear_extrapolated_seconds": 57.51264358118315,
+    "limitations": "not a runtime or upper-bound guarantee; cache uniqueness and actual input conditioning differ; no actual-grid benchmark",
+    "memory": "approximately 48 MB raw FP64 arrays plus O(unique theta,pbase) cached MPFR intervals and allocator/process overhead; full-grid RSS not measured"
+  },
+  "scope": "synthetic source-formula check and metadata gates only; exact W residual component excludes pre-capture B/K formation, other residual components and native backend norm",
+  "no_actual_data_evaluation": true,
+  "top_rdnw": "one observed FP32-derived scalar promoted exactly to FP64; no fabricated prefix"
+}

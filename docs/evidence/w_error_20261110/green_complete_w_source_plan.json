@@ -1,0 +1,45 @@
+{
+  "timestamp_local": "2026-11-10T18:06:04.200126+09:00",
+  "scope": "source-derived complete W candidate for actual native354748d6 profile, not yet a validated MPFR evaluator or endpoint error certificate",
+  "source_revision": "3d4f7857f7683a42f355fee20550d2df04a1b322",
+  "native_revision": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "3f13b8c7cb5f4ccae7273411817da5944771d4a69ed43b0091aa86e609bdc225",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7",
+    "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.h": "f926092be30df9a21b2e9967f7f4bf7d18b1fe2790cc8d2145d316aa9f73591b",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "52263f9a454b97e8d4b08eeda512b7495c9991a32efba799eff599583344b903",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_config.h": "7118ed441204b2c2f7cfc7460fe84bb781d81c24ea73d1357ce3a9b097e68490"
+  },
+  "active_path_conditions": [
+    "mode3 ImplicitOnly, dry, single-tile WRFParity, reference-update/reuse/adjoint off, hevi off, no split-explicit. WRFDamping switch is 0 even though implicit_wdamp is 1 (native log).",
+    "mu_tend_fortran_parity default true; verify it remained true. Otherwise source mean subtraction and dt-dependent clamp at tile:19370-19461 modify Mdot. nan_sanitize_mode default0 is not a separately captured runtime flag; condition on actual unchanged/default or explicitly model sanitization.",
+    "implicit_divergence=true in namelist, but post-pack applyDivergenceDamping modifies U/V and repacks W unchanged (tile:26714,26961-27145); count this path, do not incorrectly mark the whole operator disabled.",
+    "F_phys is handled by slow stage, not added by mode3 ImplicitOnly callback (tile:14123-14143); dry physics zero does not need to be subtracted a second time."
+  ],
+  "contributors": [
+    "rw_tend initialized zeros on each RHS call (tile:16170-16238), transport is explicit on this mode, so no active W advection (17631,18590,18770).",
+    "W interior and top coupled pressure/buoyancy from current diagnosed p_pert and mass; bottom coupled force masked zero (tile:21505-21523,22275-22291,22505-22533,22575-22754).",
+    "W damping gated by wrf_w_damping==1 and implicit_wdamp; logged wrf_w_damping=0. Test top damping is commented (tile:228xx-23051).",
+    "Coriolis, curvature, diffusion and Rayleigh are in do_explicit (23080-26171,26701); not active in ImplicitOnly; HEVI restores only if enabled (23060).",
+    "Canonical product rule uses current projected w and mu_tend derived from current U/V/mu mass-flux diagnosis, not frozen Mdot (15975-16026,18790-18796,26340-26356; wrf_sdirk3_ww_cp.h:280-316).",
+    "check_tend can zero the whole W tensor if nan_sanitize_mode==1 and any nonfinite; otherwise report-only (26435-26469); final packed Q projection applied after optional divergence damping (:26724)."
+  ],
+  "exact_real_candidate": {
+    "notation": "Let Y=Q_in(B+aK), with projected U,V,W,mu,phi,theta; M=mu+MUB (mu-floor inactive); L_k=c1f_k M+c2f_k>0. p=exact EOS from same Y and fixed coefficients; n_z=64. Let Dm be source-consistent mass tendency after all active continuity, HEVI and parity gates.",
+    "continuity": "On active WRFParity parity-true path, over physical core: mu_face=stagger(M), C_u=(c1h*mu_u+c2h)*u/msfuy, C_v=(c1h*mu_v+c2h)*v/msfvx; divv=msftx*dnw*(rdx*Delta_x C_u+rdy*Delta_y C_v), dmdt=sum_k(divv), Dm=extend_mass(msfty*dmdt), with dnw=-1/rdnw and source boundary conventions. If mu_tend_fortran_parity false, apply source mean and clamp instead.",
+    "force": "For k=1..63, G_k=g*(-rdn_k*(p_k-p_(k-1))-c1f_k*mu) for dry cq1=1,cq2=0; top k=64: G_top=g*(2*rdnw_63*p_63-c1f_64*mu); coupled bottom G_0=0. Source rdn/rdnw are the positive-magnitude values actually selected by getters and converted to source dtype.",
+    "physical_rate": "F_W=Q_w[ G_k/L_k - W_k*c1f_k*Dm/L_k ] under same fixed state, map positivity, correct copy extensions and exact-real cancellation of msfty and velocity_mass factors. The bottom product-rule term remains unless W_0=0 is separately established; coupled bottom masking alone does not prove F_W,0=0. This compact expression is not a bitwise surrogate for native division/multiplication sequence.",
+    "residual": "R_W*=K_W - F_W(Q_in(B+aK)); a reference with rounded B+aK instead targets a different function, so input-formation error must be explicitly bounded or exact real B,K,a used."
+  },
+  "retained_inputs": [
+    "native Stage3 base/accepted EOS raw ph,t,mu,p and fixed mu_base,p_base,alb,c1h,c2h,rdnw; W factor candidates c1f,c2f/map/cqw fingerprinted with conditional RDN/gravity identity; K/R and S_inv only as hashes and norms, not W arrays.",
+    "Initial wrfinput/wrfout fields allow some map/coefficient reconstruction with fingerprint qualification, but do not supply actual Stage3 endpoint U,V,W, K_W or R_W. Prior archived Stage2 U_eval is a different stage and cannot be transferred."
+  ],
+  "missing": [
+    "Same-call endpoint B or Y, K_W and native R_W arrays for both endpoints, with shape/dtype and pointwise pairing; U,V,W are needed to recompute continuity and W product rule, not only EOS ph/t/mu.",
+    "Actual S_inv W weights if desired weighted RMS versus a source upper, runtime RDN and gravity, map/stagger and MUB/c1/c2 identities, mu parity/sanitize state, and fixedcontext/branch evidence; hash alone is not a value.",
+    "Proof of full endpoint input-formation and all source-operation errors (including cached alb/upstream and reduction/norm). Captured native intermediates may diagnose but cannot silently replace exact-real Mdot or W terms without a separately bounded remainder."
+  ],
+  "recommendation": "A default-off terminal capture extension at the already accepted pair, preserving original native RHS/K/R and endpoint states and required same-call fixed coefficients, then independent MPFR directed interval reference for all W entries. Require exact provenance, branch/profile gates and no extra RHS; compare native R_W to K_W-F*_W, adding explicit formation and norm bounds. First prove feasibility/review resource impact; current retained data cannot supply this directly.",
+  "actions": "read-only source/profile audit; no code edit, build, test, model run or new FD"
+}

@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-11-10T18:50:32.188177+09:00",
+  "status": "PASS_CONDITIONAL_PRECAPTURE",
+  "critical_findings": [],
+  "sha256": {
+    "w_full_mpfr.cpp": "8b24158b6390a01baa03bb5e2603eb76e694d46ea6f74d2ddb127c734f339341",
+    "run_w_full_mpfr.py": "5ae180bad34712bb1f8aaadfdef65fd10ad59391227c73ca808c5989e28a2b32",
+    "test_w_full_mpfr.py": "5f062045abc98de7d0088e9e46674ab26e3c7d60a67c9b9fb9f400ce78757c59",
+    "w_full_preanalysis_test_receipt.json": "338b2eac9a363982de71a4dd1b397004626e4d6779de2773c6bb53f247b1ea55"
+  },
+  "checks": [
+    "Ideal Q(B+aK) packed periodic-X/symmetric-Y mapping, continuity from current U/V, negative reciprocal RDNW, W interior/top pressure, bottom product rule and residual K_W-F*_W follow reviewed source under dry unit-map WRFParity profile.",
+    "Top RDNW input is now the captured single Float32 getter value, promoted exactly; EOS/mass RDNW equality is separately gated.",
+    "MPFR directed arithmetic and monotone-power endpoints are source-inspected; synthetic checks reported passed by Green, not independently rerun.",
+    "Observed W inverse-weight maximum gives a rigorous mathematical RMS upper bound, conditional on actual same-stage capture; no native backend norm claim."
+  ],
+  "conditions": [
+    "Manifest profile booleans must be evidenced by actual same-call guards and capture: dry cqw/qv, six unit maps, no HEVI/sanitize/implicit transport/W damping/reuse, mode3, parity, H identity, reference/config/context and accepted pair.",
+    "Finite nonzero native velocity_mass and maps are required for real-algebra cancellation, alongside positive hybrid masses, EOS domains and valid dy/dx.",
+    "Target treats captured B,a,K,C exact, recomputes state formation/EOS and mass tendency within F; pre-capture formation of B,a,C excluded.",
+    "Future capture schema, provenance, guard mapping and binary hashes require separate review; no actual native dataset has been analyzed."
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "failures": [],
+  "fortran_proof_sha256": "7d7a0cb7717d3faa1f03b04214f8d6d25c17f752aa62f9f4a1d58ae350bd1b82",
+  "sdk_proof_sha256": "04be9bb2324750943853f12539446b66d374eb659aa346e59af7576094f066d1",
+  "fortran_object_count": 1270,
+  "dylib_count": 18,
+  "sdk_version_current": "27.2",
+  "baseline_build_receipt_sha256": "57c8957f9f58a9fc89b5fe0bd9e6dafd96672e30be02a9d63b5193a0b66182b8",
+  "baseline_link_receipt_sha256": "47e91218f7e4ab273dbe2d9bf4784f925e0407e832fbdd99280f7e87074c1b9d",
+  "no_compilation_or_model_run": true
+}

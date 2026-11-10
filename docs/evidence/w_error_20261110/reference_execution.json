@@ -1,0 +1,18 @@
+{
+  "status": "completed",
+  "returncode": 0,
+  "elapsed_seconds": 63.21095600025728,
+  "command": [
+    "/usr/bin/time",
+    "-l",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/reference_rusage.log",
+    "/opt/local/bin/python3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/run_w_full_mpfr.py",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/manifest.json",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/full_w_error.json"
+  ],
+  "registration_sha256": "63fa3afd5d046c1ba98a7ae188ada9c637b24a25b01dc74ea76a6deb7e4702f3",
+  "immutable_inputs_unchanged": true
+}

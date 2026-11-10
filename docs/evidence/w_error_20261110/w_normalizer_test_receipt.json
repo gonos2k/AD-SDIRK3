@@ -1,0 +1,19 @@
+{
+  "timestamp_local": "2026-11-10T19:10:05.666018+09:00",
+  "status": "PASS_SYNTHETIC",
+  "returncode": 0,
+  "stdout": "PASS native separate formation, periodic seam, V positive-zero walls/negative-zero ghost, W bottom/aliases, bad digest and profile rejection\n",
+  "stderr": "",
+  "sha256": {
+    "prepare_w_full_manifest.py": "1488d9fe4ccf7783284fa931a2582a91549d77be2f760e1f5d4ee897ad563be6",
+    "test_prepare_w_full_manifest.py": "4134f530e47b16fb7c82ab5ed25d549d78e400986122fa6e819d783808c7eae8"
+  },
+  "scope": "synthetic separate-multiply/add Q projection and digest/profile gates; no real capture or native execution",
+  "source_revision_guard": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
+  "limits": [
+    "Full normalizer has not yet run on an actual capture.",
+    "FNV-only captured values are fingerprint-qualified; equal hashes do not prove collision-free identity.",
+    "Validation NumPy is separate from exact-real MPFR reference."
+  ],
+  "fixed_context_gate": "current packet context hashes and EOS scalar receipt must equal original"
+}

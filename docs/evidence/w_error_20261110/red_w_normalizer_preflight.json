@@ -1,0 +1,18 @@
+{
+  "time_local": "2026-11-10T19:12:12.708261+09:00",
+  "verdict": "approve scoped pre-native normalizer subject to external registration pins",
+  "artifact_sha256": {
+    "prepare_w_full_manifest.py": "1488d9fe4ccf7783284fa931a2582a91549d77be2f760e1f5d4ee897ad563be6",
+    "test_prepare_w_full_manifest.py": "4134f530e47b16fb7c82ab5ed25d549d78e400986122fa6e819d783808c7eae8"
+  },
+  "synthetic_receipt_sha256": "85e08f7a27ebca5788cc2ec5a58d83aa3f91a08d92c31bb8e5cd301b6d3cac01",
+  "findings": [
+    "Native result/profile, build/source content hashes, fixed context, prior pair and all 9 reference plus 16 EOS file inventories, dtype, shapes and hashes are checked. Actual theta_base is retained and associated with captured context; mass RDNW bits checked against EOS RDNW.",
+    "Exact packed layout and actual rw S_inv metadata are checked. Runtime coefficients and all old/new EOS arrays are compared; actual producer input digests for U,V,mu,MUB,W and projected EOS ph/t/mu are checked.",
+    "NumPy performs separate rounded B+aK and Q only to validate association with observed native digests, preserving V wall positive zero and reflected ghost sign. It is explicitly not the reference input; inspected C++ exact_state forms B+aK with MPFR interval operations.",
+    "Source revision check ties build/attempt to d051 and current source bytes to build hashes, without requiring a future docs-only HEAD to equal d051. Paths are explicit; output directory exclusive.",
+    "Supplied prior W runtime packet is compared by contents but is not hard-coded by SHA in normalizer: external registration must pin its path and hash, as planned. Digest association remains FNV collision-qualified."
+  ],
+  "validation": "Prior synthetic PASS receipt hashes match current scripts. No new data evaluation, native run, or test repeat in this review.",
+  "limits": "Actual native capture not yet present; full RHS and norm claims depend on subsequent reference and error analysis."
+}

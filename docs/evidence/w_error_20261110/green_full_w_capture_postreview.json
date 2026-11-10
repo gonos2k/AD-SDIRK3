@@ -1,0 +1,24 @@
+{
+  "timestamp_local": "2026-11-10T19:32:02.208111+09:00",
+  "status": "PASS_SELECTED_CAPTURE",
+  "source_revision": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
+  "checks": [
+    "Independently rehashed nine raw capture arrays, all 16 EOS arrays and 16 normalized manifest files; shapes, dtype, counts and FNV agree, and all EOS NPY SHA match the prior selected-pair run.",
+    "Raw B/K0/K1/R0/R1 FNV match reference and old pair; actual theta_base 81x64x41 matches th_base source handle; c1f/c2f converted back to original FP32 match source FNV; mass-flux RDNW matches EOS RDNW bitwise.",
+    "Independently formed native-rounded B+aK, reproduced the packed Q projection with horizontal aliases, symmetric V walls and signed V ghost; all ten endpoint native u/v/mu/mub/w data hashes and EOS ph/t/mu bits match. No vertical W zero projection was applied.",
+    "All six stored scale extrema and exact layout agree with the captured receipt; W metric equals 1. Full S_inv array was not dumped, so its overall equality rests on native full hash and existing guard.",
+    "Runtime profile flags, actual dry statuses, pre-PGF zero and reference input/context metadata verified in receipt; native source instrumentation identifies inputs at original same-call use sites and preserves pre-EOS snapshot on EOS context replacement.",
+    "Exit86, accepted trust Stage 3 iter0, Stage2 only converged, zero complete steps; post-accept receipt RHS/JVP/preconditioner deltas zero. Source collectors do not call RHS/JVP."
+  ],
+  "sha256": {
+    "packet": "5ba7abf1e36ddf631ad41e837387b46c928413168f997cb9f3510478f327149e",
+    "result": "d5bdd13678b1415a175ce19fedcaff8faa19ad09e991814daa0a2f93f7369785",
+    "normalized_manifest": "1737005ed45133e7a2b84d6c115d23f8d876d816cc10c062faa0b719f4d906c6",
+    "prior_runtime_packet": "6262589381b5dd12161a35a7e6856766ca13d591bd7b8e9bee1c201637c26058"
+  },
+  "limits": [
+    "Same-call source observer and guarded context subset, not proof of every hidden cache; hashes are matching evidence, not collision-proof identity.",
+    "This validates capture and normalized inputs only; no numerical bound, full-RHS proof, exact forcing, convergence or forecast conclusion."
+  ],
+  "tests_or_model_rerun": false
+}

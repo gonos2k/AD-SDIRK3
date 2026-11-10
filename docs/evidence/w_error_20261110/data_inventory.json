@@ -1,0 +1,839 @@
+{
+  "time_local": "2026-11-10T18:04:23.266694+09:00",
+  "scope": "read-only retained Stage3 receipt and NPY manifest inventory; no model/build/new computation",
+  "same_pair_receipt_keys_equal": true,
+  "runs": {
+    "w-runtime-contract-20261110": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/run",
+      "receipt_sha256": "6262589381b5dd12161a35a7e6856766ca13d591bd7b8e9bee1c201637c26058",
+      "result_sha256": "293d610a91897e4812a86590554c8e00a3c5eb6fae361356832a33fb0b3ae607",
+      "status": "completed",
+      "stage": 3,
+      "newton": 0,
+      "timestep": 0,
+      "N": 1080491,
+      "hashes_and_merit": {
+        "base_K_hash": "17417922780157811709",
+        "base_R_hash": "727529820566087362",
+        "post_K_hash": "13071984164251720277",
+        "post_R_hash": "10901376843368402629",
+        "S_inv_hash": "14474524215718693222",
+        "reference_hash": "549134641415184238",
+        "native_scaled_rms_before": 0.0019075394375249743,
+        "native_scaled_rms_after": 1.056651210973314e-09
+      },
+      "npy_files": [
+        {
+          "path": "eos_raw/accepted_alt.npy",
+          "bytes": 1700432,
+          "sha256": "83b246a92ed161d8795681fb5cf2f3d024c2478d2b1a1eee9fb4ce3aaf529508"
+        },
+        {
+          "path": "eos_raw/accepted_mu.npy",
+          "bytes": 26648,
+          "sha256": "bb214d493f766bb01da8884621c7672b1e9c524d93a6878c67f1d2176db36e35"
+        },
+        {
+          "path": "eos_raw/accepted_p_pert.npy",
+          "bytes": 1700432,
+          "sha256": "e4d8a959aa43467b16b788326477d1f930acd0116a55318f96f8f1a943bdb4d2"
+        },
+        {
+          "path": "eos_raw/accepted_ph.npy",
+          "bytes": 1727000,
+          "sha256": "83603c1143c8c388f4d31ef119605d6ec2411e68d8dd3d169dbd65faa4fbe7b5"
+        },
+        {
+          "path": "eos_raw/accepted_t.npy",
+          "bytes": 1700432,
+          "sha256": "eecfeeb362bc6581547898186041e7ec261ccac824ac3c3b5f2d4906d105ee52"
+        },
+        {
+          "path": "eos_raw/alb.npy",
+          "bytes": 1700432,
+          "sha256": "687ec8caca6b378a785aabe29aef2c648cf421e435a337e8b93c33cdf941ed5f"
+        },
+        {
+          "path": "eos_raw/base_alt.npy",
+          "bytes": 1700432,
+          "sha256": "1ab364d79ef76960a636f70b927fda68db9be8987b8ee2906ffa347a0108ad45"
+        },
+        {
+          "path": "eos_raw/base_mu.npy",
+          "bytes": 26648,
+          "sha256": "1b5db2b0dd4b7f3dfa1ce898f2b3a531b6fee112ee962010102a8319f1f6fab8"
+        },
+        {
+          "path": "eos_raw/base_p_pert.npy",
+          "bytes": 1700432,
+          "sha256": "791f82a97311193908dd25938c7d2dcd38eaa094507fe2027d6fe5278e05474e"
+        },
+        {
+          "path": "eos_raw/base_ph.npy",
+          "bytes": 1727000,
+          "sha256": "134825b1dd43861fd409f58bce4bb5d92539157888f6db2accb50f01990559b6"
+        },
+        {
+          "path": "eos_raw/base_t.npy",
+          "bytes": 1700432,
+          "sha256": "2653a959e5819688fc836546ac1df01ef1b76754ab4927765e7c69f321ce4eab"
+        },
+        {
+          "path": "eos_raw/c1h.npy",
+          "bytes": 592,
+          "sha256": "b36051fa0ea3cb84a995a33f5cd77795ed5250beb034af9165802efb308e1b99"
+        },
+        {
+          "path": "eos_raw/c2h.npy",
+          "bytes": 592,
+          "sha256": "dcaedfc3666faabdb036c88f51d6ceb83c97c724316629023f2e23bd21b5a406"
+        },
+        {
+          "path": "eos_raw/mu_base.npy",
+          "bytes": 26648,
+          "sha256": "3e0ceae9c377de1ae00d2fbb69aa8919c71c2cd30ff9516f19bdc1911215bebc"
+        },
+        {
+          "path": "eos_raw/p_base.npy",
+          "bytes": 1700432,
+          "sha256": "806e3fc6452a8599dca5e80dd2f9f5cc0fdb2948cf9cc5dfe0e2a98b61a7385c"
+        },
+        {
+          "path": "eos_raw/rdnw.npy",
+          "bytes": 592,
+          "sha256": "6112c5ee0e8b7a29147673eb0b395a17b04959b521170a3d20428be23ba5dac1"
+        }
+      ],
+      "raw_eos_metadata": [
+        {
+          "name": "base_ph",
+          "path": "eos_raw/base_ph.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            65,
+            41
+          ],
+          "elements": 215865,
+          "data_bytes": 1726920,
+          "fnv64": "684011731455663371"
+        },
+        {
+          "name": "base_t",
+          "path": "eos_raw/base_t.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "2358126773705158619"
+        },
+        {
+          "name": "base_mu",
+          "path": "eos_raw/base_mu.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            41
+          ],
+          "elements": 3321,
+          "data_bytes": 26568,
+          "fnv64": "1719006937785706411"
+        },
+        {
+          "name": "base_alt",
+          "path": "eos_raw/base_alt.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "10166971792021692717"
+        },
+        {
+          "name": "base_p_pert",
+          "path": "eos_raw/base_p_pert.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "4021385784948373146"
+        },
+        {
+          "name": "accepted_ph",
+          "path": "eos_raw/accepted_ph.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            65,
+            41
+          ],
+          "elements": 215865,
+          "data_bytes": 1726920,
+          "fnv64": "11883759260005185441"
+        },
+        {
+          "name": "accepted_t",
+          "path": "eos_raw/accepted_t.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "15597887725574455768"
+        },
+        {
+          "name": "accepted_mu",
+          "path": "eos_raw/accepted_mu.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            41
+          ],
+          "elements": 3321,
+          "data_bytes": 26568,
+          "fnv64": "11147101136713616166"
+        },
+        {
+          "name": "accepted_alt",
+          "path": "eos_raw/accepted_alt.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "11988846963275181753"
+        },
+        {
+          "name": "accepted_p_pert",
+          "path": "eos_raw/accepted_p_pert.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "8364176241209227508"
+        },
+        {
+          "name": "mu_base",
+          "path": "eos_raw/mu_base.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            41
+          ],
+          "elements": 3321,
+          "data_bytes": 26568,
+          "fnv64": "4891263106911673159"
+        },
+        {
+          "name": "alb",
+          "path": "eos_raw/alb.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "3991341830299674328"
+        },
+        {
+          "name": "p_base",
+          "path": "eos_raw/p_base.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "14087318007462321114"
+        },
+        {
+          "name": "c1h",
+          "path": "eos_raw/c1h.npy",
+          "source_dtype": 6,
+          "shape": [
+            64
+          ],
+          "elements": 64,
+          "data_bytes": 512,
+          "fnv64": "13128977063114434341"
+        },
+        {
+          "name": "c2h",
+          "path": "eos_raw/c2h.npy",
+          "source_dtype": 6,
+          "shape": [
+            64
+          ],
+          "elements": 64,
+          "data_bytes": 512,
+          "fnv64": "9052592289448545061"
+        },
+        {
+          "name": "rdnw",
+          "path": "eos_raw/rdnw.npy",
+          "source_dtype": 7,
+          "shape": [
+            64
+          ],
+          "elements": 64,
+          "data_bytes": 512,
+          "fnv64": "16093944448094662807"
+        }
+      ],
+      "w_runtime_present": true,
+      "w_runtime": {
+        "scope": "actual_W_consumers_and_cloned_metric",
+        "fixed_coefficients_equal": true,
+        "base": {
+          "rdn_source_dtype": 6,
+          "rdn_count": 64,
+          "rdn_used_begin": 1,
+          "rdn_used_end_exclusive": 64,
+          "rdn_fnv64_f32": "12721210825020058064",
+          "rdn_values": [
+            0,
+            28.54294776916504,
+            29.448978424072266,
+            30.383792877197266,
+            31.348295211791992,
+            32.34342956542969,
+            33.370094299316406,
+            34.42931365966797,
+            35.52225875854492,
+            36.64984130859375,
+            37.813262939453125,
+            39.01365280151367,
+            40.251953125,
+            41.52971649169922,
+            42.848045349121094,
+            44.20815658569336,
+            45.61151885986328,
+            47.05939483642578,
+            48.553226470947266,
+            50.09440231323242,
+            51.68454360961914,
+            53.3252067565918,
+            55.01795196533203,
+            56.76435470581055,
+            58.566322326660156,
+            60.425445556640625,
+            62.34345626831055,
+            64.32254028320312,
+            66.36438751220703,
+            68.47095489501953,
+            70.64447784423828,
+            72.88697814941406,
+            75.20059967041016,
+            77.58766174316406,
+            80.05069732666016,
+            82.59181213378906,
+            85.21338653564453,
+            87.91851806640625,
+            90.7093505859375,
+            93.5886459350586,
+            96.55951690673828,
+            99.6246566772461,
+            102.78716278076172,
+            106.04983520507812,
+            109.41615295410156,
+            112.88951110839844,
+            116.47315979003906,
+            120.17041015625,
+            123.9848861694336,
+            127.92051696777344,
+            131.9812469482422,
+            136.17076110839844,
+            140.4932098388672,
+            144.95309448242188,
+            149.55426025390625,
+            154.30162048339844,
+            159.19984436035156,
+            164.2532958984375,
+            169.46717834472656,
+            174.84678649902344,
+            180.39697265625,
+            186.12339782714844,
+            192.03160095214844,
+            198.12709045410156
+          ],
+          "gravity_f32": 9.8100004196167,
+          "top_rdnw_f32": 201.27182006835938,
+          "canonical_horizontal": true,
+          "cq1_all_one": true,
+          "msfty_min": 1,
+          "msfty_max": 1,
+          "level_mass_w_min": 89072.53174120278,
+          "level_mass_w_max": 89092.13960225263,
+          "velocity_mass_w_min": 89072.53174120288,
+          "velocity_mass_w_max": 89092.13960225273,
+          "alpha_w_min": 89072.53174120278,
+          "alpha_w_max": 89092.13960225263
+        },
+        "accepted": {
+          "rdn_source_dtype": 6,
+          "rdn_count": 64,
+          "rdn_used_begin": 1,
+          "rdn_used_end_exclusive": 64,
+          "rdn_fnv64_f32": "12721210825020058064",
+          "rdn_values": [
+            0,
+            28.54294776916504,
+            29.448978424072266,
+            30.383792877197266,
+            31.348295211791992,
+            32.34342956542969,
+            33.370094299316406,
+            34.42931365966797,
+            35.52225875854492,
+            36.64984130859375,
+            37.813262939453125,
+            39.01365280151367,
+            40.251953125,
+            41.52971649169922,
+            42.848045349121094,
+            44.20815658569336,
+            45.61151885986328,
+            47.05939483642578,
+            48.553226470947266,
+            50.09440231323242,
+            51.68454360961914,
+            53.3252067565918,
+            55.01795196533203,
+            56.76435470581055,
+            58.566322326660156,
+            60.425445556640625,
+            62.34345626831055,
+            64.32254028320312,
+            66.36438751220703,
+            68.47095489501953,
+            70.64447784423828,
+            72.88697814941406,
+            75.20059967041016,
+            77.58766174316406,
+            80.05069732666016,
+            82.59181213378906,
+            85.21338653564453,
+            87.91851806640625,
+            90.7093505859375,
+            93.5886459350586,
+            96.55951690673828,
+            99.6246566772461,
+            102.78716278076172,
+            106.04983520507812,
+            109.41615295410156,
+            112.88951110839844,
+            116.47315979003906,
+            120.17041015625,
+            123.9848861694336,
+            127.92051696777344,
+            131.9812469482422,
+            136.17076110839844,
+            140.4932098388672,
+            144.95309448242188,
+            149.55426025390625,
+            154.30162048339844,
+            159.19984436035156,
+            164.2532958984375,
+            169.46717834472656,
+            174.84678649902344,
+            180.39697265625,
+            186.12339782714844,
+            192.03160095214844,
+            198.12709045410156
+          ],
+          "gravity_f32": 9.8100004196167,
+          "top_rdnw_f32": 201.27182006835938,
+          "canonical_horizontal": true,
+          "cq1_all_one": true,
+          "msfty_min": 1,
+          "msfty_max": 1,
+          "level_mass_w_min": 89072.71343334371,
+          "level_mass_w_max": 89092.1422570029,
+          "velocity_mass_w_min": 89072.71343334382,
+          "velocity_mass_w_max": 89092.142257003,
+          "alpha_w_min": 89072.71343334371,
+          "alpha_w_max": 89092.1422570029
+        },
+        "metric": {
+          "block": "rw",
+          "start": 432896,
+          "count": 215865,
+          "dtype": 7,
+          "min": 1,
+          "max": 1,
+          "full_S_inv_fnv64": "14474524215718693222"
+        }
+      }
+    },
+    "eos-descent-20261110": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run",
+      "receipt_sha256": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+      "result_sha256": "9f6df4d73f016cc7160470a6a555c4224c6948f038f396d6edf4c9161456d907",
+      "status": "completed",
+      "stage": 3,
+      "newton": 0,
+      "timestep": 0,
+      "N": 1080491,
+      "hashes_and_merit": {
+        "base_K_hash": "17417922780157811709",
+        "base_R_hash": "727529820566087362",
+        "post_K_hash": "13071984164251720277",
+        "post_R_hash": "10901376843368402629",
+        "S_inv_hash": "14474524215718693222",
+        "reference_hash": "549134641415184238",
+        "native_scaled_rms_before": 0.0019075394375249743,
+        "native_scaled_rms_after": 1.056651210973314e-09
+      },
+      "npy_files": [
+        {
+          "path": "eos_raw/accepted_alt.npy",
+          "bytes": 1700432,
+          "sha256": "83b246a92ed161d8795681fb5cf2f3d024c2478d2b1a1eee9fb4ce3aaf529508"
+        },
+        {
+          "path": "eos_raw/accepted_mu.npy",
+          "bytes": 26648,
+          "sha256": "bb214d493f766bb01da8884621c7672b1e9c524d93a6878c67f1d2176db36e35"
+        },
+        {
+          "path": "eos_raw/accepted_p_pert.npy",
+          "bytes": 1700432,
+          "sha256": "e4d8a959aa43467b16b788326477d1f930acd0116a55318f96f8f1a943bdb4d2"
+        },
+        {
+          "path": "eos_raw/accepted_ph.npy",
+          "bytes": 1727000,
+          "sha256": "83603c1143c8c388f4d31ef119605d6ec2411e68d8dd3d169dbd65faa4fbe7b5"
+        },
+        {
+          "path": "eos_raw/accepted_t.npy",
+          "bytes": 1700432,
+          "sha256": "eecfeeb362bc6581547898186041e7ec261ccac824ac3c3b5f2d4906d105ee52"
+        },
+        {
+          "path": "eos_raw/alb.npy",
+          "bytes": 1700432,
+          "sha256": "687ec8caca6b378a785aabe29aef2c648cf421e435a337e8b93c33cdf941ed5f"
+        },
+        {
+          "path": "eos_raw/base_alt.npy",
+          "bytes": 1700432,
+          "sha256": "1ab364d79ef76960a636f70b927fda68db9be8987b8ee2906ffa347a0108ad45"
+        },
+        {
+          "path": "eos_raw/base_mu.npy",
+          "bytes": 26648,
+          "sha256": "1b5db2b0dd4b7f3dfa1ce898f2b3a531b6fee112ee962010102a8319f1f6fab8"
+        },
+        {
+          "path": "eos_raw/base_p_pert.npy",
+          "bytes": 1700432,
+          "sha256": "791f82a97311193908dd25938c7d2dcd38eaa094507fe2027d6fe5278e05474e"
+        },
+        {
+          "path": "eos_raw/base_ph.npy",
+          "bytes": 1727000,
+          "sha256": "134825b1dd43861fd409f58bce4bb5d92539157888f6db2accb50f01990559b6"
+        },
+        {
+          "path": "eos_raw/base_t.npy",
+          "bytes": 1700432,
+          "sha256": "2653a959e5819688fc836546ac1df01ef1b76754ab4927765e7c69f321ce4eab"
+        },
+        {
+          "path": "eos_raw/c1h.npy",
+          "bytes": 592,
+          "sha256": "b36051fa0ea3cb84a995a33f5cd77795ed5250beb034af9165802efb308e1b99"
+        },
+        {
+          "path": "eos_raw/c2h.npy",
+          "bytes": 592,
+          "sha256": "dcaedfc3666faabdb036c88f51d6ceb83c97c724316629023f2e23bd21b5a406"
+        },
+        {
+          "path": "eos_raw/mu_base.npy",
+          "bytes": 26648,
+          "sha256": "3e0ceae9c377de1ae00d2fbb69aa8919c71c2cd30ff9516f19bdc1911215bebc"
+        },
+        {
+          "path": "eos_raw/p_base.npy",
+          "bytes": 1700432,
+          "sha256": "806e3fc6452a8599dca5e80dd2f9f5cc0fdb2948cf9cc5dfe0e2a98b61a7385c"
+        },
+        {
+          "path": "eos_raw/rdnw.npy",
+          "bytes": 592,
+          "sha256": "6112c5ee0e8b7a29147673eb0b395a17b04959b521170a3d20428be23ba5dac1"
+        }
+      ],
+      "raw_eos_metadata": [
+        {
+          "name": "base_ph",
+          "path": "eos_raw/base_ph.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            65,
+            41
+          ],
+          "elements": 215865,
+          "data_bytes": 1726920,
+          "fnv64": "684011731455663371"
+        },
+        {
+          "name": "base_t",
+          "path": "eos_raw/base_t.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "2358126773705158619"
+        },
+        {
+          "name": "base_mu",
+          "path": "eos_raw/base_mu.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            41
+          ],
+          "elements": 3321,
+          "data_bytes": 26568,
+          "fnv64": "1719006937785706411"
+        },
+        {
+          "name": "base_alt",
+          "path": "eos_raw/base_alt.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "10166971792021692717"
+        },
+        {
+          "name": "base_p_pert",
+          "path": "eos_raw/base_p_pert.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "4021385784948373146"
+        },
+        {
+          "name": "accepted_ph",
+          "path": "eos_raw/accepted_ph.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            65,
+            41
+          ],
+          "elements": 215865,
+          "data_bytes": 1726920,
+          "fnv64": "11883759260005185441"
+        },
+        {
+          "name": "accepted_t",
+          "path": "eos_raw/accepted_t.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "15597887725574455768"
+        },
+        {
+          "name": "accepted_mu",
+          "path": "eos_raw/accepted_mu.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            41
+          ],
+          "elements": 3321,
+          "data_bytes": 26568,
+          "fnv64": "11147101136713616166"
+        },
+        {
+          "name": "accepted_alt",
+          "path": "eos_raw/accepted_alt.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "11988846963275181753"
+        },
+        {
+          "name": "accepted_p_pert",
+          "path": "eos_raw/accepted_p_pert.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "8364176241209227508"
+        },
+        {
+          "name": "mu_base",
+          "path": "eos_raw/mu_base.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            41
+          ],
+          "elements": 3321,
+          "data_bytes": 26568,
+          "fnv64": "4891263106911673159"
+        },
+        {
+          "name": "alb",
+          "path": "eos_raw/alb.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "3991341830299674328"
+        },
+        {
+          "name": "p_base",
+          "path": "eos_raw/p_base.npy",
+          "source_dtype": 7,
+          "shape": [
+            81,
+            64,
+            41
+          ],
+          "elements": 212544,
+          "data_bytes": 1700352,
+          "fnv64": "14087318007462321114"
+        },
+        {
+          "name": "c1h",
+          "path": "eos_raw/c1h.npy",
+          "source_dtype": 6,
+          "shape": [
+            64
+          ],
+          "elements": 64,
+          "data_bytes": 512,
+          "fnv64": "13128977063114434341"
+        },
+        {
+          "name": "c2h",
+          "path": "eos_raw/c2h.npy",
+          "source_dtype": 6,
+          "shape": [
+            64
+          ],
+          "elements": 64,
+          "data_bytes": 512,
+          "fnv64": "9052592289448545061"
+        },
+        {
+          "name": "rdnw",
+          "path": "eos_raw/rdnw.npy",
+          "source_dtype": 7,
+          "shape": [
+            64
+          ],
+          "elements": 64,
+          "data_bytes": 512,
+          "fnv64": "16093944448094662807"
+        }
+      ],
+      "w_runtime_present": false,
+      "w_runtime": null
+    },
+    "forcing-path-20261103": {
+      "path": "/Users/yhlee/AD-SDIRK3-review-evidence/forcing-path-20261103/run",
+      "receipt_sha256": "23b52dafdf399193dd3ff93540868e49596928f0bd816da57c49c388446cee8c",
+      "result_sha256": "5b9cc02fd5a6030f2e21b9de4147a11cac267e179fc25291d6dcb80ed0878615",
+      "status": "completed",
+      "stage": 3,
+      "newton": 0,
+      "timestep": 0,
+      "N": 1080491,
+      "hashes_and_merit": {
+        "base_K_hash": "17417922780157811709",
+        "base_R_hash": "727529820566087362",
+        "post_K_hash": "13071984164251720277",
+        "post_R_hash": "10901376843368402629",
+        "S_inv_hash": "14474524215718693222",
+        "reference_hash": "549134641415184238",
+        "native_scaled_rms_before": 0.0019075394375249743,
+        "native_scaled_rms_after": 1.056651210973314e-09
+      },
+      "npy_files": [],
+      "raw_eos_metadata": [],
+      "w_runtime_present": false,
+      "w_runtime": null
+    }
+  },
+  "available": [
+    "base and accepted EOS capture arrays PH perturbation, theta perturbation, mu, alt and pressure perturbation, plus mu_base, alb, p_base, c1h, c2h and rdnw",
+    "W consumer actual base/accepted RDN float32 vector, gravity, top RDNW, map and mass/alpha extrema, and actual rw S_inv extrema/full hash in W receipt",
+    "base/post K and R hashes and native scalar merit; reference and S_inv hashes",
+    "initial history frame and WRF input in each run, corresponding to model initial state rather than Stage3 full state"
+  ],
+  "missing_for_full_W_target": [
+    "full Stage3 B vector and K0/K1 packed arrays, including exact U/V/W and other staggered state blocks; hashes and individual extrema do not reconstruct arrays",
+    "full Stage3 R0/R1 arrays and full actual S_inv vector: available hashes and global norms/rw extrema do not determine elementwise residual or scaling",
+    "exact Stage3 W tendency inputs and intermediates not in EOS capture: native MuDot and relevant U/V/W, theta base and fixed vertical DNW/other coefficients as established by source audit; captured RDN and RDNW cannot automatically substitute for DNW",
+    "capture-backed provenance for any additional W fields, boundary/halo states, typed coefficients and mapping needed by the full target; exact sufficiency remains subject to ongoing source audit"
+  ],
+  "interpretation": "EOS endpoint ph/t/mu are captured EOS operands; they do not uniquely determine packed B/K endpoints or uncaptured momentum fields. Prior operator-gap linear_delay NPYs are Stage2 Newton0 and do not establish Stage3 identity.",
+  "next_capture_candidate": "If source audit confirms necessity, one separately registered terminal selected-pair capture of B,K0,K1,R0,R1,actual S_inv and minimal W-call operands/coefficient arrays incl theta base, DNW, U/V/W and native MuDot, preserving shapes/dtypes/hashes and existing stage/pair gates; avoid giant Tile cache; do not infer sufficiency until call-site audit.",
+  "new_model_run": false,
+  "new_build": false
+}

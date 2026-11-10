@@ -1,0 +1,36 @@
+{
+  "time_local": "2026-11-10T18:26:39.646721+09:00",
+  "source_head": "3d4f7857f7683a42f355fee20550d2df04a1b322",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_boundary_ad.h": "55d1e669307c3fb8aac6b40a478005de7ea02f8110f67ade292490c503ffe775",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "3f13b8c7cb5f4ccae7273411817da5944771d4a69ed43b0091aa86e609bdc225",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_ww_cp.h": "664be7f52560ba6bfc8ef7d8fce9dc17911f78530388dc04f9c289f9d0d4a0f7"
+  },
+  "verdict": "Q index plan confirmed for stated captured topology; guard runtime topology and digest",
+  "indices_zero_based": {
+    "physical_n": 40,
+    "physical_m": 80,
+    "v_normal_wall_rows": [
+      0,
+      80
+    ],
+    "v_ghost_row_81": "-row79",
+    "u_face_40": "face0",
+    "u_face_41": "face1",
+    "mass_w_x_col40": "col0",
+    "mass_w_y_row80": "row79",
+    "diagnose_u": "rows 0:80, columns 0:41",
+    "diagnose_v": "rows 0:81, columns 0:40",
+    "diagnose_mu_mub": "rows 0:80, columns 0:40"
+  },
+  "conditions": [
+    "The wall mapping requires jts=jds=1 and jde=81 and packed single-tile symmetric Y/periodic X; check source flags and actual captured topology rather than infer from ranks alone.",
+    "Q does not zero vertical W at k=0; include bottom product-rate term. V ghost has negative sign, including sign of zero. Native digest reconstruction must use separate native binary64 multiply/add and Q copies and positive-zero wall replacements, no FMA; check actual producer digests.",
+    "Target C contains actual effective binary-valued geometry/coefficient inputs including rdx/rdy, rdn/rdnw, constants and bases; exclude their formation before C explicitly. Exact real Q(B+aK), continuity, EOS, pressure and conversion belong inside the reference target. Native B+aK rounding and all native F/norm arithmetic remain in error relative to that target.",
+    "Mass-flux capture occurs before EOS capture; preserve pre-EOS fields when existing capture_eos assigns a fresh context. Verify capture pairing, failures and same-call output."
+  ],
+  "limitations": [
+    "No implementation, build, new native or numeric reference in this source review.",
+    "Exact target and native residual comparison require certified reference/norm bounds; digest association is not a full-context proof."
+  ]
+}

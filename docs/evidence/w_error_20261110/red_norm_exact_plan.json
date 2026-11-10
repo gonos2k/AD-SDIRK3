@@ -1,0 +1,22 @@
+{
+  "time_local": "2026-11-10T19:18:29.494545+09:00",
+  "source_head": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "1c6239091b2caef98a237ed1c8b74816e2de7c877db059f1d3054764ee068cef",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h": "acd3f5c21707a26126fb33a184479e2a4ea93f40c70d946c14d2d92a85f2d119"
+  },
+  "verdict": "mathematical plan approved with input/layout checks",
+  "derivation": [
+    "Exactly sum squared rational FP64 residuals by block. Since weights are positive and lie within observed block extrema, sum(lo_b^2*sumR_b2)/N <= true mathematical squared weighted RMS <= sum(hi_b^2*sumR_b2)/N.",
+    "For nonnegative rational q=num/den, m=isqrt(floor(num*2^512/den)); m/2^256 <= sqrt(q) <= (m+1)/2^256, tightening upper only for exact equality.",
+    "Reported native RMS is interpreted as its exact finite stored float. Max of distances to lower/upper enclosure bounds its error relative to the fixed stored R and S mathematical norm; upward binary64 conversion and exact hex preserve the bound.",
+    "If all block extrema equal, squared lower/upper are equal, and the sole dyadic sqrt interval width is at most 2^-256; otherwise block uncertainty may dominate."
+  ],
+  "guards": [
+    "R0/R1 exact captured FP64 bytes and native RMS association, fixed S_inv clone/hash, H identity; source and capture fingerprints verified.",
+    "Six positive finite weight extrema and six non-overlapping contiguous expected blocks cover N exactly; finite inputs and native RMS, positive N; validate bit-exact binary64 decoding/hex.",
+    "No assumed tree-reduction gamma or backend sqrt bound; measured stored native RMS is used directly."
+  ],
+  "scope": "nu is norm computation difference for stored R and S, not epsilon_G, residual physics error e_i or full merit certificate.",
+  "validation": "math/source plan only; no code/test/data/native run."
+}
