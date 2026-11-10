@@ -1,0 +1,587 @@
+{
+  "source_commit": "ddc9475fdb0e5cf6ecdb8d32dee6524c9ff5602b",
+  "build_receipt_path": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/build_receipt.json",
+  "build_receipt_sha256": "994d34c0ee29bcf6ae4245994d2919ec022e2c78572706a44dd87cf7d7c13182",
+  "prior_link_receipt_sha256": "c07f27143bc0ec61985c1c10e262d5a0c56d28d21e9d1166d5d2d3604d88ef2a",
+  "removed_pair": [
+    "-L/Users/yhlee/AD-SDIRK3-review-evidence/newton-residual-consistency-20261102/native_build",
+    "-lwrf_sdirk3_libtorch"
+  ],
+  "archive_path": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a",
+  "archive_sha256": "e4f005c556d62480867ca7d138cb6fc7972f491d8167375f712393a9b8dc558d",
+  "link_argv": [
+    "g++",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/wrf.exe",
+    "-L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-ltorch",
+    "-ltorch_cpu",
+    "-lc10",
+    "-Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib",
+    "-L/opt/homebrew/opt/gcc/lib/gcc/current",
+    "-lgfortran",
+    "-lquadmath",
+    "-Wl,-rpath,/opt/homebrew/opt/gcc/lib/gcc/current",
+    "-L/opt/homebrew/opt/open-mpi/lib",
+    "-lmpi_usempif08",
+    "-lmpi_usempi_ignore_tkr",
+    "-lmpi_mpifh",
+    "-lmpi",
+    "-Wl,-rpath,/opt/homebrew/opt/open-mpi/lib",
+    "wrf.o",
+    "../main/module_wrf_top.o",
+    "libwrflib.a",
+    "-L/opt/homebrew/Cellar/netcdf/4.9.3_2/lib",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib",
+    "-lnetcdff",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf/4.9.3_2/lib",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib",
+    "-lnetcdff",
+    "-lnetcdf",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/fftpack/fftpack5/libfftpack.a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/io_grib1/libio_grib1.a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/io_grib_share/libio_grib_share.a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/io_int/libwrfio_int.a",
+    "-L/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/esmf_time_f90",
+    "-lesmf_time",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/RSL_LITE/librsl_lite.a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/frame/module_internal_header_util.o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/frame/pack_utils.o",
+    "-L/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/external/io_netcdf",
+    "-lwrfio_nf",
+    "-L/opt/homebrew/lib",
+    "-lnetcdff",
+    "-lnetcdf",
+    "-L/opt/homebrew/lib",
+    "-lhdf5_hl_fortran",
+    "-lhdf5_hl",
+    "-lhdf5_fortran",
+    "-lhdf5",
+    "-lm",
+    "-lz",
+    "-lc++",
+    "-L/opt/homebrew/Cellar/netcdf/4.9.3_2/lib",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib",
+    "-lnetcdff",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf/4.9.3_2/lib",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib",
+    "-lnetcdff",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf/4.9.3_2/lib",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib",
+    "-lnetcdff",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf/4.9.3_2/lib",
+    "-lnetcdf",
+    "-L/opt/homebrew/Cellar/netcdf-fortran/4.6.2/lib",
+    "-lnetcdff",
+    "-lnetcdf",
+    "-Wl,-why_load",
+    "-Wl,-map,/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/wrf_link.map"
+  ],
+  "link_cwd": "/Users/yhlee/AD-SDIRK3-review-evidence/newton-local-linearization-20261031/native_build/source/main",
+  "driver_version": "Apple clang version 21.0.0 (clang-2100.4.1.1)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+  "xcrun_ld_path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld",
+  "xcrun_ld_sha256": "7f7041b1bb30e5e6a815a55edf374065d5c82e1ab93f84d5b6ed5656ded24bcf",
+  "xcrun_ld_version": "@(#)PROGRAM:ld PROJECT:ld-27106.1\nBUILD 19:06:34 Oct 19 2026\nconfigured to support archs: armv6 armv7 armv7s arm64 arm64e arm64_32 i386 x86_64 x86_64h armv6m armv7k armv7m armv7em armv8m.main armv8.1m.main\nLTO support using: LLVM version 21.0.0 (static support for 30, runtime is 30)\nTAPI support using: Apple TAPI version 21.0.0 (tapi-2100.3.8.1)",
+  "driver_link_probe_sha256": "d2a77fe0cc79a73cbc94c287dd0deabc7f47a11215272fbe3ddf00e02ad87302",
+  "map_sha256": "0f3c28f09fa43e3ab97cc54a0686ff245fcbcfcb82ddb97860ca252d18058f81",
+  "map_archive_member_lines": [
+    "[464] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_interface_zerocopy.o)",
+    "[465] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+    "[466] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+    "[467] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_jvp_autograd.o)",
+    "[468] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_hydrostatic_pressure.o)",
+    "[469] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_acoustic_substep.o)",
+    "[470] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_base_state_zerocopy.o)",
+    "[471] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_tile_boundary_optimizer.o)",
+    "[472] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_config.o)",
+    "[473] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_unified_preconditioner.o)",
+    "[474] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_unified_rhs_extended.o)",
+    "[475] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_cache_utils.o)",
+    "[476] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_boundary_ad.o)",
+    "[477] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_rayleigh_damping_ad.o)",
+    "[478] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_mpi_safety_impl.o)",
+    "[479] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_halo_exchange.o)",
+    "[480] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_ad_halo_exchange.o)",
+    "[481] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_rhs_run_close.o)",
+    "[482] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_u_slow_diagnostics.o)",
+    "[483] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_pressure_stage_probe.o)",
+    "[484] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_reference_pressure.o)",
+    "[485] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_reference_pressure_model.o)",
+    "[486] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_pressure_packed_adapter.o)",
+    "[487] /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_native_pressure_reference.o)"
+  ],
+  "method_symbol_origins": [
+    {
+      "map_line": "0x1028F01D4\t0x00009E58\t[465] __ZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&)"
+    },
+    {
+      "map_line": "0x102921448\t0x00000348\t[465] __ZZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_ENK3$_3clES3_i",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&)::$_3::operator()(at::Tensor const&, int) const"
+    },
+    {
+      "map_line": "0x1029226F0\t0x000001E0\t[465] __ZZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_ENK3$_7clEv",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&)::$_7::operator()() const"
+    },
+    {
+      "map_line": "0x102922A08\t0x0000142C\t[465] __ZZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_ENK3$_6clES3_S3_S3_PKc",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&)::$_6::operator()(at::Tensor const&, at::Tensor const&, at::Tensor const&, char const*) const"
+    },
+    {
+      "map_line": "0x102A76C24\t0x00000688\t[465] __ZZZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_ENK3$_0clES3_ENKUlvE_clEv",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&)::$_0::operator()(at::Tensor const&) const::'lambda'()::operator()() const"
+    },
+    {
+      "map_line": "0x102A772AC\t0x00000710\t[465] __ZZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_ENK3$_2clES3_N3wrf6sdirk37RhsModeE",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&)::$_2::operator()(at::Tensor const&, wrf::sdirk3::RhsMode) const"
+    },
+    {
+      "map_line": "0x102A77AB0\t0x00000174\t[465] __ZZZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_ENK3$_2clES3_N3wrf6sdirk37RhsModeEENKUlPKcS3_E_clES9_S3_",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&)::$_2::operator()(at::Tensor const&, wrf::sdirk3::RhsMode) const::'lambda'(char const*, at::Tensor const&)::operator()(char const*, at::Tensor const&) const"
+    },
+    {
+      "map_line": "0x102AC3CB8\t0x0003BBF4\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)"
+    },
+    {
+      "map_line": "0x102B04774\t0x0000002C\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE0_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda0'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B047A0\t0x00000CA4\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B05724\t0x00000DBC\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlbS6_E_clEbS6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda'(bool, at::Tensor const&)::operator()(bool, at::Tensor const&) const"
+    },
+    {
+      "map_line": "0x102B064E0\t0x00000038\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE2_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda2'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B06B60\t0x0000005C\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENUlS6_E1_D1Ev",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda1'(at::Tensor const&)::~()"
+    },
+    {
+      "map_line": "0x102B07618\t0x000000B4\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENUlS6_E6_D1Ev",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda6'(at::Tensor const&)::~()"
+    },
+    {
+      "map_line": "0x102B076CC\t0x00000250\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE3_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda3'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B0791C\t0x00000250\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE4_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda4'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B08098\t0x00000630\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlS6_E7_clES6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda7'(at::Tensor const&)::operator()(at::Tensor const&) const"
+    },
+    {
+      "map_line": "0x102B086C8\t0x000000D4\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE5_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda5'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B0879C\t0x00000C14\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE6_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda6'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B093B0\t0x00004080\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlS6_E0_clES6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda0'(at::Tensor const&)::operator()(at::Tensor const&) const"
+    },
+    {
+      "map_line": "0x102B1569C\t0x00000504\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlS6_S6_E_clES6_S6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda'(at::Tensor const&, at::Tensor const&)::operator()(at::Tensor const&, at::Tensor const&) const"
+    },
+    {
+      "map_line": "0x102B15BA0\t0x0000023C\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlS6_E11_clES6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda11'(at::Tensor const&)::operator()(at::Tensor const&) const"
+    },
+    {
+      "map_line": "0x102B15DDC\t0x000005EC\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlS6_S6_RdSD_SD_SD_RbE_clES6_S6_SD_SD_SD_SD_SE_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda'(at::Tensor const&, at::Tensor const&, double&, double&, double&, double&, bool&)::operator()(at::Tensor const&, at::Tensor const&, double&, double&, double&, double&, bool&) const"
+    },
+    {
+      "map_line": "0x102B1FFA8\t0x0000018C\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlRNS7_13basic_ostreamIcNS7_11char_traitsIcEEEEE_clESH_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda'(std::__1::basic_ostream<char, std::__1::char_traits<char>>&)::operator()(std::__1::basic_ostream<char, std::__1::char_traits<char>>&) const"
+    },
+    {
+      "map_line": "0x102B396D4\t0x00000B8C\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENUlS6_E1_clES6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda1'(at::Tensor const&)::operator()(at::Tensor const&)"
+    },
+    {
+      "map_line": "0x102B3A260\t0x000001F0\t[466] __ZZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENUlS6_E1_clES6_ENKUlvE_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda1'(at::Tensor const&)::operator()(at::Tensor const&)::'lambda'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B3A5FC\t0x000000FC\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlS6_E2_clES6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda2'(at::Tensor const&)::operator()(at::Tensor const&) const"
+    },
+    {
+      "map_line": "0x102B3A7F4\t0x00000114\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlS6_E3_clES6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda3'(at::Tensor const&)::operator()(at::Tensor const&) const"
+    },
+    {
+      "map_line": "0x102B3B4BC\t0x00000754\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENUlS6_E6_clES6_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda6'(at::Tensor const&)::operator()(at::Tensor const&)"
+    },
+    {
+      "map_line": "0x102B3BE68\t0x00000394\t[466] __ZZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE6_clEvENKUlvE_clEv",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda6'()::operator()() const::'lambda'()::operator()() const"
+    },
+    {
+      "map_line": "0x102B3C908\t0x0000044C\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlRNS7_13basic_ostreamIcNS7_11char_traitsIcEEEEE0_clESH_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda0'(std::__1::basic_ostream<char, std::__1::char_traits<char>>&)::operator()(std::__1::basic_ostream<char, std::__1::char_traits<char>>&) const"
+    },
+    {
+      "map_line": "0x102B4D568\t0x000001C4\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlRNS7_13basic_ostreamIcNS7_11char_traitsIcEEEEE2_clESH_",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda2'(std::__1::basic_ostream<char, std::__1::char_traits<char>>&)::operator()(std::__1::basic_ostream<char, std::__1::char_traits<char>>&) const"
+    },
+    {
+      "map_line": "0x102CCD5F0\t0x00000020\t[465] __ZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_.cold.1",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&) (.cold.1)"
+    },
+    {
+      "map_line": "0x102CCD610\t0x00000020\t[465] __ZN23TileSDIRK3UnifiedSolver18solveImplicitStageERKN2at6TensorES3_ddiS3_S3_.cold.2",
+      "file_id": "465",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_tile_unified_impl.o)",
+      "demangled": "TileSDIRK3UnifiedSolver::solveImplicitStage(at::Tensor const&, at::Tensor const&, double, double, int, at::Tensor const&, at::Tensor const&) (.cold.2)"
+    },
+    {
+      "map_line": "0x102CCFCC8\t0x00000038\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.1",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.1)"
+    },
+    {
+      "map_line": "0x102CCFD00\t0x00000038\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.2",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.2)"
+    },
+    {
+      "map_line": "0x102CCFD38\t0x00000038\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.3",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.3)"
+    },
+    {
+      "map_line": "0x102CCFD70\t0x00000038\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.4",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.4)"
+    },
+    {
+      "map_line": "0x102CCFDA8\t0x00000038\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.5",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.5)"
+    },
+    {
+      "map_line": "0x102CCFDE0\t0x00000020\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.6",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.6)"
+    },
+    {
+      "map_line": "0x102CCFE00\t0x00000054\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.7",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.7)"
+    },
+    {
+      "map_line": "0x102CCFE54\t0x00000054\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.8",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.8)"
+    },
+    {
+      "map_line": "0x102CCFEA8\t0x00000038\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.9",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.9)"
+    },
+    {
+      "map_line": "0x102CCFEE0\t0x00000020\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.10",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.10)"
+    },
+    {
+      "map_line": "0x102CCFF00\t0x00000020\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.11",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.11)"
+    },
+    {
+      "map_line": "0x102CCFF20\t0x00000038\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.12",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.12)"
+    },
+    {
+      "map_line": "0x102CCFF58\t0x00000020\t[466] __ZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_.cold.13",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&) (.cold.13)"
+    },
+    {
+      "map_line": "0x102CD006C\t0x00000024\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_ENKUlvE_clEv.cold.1",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::'lambda'()::operator()() const (.cold.1)"
+    },
+    {
+      "map_line": "0x103021498\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E11numrange_on.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::numrange_on (.got)"
+    },
+    {
+      "map_line": "0x1030214A0\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E12blockgain_on.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::blockgain_on (.got)"
+    },
+    {
+      "map_line": "0x1030214A8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E13check_enabled.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::check_enabled (.got)"
+    },
+    {
+      "map_line": "0x1030214B0\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E14ab_target_iter.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::ab_target_iter (.got)"
+    },
+    {
+      "map_line": "0x1030214B8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E14ew_eta_initial.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::ew_eta_initial (.got)"
+    },
+    {
+      "map_line": "0x1030214C0\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E16warned_no_layout.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::warned_no_layout (.got)"
+    },
+    {
+      "map_line": "0x1030214C8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E16warned_no_layout_0.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::warned_no_layout (.got)"
+    },
+    {
+      "map_line": "0x1030214D0\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E16warned_no_layout_1.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::warned_no_layout (.got)"
+    },
+    {
+      "map_line": "0x1030214D8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E17halo_stale_warned.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::halo_stale_warned (.got)"
+    },
+    {
+      "map_line": "0x1030214E0\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E20delay_selected_fired.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::delay_selected_fired (.got)"
+    },
+    {
+      "map_line": "0x1030214E8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E23rhs_determinism_checked.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::rhs_determinism_checked (.got)"
+    },
+    {
+      "map_line": "0x1030214F0\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E3why.got",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::why (.got)"
+    },
+    {
+      "map_line": "0x103075A98\t0x00000001\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E20delay_selected_fired",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::delay_selected_fired"
+    },
+    {
+      "map_line": "0x103075A99\t0x00000001\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E17halo_stale_warned",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::halo_stale_warned"
+    },
+    {
+      "map_line": "0x103075A9A\t0x00000002\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E23rhs_determinism_checked",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::rhs_determinism_checked"
+    },
+    {
+      "map_line": "0x103075A9C\t0x00000004\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E13check_enabled",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::check_enabled"
+    },
+    {
+      "map_line": "0x103075AA8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E14ew_eta_initial",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::ew_eta_initial"
+    },
+    {
+      "map_line": "0x103075AB8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E11numrange_on",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::numrange_on"
+    },
+    {
+      "map_line": "0x103075AC8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E12blockgain_on",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::blockgain_on"
+    },
+    {
+      "map_line": "0x103075AD8\t0x00000008\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E14ab_target_iter",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::ab_target_iter"
+    },
+    {
+      "map_line": "0x103075AE8\t0x00000001\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E16warned_no_layout",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::warned_no_layout"
+    },
+    {
+      "map_line": "0x103075AE9\t0x00000001\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E16warned_no_layout_0",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::warned_no_layout"
+    },
+    {
+      "map_line": "0x103075AEA\t0x00000001\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E16warned_no_layout_1",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::warned_no_layout"
+    },
+    {
+      "map_line": "0x103075AEB\t0x000000A5\t[466] __ZZN3wrf6sdirk321WRFNewtonKrylovSolver4Impl16solve_stage_implERKN2at6TensorES6_RKNSt3__18functionIFS4_S6_EEESC_ddiS6_E3why",
+      "file_id": "466",
+      "object": "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a(wrf_sdirk3_newton_solver.o)",
+      "demangled": "wrf::sdirk3::WRFNewtonKrylovSolver::Impl::solve_stage_impl(at::Tensor const&, at::Tensor const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, std::__1::function<at::Tensor (at::Tensor const&)> const&, double, double, int, at::Tensor const&)::why"
+    }
+  ],
+  "why_load_archive_lines": [
+    "'_sdirk3_notify_halo_fresh_checked' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[21](wrf_sdirk3_mpi_safety_impl.o)",
+    "'_sdirk3_halo_finalize' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[22](wrf_sdirk3_halo_exchange.o)",
+    "'_sdirk3_rhs_run_begin_checked' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[24](wrf_sdirk3_rhs_run_close.o)",
+    "'_sdirk3_set_mpi_comm_checked' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[5](wrf_sdirk3_interface_zerocopy.o)",
+    "'_sdirk3_tile_set_base_state_checked' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[13](wrf_sdirk3_base_state_zerocopy.o)",
+    "'_wrf_sdirk3_is_workers_started' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[15](wrf_sdirk3_config.o)",
+    "'__ZN23TileSDIRK3UnifiedSolver12setBaseStateEPKfS1_S1_S1_' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[8](wrf_sdirk3_tile_unified_impl.o)",
+    "'__ZN3wrf6sdirk311WRFGridInfo19resetPerSolverStateEv' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[18](wrf_sdirk3_cache_utils.o)",
+    "'__ZN3wrf6sdirk319WRFGridInfoExtended22initializeTerrainSlopeEPKfS3_S3_S3_ii' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[17](wrf_sdirk3_unified_rhs_extended.o)",
+    "'__ZN3wrf6sdirk321WRFNewtonKrylovSolver22clear_saved_trajectoryEv' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[9](wrf_sdirk3_newton_solver.o)",
+    "'__ZN3wrf6sdirk311PreparedJvpC1ERKNSt3__18functionIFN2at6TensorERKS5_EEES7_' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[10](wrf_sdirk3_jvp_autograd.o)",
+    "'__ZN3wrf6sdirk314next_solver_idEv' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[25](wrf_sdirk3_u_slow_diagnostics.o)",
+    "'__ZN3wrf6sdirk318invalidateZ1DCacheEv' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[20](wrf_sdirk3_rayleigh_damping_ad.o)",
+    "'__ZN3wrf6sdirk319TileBoundaryManager12get_instanceEv' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[14](wrf_tile_boundary_optimizer.o)",
+    "'__ZN3wrf6sdirk320invalidateDzMinCacheEv' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[19](wrf_sdirk3_boundary_ad.o)",
+    "'__ZN3wrf6sdirk320pressure_stage_probe11capture_eosERKN2at6TensorES5_S5_S5_S5_S5_S5_S5_S5_S5_S5_fffffRKNS1_24PressureGeometryEvidenceE' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[26](wrf_sdirk3_pressure_stage_probe.o)",
+    "'__ZN3wrf6sdirk321UnifiedPreconditioner15set_stage_stateERKN2at6TensorEi' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[16](wrf_sdirk3_unified_preconditioner.o)",
+    "'__ZN3wrf6sdirk321performADHaloExchangeERKN2at6TensorERKNS0_12ADHaloConfigE' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[23](wrf_sdirk3_ad_halo_exchange.o)",
+    "'__ZN3wrf6sdirk323compute_inverse_densityERKN2at6TensorES4_ffff' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[11](wrf_hydrostatic_pressure.o)",
+    "'__ZN3wrf6sdirk38acoustic10advance_uvERKNS1_5StateERKNS1_5ConstE' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[12](wrf_sdirk3_acoustic_substep.o)",
+    "'__ZNK3wrf6sdirk323NativePressureReference5applyERKN2at6TensorE' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[30](wrf_sdirk3_native_pressure_reference.o)",
+    "'__ZN3wrf6sdirk321PressurePackedAdapterC1Eiii' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[29](wrf_sdirk3_pressure_packed_adapter.o)",
+    "'__ZN3wrf6sdirk322ReferencePressureModelC1ExxNS0_25ReferencePressureProfilesEdddd' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[28](wrf_sdirk3_reference_pressure_model.o)",
+    "'__ZN3wrf6sdirk317ReferencePressureC1ExxRKNSt3__16vectorIdNS2_9allocatorIdEEEES8_S8_dddd' caused load of /Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/libwrf_sdirk3_libtorch.a[27](wrf_sdirk3_reference_pressure.o)"
+  ],
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "e501949438640f2f492352709203dd5734ded9cdd4b24355ffbde271cff48b77",
+  "executable_sha256": "97be491ae6ed7907447d33e68d391a4a0058d5e56f31fdb2f0425f35e1b1e5c3",
+  "model_run": false
+}

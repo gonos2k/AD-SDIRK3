@@ -8,3 +8,7 @@ docs/evidence/link_origin_o1_20261102/darwin_link_contract.mk whitespace=-blank-
 
 # Preserve the exact registered EOS native namelist, including original blanks.
 docs/evidence/eos_descent_20261110/run/namelist.input whitespace=-blank-at-eol
+
+# Preserve the hashed native namelist and original compiler failure verbatim.
+docs/evidence/w_runtime_20261110/run/namelist.input whitespace=-blank-at-eol
+docs/evidence/w_runtime_20261110/build_attempt_8706/wrf_sdirk3_newton_solver.cpp.log whitespace=-blank-at-eol

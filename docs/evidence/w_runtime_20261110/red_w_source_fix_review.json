@@ -1,0 +1,10 @@
+{
+  "time_local": "2026-11-10T15:25:51.656861+09:00",
+  "base": "8706f9c6",
+  "head": "ddc9475fdb0e5cf6ecdb8d32dee6524c9ff5602b",
+  "source": "external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h",
+  "sha256": "01c4bd2e3d708e9bd8427f673433520a61a2ee79476573bc64a6efd4fea79fde",
+  "verdict": "approve narrow compiler fix",
+  "review": "Replaces two generic const auto& lambda parameters with the same concrete WConsumerEvidence const reference via a local alias. No predicate, operation, object layout, solver path or numeric expression changed. Fix removes dependent template member parsing issue. Clean rebuild of affected objects remains required.",
+  "validation": "git diff --check passed; no build, test or model run by reviewer"
+}

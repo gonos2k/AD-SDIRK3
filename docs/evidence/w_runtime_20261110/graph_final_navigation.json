@@ -1,0 +1,39 @@
+{
+  "source_commit": "ddc9475fdb0e5cf6ecdb8d32dee6524c9ff5602b",
+  "native_source_commit": "ddc9475fdb0e5cf6ecdb8d32dee6524c9ff5602b",
+  "graph_sha256": "19f6ded628c18368488d615387789689e96da3e26442d4ad1d33351ec80f3236",
+  "pins_sha256": "f0b780b067065a1cf23920d6c7e8def582df5ef4a4d2251ddcef61ba90d0fd0b",
+  "relationships": [
+    {
+      "from": "public README.md",
+      "to": "analyze_w_runtime.py and test_analyze_w_runtime.py",
+      "kind": "documented saved-output analysis"
+    },
+    {
+      "from": "public run_w_runtime.py",
+      "to": "native registration and accepted-step packet",
+      "kind": "native runner; historical execution already recorded"
+    },
+    {
+      "from": "public build_w_runtime.py",
+      "to": "five capture-header consumers",
+      "kind": "matching internal C++ layout rebuild"
+    },
+    {
+      "from": "public link_single_archive.py",
+      "to": "current archive and link map",
+      "kind": "method-origin and archive-origin verification"
+    },
+    {
+      "from": "public publish_w_runtime.py",
+      "to": "explicit public evidence files",
+      "kind": "historical packaging helper"
+    }
+  ],
+  "gaps": [
+    "Graph references do not prove runtime branch selection, actual W staggering, input identity or floating-point roundoff.",
+    "The selected W component does not establish full RHS, norm, forcing, or exact descent.",
+    "Fortran and other non-selected source files are outside this bounded corpus.",
+    "Published build and runner scripts contain historical absolute paths; graph re-anchoring does not make those scripts portable."
+  ]
+}

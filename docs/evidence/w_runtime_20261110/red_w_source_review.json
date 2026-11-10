@@ -1,0 +1,34 @@
+{
+  "time_local": "2026-11-10T15:22:31.969170+09:00",
+  "base": "e556771080495bedaa3a2fe7bbffa7cbdb7872c9",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/tests/test_accepted_step_probe.cpp": "211fe28702a91f4b7075f8f39505aecc2ffdcae2ab15d1eddef89778a597f82c",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h": "07e2e9113a35b8bcbd169d6b3793b547272df49dd12fc31f1c789d80592e56f8",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "52263f9a454b97e8d4b08eeda512b7495c9991a32efba799eff599583344b903",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_stage_probe.cpp": "563c059dfbb0d591c4390814ec097d90efb96b9beb954992cb9329a3eead7155",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_stage_probe.h": "3ef80fce3ec508f46b97b0e77800995929e9d001d87e964b998ba01584e366b0",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "3f13b8c7cb5f4ccae7273411817da5944771d4a69ed43b0091aa86e609bdc225"
+  },
+  "verdict": "approved for freeze and clean build with specified captured-operand sensitivity model",
+  "review": [
+    "Capture uses existing scoped EOS context at actual mass, interior RDN/gravity and top RDNW consumers; no-throw collectors mark missing, invalid or duplicate; accepted helper checks both endpoint statuses and existing accepted trial input/K/R/context checks remain.",
+    "RDN captured CPU FP32 and used indices, actual gravity and top RDNW represented as exact float promoted for JSON; cq1==1 and canonical branch gate, msfty/alpha/velocity/level mass finiteness and positivity; cloned W S_inv block checked CPU FP64 finite positive with start/count.",
+    "W pressure uses alpha_w=(c1f*mu_full+c2f)/msfty across packed state, while level_mass_w computed on physical core and extended separately. Extrema alone do not establish pointwise alpha_w*msfty==level_mass_w on aliases; use directed bound based on actual alpha_min*msfty_min, or separately prove pointwise equality.",
+    "Base/accepted matching of msfty extrema alone does not establish pointwise map equality; existing selected fixed-input Handle/hash checks provide only observed-subset value/owner evidence, not a full-context guarantee.",
+    "Calls are compile-time diagnostic gated and no arithmetic formula changed; no extra RHS/JVP, but capture performs allocations, clones and synchronizing reductions, and exceptions fail the diagnostic evidence.",
+    "PressureEosContext ABI is enlarged; rebuild all dependent objects using matching headers and compile macros, verify exact link and existing focused checks."
+  ],
+  "limitations": [
+    "No code edit, build, test, native or model run by reviewer.",
+    "Exact-real sensitivity remains separate from floating-point W-path rounding, whole RHS and descent.",
+    "Source-level approval only; clean rebuild all header consumers and perform focused tests and provenance validation before native use."
+  ],
+  "diff_check_exit": 0,
+  "accepted_analysis_choice": {
+    "interior": "C_k=abs(g*RDN_k)/(msfty_min*alpha_w_min), applied to sum of adjacent pressure component errors",
+    "top": "C_top=2*abs(g*top_RDNW)/(msfty_min*alpha_w_min), applied to top source pressure error",
+    "interpretation": "Intermediate real W operator holds captured rounded alpha_w, msfty and velocity_mass coefficients fixed; real algebra cancels positive velocity_mass, with no level_mass alias identity required.",
+    "metric": "actual observed cloned S_inv W block max and packed counts",
+    "limitations": "Coefficient/ratio formation and native W arithmetic rounding remain in unbounded remainder; full native W, full RHS e_i and descent not certified."
+  }
+}

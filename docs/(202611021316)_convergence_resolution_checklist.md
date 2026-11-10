@@ -2,7 +2,7 @@
 
 작성: 2026-11-02T13:16:08.084142+09:00.
 최초 개발 기준 main9292c6c896fcec0f338d0fec7d27bd803e4c620f(PR337 병합).
-최신 갱신: 2026-11-10T14:19:39.086928+09:00, 기준 main9e7d69d8(PR345 병합).
+최신 갱신: 2026-11-10T16:03:32.302776+09:00, 기준 maine5567710(PR346 병합).
 Stage3 EOS 정의역·산술 오차 성분: [진행 보고]((202611101123)_stage3_eos_domain_and_error_component.md).
 링크 귀속 정정·O1: [보고서]((202611022330)_link_origin_o1_resolution.md).
 이번 조기 반환·소비자 진행: [보고서]((202611021509)_early_residual_status_resolution.md).
@@ -178,3 +178,22 @@ alb와 EOS 산술을 직접 함께 감싼 값이므로 이전 EOS 성분을 다�
 
 새 native·MPFR 전수·RK3·예보장·성능 재실행은 없다. 기존 데이터와 source 가정을 사용한
 조건부 성분 분석이며 실제 전체 W 오차, Stage3 반복 수렴 및 E/T/A/F는 완료가 아니다.
+
+
+## PR346 후속: 실제 W consumer·metric 계약
+
+[진행 보고]((202611101601)_w_consumer_metric_runtime_contract.md) · [재현/검증 범위](evidence/w_runtime_20261110/README.md).
+
+- [x] 선택한 base/accepted 호출의 실제 RDN Float32 vector, g, top RDNW를 consumer에서 포착.
+  이전 후보와 일치한다. 전체 getter/미래 iteration의 불변성 증명으로 확대하지 않는다.
+- [x] 실제 cloned rw inverse metric의 block/count/dtype/hash와 min=max1 관측.
+  이 쌍에서는 floor proxy 대신 관측된 상한을 사용한다. backend norm 오차 인증은 아니다.
+- [x] 기존 K/R/S/ref/context와16 EOS 파일의 동일성을 확인해 이전 MPFR 성분을 재사용.
+- [ ] 전체 W native 산술·coefficient/state formation 및 다른 RHS 오차를 제한한다.
+  이번 압력 성분은 captured alpha_w/map 피연산자를 고정한 실수 중간 모델이며,
+  level_mass alias 동일성이나 native 나눗셈 상쇄를 가정하지 않는다.
+- [ ] U/V primary·NH4 및 나머지 EPS 항과 scaling/norm/float-conversion을 묶어 e_i를 완성한다.
+
+새 source ddc9475 진단1회는 exit86, Stage2 수렴, Stage3 미완료·완료 timestep0이다.
+기존 h600 one-step/174장 비교, P1 NO-GO를 새로 수행하거나 소급 변경하지 않았다.
+전체 merit 감소·Stage3 반복·시간지도/예보 안정성·실용 비용·5일은 계속 미완료다.

@@ -1,0 +1,17 @@
+{
+  "time_local": "2026-11-10T15:34:00.725682+09:00",
+  "verdict": "approved for registered offline selected-pair analysis",
+  "source_sha256": {
+    "analyze_w_runtime.py": "7efb81b221c4dc3b05777c8b1ea410c20d404654283ca06c41529b51f88c6397",
+    "test_analyze_w_runtime.py": "efb282b3c0e26257966c2eb5e4b2397ebe43703279d90c0ad9114c18af8cf56b"
+  },
+  "findings": [
+    "Prior ALB file is bound to registered SHA and passed status, exact 16 expected artifact names and exactly two endpoint states are required.",
+    "Exact Fraction fixed-operand W coefficient uses captured alpha/map minima, measured inverse-scale maximum and packed RMS factor; no level-mass alias identity assumed.",
+    "Synthetic tests independently run and passed, including missing artifact/endpoint refusals."
+  ],
+  "limits": [
+    "No real-data/native run in this preflight.",
+    "Native W arithmetic, coefficient formation relative to full target, full RHS e_i, exact forcing and descent remain outside bound."
+  ]
+}

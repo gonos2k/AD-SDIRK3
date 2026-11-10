@@ -1,0 +1,14 @@
+In file included from /Users/yhlee/SDIRK3-review-worktrees/w-runtime-contract-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp:102:
+/Users/yhlee/SDIRK3-review-worktrees/w-runtime-contract-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h:166:46: error: use 'template' keyword to treat 'item' as a dependent template name
+  166 |             torch::isfinite(w.rdn_f32).all().item<bool>() &&
+      |                                              ^
+      |                                              template 
+/Users/yhlee/SDIRK3-review-worktrees/w-runtime-contract-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h:167:61: error: use 'template' keyword to treat 'item' as a dependent template name
+  167 |             w.rdn_f32.slice(0,1,w.rdn_used_end).gt(0).all().item<bool>() &&
+      |                                                             ^
+      |                                                             template 
+/Users/yhlee/SDIRK3-review-worktrees/w-runtime-contract-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_accepted_step_probe.h:193:69: error: use 'template' keyword to treat 'item' as a dependent template name
+  193 |         for(int64_t i=0;i<r.numel();++i) {if(i) o << ','; o << r[i].item<double>();}
+      |                                                                     ^
+      |                                                                     template 
+3 errors generated.
