@@ -233,3 +233,33 @@ weight evidence, U/V primary and NH4, other RHS and metric remainder still need
 bounds before e0+e1 or Stage3 convergence can be certified. No native or RK3 was
 rerun; the original accepted-pair scope and historical NO-GO results are preserved.
 [Replay and source/data conditions](../evidence/eos_rhs_20261110/README.md).
+
+
+## Selected W operands observed rather than assumed (PR346 follow-up)
+
+Native source ddc9475 records actual CPU Float32 RDN and gravity at the W consumer,
+actual Float32 top RDNW, canonical/dry and positive finite operand ranges, and
+min/max/count/dtype of the actual cloned rw inverse-metric block. In both selected
+calls, values match the prior candidates; rw inverse weights have min=max1. All
+old pair/context and16 EOS SHA identities match. These observations close the
+previous RDN/g/top and weight assumptions for this pair only, not future solves.
+
+PressureEosContext layout changed, so all five header consumers were rebuilt with
+matching macros. The initial generic-lambda compile failure was preserved; explicit
+parameter types fixed it without numerical changes. Helper and single-archive
+map validation passed, and the one registered h600 diagnostic exited86 after the
+first accepted Stage3 update, with zero completed steps.
+
+The new sensitivity model fixes captured native alpha_w (canonical mass/map, not
+EOS inverse density), msfty and velocity_mass operands. It uses the positive
+product of alpha_w and map minima, rather than assuming pointwise level_mass_w
+identity on aliases. Positive velocity mass cancels only in this real intermediate
+model. Native ratio/arithmetic and coefficient formation versus full G* remain
+separate remainder terms. Observed inverse-weight max replaces the floor proxy;
+mathematical norm bounding does not certify native norm/float conversion.
+
+The weighted pressure-input components are approximately2.4011311208232075e-13
+and2.364582296508406e-13, with exact Fractions authoritative. Full native W error,
+U/V primary/NH4/other RHS, formation, norm error and e0/e1 are still open. Thus
+exact merit decrease, Stage3 convergence, E/T/A/F and forecast claims remain open.
+[Replay, source and data contract](../evidence/w_runtime_20261110/README.md).

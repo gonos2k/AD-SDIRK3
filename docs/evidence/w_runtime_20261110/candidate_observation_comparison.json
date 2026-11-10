@@ -1,0 +1,14 @@
+{
+  "scope": "selected base and accepted trial W consumers only",
+  "rdn_candidate_matches_observed": true,
+  "gravity_candidate_matches_observed": true,
+  "top_rdnw_candidate_matches_observed": true,
+  "actual_rw_inverse_metric_min": 1,
+  "actual_rw_inverse_metric_max": 1,
+  "observed_rdn_used_indices": [
+    1,
+    64
+  ],
+  "prior_artifact_flags_unchanged": true,
+  "native_roundoff_or_full_rhs_certified": false
+}

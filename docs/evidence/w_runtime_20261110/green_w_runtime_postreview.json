@@ -1,0 +1,34 @@
+{
+  "timestamp_local": "2026-11-10T15:45:47.254420+09:00",
+  "status": "PASS_SELECTED_PAIR_W_EVIDENCE",
+  "source_revision": "ddc9475fdb0e5cf6ecdb8d32dee6524c9ff5602b",
+  "checks": [
+    "Reconstructed all 128 endpoint float32 RDN values and verified byte FNV, finite values and positivity at exactly consumed k=1..63 (unused k=0 is zero).",
+    "Verified scalar float32 gravity/top coefficients, fixed equalities, canonical/dry path, finite positive mass/alpha/map extrema; W S_inv block start/count/dtype/min/max and full S hash.",
+    "Compared original same-pair K/R/S/context and all 16 raw EOS NPY SHA-256 files, plus each new file shape, dtype, byte count and FNV.",
+    "Postaccept receipt counters show zero additional RHS/JVP/preconditioner calls; source review confirms capture collectors do not invoke them. Terminal exit 86, only Stage 2 converged, zero complete steps.",
+    "Independently recomputed each of 65 per-level rational bounds per endpoint and W weighted RMS bounds from actual alpha_w, msfty, RDN, gravity, prior EOS-pressure bounds and Nw/N < 1/4."
+  ],
+  "input_sha256": {
+    "packet": "6262589381b5dd12161a35a7e6856766ca13d591bd7b8e9bee1c201637c26058",
+    "result": "293d610a91897e4812a86590554c8e00a3c5eb6fae361356832a33fb0b3ae607",
+    "observed_w": "c91f63137380fd0d845dbc7101d13aeec9ad52c22b24622916997b46ad4da21e",
+    "prior_packet": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+    "prior_alb": "2f9f9de1110de620c1725c2bb7727ee87c3773fa69aca6cc68b5ff4d8db051a2"
+  },
+  "values": {
+    "gravity_f32": 9.8100004196167,
+    "top_rdnw_f32": 201.27182006835938,
+    "rdn_fnv64_f32": "12721210825020058064",
+    "metric_rw_count": 215865,
+    "metric_rw_min": 1,
+    "metric_rw_max": 1,
+    "base_weighted_rms_bound": 2.4011311208232075e-13,
+    "accepted_weighted_rms_bound": 2.364582296508406e-13
+  },
+  "limitations": [
+    "Conditional exact-real intermediate pressure input-sensitivity bound using prior EOS-pressure bounds and projected W topology; native coefficient formation, division and arithmetic roundoff remain in E_rest.",
+    "One selected pair, no full-RHS error, forcing, convergence or forecast conclusion."
+  ],
+  "native_or_test_rerun": false
+}

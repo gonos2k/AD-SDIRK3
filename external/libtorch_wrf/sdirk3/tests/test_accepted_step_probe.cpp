@@ -51,4 +51,27 @@ int main() {
     threw=false; wrong=trial; wrong.ph=trial.ph.slice(1,0,2);
     try { (void)eos_scalars(e,wrong,B,K0,K1,0,6,6,4); } catch (...) { threw=true; }
     assert(threw);
+    wrf::sdirk3::pressure_stage_probe::WConsumerEvidence wb;
+    wb.interior_seen=wb.top_seen=wb.mass_seen=wb.canonical=wb.cq1_is_one=true;
+    wb.rdn_f32=torch::tensor({1.f,2.f,3.f},torch::kFloat32);
+    wb.rdn_used_end=3; wb.gravity=9.81f; wb.top_rdnw=4.f;
+    wb.msfty_min=1; wb.msfty_max=2; wb.level_mass_min=3; wb.level_mass_max=4;
+    wb.velocity_mass_min=5; wb.velocity_mass_max=6; wb.alpha_min=7; wb.alpha_max=8;
+    auto wa=wb; wa.level_mass_min=2.5;
+    auto wp=w_runtime(wb,wa,scale,1,2);
+    auto metric_pos=wp.find("\"metric\":"); assert(metric_pos!=std::string::npos);
+    assert(field(wp.substr(metric_pos),"min")==.5 && field(wp.substr(metric_pos),"max")==1 &&
+           field(wp.substr(metric_pos),"count")==2 && field(wp,"rdn_count")==3);
+    threw=false; auto missing=wa; missing.top_seen=false;
+    try { (void)w_runtime(wb,missing,scale,1,2); } catch (...) { threw=true; }
+    assert(threw);
+    threw=false; auto duplicate=wa; duplicate.duplicate=true;
+    try { (void)w_runtime(wb,duplicate,scale,1,2); } catch (...) { threw=true; }
+    assert(threw);
+    threw=false; auto nonfinite=wa; nonfinite.alpha_min=std::numeric_limits<double>::infinity();
+    try { (void)w_runtime(wb,nonfinite,scale,1,2); } catch (...) { threw=true; }
+    assert(threw);
+    threw=false; auto changed=wa; changed.top_rdnw=5;
+    try { (void)w_runtime(wb,changed,scale,1,2); } catch (...) { threw=true; }
+    assert(threw);
 }

@@ -93,6 +93,52 @@ void capture_v_primary(const PressureVPrimaryContext& input) {
 }
 #endif
 void mark_capture_failed() noexcept { if (active_eos_context) active_eos_context->failed=true; }
+void capture_w_interior(const torch::Tensor& rdn,int64_t used_end,float gravity,bool canonical,
+                        const torch::Tensor& cq1,const torch::Tensor& msfty) noexcept {
+    if (!active_eos_context) return;
+    auto& w=active_eos_context->w_consumer;
+    if (w.interior_seen) { w.duplicate=true; return; }
+    w.interior_seen=true;
+    try {
+        torch::NoGradGuard guard;
+        TORCH_CHECK(active_eos_context->captured && !active_eos_context->failed && !active_eos_context->duplicate &&
+            rdn.defined() && rdn.is_cpu() && rdn.dim()==1 && rdn.scalar_type()==torch::kFloat32 &&
+            used_end>1 && used_end<=rdn.numel() && torch::isfinite(rdn).all().item<bool>() && std::isfinite(gravity) &&
+            cq1.defined() && cq1.numel()>0 && torch::isfinite(cq1).all().item<bool>() &&
+            msfty.defined() && msfty.numel()>0 && torch::isfinite(msfty).all().item<bool>(),
+            "invalid W interior capture");
+        w.rdn_f32=rdn.detach().contiguous().clone(); w.rdn_used_end=used_end;
+        w.gravity=gravity; w.canonical=canonical;
+        w.cq1_is_one=cq1.eq(1).all().item<bool>();
+        w.msfty_min=msfty.min().item<double>(); w.msfty_max=msfty.max().item<double>();
+    } catch (...) { w.failed=true; }
+}
+void capture_w_top(float rdnw) noexcept {
+    if (!active_eos_context) return;
+    auto& w=active_eos_context->w_consumer;
+    if (w.top_seen) { w.duplicate=true; return; }
+    w.top_seen=true;
+    if (!active_eos_context->captured || !std::isfinite(rdnw)) {w.failed=true; return;}
+    w.top_rdnw=rdnw;
+}
+void capture_w_mass(const torch::Tensor& level_mass,const torch::Tensor& velocity_mass,
+                    const torch::Tensor& alpha) noexcept {
+    if (!active_eos_context) return;
+    auto& w=active_eos_context->w_consumer;
+    if (w.mass_seen) { w.duplicate=true; return; }
+    w.mass_seen=true;
+    try {
+        torch::NoGradGuard guard;
+        TORCH_CHECK(active_eos_context->captured && level_mass.defined() && velocity_mass.defined() &&
+            alpha.defined() && level_mass.numel()>0 && velocity_mass.numel()>0 && alpha.numel()>0 &&
+            torch::isfinite(level_mass).all().item<bool>() && torch::isfinite(velocity_mass).all().item<bool>() &&
+            torch::isfinite(alpha).all().item<bool>(), "invalid W mass capture");
+        w.level_mass_min=level_mass.min().item<double>(); w.level_mass_max=level_mass.max().item<double>();
+        w.velocity_mass_min=velocity_mass.min().item<double>(); w.velocity_mass_max=velocity_mass.max().item<double>();
+        w.alpha_min=alpha.min().item<double>(); w.alpha_max=alpha.max().item<double>();
+    } catch (...) { w.failed=true; }
+}
+
 
 void capture_eos(const torch::Tensor& ph,const torch::Tensor& t,const torch::Tensor& mu,
                  const torch::Tensor& mu_base,const torch::Tensor& alb,const torch::Tensor& p_base,

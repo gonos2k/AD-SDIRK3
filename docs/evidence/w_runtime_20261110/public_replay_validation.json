@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "timestamp_local": "2026-11-10T16:09:17.625186+09:00",
+  "scope": "published files and prior repo bundles, explicit absolute script paths from unrelated temporary cwd; stdout byte-identical to archived analysis",
+  "bytes": 12940,
+  "native_runs": 0,
+  "source_sha256": "7efb81b221c4dc3b05777c8b1ea410c20d404654283ca06c41529b51f88c6397"
+}

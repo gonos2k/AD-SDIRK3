@@ -153,6 +153,63 @@ inline std::string write_eos_raw(
     out << "]}";
     return out.str();
 }
+inline std::string w_runtime(
+        const wrf::sdirk3::pressure_stage_probe::WConsumerEvidence& b,
+        const wrf::sdirk3::pressure_stage_probe::WConsumerEvidence& a,
+        const Tensor& sinv,int64_t start,int64_t count) {
+    torch::NoGradGuard guard;
+    using WConsumer=wrf::sdirk3::pressure_stage_probe::WConsumerEvidence;
+    const auto valid=[](const WConsumer& w) {
+        return w.interior_seen && w.top_seen && w.mass_seen && !w.duplicate && !w.failed &&
+            w.canonical && w.cq1_is_one && w.rdn_f32.defined() && w.rdn_f32.is_cpu() &&
+            w.rdn_f32.dim()==1 && w.rdn_f32.scalar_type()==torch::kFloat32 && w.rdn_f32.numel()>0 &&
+            w.rdn_used_end>1 && w.rdn_used_end<=w.rdn_f32.numel() &&
+            torch::isfinite(w.rdn_f32).all().item<bool>() &&
+            w.rdn_f32.slice(0,1,w.rdn_used_end).gt(0).all().item<bool>() &&
+            std::isfinite(w.gravity) && w.gravity>0 && std::isfinite(w.top_rdnw) && w.top_rdnw>0 &&
+            std::isfinite(w.msfty_min) && std::isfinite(w.msfty_max) && w.msfty_min>0 &&
+            std::isfinite(w.level_mass_min) && std::isfinite(w.level_mass_max) && w.level_mass_min>0 &&
+            std::isfinite(w.velocity_mass_min) && std::isfinite(w.velocity_mass_max) && w.velocity_mass_min>0 &&
+            std::isfinite(w.alpha_min) && std::isfinite(w.alpha_max) && w.alpha_min>0 &&
+            w.msfty_min<=w.msfty_max && w.level_mass_min<=w.level_mass_max &&
+            w.velocity_mass_min<=w.velocity_mass_max && w.alpha_min<=w.alpha_max;
+    };
+    TORCH_CHECK(valid(b) && valid(a) && b.rdn_used_end==a.rdn_used_end && b.rdn_f32.sizes()==a.rdn_f32.sizes() &&
+        torch::equal(b.rdn_f32,a.rdn_f32) &&
+        std::memcmp(&b.gravity,&a.gravity,sizeof(float))==0 &&
+        std::memcmp(&b.top_rdnw,&a.top_rdnw,sizeof(float))==0 &&
+        b.msfty_min==a.msfty_min && b.msfty_max==a.msfty_max,
+        "missing, invalid, or changed W consumer evidence");
+    TORCH_CHECK(sinv.defined() && sinv.is_cpu() && sinv.dim()==1 && sinv.scalar_type()==torch::kFloat64 &&
+        start>=0 && count>0 && start+count<=sinv.numel(), "invalid W inverse-scale layout");
+    const auto w=sinv.slice(0,start,start+count);
+    TORCH_CHECK(torch::isfinite(w).all().item<bool>() && w.gt(0).all().item<bool>(), "invalid W inverse-scale");
+    const auto endpoint=[](const WConsumer& x) {
+        const auto r=x.rdn_f32.detach().to(torch::kFloat64).contiguous();
+        std::ostringstream o; o << std::setprecision(17)
+          << "{\"rdn_source_dtype\":" << int(x.rdn_f32.scalar_type()) << ",\"rdn_count\":" << r.numel()
+          << ",\"rdn_used_begin\":1,\"rdn_used_end_exclusive\":" << x.rdn_used_end
+          << ",\"rdn_fnv64_f32\":" << wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(x.rdn_f32)))
+          << ",\"rdn_values\":[";
+        for(int64_t i=0;i<r.numel();++i) {if(i) o << ','; o << r[i].item<double>();}
+        o << "],\"gravity_f32\":" << static_cast<double>(x.gravity)
+          << ",\"top_rdnw_f32\":" << static_cast<double>(x.top_rdnw)
+          << ",\"canonical_horizontal\":true,\"cq1_all_one\":true"
+          << ",\"msfty_min\":" << x.msfty_min << ",\"msfty_max\":" << x.msfty_max
+          << ",\"level_mass_w_min\":" << x.level_mass_min << ",\"level_mass_w_max\":" << x.level_mass_max
+          << ",\"velocity_mass_w_min\":" << x.velocity_mass_min << ",\"velocity_mass_w_max\":" << x.velocity_mass_max
+          << ",\"alpha_w_min\":" << x.alpha_min << ",\"alpha_w_max\":" << x.alpha_max << "}";
+        return o.str();
+    };
+    std::ostringstream out; out << std::setprecision(17)
+        << "{\"scope\":\"actual_W_consumers_and_cloned_metric\",\"fixed_coefficients_equal\":true"
+        << ",\"base\":" << endpoint(b) << ",\"accepted\":" << endpoint(a)
+        << ",\"metric\":{\"block\":\"rw\",\"start\":" << start << ",\"count\":" << count
+        << ",\"dtype\":" << int(sinv.scalar_type()) << ",\"min\":" << w.min().item<double>()
+        << ",\"max\":" << w.max().item<double>() << ",\"full_S_inv_fnv64\":"
+        << wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(sinv))) << "}}";
+    return out.str();
+}
 inline std::string measure(const Tensor& base_k,const Tensor& base_r,const Tensor& scale_inv,
                            const Tensor& post_k,const Tensor& post_r,
                            const Tensor& observed_k,const Tensor& observed_r,

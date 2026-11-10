@@ -1,0 +1,25 @@
+{
+  "time_local": "2026-11-10T15:43:59.419145+09:00",
+  "status": "passed",
+  "files_sha256": {
+    "native_registration.json": "f8963cc27ee32476bbc6a608b3107856ad945df2413f17f7a209542f02e931de",
+    "run/result.json": "293d610a91897e4812a86590554c8e00a3c5eb6fae361356832a33fb0b3ae607",
+    "run/accepted_step_probe.json": "6262589381b5dd12161a35a7e6856766ca13d591bd7b8e9bee1c201637c26058",
+    "observed_w_component.json": "c91f63137380fd0d845dbc7101d13aeec9ad52c22b24622916997b46ad4da21e",
+    "candidate_observation_comparison.json": "85797f741246f270eff048e5b58f384ad7a535c8521cea4c3f8c6708ae40f426",
+    "analyze_w_runtime.py": "7efb81b221c4dc3b05777c8b1ea410c20d404654283ca06c41529b51f88c6397"
+  },
+  "checks": [
+    "All 382 native registration immutable SHA pins verified; native status diagnostic_completed, rc86, errors empty, zero steps; selected pair K/R, inverse scale, reference, native RMS, N and recorded context match prior packet.",
+    "All 16 retained EOS raw-file hashes match both prior ALB analysis and new run artifacts. Runtime reports W S_inv min=max=1 and full S_inv hash matches prior; input association hashes match analysis.",
+    "Independently recomputed exact Fraction pressure-input sensitivity for 63 interior levels, top and zero bottom for each endpoint from captured g, RDN, top RDNW, alpha_w_min and msfty_min; all 65 values and weighted RMS fractions match recorded analysis.",
+    "Observed coefficient calculation uses actual alpha_w and msfty minima, not level_mass alias equality; W inverse-scale and packed-count factor 1/2 give conservative exact-real intermediate bound."
+  ],
+  "weighted_rms_upper_base": 2.4011311208232075e-13,
+  "weighted_rms_upper_accepted": 2.364582296508406e-13,
+  "scope": "Selected accepted pair only; exact-real sensitivity to EOS pressure input under observed coefficients and prior component assumptions. Native W operation/ratio/coefficient-formation roundoff and other RHS E_rest, full e_i, forcing and descent remain uncertified.",
+  "limitations": [
+    "Candidate-comparison booleans are reported by their own artifact; independently checked actual captured operands, not candidate reconstruction.",
+    "No native model, additional MPFR or forecast/RK3 comparison in this review."
+  ]
+}

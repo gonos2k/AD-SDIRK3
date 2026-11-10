@@ -1,0 +1,30 @@
+{
+  "timestamp_local": "2026-11-10T16:09:38.715303+09:00",
+  "status": "PASS",
+  "source_revision": "ddc9475fdb0e5cf6ecdb8d32dee6524c9ff5602b",
+  "scope": "Green final review of staged report, source provenance and 57-file public evidence package; no tests or model runs repeated",
+  "checks": [
+    "All 57 manifest records match current staged package sizes and SHA-256; no unlisted evidence files. git diff --cached --check passes.",
+    "Final graph source pin lists 72 files; every file matches. Decompressed graph SHA-256 matches navigation receipt. Graph relationships are navigation aids, not numerical proof.",
+    "Staged source history identifies 8706 failed generic-lambda build and ddc9475 explicit-type fix; ddc build receipt records five rebuilt consumers, helper compile/run 0 with assertions active and matching archive hash.",
+    "Archived link map decompresses to recorded SHA and maps direct Tile RHS and Newton method bodies to intended archive object IDs 465 and 466.",
+    "Portable README replay names existing repo-local prior files; inspected prior hashes match analysis inputs and scripts use Python standard library. Did not rerun the tests or replay.",
+    "My prior independent Green selected-pair review verified all 128 Float32 RDN values, 16 EOS NPY source files, same-pair hashes, actual rw metric max 1, and independently reproduced 65 rational levels per endpoint.",
+    "Report correctly describes the observed alpha_w and msfty as fixed operands of an exact-real intermediate model; native coefficient formation, arithmetic/reduction, non-W components and full RHS remain outside the bound. No forecast, complete timestep, RK3 endpoint comparison, exact forcing or convergence certification is claimed."
+  ],
+  "hashes": {
+    "manifest": "b109c660cb9471cc0c61193e43814c5d935e77a927d606042a9857f7aac42f2d",
+    "report": "0521193a8a815371f47b674f10a0fd2c5fc8fe09c467c86157437ba672791586",
+    "packet": "6262589381b5dd12161a35a7e6856766ca13d591bd7b8e9bee1c201637c26058",
+    "result": "293d610a91897e4812a86590554c8e00a3c5eb6fae361356832a33fb0b3ae607",
+    "observed_w": "c91f63137380fd0d845dbc7101d13aeec9ad52c22b24622916997b46ad4da21e",
+    "prior_green_postreview": "4ecae0184a62896fc464bf72b67be8beba3b88b488e915f6c94a24503e32c620"
+  },
+  "open_limits": [
+    "Runtime kernel and observed coefficient conditions apply only to the selected base and accepted trial; full-RHS error and exact merit decrease remain open.",
+    "Portable standard-library analysis is distinct from full native WRF rebuild/reexecution, which requires the archived external stack."
+  ],
+  "manifest_entries_reviewed": 57,
+  "source_or_document_edits": false,
+  "native_or_test_rerun": false
+}

@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-10T15:34:39.223102+09:00",
+  "status": "passed",
+  "source_commit": "ddc9475fdb0e5cf6ecdb8d32dee6524c9ff5602b",
+  "runner_sha256": "bb9c0c75781064f89533456d16ae31ebb0e1fd4ced1c73c1021fd14b7bf52ac1",
+  "build_receipt_sha256": "994d34c0ee29bcf6ae4245994d2919ec022e2c78572706a44dd87cf7d7c13182",
+  "link_receipt_sha256": "efc98e90f8a34a3f17e8e780d7273b34357bf02a6ac37a777b84454ca45b3833",
+  "helper_receipt_sha256": "9733c6d165bdaea95df45689498ea9fe0b9afd11612ea8608d5a78bca3b73ac0",
+  "executable_sha256": "97be491ae6ed7907447d33e68d391a4a0058d5e56f31fdb2f0425f35e1b1e5c3",
+  "map_sha256": "0f3c28f09fa43e3ab97cc54a0686ff245fcbcfcb82ddb97860ca252d18058f81",
+  "checks": [
+    "readonly source/archive/method origins/helper/target packet",
+    "synthetic W valid/negative RDN/bad metric hash"
+  ],
+  "model_run": false
+}

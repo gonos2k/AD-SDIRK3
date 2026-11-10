@@ -1,0 +1,21 @@
+{
+  "time_local": "2026-11-10T16:09:14.744941+09:00",
+  "verdict": "PASS scoped source/evidence/docs review; no blockers",
+  "manifest_sha256": "b109c660cb9471cc0c61193e43814c5d935e77a927d606042a9857f7aac42f2d",
+  "manifest_entries_verified": 57,
+  "staged_and_worktree_hash_mismatches": [],
+  "report_sha256": "0521193a8a815371f47b674f10a0fd2c5fc8fe09c467c86157437ba672791586",
+  "old_packet_sha256": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+  "prior_alb_sha256": "2f9f9de1110de620c1725c2bb7727ee87c3773fa69aca6cc68b5ff4d8db051a2",
+  "checks": [
+    "Report and README identify alpha_w as mass/map, not EOS alt, and use captured alpha/map minima without assuming level_mass alias identity.",
+    "The real-intermediate pressure-input component and unbounded native arithmetic/coefficient formation remainder are distinguished; actual W weights and RDN/g/top are limited to selected pair.",
+    "Portable replay paths point to staged historical packet and prior alb whose hashes match checker pins; result records rc86, matched pair, 0 complete steps and stage3 not complete.",
+    "Initial compile failure and clean five-consumer rebuild are separately documented. Prior native/data/source postreview provides 16-file and selected-pair verification.",
+    "57 manifest files have matching working-tree and staged bytes/hash; git diff --cached --check clean."
+  ],
+  "limits": [
+    "No tests, build, native model or new RK3 comparison in this final review.",
+    "Two future review receipts and their manifest entries were not yet staged or checked."
+  ]
+}

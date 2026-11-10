@@ -1,0 +1,23 @@
+{
+  "time_local": "2026-11-10T15:12:24.159308+09:00",
+  "head": "e556771080495bedaa3a2fe7bbffa7cbdb7872c9",
+  "source_sha256": {
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_pressure_stage_probe.h": "a9e3490a3a0c1daa28b4a9a891c5a499637274adf1012da698dd1317cf558bf6",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp": "eae0918679b4b68901d2f09ffcdb0c3f4d79b273f179e55a2564b0b9e99a1644"
+  },
+  "verdict": "feasible for conditional exact-real W pressure-input sensitivity, with explicit gates and no complete RHS bound",
+  "source": [
+    "W interior pressure branch obtains getRdnTensor(CPU,FP32,nz), uses k index and scalar; capture actual tensor/values after fallback and actual gravity float at consumer, not FP64 EOS geometry approximation. Top separately reads getRdnwTensor(CPU,FP32,nz) at k-1.",
+    "Capture actual W cqw/cq1 consumer values and finite max or demonstrate exact dry zero, real selected canonical WRF mass-flux branch and Q/packing. Capture per-endpoint finite strictly positive level_mass_w and velocity_mass_w (or their proven conservative global minima) and actual map/alpha_w conditions; evaluate stored values at both original base and accepted trial, check accepted trial belongs to observed K/R.",
+    "Capture W S_inv block max and finiteness/positivity, correct W block start/size, packed layout N and source identity mask, ensure same fixed cloned scale at both endpoints. A scalar max is sufficient for conservative weighted bound, given correct counts, Q alias action and endpoint error bounds.",
+    "Cancellation of map/velocity factors is an exact-real input-sensitivity simplification, not a bound on native multiply/divide rounding. Actual coefficients must include branch/cq/mass and fallback values, verify finite/positive and sanitation mode.",
+    "Scoped capture can allocate/clone, synchronize and trigger diagnostics/A5 side effects and is terminal-only evidence; compare path and counters, no extra RHS/JVP, fail closed on missing, duplicate, partial capture or context mismatch.",
+    "Changing PressureEosContext layout is an ABI change: rebuild all consumers using identical header/macros, inspect link provenance, rerun affected checks."
+  ],
+  "limits": [
+    "Quantities close selected-point coefficient/weight assumptions, not intermediate operation forward error, non-W components, whole RHS e_i, exact forcing, or descent.",
+    "Projected output alias multiplicities and independent/owned vs packed accounting must be explicitly checked; do not use unweighted norm as weighted S norm.",
+    "Initial plan only: no code edit, build, test, native or model run."
+  ]
+}

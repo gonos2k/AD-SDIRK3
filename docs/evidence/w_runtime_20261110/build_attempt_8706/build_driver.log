@@ -1,0 +1,8 @@
+COMPILING wrf_sdirk3_native_pressure_reference.cpp
+COMPILING wrf_sdirk3_newton_solver.cpp
+Traceback (most recent call last):
+  File "/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/build_w_runtime.py", line 33, in <module>
+    with (E/(source+'.log')).open('x') as log:subprocess.run(a,cwd=W,stdout=log,stderr=subprocess.STDOUT,check=True)
+  File "/opt/local/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/subprocess.py", line 526, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/usr/bin/g++', '-DWRF_SDIRK3_ACCEPTED_STEP_PROBE', '-DWRF_SDIRK3_LINEAR_DELAY_AUDIT', '-DWRF_SDIRK3_PRESSURE_A5', '-I/Users/yhlee/AD-SDIRK3-review-evidence/pressure-a4-20261031/a4_build/B', '-DWRF_SDIRK3_PRESSURE_REFERENCE_STAGE', '-DWRF_SDIRK3_PRESSURE_A4', '-std=c++17', '-O3', '-c', '-DMACOS', '-DDMPARALLEL', '-DUSE_SDIRK3', '-DWRF_SDIRK3_PRESSURE_STAGE_PROBE', '-I/Users/yhlee/SDIRK3-review-worktrees/w-runtime-contract-20261110/external/libtorch_wrf/sdirk3', '-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include', '-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include', '-I/opt/homebrew/include', '-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include', '-I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include', '-D_GLIBCXX_USE_CXX11_ABI=0', '-MMD', '-MP', '-c', '/Users/yhlee/SDIRK3-review-worktrees/w-runtime-contract-20261110/external/libtorch_wrf/sdirk3/wrf_sdirk3_newton_solver.cpp', '-o', '/Users/yhlee/AD-SDIRK3-review-evidence/w-runtime-contract-20261110/native_build/wrf_sdirk3_newton_solver.o']' returned non-zero exit status 1.

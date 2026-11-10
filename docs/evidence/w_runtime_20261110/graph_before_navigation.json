@@ -1,0 +1,36 @@
+{
+  "source_commit": "e556771080495bedaa3a2fe7bbffa7cbdb7872c9",
+  "dependencies": [
+    {
+      "from": "wrf_sdirk3_newton_solver.cpp:6189,11768",
+      "to": "ScopedEosCapture",
+      "scope": "base/trial synchronous capture"
+    },
+    {
+      "from": "wrf_sdirk3_tile_unified_impl.cpp:20492-20509",
+      "to": "calc_p_rho_wrf and capture_eos",
+      "scope": "EOS state snapshot conditional on active capture"
+    },
+    {
+      "from": "wrf_sdirk3_pressure_stage_probe.cpp:55",
+      "to": "PressureEosContext",
+      "scope": "thread-local scoped capture and detached cloned tensors"
+    },
+    {
+      "from": "wrf_sdirk3_accepted_step_probe.h",
+      "to": "PressureEosContext",
+      "scope": "accepted endpoint receipt"
+    },
+    {
+      "from": "test_accepted_step_probe.cpp",
+      "to": "accepted_step_probe.h",
+      "scope": "helper unit fixture"
+    }
+  ],
+  "gaps": [
+    "AST edges do not prove runtime stage/branch selection, full callback state or W stagger/physical boundary mapping.",
+    "Extending PressureEosContext changes an internal C++ layout: all observed consumers must share consistent macro flags and be rebuilt, regardless of unchanged Fortran ABI.",
+    "Prior Tile source differs by an independently documented comment-only patch; rebuild it from current source.",
+    "Compiler dependencies capture prior configured preprocessor paths only; direct includes, new conditional branches and source identity require post-edit review."
+  ]
+}

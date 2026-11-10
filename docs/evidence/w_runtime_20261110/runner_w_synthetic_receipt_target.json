@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-11-10T15:34:02.144980+09:00",
+  "status": "passed",
+  "runner_sha256": "10d0b5d6f8cef955461f872660a4682bf928878857276e44d94e9213724a43ca",
+  "checks": [
+    "synthetic W metadata accepted",
+    "negative RDN rejected",
+    "metric hash mismatch rejected"
+  ],
+  "model_run": false
+}
