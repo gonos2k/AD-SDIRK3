@@ -1,0 +1,18 @@
+{
+  "timestamp_local": "2026-11-10T12:46:22.891528+09:00",
+  "status": "PASS_BOUNDED",
+  "scope": "Green review of saved outputs, provenance and representation; no MPFR/model replay",
+  "checks": [
+    "All 38 registered immutable input hashes match, registration SHA matches execution receipt, execution rc0 and immutable_inputs_unchanged=true.",
+    "Analysis reports 212544 cells for each of two states; all aggregate and 64-level decimal-to-binary64 values match companion hexadecimal encodings. Checker source, binary and reconstructed theta hashes match.",
+    "Upstream alb Linf upper 1.245771593971007e-15; composed native pressure Linf upper base 6.555505427197812e-11 Pa and accepted 6.656069455240462e-11 Pa.",
+    "Composed EOS compares native outputs directly with ideal-alb EOS; induced values are separate sensitivities and must not be added again. Native al_pert is absent, so induced al_pert is not a composed-native error.",
+    "64 widened exact-real tube levels have positive alpha and pow-base lower bounds and reference the saved analysis hash."
+  ],
+  "limits": [
+    "Theta input identity is FNV-qualified because the original theta array was not retained.",
+    "Rounded-input component estimates depend on trusted MPFR and captured context; exclude state formation, other RHS, scaling/norm, e_i and strict merit descent.",
+    "Widened tube is an exact-real function under original state-box and fixed-context assumptions, not a counterfactual binary64 execution.",
+    "No independent full-cell MPFR recalculation, model run or new forecast evidence in this review."
+  ]
+}

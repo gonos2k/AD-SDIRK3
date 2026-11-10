@@ -1,0 +1,41 @@
+{
+  "source_commit": "2c1dcce1d82560297b3259a5e7687dd52b2e38c2",
+  "script": "docs/evidence/eos_descent_20261110/descent_budget.py",
+  "relationships": [
+    {
+      "from": "README.md:27",
+      "to": "descent_budget.py",
+      "kind": "documented invocation",
+      "evidence": "python3 descent_budget.py"
+    },
+    {
+      "from": "descent_budget.py",
+      "to": "/Users/yhlee/AD-SDIRK3-review-evidence/forcing-path-20261103/run/accepted_step_probe.json",
+      "kind": "hard-coded absolute input",
+      "fields": [
+        "native_scaled_rms_before",
+        "native_scaled_rms_after"
+      ]
+    },
+    {
+      "from": "descent_budget.py",
+      "to": "descent_budget.json",
+      "kind": "writes adjacent file; overwrites existing file"
+    },
+    {
+      "from": "package_public.py:7",
+      "to": "descent_budget.py and descent_budget.json",
+      "kind": "copies existing evidence-root files into old EOS public bundle and regenerates manifest"
+    },
+    {
+      "from": "manifest.json",
+      "to": "descent_budget.py and descent_budget.json",
+      "kind": "records size and SHA-256 for packaged copies"
+    }
+  ],
+  "limits": [
+    "The script reads an external absolute-path receipt, not the adjacent public run receipt.",
+    "The package script is a historical publication helper with hard-coded original worktree paths, not automatically invoked by descent_budget.py.",
+    "A graph edge is not proof that the scalar formula establishes a full endpoint error bound."
+  ]
+}

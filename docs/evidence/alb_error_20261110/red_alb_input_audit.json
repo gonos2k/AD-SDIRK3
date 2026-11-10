@@ -1,0 +1,46 @@
+{
+  "time_local": "2026-11-10T12:33:24.588809+09:00",
+  "source_head": "400877e49ebb00f69e99082206a5efd663ff8cc1",
+  "source_sha256": {
+    "dyn_em/module_implicit_sdirk3.F": "3ac269a16728908bee61a4172e7a25163864694023cc21b0eede9ace0204c092",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_base_state_zerocopy.cpp": "ae97ff34de530ad4f50f5f7b7fa3b3a99bd676cf97cd10a3c4665c790673edf7",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp": "aa0e427293d7c118a1bcb5ed7613ef7b4f8f840d2f35ea49d3734064197a945e",
+    "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified.h": "5dc826964e19b1c2bc4d6c345789e3ee73d144a28c8ee183ad791c01148bbdb9",
+    "external/libtorch_wrf/sdirk3/wrf_hydrostatic_pressure.cpp": "08dea0ace700f6f03ebef9700bae7d0d656099e56a6f8df5fd711c216f545ed2"
+  },
+  "verdict": "feasible with theta fingerprint collision qualification and conditional scope",
+  "observations": [
+    "Fortran passes grid pb and t_init; zero-copy interface gathers contiguous Fortran tile into [j,k,i] FP32 and Tile setter clones PB and computes t_init+300.0f in FP32; normal RHS aligns both to FP64 input.",
+    "Independently reconstructed archived input PB and FP32 T_INIT+300 then FP64, packed [81,64,41] using periodic X copy and symmetric Y last-row copy. Byte FNV64 th_base=4185430885422016772 and p_base=14087318007462321114 match captured stage3 frame. Actual th_base bytes were not retained: equality remains a collision-qualified fingerprint observation, not direct byte proof.",
+    "PB reconstructed bytes are exactly equal to retained p_base NPY. Source context/frame supports CPU FP64 [81,64,41]; data-only FNV by itself does not encode dtype/shape.",
+    "Native EOS scalar receipt and Tile constants rd=287, cv=717.5, cp=1004.5, p1000mb=100000, t0=300. RD=287.04 is a different constant than this executable and must not silently replace 287; any sensitivity analysis is a different target."
+  ],
+  "manifest": {
+    "native_receipt": "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/accepted_step_probe.json",
+    "native_receipt_sha256": "9d252ca255cef90546f34119aefeb8df03c573413115241f9b09252aa956bd56",
+    "wrfinput": "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/wrfinput_d01",
+    "wrfinput_sha256": "c3e56611954a5f9c1de107b7c86ecef0a5ff0ea5456cf94f26abfaf31e9bf912",
+    "captured_alb": "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/eos_raw/alb.npy",
+    "captured_alb_sha256": "687ec8caca6b378a785aabe29aef2c648cf421e435a337e8b93c33cdf941ed5f",
+    "captured_p_base": "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/eos_raw/p_base.npy",
+    "captured_p_base_sha256": "806e3fc6452a8599dca5e80dd2f9f5cc0fdb2948cf9cc5dfe0e2a98b61a7385c",
+    "theta_reconstruction": "T_INIT [k,j,i] FP32 + 300.0f -> FP32, reorder [j,k,i], pack 81x64x41 boundary aliases, promote FP64",
+    "theta_data_fnv64": "4185430885422016772",
+    "pressure_data_fnv64": "14087318007462321114",
+    "rd": 287.0,
+    "cv": 717.5,
+    "cp": 1004.5,
+    "p1000mb": 100000.0,
+    "rank": 0,
+    "topology": [
+      1,
+      1
+    ]
+  },
+  "conditions": [
+    "Check actual selected input receipt/shape/dtype/hash, finite positive theta and PB and admissible exponent/pow domain, FP32 round-to-nearest addition and exact FP64 conversion; preserve raw hashes and verify authoritative source revision.",
+    "Potential theta hash collision and unretained upstream inputs remain; reconstruction and baseline initial-field agreement do not prove all Tile state or full context.",
+    "Analysis covers compute_inverse_density at reconstructed rounded inputs, not upstream WRF formation or full RHS/forcing."
+  ],
+  "validation": "read-only independent source and array reconstruction; no native model, source edit or test rerun"
+}

@@ -2,8 +2,8 @@
   "scope": "Public EOS component analysis and source/link/native receipts; not full WRF replay or full residual certification",
   "files": {
     "README.md": {
-      "bytes": 4398,
-      "sha256": "d3b4d32b9259326942ef6f3f3628ae353961b6740fb96e8ba84b587559f3c790"
+      "bytes": 4891,
+      "sha256": "6996689cf7c2136b774c5e00fd79bd97ad9a0f58b31d279d1cb3ee706e554c3d"
     },
     "check_stack.py": {
       "bytes": 2998,
@@ -14,8 +14,8 @@
       "sha256": "464bf5fbe10f88fed7ea704fc028742673d69129218342d45ff0ec6eaebf88f0"
     },
     "descent_budget.py": {
-      "bytes": 1012,
-      "sha256": "c5f0582ede9cd660d764fdd2ad241636053209a09c61d901c8c3671f7fe99d3d"
+      "bytes": 916,
+      "sha256": "bc34cc5abdc98f7484c94db840311c3d4c091ffdb820ca6e3786b69d04d62282"
     },
     "eos_domain_analysis.json": {
       "bytes": 42102,

@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-11-10T12:39:58.811442+09:00",
+  "status": "PASS_BOUNDED_PREREGISTRATION",
+  "sha256": {
+    "widen_alb_tube.py": "e28834ef345a1cbefe0798a1b4e0be4f99cb08ed58689c7a90d3246c117adeeb",
+    "test_widen_alb_tube.py": "88f3ae08f722d8dce3b8944eebfe2dd39642b13bc09f032cef0f58ff357ce927"
+  },
+  "findings": [
+    "Signed beta and c1*mu endpoint maxima / positive D_lo are conservative; Fraction bounds avoid conversion shrink.",
+    "CLI now requires historical receipt SHA 9d252c and original domain SHA 684aac, verified against actual historical files; analysis receipt hash also checked.",
+    "Empty levels, nonpositive a and negative K maxima rejected; widened zero crossing refused.",
+    "al_pert shift is input sensitivity only; original state-box and fixed-context assumptions remain."
+  ],
+  "scope": "Read-only review of frozen increment; prior synthetic test PASS reported by parent, not rerun; no actual data applied."
+}

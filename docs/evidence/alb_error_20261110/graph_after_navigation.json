@@ -1,0 +1,65 @@
+{
+  "source_commit": "400877e49ebb00f69e99082206a5efd663ff8cc1",
+  "graph_sha256": "0023cf571919652a030ac207aaa2a234e3ddd9efa634640ac276a77a10027652",
+  "pins_sha256": "69dd89c6a751e3d826009fd1d46d0be8d3632ffd1f0a7ab25fc56fc7e7680e6a",
+  "analysis_files": [
+    "docs/evidence/eos_descent_20261110/descent_budget.py",
+    "docs/evidence/eos_descent_20261110/package_public.py",
+    "docs/evidence/alb_error_20261110/alb_mpfr.cpp",
+    "docs/evidence/alb_error_20261110/evaluate_alb.py",
+    "docs/evidence/alb_error_20261110/reconstruct_alb_inputs.py",
+    "docs/evidence/alb_error_20261110/test_alb_mpfr.py",
+    "docs/evidence/alb_error_20261110/widen_alb_tube.py",
+    "docs/evidence/alb_error_20261110/test_widen_alb_tube.py",
+    "docs/evidence/alb_error_20261110/register_and_run_alb.py",
+    "docs/evidence/alb_error_20261110/publish_alb.py"
+  ],
+  "gaps": [
+    "AST calls and imports may not represent subprocesses, string paths, ignored runtime data or mathematical assumptions.",
+    "43 C++ sources are unchanged and re-anchored; Fortran and other production sources are outside the corpus.",
+    "Analysis outputs, theorem assumptions and endpoint data need independent validation; graph relationships do not establish bounds."
+  ],
+  "workspace_note": "Some tracked documentation and ignored analysis artifacts can be modified independently of HEAD; exact source hashes above identify captured content.",
+  "relationships": [
+    {
+      "from": "alb_error_20261110/README.md:16",
+      "to": "alb_mpfr.cpp and tests",
+      "kind": "documented build and test commands"
+    },
+    {
+      "from": "alb_error_20261110/README.md:19",
+      "to": "evaluate_alb.py and widen_alb_tube.py",
+      "kind": "documented replay sequence"
+    },
+    {
+      "from": "register_and_run_alb.py:14",
+      "to": "evaluate_alb.py",
+      "kind": "subprocess with pinned receipt, raw data, theta and reconstruction inputs"
+    },
+    {
+      "from": "evaluate_alb.py:131",
+      "to": "alb_mpfr executable built from alb_mpfr.cpp",
+      "kind": "checker subprocess"
+    },
+    {
+      "from": "test_widen_alb_tube.py:3",
+      "to": "widen_alb_tube.evaluate",
+      "kind": "Python import"
+    },
+    {
+      "from": "alb_error_20261110/README.md:38",
+      "to": "eos_descent_20261110/descent_budget.py",
+      "kind": "documents stdout redirection"
+    },
+    {
+      "from": "eos_descent_20261110/descent_budget.py:5",
+      "to": "eos_descent_20261110/run/accepted_step_probe.json",
+      "kind": "adjacent receipt input"
+    },
+    {
+      "from": "publish_alb.py:6",
+      "to": "analysis and test artifacts",
+      "kind": "historical explicit packaging file list"
+    }
+  ]
+}

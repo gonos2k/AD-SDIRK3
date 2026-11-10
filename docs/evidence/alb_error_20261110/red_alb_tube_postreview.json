@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-11-10T12:46:05.785188+09:00",
+  "status": "PASS_BOUNDED_OFFLINE",
+  "critical_findings": [],
+  "sha256": {
+    "alb_analysis.json": "2f9f9de1110de620c1725c2bb7727ee87c3773fa69aca6cc68b5ff4d8db051a2",
+    "widened_tube_analysis.json": "1bf91dfbf43f527410f375436806a3823973dc2566add17f4dcdf0dc9b5b9868",
+    "alb_execution.json": "ea84b7db699f4ae87de19560d0b9a76d4f80d912ad82f8956f707126c12cf80f",
+    "widen_alb_tube.py": "e28834ef345a1cbefe0798a1b4e0be4f99cb08ed58689c7a90d3246c117adeeb"
+  },
+  "checks": [
+    "64 levels independently recomputed with exact Fractions: beta/D, al_pert sensitivity, alpha widening and pow-base endpoints match saved rows; all alpha lower bounds positive.",
+    "Maximum alpha shift 1.24605184706512e-15 m3/kg; exact lower fractions differ at every level though rounded decimal may appear unchanged.",
+    "Widened analysis pins exact historical receipt and original domain, plus new alb analysis; recorded offline execution rc=0 and immutable inputs unchanged."
+  ],
+  "limits": [
+    "Exact-real EOS under original state-box/fixed-input assumptions, conditional same-cell reconstructed theta fingerprint and MPFR bounds; no counterfactual native FP, full RHS, norm or merit decrease certificate.",
+    "al_pert change is input sensitivity only, not native arithmetic bound.",
+    "No MPFR/native/test rerun by reviewer."
+  ]
+}

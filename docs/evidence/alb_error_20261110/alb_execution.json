@@ -1,0 +1,18 @@
+{
+  "command": [
+    "python3",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/alb-error-propagation-20261110/evaluate_alb.py",
+    "/Users/yhlee/SDIRK3-review-worktrees/alb-error-propagation-20261110/docs/evidence/eos_descent_20261110/run/accepted_step_probe.json",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/eos-descent-20261110/run/eos_raw",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/alb-error-propagation-20261110/reconstructed/theta_base.npy",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/alb-error-propagation-20261110/reconstructed/reconstruction.json",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/alb-error-propagation-20261110/alb_analysis.json"
+  ],
+  "registration_sha256": "cefd40316241a3f3a353b5c60e5fb9342275bbe959763644144bd28073ba5528",
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "status": "completed",
+  "elapsed_seconds": 248.28803758276626,
+  "immutable_inputs_unchanged": true
+}

@@ -1,0 +1,143 @@
+{
+  "scope": "offline alb and composed EOS component, fingerprint-qualified theta input; not full RHS or exact merit certificate",
+  "native_data_revision": "354748d60248d2b407ef18b646b618e28cbf445a",
+  "code_baseline": "2c1dcce1d82560297b3259a5e7687dd52b2e38c2",
+  "files": {
+    "README.md": {
+      "bytes": 5623,
+      "sha256": "db034453a1b147ebd4fe832176cbbc8112c1cd13f608dbc28148bd646da77936"
+    },
+    "alb_analysis.json": {
+      "bytes": 57226,
+      "sha256": "2f9f9de1110de620c1725c2bb7727ee87c3773fa69aca6cc68b5ff4d8db051a2"
+    },
+    "alb_execution.json": {
+      "bytes": 908,
+      "sha256": "ea84b7db699f4ae87de19560d0b9a76d4f80d912ad82f8956f707126c12cf80f"
+    },
+    "alb_mpfr.cpp": {
+      "bytes": 10887,
+      "sha256": "3e72481bf236d0e7245f49ea8b71e446cef43886c4284ffbdef083d7df02d376"
+    },
+    "alb_preanalysis_test_receipt.json": {
+      "bytes": 2150,
+      "sha256": "392e6ddbdad6e3012494924ebff09ea37723010b5711e3c96b20b206c2dedfbd"
+    },
+    "alb_registration.json": {
+      "bytes": 7242,
+      "sha256": "cefd40316241a3f3a353b5c60e5fb9342275bbe959763644144bd28073ba5528"
+    },
+    "component_summary.json": {
+      "bytes": 649,
+      "sha256": "828654a7d1c00739ce7fab2be75ac0bf99635f080d01db04453f208133498059"
+    },
+    "descent_replay_validation.json": {
+      "bytes": 847,
+      "sha256": "341629bbe1a7682736a1251e154048701a15472cc168faf8970a7d40e445afaa"
+    },
+    "evaluate_alb.py": {
+      "bytes": 5673,
+      "sha256": "0329f54d0910e03b0019cce08211523abb6a7b7f5486434a9eee187b7a985610"
+    },
+    "graph_after.json.gz": {
+      "bytes": 52459,
+      "sha256": "8b0529d6fb83375f4302a0266b584ff68d97df228237b832627f49510e90109e"
+    },
+    "graph_after_navigation.json": {
+      "bytes": 2682,
+      "sha256": "0291bdfe58b94d523fb95e23ac3a497e07119bb52c2706d176be555c3032346f"
+    },
+    "graph_after_pins.json": {
+      "bytes": 8355,
+      "sha256": "69dd89c6a751e3d826009fd1d46d0be8d3632ffd1f0a7ab25fc56fc7e7680e6a"
+    },
+    "graph_before_navigation.json": {
+      "bytes": 1493,
+      "sha256": "3ae9f6967b83f746c3d931f00fb70ec29fb0e9d3be5966e3fd050d342689406b"
+    },
+    "graph_before_pins.json": {
+      "bytes": 7378,
+      "sha256": "21e34bb62e15643978cdeb1fa3329deaad04303c344466e27ccf158b227eb687"
+    },
+    "green_alb_input_feasibility.json": {
+      "bytes": 3611,
+      "sha256": "99d17c3c12169b6164b44e78142c9708784e79df7135ae983dc48cf1558e8f23"
+    },
+    "green_alb_result_review.json": {
+      "bytes": 1600,
+      "sha256": "4f862e606461649d1ffbafe16c2c5aaa70044f0d888f155af22d059dd3cecee5"
+    },
+    "publish_alb.py": {
+      "bytes": 1197,
+      "sha256": "07b8f05677dcbd5625f8c1bf1bc8cf6855a497aec3d94676d81d218508d3f62d"
+    },
+    "reconstruct_alb_inputs.py": {
+      "bytes": 2848,
+      "sha256": "ecc0b77f4ae52a95915b1ab462d1cae31b48b9ee16c79932c89c4d8dcb335953"
+    },
+    "reconstruction.json": {
+      "bytes": 834,
+      "sha256": "64b144b67797e6d31622faacc4edbf79e196199d1b3e1ed0e4786377c2b1e09a"
+    },
+    "red_alb_checker_preflight.json": {
+      "bytes": 2238,
+      "sha256": "fce69b47267ecd1f5411d3ecf34c415d60273ef26090d870401ea6f64297a995"
+    },
+    "red_alb_input_audit.json": {
+      "bytes": 3791,
+      "sha256": "53afd5729912858d4889e79b6e0523f330c4fcdc4c2d92b62739dd96848e84cb"
+    },
+    "red_alb_propagation_plan.json": {
+      "bytes": 2448,
+      "sha256": "ae5c7188dc4472441b612017dd741517779bec2f9c28d24c3b25ac3639c39919"
+    },
+    "red_alb_result_review.json": {
+      "bytes": 1249,
+      "sha256": "128ffeba9a86082ac64b46f07c7d7ee26cebb6592a5e535c95aec779929caa78"
+    },
+    "red_alb_tube_plan.json": {
+      "bytes": 1528,
+      "sha256": "e8323d15575c360949707bd919f31850015fcb9bd52f012be075d5d3e73c3894"
+    },
+    "red_alb_tube_postreview.json": {
+      "bytes": 1383,
+      "sha256": "71d2672f378f3aa736bc8c01959d1afa8c104ab48b7dd1bf9a42d12139e263b2"
+    },
+    "red_alb_tube_preflight.json": {
+      "bytes": 947,
+      "sha256": "a420441b8fcb316427fc57d77c555b38a09ea3a8cf5c956a5f78d7a0561060af"
+    },
+    "red_final_review.json": {
+      "bytes": 889,
+      "sha256": "5c461854c3731ef428c143bc552b00ef0a543b66574a6daf1ce82fd4911cd19b"
+    },
+    "register_and_run_alb.py": {
+      "bytes": 3050,
+      "sha256": "13ebc102cc3274b8d9d321f42f9cfd46b6cb76f94af77068610e69d72b4b5955"
+    },
+    "test_alb_mpfr.py": {
+      "bytes": 6828,
+      "sha256": "0d6573155a3725ddbdf3e8504c416a96b852f687dcb22562bff56f94885266a5"
+    },
+    "test_widen_alb_tube.py": {
+      "bytes": 1348,
+      "sha256": "88f3ae08f722d8dce3b8944eebfe2dd39642b13bc09f032cef0f58ff357ce927"
+    },
+    "theta_base.npy.gz": {
+      "bytes": 13283,
+      "sha256": "9c1617c0de6de81687834a75951c4ced940ef35a29376f447c358dcf6bf4924a"
+    },
+    "widen_alb_tube.py": {
+      "bytes": 4829,
+      "sha256": "e28834ef345a1cbefe0798a1b4e0be4f99cb08ed58689c7a90d3246c117adeeb"
+    },
+    "widened_tube_analysis.json": {
+      "bytes": 57981,
+      "sha256": "1bf91dfbf43f527410f375436806a3823973dc2566add17f4dcdf0dc9b5b9868"
+    },
+    "green_final_review.json": {
+      "bytes": 1532,
+      "sha256": "ac69b053c189db2b02b92e9472fc6e51299f7a335c37db7b368bcb5429f68c8f"
+    }
+  }
+}

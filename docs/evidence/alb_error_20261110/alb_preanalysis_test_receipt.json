@@ -1,0 +1,38 @@
+{
+  "timestamp_local": "2026-11-10T12:37:56.288156+09:00",
+  "status": "PASS_SYNTHETIC",
+  "returncode": 0,
+  "stdout": "PASS exact identity, wrong alb propagation and al_pert factor, domain crossing, rdnw sign, receipt metadata wrapper\n",
+  "stderr": "",
+  "compile_argv": [
+    "clang++",
+    "-std=c++17",
+    "-O2",
+    "-I/opt/homebrew/include",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/alb-error-propagation-20261110/alb_mpfr.cpp",
+    "-L/opt/homebrew/lib",
+    "-lmpfr",
+    "-lgmp",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/alb-error-propagation-20261110/alb_mpfr"
+  ],
+  "compiler": "Apple clang version 21.0.0 (clang-2100.4.1.1)",
+  "sha256": {
+    "alb_mpfr.cpp": "3e72481bf236d0e7245f49ea8b71e446cef43886c4284ffbdef083d7df02d376",
+    "alb_mpfr": "188173e0ff31945a6213fb38c49f1c9b89d45555cae8c8e8b0bfd5b42458961a",
+    "evaluate_alb.py": "0329f54d0910e03b0019cce08211523abb6a7b7f5486434a9eee187b7a985610",
+    "test_alb_mpfr.py": "0d6573155a3725ddbdf3e8504c416a96b852f687dcb22562bff56f94885266a5",
+    "reconstruct_alb_inputs.py": "ecc0b77f4ae52a95915b1ab462d1cae31b48b9ee16c79932c89c4d8dcb335953",
+    "reconstructed/theta_base.npy": "f3d7d9d7ab0f091d99db3f603ad51020451c18bf7e76996ff9e1f7eeb20a084f",
+    "reconstructed/reconstruction.json": "64b144b67797e6d31622faacc4edbf79e196199d1b3e1ed0e4786377c2b1e09a"
+  },
+  "method": "256-bit directed MPFR; upstream alb ideal, induced delta alpha/al_pert/pressure and direct composed native alpha/pressure",
+  "source_attribution": "NPY and interval helpers adapted from eos-descent eos_mpfr.cpp SHA c0cb5b2e3bbe358f64aab99eaa40371d63f3e9698f040daaea3b75e0ceb492bb",
+  "limitations": [
+    "Native al_pert not retained; only induced real delta is computed, no composed-native al_pert bound.",
+    "Reconstructed theta matches recorded FNV only; original theta bytes unavailable.",
+    "No actual-data MPFR analysis has run; await preflight review.",
+    "Scope excludes state formation, other RHS, norm, e_i and full descent."
+  ],
+  "extra_checks": "reconstruction theta_shape and theta_dtype verified; tests reject invalid reconstruction metadata before output creation"
+}
