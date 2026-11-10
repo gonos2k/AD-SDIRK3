@@ -74,4 +74,31 @@ int main() {
     threw=false; auto changed=wa; changed.top_rdnw=5;
     try { (void)w_runtime(wb,changed,scale,1,2); } catch (...) { threw=true; }
     assert(threw);
+    PressureEosContext ref;
+    ref.t=torch::ones({2,1,2},o); ref.rdnw=torch::tensor({2.},o);
+    ref.geometry.theta_base=torch::ones_like(ref.t)*300;
+    ref.geometry.c1f=torch::tensor({.5,1.},o); ref.geometry.c2f=torch::tensor({2.,3.},o);
+    auto& wr=ref.w_reference; wr.seen=wr.w_seen=wr.profile_ok=wr.pre_pgf_zero=true;
+    wr.mass_rdnw=ref.rdnw.clone(); wr.rdx=wr.rdy=.001f;
+    wr.input_dtypes.fill(int(torch::kFloat64));
+    wr.input_shapes={std::vector<int64_t>{1,1,2},std::vector<int64_t>{2,1,1},
+        std::vector<int64_t>{1,1},std::vector<int64_t>{1,1},std::vector<int64_t>{2,2,2}};
+    auto ref_trial=ref; auto full=torch::arange(13,o); auto weights=torch::ones_like(full);
+    wrf::sdirk3::StateLayout layout; layout.is_exact=true; layout.total_size=13;
+    layout.blocks={{"ru",0,2},{"rv",2,2},{"rw",4,2},{"ph",6,2},{"t",8,4},{"mu",12,1}};
+    char tempdir[]="/tmp/w_reference_test_XXXXXX"; assert(mkdtemp(tempdir));
+    char olddir[4096]; assert(getcwd(olddir,sizeof(olddir))); assert(chdir(tempdir)==0);
+    threw=false; auto invalid=ref_trial; invalid.w_reference.profile_ok=false;
+    try { (void)write_w_reference(ref,invalid,full,full,full,full,full,weights,layout); } catch (...) { threw=true; }
+    assert(threw);
+    auto captured=write_w_reference(ref,ref_trial,full,full,full,full,full,weights,layout);
+    assert(captured.find("\"scope\":\"native_stage3_w_reference_inputs_v1\"")!=std::string::npos &&
+           captured.find("\"name\":\"mass_rdnw\"")!=std::string::npos);
+    threw=false;
+    try { (void)write_w_reference(ref,ref_trial,full,full,full,full,full,weights,layout); } catch (...) { threw=true; }
+    assert(threw);
+    for(const char* name : {"B","K0","K1","R0","R1","theta_base","c1f","c2f","mass_rdnw"}) {
+        auto path=std::string("w_reference/")+name+".npy"; assert(std::remove(path.c_str())==0);
+    }
+    assert(rmdir("w_reference")==0); assert(chdir(olddir)==0); assert(rmdir(tempdir)==0);
 }

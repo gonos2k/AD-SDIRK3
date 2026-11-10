@@ -93,6 +93,54 @@ void capture_v_primary(const PressureVPrimaryContext& input) {
 }
 #endif
 void mark_capture_failed() noexcept { if (active_eos_context) active_eos_context->failed=true; }
+void capture_w_reference_mass(const torch::Tensor& rdnw,const torch::Tensor& u,const torch::Tensor& v,
+    const torch::Tensor& mu,const torch::Tensor& mub,const torch::Tensor& qv,const torch::Tensor& cqw,
+    const std::array<torch::Tensor,6>& maps,float rdx,float rdy,bool profile_ok) noexcept {
+    if (!active_eos_context) return;
+    auto& c=active_eos_context->w_reference;
+    if (c.seen) {c.duplicate=true; return;} c.seen=true;
+    try {
+        torch::NoGradGuard guard;
+        TORCH_CHECK(rdnw.defined() && rdnw.is_cpu() && rdnw.dim()==1 &&
+            rdnw.scalar_type()==torch::kFloat64 && rdnw.numel()>0 &&
+            torch::isfinite(rdnw).all().item<bool>() && rdnw.gt(0).all().item<bool>() &&
+            std::isfinite(rdx) && rdx>0 && std::isfinite(rdy) && rdy>0, "invalid W reference mass inputs");
+        c.mass_rdnw=rdnw.detach().contiguous().clone(); c.rdx=rdx; c.rdy=rdy; c.profile_ok=profile_ok;
+        for (const auto& map:maps) c.profile_ok &= map.defined() && map.numel()>0 &&
+            torch::isfinite(map).all().item<bool>() && map.eq(1).all().item<bool>();
+        const auto dry=[](const torch::Tensor& x) {return !x.defined() || x.numel()==0 ? 0 :
+            (torch::isfinite(x).all().item<bool>() && x.eq(0).all().item<bool>() ? 1 : 2);};
+        c.qv_status=dry(qv); c.cqw_status=dry(cqw);
+        c.profile_ok &= c.qv_status!=2 && c.cqw_status!=2;
+        const std::array<torch::Tensor,4> inputs={u,v,mu,mub};
+        for(size_t i=0;i<inputs.size();++i) {
+            const auto& x=inputs[i];
+            TORCH_CHECK(x.defined() && x.is_cpu() && x.scalar_type()==torch::kFloat64 &&
+                        torch::isfinite(x).all().item<bool>(), "invalid W reference state input");
+            auto y=x.detach().contiguous();
+            uint64_t h=14695981039346656037ULL; const auto* bytes=static_cast<const unsigned char*>(y.data_ptr());
+            for(size_t j=0;j<y.nbytes();++j) {h^=bytes[j];h*=1099511628211ULL;}
+            c.input_hashes[i]=h; c.input_dtypes[i]=int(y.scalar_type());
+            c.input_shapes[i]=x.sizes().vec();
+        }
+    } catch (...) {c.failed=true;}
+}
+void capture_w_reference_step(const torch::Tensor& w,const torch::Tensor& pre_pgf_rw) noexcept {
+    if (!active_eos_context) return;
+    auto& c=active_eos_context->w_reference;
+    if(c.w_seen) {c.duplicate=true;return;} c.w_seen=true;
+    try {
+        torch::NoGradGuard guard;
+        TORCH_CHECK(w.defined() && w.is_cpu() && w.scalar_type()==torch::kFloat64 &&
+            pre_pgf_rw.defined() && torch::isfinite(w).all().item<bool>() &&
+            torch::isfinite(pre_pgf_rw).all().item<bool>(), "invalid W pre-PGF state");
+        auto y=w.detach().contiguous(); uint64_t h=14695981039346656037ULL;
+        const auto* bytes=static_cast<const unsigned char*>(y.data_ptr());
+        for(size_t j=0;j<y.nbytes();++j) {h^=bytes[j];h*=1099511628211ULL;}
+        c.input_hashes[4]=h;c.input_dtypes[4]=int(y.scalar_type());c.input_shapes[4]=w.sizes().vec();
+        c.pre_pgf_zero=pre_pgf_rw.eq(0).all().item<bool>();
+    } catch (...) {c.failed=true;}
+}
 void capture_w_interior(const torch::Tensor& rdn,int64_t used_end,float gravity,bool canonical,
                         const torch::Tensor& cq1,const torch::Tensor& msfty) noexcept {
     if (!active_eos_context) return;
@@ -152,6 +200,7 @@ void capture_eos(const torch::Tensor& ph,const torch::Tensor& t,const torch::Ten
     try {
         torch::NoGradGuard guard;
         PressureEosContext snapshot;
+        snapshot.w_reference=std::move(c.w_reference);
         snapshot.ph=ph.detach().clone(); snapshot.t=t.detach().clone(); snapshot.mu=mu.detach().clone();
         snapshot.mu_base=mu_base.detach().clone(); snapshot.alb=alb.detach().clone();
         snapshot.p_base=p_base.detach().clone(); snapshot.c1h=c1h.detach().clone();
@@ -164,6 +213,7 @@ void capture_eos(const torch::Tensor& ph,const torch::Tensor& t,const torch::Ten
         dst.msfux=geometry.msfux.detach().clone(); dst.msfuy=geometry.msfuy.detach().clone();
         dst.msfvx=geometry.msfvx.detach().clone(); dst.msfvy=geometry.msfvy.detach().clone();
         dst.ground_phi=geometry.ground_phi.detach().clone();
+        if (geometry.theta_base.defined()) dst.theta_base=geometry.theta_base.detach().clone();
         dst.rdx=geometry.rdx; dst.rdy=geometry.rdy; dst.gravity=geometry.gravity;
         dst.whole_single_rank=geometry.whole_single_rank;
         dst.packed_periodic_x_symmetric_y=geometry.packed_periodic_x_symmetric_y;

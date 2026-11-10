@@ -210,6 +210,101 @@ inline std::string w_runtime(
         << wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(sinv))) << "}}";
     return out.str();
 }
+// Serialized stored-binary operands for the bounded full-W reference only.
+inline std::string write_w_reference(
+        const wrf::sdirk3::pressure_stage_probe::PressureEosContext& base,
+        const wrf::sdirk3::pressure_stage_probe::PressureEosContext& accepted,
+        const Tensor& B,const Tensor& K0,const Tensor& K1,const Tensor& R0,const Tensor& R1,
+        const Tensor& sinv,const wrf::sdirk3::StateLayout& layout) {
+    torch::NoGradGuard guard;
+    const auto& x=base.w_reference; const auto& y=accepted.w_reference;
+    const auto equal=[](const Tensor& a,const Tensor& b) {
+        return a.defined() && b.defined() && a.is_cpu() && b.is_cpu() && a.scalar_type()==b.scalar_type() &&
+            a.sizes()==b.sizes() && torch::isfinite(a).all().item<bool>() &&
+            torch::isfinite(b).all().item<bool>() && torch::equal(a,b) &&
+            wrf_terminal_jvp::hash(a)==wrf_terminal_jvp::hash(b);
+    };
+    TORCH_CHECK(x.seen && y.seen && x.w_seen && y.w_seen && !x.failed && !y.failed &&
+        !x.duplicate && !y.duplicate && x.profile_ok && y.profile_ok && x.pre_pgf_zero && y.pre_pgf_zero &&
+        x.qv_status==y.qv_status && x.cqw_status==y.cqw_status &&
+        std::memcmp(&x.rdx,&y.rdx,sizeof(float))==0 && std::memcmp(&x.rdy,&y.rdy,sizeof(float))==0 &&
+        equal(x.mass_rdnw,y.mass_rdnw) && equal(x.mass_rdnw,base.rdnw) &&
+        equal(y.mass_rdnw,accepted.rdnw) && equal(base.geometry.theta_base,accepted.geometry.theta_base) &&
+        equal(base.geometry.c1f,accepted.geometry.c1f) && equal(base.geometry.c2f,accepted.geometry.c2f) &&
+        base.geometry.theta_base.sizes()==base.t.sizes() && base.t.dim()==3 &&
+        base.geometry.c1f.dim()==1 && base.geometry.c2f.dim()==1 &&
+        base.geometry.c1f.numel()==base.t.size(1)+1 && base.geometry.c2f.numel()==base.t.size(1)+1 &&
+        x.mass_rdnw.numel()==base.t.size(1) &&
+        layout.is_exact && layout.total_size==B.numel() && layout.blocks.size()==6 &&
+        B.dim()==1 && B.scalar_type()==torch::kFloat64 && B.sizes()==K0.sizes() && B.sizes()==K1.sizes() &&
+        B.sizes()==R0.sizes() && B.sizes()==R1.sizes() && B.sizes()==sinv.sizes(),
+        "unsupported or inconsistent W reference inputs");
+    const int64_t ny=base.t.size(0),nz=base.t.size(1),nx=base.t.size(2);
+    TORCH_CHECK(ny>1 && nx>1, "unsupported packed dimensions");
+    const std::array<std::vector<int64_t>,5> expected_shapes={
+        std::vector<int64_t>{ny-1,nz,nx},std::vector<int64_t>{ny,nz,nx-1},
+        std::vector<int64_t>{ny-1,nx-1},std::vector<int64_t>{ny-1,nx-1},
+        std::vector<int64_t>{ny,nz+1,nx}};
+    for(size_t i=0;i<expected_shapes.size();++i)
+        TORCH_CHECK(x.input_dtypes[i]==int(torch::kFloat64) && y.input_dtypes[i]==int(torch::kFloat64) &&
+            x.input_shapes[i]==expected_shapes[i] && y.input_shapes[i]==expected_shapes[i],
+            "W native input metadata mismatch");
+    TORCH_CHECK(::mkdir("w_reference",0700)==0,"cannot create exclusive w_reference directory");
+    const std::array<std::pair<const char*,const Tensor*>,9> fields={{
+        {"B",&B},{"K0",&K0},{"K1",&K1},{"R0",&R0},{"R1",&R1},
+        {"theta_base",&base.geometry.theta_base},{"c1f",&base.geometry.c1f},
+        {"c2f",&base.geometry.c2f},{"mass_rdnw",&x.mass_rdnw}
+    }};
+    const auto input_json=[](const wrf::sdirk3::pressure_stage_probe::WReferenceEvidence& c) {
+        static const std::array<const char*,5> names={"u","v","mu","mub","w"};
+        std::ostringstream o; o << "[";
+        for(size_t i=0;i<names.size();++i) {
+            if(i) o << ',';
+            o << "{\"name\":" << wrf_terminal_jvp::quote(names[i])
+              << ",\"dtype\":" << c.input_dtypes[i] << ",\"shape\":[";
+            for(size_t j=0;j<c.input_shapes[i].size();++j) {if(j) o << ',';o << c.input_shapes[i][j];}
+            o << "],\"fnv64\":" << wrf_terminal_jvp::quote(std::to_string(c.input_hashes[i])) << "}";
+        }
+        o << "]";return o.str();
+    };
+    std::ostringstream out; out << std::setprecision(17)
+        << "{\"scope\":\"native_stage3_w_reference_inputs_v1\",\"format\":\"flat_npy_little_endian_float64\","
+        << "\"rdx_f32\":" << static_cast<double>(x.rdx) << ",\"rdy_f32\":" << static_cast<double>(x.rdy)
+        << ",\"profile\":{\"implicit_only\":true,\"canonical_horizontal\":true,\"packed\":true,"
+        << "\"hevi\":false,\"split_explicit\":false,\"implicit_transport\":false,"
+        << "\"mu_horizontal\":true,\"mu_fortran_parity\":true,\"nan_sanitize\":0,"
+        << "\"wrf_w_damping\":0,\"six_maps_unit\":true,\"pre_pgf_rw_zero\":true,"
+        << "\"qv_status\":" << x.qv_status << ",\"cqw_status\":" << x.cqw_status << "}"
+        << ",\"mass_rdnw_matches_eos\":true,\"base_input_hashes\":" << input_json(x)
+        << ",\"accepted_input_hashes\":" << input_json(y) << ",\"layout\":[";
+    for(size_t i=0;i<layout.blocks.size();++i) {
+        const auto& block=layout.blocks[i];
+        TORCH_CHECK(block.start>=0 && block.size>0 && block.start+block.size<=sinv.numel(),"invalid W layout");
+        const auto weights=sinv.slice(0,block.start,block.start+block.size);
+        TORCH_CHECK(torch::isfinite(weights).all().item<bool>() && weights.gt(0).all().item<bool>(),"invalid weights");
+        if(i) out << ',';
+        out << "{\"name\":" << wrf_terminal_jvp::quote(block.name) << ",\"start\":" << block.start
+            << ",\"size\":" << block.size << ",\"sinv_min\":" << weights.min().item<double>()
+            << ",\"sinv_max\":" << weights.max().item<double>() << "}";
+    }
+    out << "],\"files\":[";
+    for(size_t i=0;i<fields.size();++i) {
+        const auto& t=*fields[i].second;
+        TORCH_CHECK(t.defined() && t.is_cpu() && t.numel()>0 &&
+            (t.scalar_type()==torch::kFloat32 || t.scalar_type()==torch::kFloat64) &&
+            torch::isfinite(t).all().item<bool>(),"invalid W reference tensor");
+        const auto flat=t.detach().to(torch::kFloat64).contiguous().view({-1});
+        const std::string path=std::string("w_reference/")+fields[i].first+".npy";
+        TORCH_CHECK(wrf::sdirk3::linear_delay_audit::write_npy(path.c_str(),flat),"W reference write failed");
+        if(i) out << ',';
+        out << "{\"name\":" << wrf_terminal_jvp::quote(fields[i].first) << ",\"path\":"
+            << wrf_terminal_jvp::quote(path) << ",\"source_dtype\":" << int(t.scalar_type()) << ",\"shape\":[";
+        for(int64_t j=0;j<t.dim();++j) {if(j) out << ',';out << t.size(j);}
+        out << "],\"elements\":" << t.numel() << ",\"data_bytes\":" << flat.nbytes()
+            << ",\"fnv64\":" << wrf_terminal_jvp::quote(std::to_string(wrf_terminal_jvp::hash(flat))) << "}";
+    }
+    out << "]}";return out.str();
+}
 inline std::string measure(const Tensor& base_k,const Tensor& base_r,const Tensor& scale_inv,
                            const Tensor& post_k,const Tensor& post_r,
                            const Tensor& observed_k,const Tensor& observed_r,

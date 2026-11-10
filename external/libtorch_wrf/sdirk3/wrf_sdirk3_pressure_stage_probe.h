@@ -2,6 +2,9 @@
 
 #ifdef WRF_SDIRK3_PRESSURE_STAGE_PROBE
 #include <torch/torch.h>
+#include <array>
+#include <vector>
+#include <cstdint>
 #ifdef WRF_SDIRK3_PRESSURE_A5
 #include <functional>
 #endif
@@ -11,7 +14,7 @@ struct StateLayout;
 class UnifiedPreconditioner;
 namespace pressure_stage_probe {
 struct PressureGeometryEvidence {
-    torch::Tensor c1f,c2f,rdn,msftx,msfty,msfux,msfuy,msfvx,msfvy,ground_phi;
+    torch::Tensor c1f,c2f,rdn,msftx,msfty,msfux,msfuy,msfvx,msfvy,ground_phi,theta_base;
     float rdx=0,rdy=0,gravity=0;
     bool whole_single_rank=false,packed_periodic_x_symmetric_y=false;
 };
@@ -35,12 +38,22 @@ struct WConsumerEvidence {
     bool canonical=false, cq1_is_one=false;
     bool interior_seen=false, top_seen=false, mass_seen=false, duplicate=false, failed=false;
 };
+struct WReferenceEvidence {
+    torch::Tensor mass_rdnw;
+    std::array<uint64_t,5> input_hashes{};
+    std::array<int,5> input_dtypes{};
+    std::array<std::vector<int64_t>,5> input_shapes;
+    float rdx=0, rdy=0;
+    int qv_status=0, cqw_status=0; // 0 absent, 1 present zero, 2 invalid/nonzero
+    bool seen=false, duplicate=false, failed=false, profile_ok=false, pre_pgf_zero=false, w_seen=false;
+};
 struct PressureEosContext {
     torch::Tensor ph,t,mu,mu_base,alb,p_base,c1h,c2h,rdnw,alt,p_pert;
     float rd=0,cv=0,cp=0,p0=0,t0=0;
     bool captured=false,duplicate=false,failed=false;
     PressureGeometryEvidence geometry;
     WConsumerEvidence w_consumer;
+    WReferenceEvidence w_reference;
 #ifdef WRF_SDIRK3_PRESSURE_A5
     PressureVPrimaryContext v_primary;
 #endif
@@ -60,6 +73,10 @@ void capture_v_primary(const PressureVPrimaryContext& input);
 void mark_v_primary_capture_failed() noexcept;
 #endif
 void mark_capture_failed() noexcept;
+void capture_w_reference_mass(const torch::Tensor& rdnw,const torch::Tensor& u,const torch::Tensor& v,
+    const torch::Tensor& mu,const torch::Tensor& mub,const torch::Tensor& qv,const torch::Tensor& cqw,
+    const std::array<torch::Tensor,6>& maps,float rdx,float rdy,bool profile_ok) noexcept;
+void capture_w_reference_step(const torch::Tensor& w,const torch::Tensor& pre_pgf_rw) noexcept;
 void capture_w_interior(const torch::Tensor& rdn,int64_t used_end,float gravity,bool canonical,
                         const torch::Tensor& cq1,const torch::Tensor& msfty) noexcept;
 void capture_w_top(float rdnw) noexcept;

@@ -15999,10 +15999,30 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         auto dev = u.device();
         auto dtp = u.scalar_type();
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+        auto reference_mass_rdnw=getRdnwTensor(dev,dtp,nz_);
+        auto dnw_t = -torch::reciprocal(reference_mass_rdnw);
+#else
         auto dnw_t = -torch::reciprocal(getRdnwTensor(dev, dtp, nz_));
+#endif
         const bool packed = isPackedPeriodicDomain();
         const int64_t m = ny_o - (packed ? 1 : 0);
         const int64_t n = nx_o - (packed ? 1 : 0);
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+        if (wrf::sdirk3::pressure_stage_probe::capture_active()) {
+            const auto& cfg=wrf::sdirk3::g_sdirk3_config;
+            const bool supported=mode==wrf::sdirk3::RhsMode::ImplicitOnly && canonical_horizontal &&
+                packed && !g_export_coupled_slow && cfg.imex_split_mode==3 && !cfg.hevi_split &&
+                !cfg.split_explicit && !usesImplicitTransport() && cfg.effective_mu_horizontal_div_only() &&
+                cfg.mu_tend_fortran_parity && cfg.nan_sanitize_mode==0 && cfg.wrf_w_damping==0 &&
+                n_moist_==0 && nprocx_*nprocy_==1;
+            wrf::sdirk3::pressure_stage_probe::capture_w_reference_mass(
+                reference_mass_rdnw,u.slice(0,0,m).slice(2,0,n+1),v.slice(0,0,m+1).slice(2,0,n),
+                mu.slice(0,0,m).slice(1,0,n),mu_base_.to(dev,dtp).slice(0,0,m).slice(1,0,n),
+                grid_info_ ? grid_info_->qv : torch::Tensor(),cqw_,
+                {msftx_,msfty_,msfux_,msfuy_,msfvx_,msfvy_},rdx,rdy,supported);
+        }
+#endif
         // calc_ww_cp operates on independent physical cells. Packed endpoint
         // aliases must not participate as extra cells in its seam averages.
         mass_flux_memo = wrf::sdirk3::diagnose_wrf_mass_flux(
@@ -20503,6 +20523,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 geometry.ground_phi=ph_base_.select(1,0).to(ph.device(),ph.scalar_type())+ph.select(1,0);
                 geometry.rdx=rdx; geometry.rdy=rdy;
                 geometry.gravity=(grid_info_ && grid_info_->g>0) ? grid_info_->g : g_;
+#ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
+                geometry.theta_base=th_base_;
+#endif
                 geometry.whole_single_rank=nprocx_*nprocy_==1 &&
                     its_<=ids_ && ite_>=ide_-1 && jts_<=jds_ && jte_>=jde_-1;
                 geometry.packed_periodic_x_symmetric_y=isPackedPeriodicDomain() && !config_flags_polar_;
@@ -21521,6 +21544,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 w_pgf_to_legacy = velocity_mass_w / alpha_w;
 #ifdef WRF_SDIRK3_ACCEPTED_STEP_PROBE
                 wrf::sdirk3::pressure_stage_probe::capture_w_mass(level_mass_w,velocity_mass_w,alpha_w);
+                wrf::sdirk3::pressure_stage_probe::capture_w_reference_step(w,rw_tend);
 #endif
             }
 

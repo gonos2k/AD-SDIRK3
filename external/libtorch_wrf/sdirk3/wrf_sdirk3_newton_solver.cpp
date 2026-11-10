@@ -12891,6 +12891,8 @@ public:
                                                        ph->start,ph->size,theta->start,theta->size);
                     const auto w_packet=w_runtime(e.w_consumer,receipt_trial_eos.w_consumer,
                                                    receipt_sinv,rw->start,rw->size);
+                    const auto reference_packet=write_w_reference(e,receipt_trial_eos,U_stage,
+                        receipt_base_k,K,receipt_base_r,accepted_residual,receipt_sinv,cached_layout_);
                     const auto eos_raw=write_eos_raw(e,receipt_trial_eos);
                     TORCH_CHECK(wrf_terminal_jvp::hash(K)==diag_k_hash &&
                         wrf_terminal_jvp::hash(accepted_residual)==diag_r_hash &&
@@ -12909,6 +12911,7 @@ public:
                     body += ",\"trial_input_hash\":" + wrf_terminal_jvp::quote(std::to_string(receipt_trial_input_hash)) +
                         ",\"eos_scalars\":" + eos_packet +
                         ",\"w_runtime\":" + w_packet +
+                        ",\"w_reference\":" + reference_packet +
                         ",\"raw_eos\":" + eos_raw +
                         ",\"stage\":3,\"newton\":0,\"timestep\":0,\"solve_ordinal\":" +
                         std::to_string(delay_frame.ordinal) + ",\"outcome\":\"" + (trust?"accepted_trust":"accepted_recovery") +
