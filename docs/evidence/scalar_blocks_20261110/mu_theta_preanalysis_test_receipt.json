@@ -1,0 +1,26 @@
+{
+  "timestamp_local": "2026-11-10T21:42:59.453018+09:00",
+  "status": "PASS_SYNTHETIC",
+  "test_returncode": 0,
+  "stdout": "PASS zero flow, nonuniform mass/product rule, nonzero K, epsilon hull, mismatch and domain rejection\n",
+  "stderr": "",
+  "source_sha256": "599bf86ae23e8b2565cec14fc99a56a60bd616de9cfd509b705457a31357d672",
+  "binary_sha256": "0f413e23cd3516366292da50e7b285139a0f719c1806729816fcda20f80bccb7",
+  "wrapper_sha256": "22ab70e5c56bf8beb666a06adb14aa693e079b40c35c7fe0eddb89069938d7db",
+  "test_sha256": "4f0b6423391cc8a487f0fe782b30b7c35341abdc4c56edd34446cde63dc5cf4e",
+  "compile_argv": [
+    "clang++",
+    "-std=c++17",
+    "-O2",
+    "-I/opt/homebrew/include",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/mu_theta_mpfr.cpp",
+    "-L/opt/homebrew/lib",
+    "-lmpfr",
+    "-lgmp",
+    "-o",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/mu_theta_mpfr"
+  ],
+  "fixture_readonly_precheck": "prior W validator accepted 16 retained arrays; source manifest, validator and packet SHA pinned",
+  "benchmark": "10x10x8 zero-flow ~0.029s, size-only extrapolation ~5.7s not an upper guarantee",
+  "no_native_execution": true
+}

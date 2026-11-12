@@ -4,8 +4,8 @@
   "native_source": "d05130c0f30b5ce0397b2090a7103bf3aba7fcb3",
   "files": {
     "README.md": {
-      "bytes": 7788,
-      "sha256": "169dbb44049a7a33103b58ae894876075eb66864549d769092a3c770128ba89a"
+      "bytes": 8426,
+      "sha256": "fd95bebd209ddffa4243ca40e185294ef4ccc9c246ab84ea899011a833536a6f"
     },
     "build_driver.log": {
       "bytes": 220,
@@ -276,8 +276,8 @@
       "sha256": "4134f530e47b16fb7c82ab5ed25d549d78e400986122fa6e819d783808c7eae8"
     },
     "test_w_block_decrease.py": {
-      "bytes": 906,
-      "sha256": "58b5a71e5bf0634890dd3ac5c2517cbf98affe9c616841e854d0a9b95bee2f7c"
+      "bytes": 2624,
+      "sha256": "69b15367e2dbf784e48dd20cd899e9c99b66c4818171543bc0ad432cada55afc"
     },
     "test_w_full_mpfr.py": {
       "bytes": 5819,
@@ -288,8 +288,8 @@
       "sha256": "517cc99d6ed1f5c0325f8d09fe7e40a3624bf12cb587f93dd18f2a63c925dc1c"
     },
     "w_block_decrease.py": {
-      "bytes": 3306,
-      "sha256": "f52b7a7a8d8d4635d050461fe1243baadfd76d400192c7416e29c01909bf5681"
+      "bytes": 4563,
+      "sha256": "ec5b856cbe00d635a748f6765c01aba23d4263ec841b7463cbbe7a254dc27b77"
     },
     "w_full_algorithm_receipt.json": {
       "bytes": 2757,

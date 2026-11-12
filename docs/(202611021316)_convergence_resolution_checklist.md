@@ -221,3 +221,24 @@ B/a/C가 입력으로 주어지기 전의 형성 오차와 PDE/시간지도 정�
 - [x] 같은 fixed-input/profile 두 상태의 W 블록 target merit는 엄격히 감소함을 조건부로 확인했다.
   Exact native W norm과 epsilon_W의 분리 구간 증명이며, global nu를 중복 더하지 않는다.
   전체 merit 감소/Stage3 수렴 상태는 여전히 미인증이다.
+
+
+## PR348 후속: W 출처 교차검증과 μ/T 잔차 블록
+
+[진행 보고]((202611102145)_mu_theta_residual_and_provenance.md) · [재현/조건](evidence/scalar_blocks_20261110/README.md).
+
+- [x] P3: W reference input SHA 전체 key/value, 고정 source SHA, N/count와 실제 metric layout/min/max를 교차검증.
+  모순14종 거부, 플랫폼별 binary SHA 차이는 허용; 기존 W 감소 출력 byte 일치.
+- [x] 동일 B/a/C/K와 full N에서 전체 μ residual 오차를 조건부 MPFR 상계로 계산.
+  가중 상계 before3.6580367994881326e-16 /accepted3.61929848876647e-16.
+- [x] 같은 두 상태의 전체 T residual 오차를 source epsilon family 아래 제한.
+  before9.210741413599433e-15 /accepted9.656070767402656e-15. 실제 autocast는 미관측이고
+  Tile-local helper의 promoted 1e-10f~1e-4f 사이 모든 고정 ε를 포함한 family 상계다.
+- [x] 기존 W/ν/W-only 감소는 원래 범위에서 재사용. 새 native/W/EOS/norm 계산을 반복하지 않았다.
+- [ ] PH 수평·수직 이류 전체와 실제 FNM/FNP/selector/PHB 입력 출처를 확보한다.
+- [ ] U/V primary·NH4·질량 변환·활성 divergence damping의 전체 블록 오차를 제한한다.
+- [ ] 여섯 블록 εG와 ν로 전체 e_i를 조립해 full merit 감소 예산을 판정한다.
+
+μ/T 전수 offline1회는 exit0,24pin 불변이다. 새 WRF/RK3·endpoint·비용 비교는 없으며,
+production 소스·ABI·tolerance도 불변이다. 정확한 전체 forcing·Stage3 반복·시간지도 수렴,
+장기 W 잡음·5일 정확도·실용 비용은 계속 미인증이다.

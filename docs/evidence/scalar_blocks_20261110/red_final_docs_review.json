@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-11-10T21:47:13.198201+09:00",
+  "status": "PASS_BOUNDED_DOC_REVIEW",
+  "critical_findings": [],
+  "sha256": {
+    "docs/(202611102145)_mu_theta_residual_and_provenance.md": "4e77507f29ce03080eb8f757cb7603c74f8a8b3f8536e393206c15032b9c2aa0",
+    "docs/evidence/scalar_blocks_20261110/README.md": "de0ff835005b77a521f9eb6b298090c86381187ac24d7520a4d4dc76be9f3bc1",
+    "docs/design/forcing_support_conditions.md": "69e6ff012876f124c3848e959ad6e7f97cab8d9dd0b54b1664c370bc13be43d9",
+    "docs/(202611021316)_convergence_resolution_checklist.md": "7ebd28357b493424ad8962f8705501ee259c104088737b99ff98079358feb2d0"
+  },
+  "checks": [
+    "Mu/T are complete blocks only under guarded fast profile and a uniform fixed-epsilon family, not a measured autocast choice or full RHS result.",
+    "PH next work includes active horizontal/vertical transport and missing FNM/FNP/selectors/PHB provenance; U/V includes primary, NH4, mass conversion and divergence damping.",
+    "W and stored-input nu are reused under prior scopes, without double counting or claiming full merit or stage/time convergence.",
+    "No new native/RK3/forecast or performance claims; fixed-input target explicitly excludes prior formation."
+  ],
+  "limitations": [
+    "No source/test/native rerun during this documentation review; final public manifest/packaging requires separate verification."
+  ]
+}

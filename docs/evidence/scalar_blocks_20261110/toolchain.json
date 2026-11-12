@@ -1,0 +1,22 @@
+{
+  "timestamp_local": "2026-11-10T21:44:52.042553+09:00",
+  "scope": "post-build installed standalone reference toolchain inventory; no native WRF build",
+  "compiler": "/usr/bin/clang++",
+  "compiler_sha256": "5b1ddb7e9c11b87a034fc88b212e8ac243cfe2b4db696d767aa44c79595fc09a",
+  "compiler_version": "Apple clang version 21.0.0 (clang-2100.4.1.1)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "mpfr_header": "/opt/homebrew/Cellar/mpfr/4.2.2/include/mpfr.h",
+  "mpfr_header_sha256": "588c2bd606cba060afb49cd024f9119e996089a341a99d1dc7e0367622335a13",
+  "mpfr_version_defines": [
+    "#define MPFR_VERSION_MAJOR 4",
+    "#define MPFR_VERSION_MINOR 2",
+    "#define MPFR_VERSION_PATCHLEVEL 2",
+    "#define MPFR_VERSION_STRING \"4.2.2\"",
+    "#define MPFR_VERSION_NUM(a,b,c) (((a) << 16L) | ((b) << 8) | (c))",
+    "#define MPFR_VERSION \\"
+  ],
+  "linked_libraries": "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/mu_theta_mpfr:\n\t/opt/homebrew/opt/mpfr/lib/libmpfr.6.dylib (compatibility version 9.0.0, current version 9.2.0)\n\t/opt/homebrew/opt/gmp/lib/libgmp.10.dylib (compatibility version 16.0.0, current version 16.0.0)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.32.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.40.3)\n",
+  "libraries": {
+    "/opt/homebrew/Cellar/mpfr/4.2.2/lib/libmpfr.6.dylib": "6104afef4268465921ec7b1b303c6ce979341b654ae1f6edd1310feafe715bfc",
+    "/opt/homebrew/Cellar/gmp/6.3.0/lib/libgmp.10.dylib": "1bb9184824b82f40bd50279634290d6cbdf9c1a371c045c7b10815e7955cd696"
+  }
+}

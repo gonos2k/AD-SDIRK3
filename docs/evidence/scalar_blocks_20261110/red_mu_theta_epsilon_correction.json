@@ -1,0 +1,24 @@
+{
+  "time_local": "2026-11-10T21:38:44.352089+09:00",
+  "status": "corrected",
+  "supersedes": "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/red_mu_theta_reference_plan.json",
+  "reason": "Earlier review consulted metric_utils helper rather than the unqualified Tile-local helper used at theta conversion.",
+  "source_sha256": "1141d7df1aa8502cde79c084cad28c9b319fca65d520a8c1db217e70b6eb99d1",
+  "actual_source": "tile_unified_impl.cpp getAutocastAwareEps(tensor) and theta conversion",
+  "actual_choices": [
+    {
+      "cpp_float": "1e-10f",
+      "exact": "14411519/144115188075855872",
+      "binary64_hex": "0x1.b7cdfe0000000p-34",
+      "condition": "default including BF16"
+    },
+    {
+      "cpp_float": "1e-4f",
+      "exact": "13743895/137438953472",
+      "binary64_hex": "0x1.a36e2e0000000p-14",
+      "condition": "FP16 or FP16 autocast"
+    }
+  ],
+  "note": "Wider earlier 1e-3f endpoint was conservative but not a possible return of this local helper. Hull of these two exact dyadics covers all choices; actual autocast is not directly witnessed.",
+  "limits": "No native run, source edit, or data evaluation."
+}

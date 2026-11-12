@@ -1,0 +1,40 @@
+{
+  "timestamp_local": "2026-11-10T21:42:59.453931+09:00",
+  "status": "registered",
+  "source_revision": "326347dd334a321f2523edbf5af1c9b182bc1b6d",
+  "scope": "one offline interval evaluation of selected mu/T residual at fixed captured inputs; no native",
+  "epsilon_scope": "uniform for every fixed epsilon in [binary32 1e-10, binary32 1e-4]; actual CPU autocast state unobserved",
+  "maximum_evaluations": 1,
+  "failure_policy": "no retry or threshold change; retain failure",
+  "conditions": [
+    "selected old W profile and data fingerprints; ideal exact Q(B+aK) and recomputed Mdot",
+    "trusted MPFR directed rounding, finite positive domains, captured weights bound",
+    "prior B/K/C formation, other residual blocks and native norm excluded"
+  ],
+  "input_sha256": {
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/mu_theta_mpfr.cpp": "599bf86ae23e8b2565cec14fc99a56a60bd616de9cfd509b705457a31357d672",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/mu_theta_mpfr": "0f413e23cd3516366292da50e7b285139a0f719c1806729816fcda20f80bccb7",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/run_mu_theta.py": "22ab70e5c56bf8beb666a06adb14aa693e079b40c35c7fe0eddb89069938d7db",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/test_mu_theta_mpfr.py": "4f0b6423391cc8a487f0fe782b30b7c35341abdc4c56edd34446cde63dc5cf4e",
+    "/Users/yhlee/SDIRK3-review-worktrees/residual-blocks-20261110/docs/evidence/w_error_20261110/run_w_full_mpfr.py": "5ae180bad34712bb1f8aaadfdef65fd10ad59391227c73ca808c5989e28a2b32",
+    "/Users/yhlee/SDIRK3-review-worktrees/residual-blocks-20261110/docs/evidence/w_error_20261110/normalized_manifest.json": "1737005ed45133e7a2b84d6c115d23f8d876d816cc10c062faa0b719f4d906c6",
+    "/Users/yhlee/SDIRK3-review-worktrees/residual-blocks-20261110/docs/evidence/w_error_20261110/run/accepted_step_probe.json": "5ba7abf1e36ddf631ad41e837387b46c928413168f997cb9f3510478f327149e",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/B.npy": "3aec1713e0be4dc00873d4b102ffcd3211bae25cc916b81a7614f14f9e538e37",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/K0.npy": "b3fc181a8fd1bc8921f7ec8dffdff6a840d3c4100ae795d7be36b967a1970592",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/K1.npy": "3cfb5b8af3995b08cb58757f286b9f43f3f0b26bfe014f23e1bc968d650a9f92",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/R0.npy": "2d948e7332befcb250473d4b41e7d415c1b4b1eb4a0aca84492c4aaf5525675f",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/R1.npy": "63cb3f0d4af7b3ca0223ade091ea6fa959317235c03ce593bfa7459ef95c2ade",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/c1f.npy": "331490ce20c33bd7aff7c4834af8c993298c698fd903d42c9d6c71f4814dfaec",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/c1h.npy": "b36051fa0ea3cb84a995a33f5cd77795ed5250beb034af9165802efb308e1b99",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/c2f.npy": "dc0b777f43c3254504b48c6081f6b5f99072b29756d8e49ba832fa5b9b55ebd0",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/c2h.npy": "dcaedfc3666faabdb036c88f51d6ceb83c97c724316629023f2e23bd21b5a406",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/eos_rdnw.npy": "6112c5ee0e8b7a29147673eb0b395a17b04959b521170a3d20428be23ba5dac1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/mass_rdnw.npy": "6112c5ee0e8b7a29147673eb0b395a17b04959b521170a3d20428be23ba5dac1",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/mub.npy": "3e0ceae9c377de1ae00d2fbb69aa8919c71c2cd30ff9516f19bdc1911215bebc",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/pbase.npy": "806e3fc6452a8599dca5e80dd2f9f5cc0fdb2948cf9cc5dfe0e2a98b61a7385c",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/pressure_rdn.npy": "237b3434792d6745b6ed395bcb81b1b57174b582663c8b9f99fba83780765800",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/theta_base.npy": "c2b7b7d3a38b3f89fadc7b704e01ffa4a7702afe0f8c5de348cb15ab3071eeb6",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/w-error-envelope-20261110/normalized_case/top_rdnw.npy": "c655b3a7d0e82da666a22376fdaf21502f351aef9005d7248042085f759d827b",
+    "/Users/yhlee/AD-SDIRK3-review-evidence/residual-blocks-20261110/mu_theta_preanalysis_test_receipt.json": "c8d685d8e3f174a1ea633dd945977cb49a60dd60ab16d6a63d04612567b8db53"
+  }
+}

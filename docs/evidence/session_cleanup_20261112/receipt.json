@@ -1,0 +1,316 @@
+{
+  "timestamp_local": "2026-11-12T22:57:10.507343+09:00",
+  "scope": "current SDIRK3 review session only; filesystem organization and regenerated cache cleanup",
+  "source_head": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495",
+  "consolidation": {
+    "original_archive_files": 133,
+    "current_file_mappings": 36,
+    "canonical_repository_files": 27,
+    "unique_private_archive_files": 9,
+    "private_archive_versioned": false,
+    "original_index_sha256": "846da2bbf5c47b10d704fe20fc935992139fb86fc3f52cce6e32e63c0c943a23",
+    "current_index_sha256": "17a0e022ecac51409d64fc370636b6aaff28968cccdf87ba051f3594e944f3df"
+  },
+  "removed_clean_checkouts": [
+    {
+      "name": "alb-error-propagation-20261110",
+      "preserved_branch": "codex/alb-error-propagation-20261110",
+      "preserved_commit": "2f1ea797895ff453e5d8e980ab007bebe13479e4"
+    },
+    {
+      "name": "eos-descent-20261110",
+      "preserved_branch": "codex/eos-descent-20261110",
+      "preserved_commit": "b6fdea6e35c3088f1ea5202195e7167307acd787"
+    },
+    {
+      "name": "eos-rhs-propagation-20261110",
+      "preserved_branch": "codex/eos-rhs-propagation-20261110",
+      "preserved_commit": "ca9d6cf4033c654eca6a05f912f4994c7eb00e19"
+    },
+    {
+      "name": "w-runtime-contract-20261110",
+      "preserved_branch": "codex/w-runtime-contract-20261110",
+      "preserved_commit": "4a974d627e6d0d360c78d2660286f08741b273af"
+    },
+    {
+      "name": "w-error-envelope-20261110",
+      "preserved_branch": "codex/w-error-envelope-20261110",
+      "preserved_commit": "d162d8dcb5b02a0262ebc5238ec2f6dfd3ff4062"
+    }
+  ],
+  "disk_free_observation": {
+    "before_bytes": 14022307840,
+    "after_bytes": 16174477312,
+    "scope": "observed filesystem free-space difference; not an exact exclusive allocated-size measurement"
+  },
+  "deduplicated_files": [
+    {
+      "old_archive_name": "graph_after.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/graph_after.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 2626307,
+      "logical_sha256": "7cdfdb6e957e34c4dca5def7787a2b327e45b324c4728a4193a9bc10dc1a42dd",
+      "stored_sha256": "3dde831ca9cd0857ec4d7d0649dbd2c31ccd1f7b84d31058d6253a277d7afa1f",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/graph_after.json.gz"
+    },
+    {
+      "old_archive_name": "graph_after_navigation.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/graph_after_navigation.json",
+      "encoding": "identity",
+      "original_bytes": 1498,
+      "logical_sha256": "ddca39e5efb39a3286e508082792d40deba85d8b8a3cbc981b19f036a6b9d990",
+      "stored_sha256": "ddca39e5efb39a3286e508082792d40deba85d8b8a3cbc981b19f036a6b9d990",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/graph_after_navigation.json"
+    },
+    {
+      "old_archive_name": "graph_after_pins.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/graph_after_pins.json",
+      "encoding": "identity",
+      "original_bytes": 19748,
+      "logical_sha256": "3235617f5a852d027af03eab5ddb60812907520192059c1b281e6317555db923",
+      "stored_sha256": "3235617f5a852d027af03eab5ddb60812907520192059c1b281e6317555db923",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/graph_after_pins.json"
+    },
+    {
+      "old_archive_name": "graph_before.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/graph_before.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 2506251,
+      "logical_sha256": "014850c847748455fb7ae0f94f9839229ff63c2a0f1ff4b7dc5962a86238eac8",
+      "stored_sha256": "e2c751096c2b4f85b3170fef5942650d4b30f8ccfd7daca28ad2a6c5666ec17f",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/graph_before.json.gz"
+    },
+    {
+      "old_archive_name": "graph_before_navigation.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/graph_before_navigation.json",
+      "encoding": "identity",
+      "original_bytes": 2374,
+      "logical_sha256": "163acf98228988a8b528256893432dc1dc0661ad98df91740bf4a50351055dd4",
+      "stored_sha256": "163acf98228988a8b528256893432dc1dc0661ad98df91740bf4a50351055dd4",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/graph_before_navigation.json"
+    },
+    {
+      "old_archive_name": "graph_before_pins.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/graph_before_pins.json",
+      "encoding": "identity",
+      "original_bytes": 14862,
+      "logical_sha256": "ff5539db17a2a1ffecc42cea643f6e8bfc5a88ac377b1e70d0ee3f1a114f084d",
+      "stored_sha256": "ff5539db17a2a1ffecc42cea643f6e8bfc5a88ac377b1e70d0ee3f1a114f084d",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/graph_before_pins.json"
+    },
+    {
+      "old_archive_name": "graph_validator_before.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/graph_validator_before.json",
+      "encoding": "identity",
+      "original_bytes": 46181,
+      "logical_sha256": "859e2528533badccb66295a9cd96db1b653e39b0827bdce3efc369951eba4081",
+      "stored_sha256": "859e2528533badccb66295a9cd96db1b653e39b0827bdce3efc369951eba4081",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/graph_validator_before.json"
+    },
+    {
+      "old_archive_name": "green_final_review.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/green_final_review.json",
+      "encoding": "identity",
+      "original_bytes": 1546,
+      "logical_sha256": "17e5e50eb3c01dede850b218ef960d72dbfbf17dba5544ca9f050d08b1406ab1",
+      "stored_sha256": "17e5e50eb3c01dede850b218ef960d72dbfbf17dba5544ca9f050d08b1406ab1",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/green_final_review.json"
+    },
+    {
+      "old_archive_name": "green_mu_theta_source_plan.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/green_mu_theta_source_plan.json",
+      "encoding": "identity",
+      "original_bytes": 5466,
+      "logical_sha256": "5de67be11cff77764623732de6dac26951b804e26ee3421ba9b669d14b539ace",
+      "stored_sha256": "5de67be11cff77764623732de6dac26951b804e26ee3421ba9b669d14b539ace",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/green_mu_theta_source_plan.json"
+    },
+    {
+      "old_archive_name": "green_p3_validation_review.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/green_p3_validation_review.json",
+      "encoding": "identity",
+      "original_bytes": 1602,
+      "logical_sha256": "296fa885f515615da4a38435798276fdca245d6f5bace7c3136bfc7f10af210b",
+      "stored_sha256": "296fa885f515615da4a38435798276fdca245d6f5bace7c3136bfc7f10af210b",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/green_p3_validation_review.json"
+    },
+    {
+      "old_archive_name": "green_packaging_review.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/green_packaging_review.json",
+      "encoding": "identity",
+      "original_bytes": 4031,
+      "logical_sha256": "9122b3cf2e8bfcb9abcac973967b6ed7e1b95340173aad95735ac9bd9888fa00",
+      "stored_sha256": "9122b3cf2e8bfcb9abcac973967b6ed7e1b95340173aad95735ac9bd9888fa00",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/green_packaging_review.json"
+    },
+    {
+      "old_archive_name": "mu_theta_analysis.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/mu_theta_analysis.json",
+      "encoding": "identity",
+      "original_bytes": 14280,
+      "logical_sha256": "72662000a0312c1490bc33ffbd4f5c80430fb16c3ca89aaf9a43712f1f34c76b",
+      "stored_sha256": "72662000a0312c1490bc33ffbd4f5c80430fb16c3ca89aaf9a43712f1f34c76b",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/mu_theta_analysis.json"
+    },
+    {
+      "old_archive_name": "mu_theta_execution.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/mu_theta_execution.json",
+      "encoding": "identity",
+      "original_bytes": 1003,
+      "logical_sha256": "b650d87c2791f6f0cd92abfd050c50cd80da46dde393ca930e3ab4162db5908f",
+      "stored_sha256": "b650d87c2791f6f0cd92abfd050c50cd80da46dde393ca930e3ab4162db5908f",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/mu_theta_execution.json"
+    },
+    {
+      "old_archive_name": "mu_theta_mpfr.cpp",
+      "canonical": "docs/evidence/scalar_blocks_20261110/mu_theta_mpfr.cpp",
+      "encoding": "identity",
+      "original_bytes": 12664,
+      "logical_sha256": "599bf86ae23e8b2565cec14fc99a56a60bd616de9cfd509b705457a31357d672",
+      "stored_sha256": "599bf86ae23e8b2565cec14fc99a56a60bd616de9cfd509b705457a31357d672",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/mu_theta_mpfr.cpp"
+    },
+    {
+      "old_archive_name": "mu_theta_preanalysis_test_receipt.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/mu_theta_preanalysis_test_receipt.json",
+      "encoding": "identity",
+      "original_bytes": 1191,
+      "logical_sha256": "c8d685d8e3f174a1ea633dd945977cb49a60dd60ab16d6a63d04612567b8db53",
+      "stored_sha256": "c8d685d8e3f174a1ea633dd945977cb49a60dd60ab16d6a63d04612567b8db53",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/mu_theta_preanalysis_test_receipt.json"
+    },
+    {
+      "old_archive_name": "mu_theta_registration.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/mu_theta_registration.json",
+      "encoding": "identity",
+      "original_bytes": 4818,
+      "logical_sha256": "003db002cc974de309c1ff7a99b3c0c8ec3540d19ba82d9f5aeadb550d1466c3",
+      "stored_sha256": "003db002cc974de309c1ff7a99b3c0c8ec3540d19ba82d9f5aeadb550d1466c3",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/mu_theta_registration.json"
+    },
+    {
+      "old_archive_name": "p3_validation.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/p3_validation.json",
+      "encoding": "identity",
+      "original_bytes": 1252,
+      "logical_sha256": "62c5af5935b0b17c7da9a40763f8eafd2009f94dce870f229177e38fedcb9341",
+      "stored_sha256": "62c5af5935b0b17c7da9a40763f8eafd2009f94dce870f229177e38fedcb9341",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/p3_validation.json"
+    },
+    {
+      "old_archive_name": "prior_w_evidence_manifest.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/prior_w_evidence_manifest.json",
+      "encoding": "identity",
+      "original_bytes": 12638,
+      "logical_sha256": "be8723f4c3fbe5254f8eb5cfd85141fc17ff7c5bd179a3c649e7ec93716fa721",
+      "stored_sha256": "be8723f4c3fbe5254f8eb5cfd85141fc17ff7c5bd179a3c649e7ec93716fa721",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/prior_w_evidence_manifest.json"
+    },
+    {
+      "old_archive_name": "red_final_docs_review.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/red_final_docs_review.json",
+      "encoding": "identity",
+      "original_bytes": 1390,
+      "logical_sha256": "e4447fb229dac3497ce2aa009d990c036733fa6df21b2ca56f41da09c039ea19",
+      "stored_sha256": "e4447fb229dac3497ce2aa009d990c036733fa6df21b2ca56f41da09c039ea19",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/red_final_docs_review.json"
+    },
+    {
+      "old_archive_name": "red_mu_theta_epsilon_correction.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/red_mu_theta_epsilon_correction.json",
+      "encoding": "identity",
+      "original_bytes": 1149,
+      "logical_sha256": "607e92dbfbd0ac26b58f8eeda8d437c70a3d5704bd8e2c79bc8a12a95bfdc5d4",
+      "stored_sha256": "607e92dbfbd0ac26b58f8eeda8d437c70a3d5704bd8e2c79bc8a12a95bfdc5d4",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/red_mu_theta_epsilon_correction.json"
+    },
+    {
+      "old_archive_name": "red_mu_theta_reference_plan.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/red_mu_theta_reference_plan.json",
+      "encoding": "identity",
+      "original_bytes": 3020,
+      "logical_sha256": "205de45f94d4a0e812fdafa3da6fc4a01f5e8b42c2e737818f082f14caeff513",
+      "stored_sha256": "205de45f94d4a0e812fdafa3da6fc4a01f5e8b42c2e737818f082f14caeff513",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/red_mu_theta_reference_plan.json"
+    },
+    {
+      "old_archive_name": "red_mu_theta_result_review.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/red_mu_theta_result_review.json",
+      "encoding": "identity",
+      "original_bytes": 2165,
+      "logical_sha256": "47986c2274449ac3fb476dfc3000c5ecb0c1376c067a6ca88bf74fe3d97733c3",
+      "stored_sha256": "47986c2274449ac3fb476dfc3000c5ecb0c1376c067a6ca88bf74fe3d97733c3",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/red_mu_theta_result_review.json"
+    },
+    {
+      "old_archive_name": "red_p3_review.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/red_p3_review.json",
+      "encoding": "identity",
+      "original_bytes": 1100,
+      "logical_sha256": "e01ec54a7c83b72f3292cfa3d101274ff4a77b6cd0640ac7298394a981788d08",
+      "stored_sha256": "e01ec54a7c83b72f3292cfa3d101274ff4a77b6cd0640ac7298394a981788d08",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/red_p3_review.json"
+    },
+    {
+      "old_archive_name": "red_phi_uv_source_plan.json",
+      "canonical": "docs/evidence/scalar_blocks_20261110/red_phi_uv_source_plan.json",
+      "encoding": "identity",
+      "original_bytes": 4204,
+      "logical_sha256": "c4acf577b2076d0ea238b82ab8c7dba74d0d32b293c58ac52082126cf1166fb4",
+      "stored_sha256": "c4acf577b2076d0ea238b82ab8c7dba74d0d32b293c58ac52082126cf1166fb4",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/red_phi_uv_source_plan.json"
+    },
+    {
+      "old_archive_name": "run_mu_theta.py",
+      "canonical": "docs/evidence/scalar_blocks_20261110/run_mu_theta.py",
+      "encoding": "identity",
+      "original_bytes": 5745,
+      "logical_sha256": "22ab70e5c56bf8beb666a06adb14aa693e079b40c35c7fe0eddb89069938d7db",
+      "stored_sha256": "22ab70e5c56bf8beb666a06adb14aa693e079b40c35c7fe0eddb89069938d7db",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/run_mu_theta.py"
+    },
+    {
+      "old_archive_name": "test_mu_theta_mpfr.py",
+      "canonical": "docs/evidence/scalar_blocks_20261110/test_mu_theta_mpfr.py",
+      "encoding": "identity",
+      "original_bytes": 3004,
+      "logical_sha256": "4f0b6423391cc8a487f0fe782b30b7c35341abdc4c56edd34446cde63dc5cf4e",
+      "stored_sha256": "4f0b6423391cc8a487f0fe782b30b7c35341abdc4c56edd34446cde63dc5cf4e",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/scalar_blocks_20261110/test_mu_theta_mpfr.py"
+    },
+    {
+      "old_archive_name": "w_block_decrease_replay.json",
+      "canonical": "docs/evidence/w_error_20261110/w_block_decrease.json",
+      "encoding": "identity",
+      "original_bytes": 2501,
+      "logical_sha256": "517cc99d6ed1f5c0325f8d09fe7e40a3624bf12cb587f93dd18f2a63c925dc1c",
+      "stored_sha256": "517cc99d6ed1f5c0325f8d09fe7e40a3624bf12cb587f93dd18f2a63c925dc1c",
+      "git_ref": "2d4d8e29dfdfad94412244eb4cb2b61255a0e495:docs/evidence/w_error_20261110/w_block_decrease.json"
+    }
+  ],
+  "generated_cache_removal": [
+    {
+      "name": "__pycache__",
+      "files": 2,
+      "bytes": 11332
+    },
+    {
+      "name": "graphify-cache",
+      "files": 95,
+      "bytes": 10491387
+    }
+  ],
+  "logical_duplicate_and_cache_bytes_removed": 15804709,
+  "validation": {
+    "all_current_file_size_sha_mode_match": true,
+    "canonical_files_match_pinned_git_blobs": true,
+    "original_index_preserved": true,
+    "unique_private_archive_inventory_matches": true,
+    "removed_checkout_branch_commits_retained": true
+  },
+  "numerical_or_production_source_change": false,
+  "new_native_WRF_RK3_MPFR_or_performance_run": false,
+  "branches_deleted": false,
+  "global_worktree_prune": false,
+  "git_or_PR_merge_performed": false
+}

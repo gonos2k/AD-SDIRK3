@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-11-10T21:40:24.116730+09:00",
+  "status": "PASS_BOUNDED_SOURCE_REVIEW",
+  "critical_findings": [],
+  "sha256": {
+    "docs/evidence/w_error_20261110/w_block_decrease.py": "ec5b856cbe00d635a748f6765c01aba23d4263ec841b7463cbbe7a254dc27b77",
+    "docs/evidence/w_error_20261110/test_w_block_decrease.py": "69b15367e2dbf784e48dd20cd899e9c99b66c4818171543bc0ad432cada55afc"
+  },
+  "checks": [
+    "Reference input SHA map and source hash checked, platform-specific executable hash allowed to vary.",
+    "Packed N, W count and offset, positive scale extrema, and packet/manifest/analysis maxima and minima must agree.",
+    "Test exercises contradictory metadata and source binding plus cross-platform binary compatibility; does not itself prove source calculation correctness.",
+    "Reverse-triangle decrease remains W-block only; full merit and Stage3 flags explicitly false."
+  ],
+  "limits": [
+    "Source and manifest authenticity remain registration/provenance assumptions; no whole residual or mathematical stage convergence inferred.",
+    "No tests or model rerun."
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "timestamp_local": "2026-11-10T21:50:40.992442+09:00",
+  "verdict": "PASS",
+  "manifests": {
+    "scalar_blocks_20261110": {
+      "listed": 28,
+      "bad": [],
+      "unlisted": []
+    },
+    "w_error_20261110": {
+      "listed": 85,
+      "bad": [],
+      "unlisted": [
+        "__pycache__/norm_exact.cpython-310.pyc",
+        "__pycache__/run_w_full_mpfr.cpython-310.pyc",
+        "__pycache__/w_block_decrease.cpython-310.pyc"
+      ]
+    }
+  },
+  "graphs": {
+    "graph_before.json": {
+      "stored_sha_matches": true,
+      "decompressed_sha_matches": true,
+      "decompressed_size_matches": true,
+      "gzip_mtime_zero": true,
+      "navigation_sha_matches": null,
+      "before_matches_original": true
+    },
+    "graph_after.json": {
+      "stored_sha_matches": true,
+      "decompressed_sha_matches": true,
+      "decompressed_size_matches": true,
+      "gzip_mtime_zero": true,
+      "navigation_sha_matches": true,
+      "before_matches_original": null
+    }
+  },
+  "graph_after_pin_count": 97,
+  "graph_after_pin_mismatches": [],
+  "staged_count": 36,
+  "staged_paths": [
+    "docs/(202611021316)_convergence_resolution_checklist.md",
+    "docs/(202611102145)_mu_theta_residual_and_provenance.md",
+    "docs/design/forcing_support_conditions.md",
+    "docs/evidence/scalar_blocks_20261110/README.md",
+    "docs/evidence/scalar_blocks_20261110/graph_after.json.gz",
+    "docs/evidence/scalar_blocks_20261110/graph_after_navigation.json",
+    "docs/evidence/scalar_blocks_20261110/graph_after_pins.json",
+    "docs/evidence/scalar_blocks_20261110/graph_before.json.gz",
+    "docs/evidence/scalar_blocks_20261110/graph_before_navigation.json",
+    "docs/evidence/scalar_blocks_20261110/graph_before_pins.json",
+    "docs/evidence/scalar_blocks_20261110/graph_storage.json",
+    "docs/evidence/scalar_blocks_20261110/graph_validator_before.json",
+    "docs/evidence/scalar_blocks_20261110/green_final_review.json",
+    "docs/evidence/scalar_blocks_20261110/green_mu_theta_source_plan.json",
+    "docs/evidence/scalar_blocks_20261110/green_p3_validation_review.json",
+    "docs/evidence/scalar_blocks_20261110/manifest.json",
+    "docs/evidence/scalar_blocks_20261110/mu_theta_analysis.json",
+    "docs/evidence/scalar_blocks_20261110/mu_theta_execution.json",
+    "docs/evidence/scalar_blocks_20261110/mu_theta_mpfr.cpp",
+    "docs/evidence/scalar_blocks_20261110/mu_theta_preanalysis_test_receipt.json",
+    "docs/evidence/scalar_blocks_20261110/mu_theta_registration.json",
+    "docs/evidence/scalar_blocks_20261110/p3_validation.json",
+    "docs/evidence/scalar_blocks_20261110/prior_w_evidence_manifest.json",
+    "docs/evidence/scalar_blocks_20261110/red_final_docs_review.json",
+    "docs/evidence/scalar_blocks_20261110/red_mu_theta_epsilon_correction.json",
+    "docs/evidence/scalar_blocks_20261110/red_mu_theta_reference_plan.json",
+    "docs/evidence/scalar_blocks_20261110/red_mu_theta_result_review.json",
+    "docs/evidence/scalar_blocks_20261110/red_p3_review.json",
+    "docs/evidence/scalar_blocks_20261110/red_phi_uv_source_plan.json",
+    "docs/evidence/scalar_blocks_20261110/run_mu_theta.py",
+    "docs/evidence/scalar_blocks_20261110/test_mu_theta_mpfr.py",
+    "docs/evidence/scalar_blocks_20261110/toolchain.json",
+    "docs/evidence/w_error_20261110/README.md",
+    "docs/evidence/w_error_20261110/manifest.json",
+    "docs/evidence/w_error_20261110/test_w_block_decrease.py",
+    "docs/evidence/w_error_20261110/w_block_decrease.py"
+  ],
+  "staged_outside_scope": [],
+  "staged_index_worktree_mismatches": [],
+  "limits": [
+    "Before-navigation record has no graph_sha256 field; its decompressed graph matches graph_storage and the original before graph.",
+    "Three unstaged ignored Python bytecode files in the earlier W evidence directory are absent from its historical manifest; none are staged.",
+    "The review receipt itself is not yet in the public manifest and needs inclusion in the subsequent final inventory.",
+    "No calculations, tests or native runs repeated."
+  ]
+}
